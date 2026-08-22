@@ -1,20 +1,18 @@
 {
-	"modules": {
-		"system-stats": {
-			"enabled": true,
-			"options": {}
-		},
+	"control": {
+		"port": 4000
+	},
+	"moduleOverrides": {
 		"docker-control": {
-			"enabled": false,
-			"options": {}
+			"enabled": false
 		},
 		"ntfy-bridge": {
-			"enabled": false,
-			"options": {}
+			"enabled": false
 		},
 		"presence": {
-			"enabled": false,
-			"options": {}
+			"enabled": false
 		}
-	}
+	},
+	"facesBasePort": 3000,
+	"faceOverrides": {}
 }

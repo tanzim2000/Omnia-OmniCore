@@ -1,31 +1,34 @@
 // core/module-loader.js
-// Reads the config file and loads only the modules marked "enabled": true.
-// This is what makes OmniCore "config-driven" instead of hardcoded —
-// adding/removing a module later means editing the config, not this file.
+// Auto-discovers modules by scanning the modules/ folder — no config editing
+// needed to add a new module. config.moduleOverrides is only for optional
+// per-module tweaks: disabling one, or passing custom options.
 
 const fs = require("fs");
 const path = require("path");
 
-function loadModules(app) {
-	// Read and parse the config file
-	const configPath = path.join(__dirname, "..", "config", "omnicore.config.json");
-	const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+function loadModules(app, config) {
+	const modulesDir = path.join(__dirname, "..", "modules");
 
-	// Loop through every module listed in the config
-	for (const [moduleName, moduleConfig] of Object.entries(config.modules)) {
-		if (!moduleConfig.enabled) {
+	// Every subfolder inside modules/ is treated as a module
+	const discoveredModules = fs
+		.readdirSync(modulesDir, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => entry.name);
+
+	const overrides = config.moduleOverrides || {};
+
+	for (const moduleName of discoveredModules) {
+		const override = overrides[moduleName] || {};
+
+		if (override.enabled === false) {
 			console.log(`Skipping disabled module: ${moduleName}`);
-			continue; // skip to the next module
+			continue;
 		}
 
-		// Dynamically require the module's folder — Node resolves
-		// modules/system-stats/index.js automatically
-		const modulePath = path.join(__dirname, "..", "modules", moduleName);
+		const modulePath = path.join(modulesDir, moduleName);
 		const moduleFn = require(modulePath);
 
-		// Each module must export a function that takes (app, options)
-		// and registers its own routes/logic onto the shared Express app
-		moduleFn(app, moduleConfig.options);
+		moduleFn(app, override.options || {});
 
 		console.log(`Loaded module: ${moduleName}`);
 	}

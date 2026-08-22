@@ -1,21 +1,28 @@
 // index.js
-// OmniCore entry point. Starts Express and hands off to the module loader,
-// which reads config/omnicore.config.json and mounts each enabled module.
+// OmniCore entry point.
+// Starts a small control server exposing GET /faces — a registry of every
+// running face, for OmniVision to query later — then starts every enabled
+// face as its own independent server on its own port.
 
 const express = require("express");
-const loadModules = require("./core/module-loader");
+const fs = require("fs");
+const path = require("path");
+const loadFaces = require("./core/face-loader");
 
-const app = express();
-const PORT = 3000;
+// Load config once, up front
+const configPath = path.join(__dirname, "config", "omnicore.config.json");
+const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
 
-// Keep this route as a basic health check for the server itself
-app.get("/", (req, res) => {
-	res.send("OmniCore is alive");
+// Start every enabled face; loadFaces returns what actually started
+const runningFaces = loadFaces(config);
+
+// Control server: a small dedicated app just for cross-face info
+const controlApp = express();
+
+controlApp.get("/faces", (req, res) => {
+	res.json(runningFaces);
 });
 
-// Load and mount every module marked "enabled" in the config
-loadModules(app);
-
-app.listen(PORT, () => {
-	console.log(`OmniCore listening on port ${PORT}`);
+controlApp.listen(config.control.port, () => {
+	console.log(`OmniCore control server listening on port ${config.control.port}`);
 });
