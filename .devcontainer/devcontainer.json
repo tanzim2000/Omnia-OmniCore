@@ -27,7 +27,7 @@
 
 	// Ports OmniCore's Express server will run on — Codespaces auto-forwards these
 	// and gives you a clickable preview link. 3000 is the common Express default.
-	"forwardPorts": [3000],
+	"forwardPorts": [3000, 4000],
 
 	// Runs once, right after the container is created — sets up npm project + Express
 	// (safe to re-run: npm init -y won't overwrite an existing package.json)

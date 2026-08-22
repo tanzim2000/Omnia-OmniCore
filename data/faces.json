@@ -1,0 +1,12 @@
+{
+	"faces": [
+		{
+			"id": 4001,
+			"name": "test",
+			"theme": "windows8",
+			"modules": [
+				"system-stats"
+			]
+		}
+	]
+}

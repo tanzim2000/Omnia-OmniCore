@@ -1,54 +1,63 @@
 // core/face-loader.js
-// Auto-discovers faces by scanning the faces/ folder — no config editing
-// needed to add a new face. config.faceOverrides is only for optional
-// per-face tweaks: disabling one, or pinning it to a specific port.
+// Starts a face — one Express server on the face's own port.
+// A face's ID *is* its port number. Faces can be started live at runtime,
+// no OmniCore restart needed.
 
 const express = require("express");
-const fs = require("fs");
-const path = require("path");
-const loadModules = require("./module-loader");
+const { mountModules } = require("./module-loader");
+const { listThemes } = require("./theme-loader");
+const { updateFace } = require("./face-store");
+const renderFallbackPage = require("./fallback-page");
 
-function loadFaces(config) {
-	const facesDir = path.join(__dirname, "..", "faces");
+// Tracks which faces are currently running, keyed by port
+const runningFaces = new Map();
 
-	const discoveredFaces = fs
-		.readdirSync(facesDir, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
-		.map((entry) => entry.name);
-
-	const overrides = config.faceOverrides || {};
-	let nextPort = config.facesBasePort || 3000;
-	const runningFaces = [];
-
-	for (const faceName of discoveredFaces) {
-		const override = overrides[faceName] || {};
-
-		if (override.enabled === false) {
-			console.log(`Skipping disabled face: ${faceName}`);
-			continue;
+function startFace(face) {
+	return new Promise((resolve) => {
+		if (runningFaces.has(face.id)) {
+			console.log(`Face "${face.name}" (${face.id}) already running`);
+			resolve();
+			return;
 		}
 
-		const port = override.port || nextPort;
-		nextPort = Math.max(nextPort, port) + 1;
-
 		const app = express();
-		loadModules(app, config); // pass the whole config down, not just app
+		app.use(express.json());
+
+		console.log(`Starting face "${face.name}" on port ${face.id}`);
+
+		// Only the modules this face lists — not every module on the system
+		mountModules(app, face.modules);
 
 		app.get("/", (req, res) => {
-			res.send(`Face "${faceName}" is alive`);
+			const themes = listThemes();
+			const themeIsValid =
+				face.theme && themes.some((theme) => theme.id === face.theme);
+
+			if (!themeIsValid) {
+				res.send(renderFallbackPage(themes));
+				return;
+			}
+
+			// TODO: render the actual theme frontend here
+			res.send(`Face "${face.name}" is running theme "${face.theme}"`);
 		});
 
-		const faceFn = require(path.join(facesDir, faceName));
-		faceFn(app, override.options || {});
-
-		app.listen(port, () => {
-			console.log(`Face "${faceName}" listening on port ${port}`);
+		app.post("/select-theme", (req, res) => {
+			const updated = updateFace(face.id, { theme: req.body.theme });
+			face.theme = updated.theme;
+			res.json(updated);
 		});
 
-		runningFaces.push({ name: faceName, port });
-	}
+		app.get("/identity", (req, res) => {
+			res.json(face);
+		});
 
-	return runningFaces;
+		// Only resolve once the server is genuinely accepting connections
+		const server = app.listen(face.id, () => {
+			runningFaces.set(face.id, server);
+			resolve();
+		});
+	});
 }
 
-module.exports = loadFaces;
+module.exports = { startFace };

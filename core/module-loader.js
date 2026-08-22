@@ -1,37 +1,39 @@
 // core/module-loader.js
-// Auto-discovers modules by scanning the modules/ folder — no config editing
-// needed to add a new module. config.moduleOverrides is only for optional
-// per-module tweaks: disabling one, or passing custom options.
+// Modules are backend-only capabilities. They never render anything —
+// themes consume module data and decide how it looks.
+// A module is any subfolder of modules/ exporting a function (app, options).
 
 const fs = require("fs");
 const path = require("path");
 
-function loadModules(app, config) {
-	const modulesDir = path.join(__dirname, "..", "modules");
+const modulesDir = path.join(__dirname, "..", "modules");
 
-	// Every subfolder inside modules/ is treated as a module
-	const discoveredModules = fs
+// Every module available on this OmniCore install
+function listModules() {
+	if (!fs.existsSync(modulesDir)) {
+		return [];
+	}
+
+	return fs
 		.readdirSync(modulesDir, { withFileTypes: true })
 		.filter((entry) => entry.isDirectory())
 		.map((entry) => entry.name);
+}
 
-	const overrides = config.moduleOverrides || {};
+// Mount only the modules a specific face has listed in its identity
+function mountModules(app, moduleIds) {
+	for (const moduleId of moduleIds) {
+		const modulePath = path.join(modulesDir, moduleId);
 
-	for (const moduleName of discoveredModules) {
-		const override = overrides[moduleName] || {};
-
-		if (override.enabled === false) {
-			console.log(`Skipping disabled module: ${moduleName}`);
+		if (!fs.existsSync(modulePath)) {
+			console.log(`  Module not found, skipping: ${moduleId}`);
 			continue;
 		}
 
-		const modulePath = path.join(modulesDir, moduleName);
 		const moduleFn = require(modulePath);
-
-		moduleFn(app, override.options || {});
-
-		console.log(`Loaded module: ${moduleName}`);
+		moduleFn(app, {});
+		console.log(`  Mounted module: ${moduleId}`);
 	}
 }
 
-module.exports = loadModules;
+module.exports = { listModules, mountModules };
