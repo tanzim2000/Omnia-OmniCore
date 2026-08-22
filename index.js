@@ -1,18 +1,21 @@
 // index.js
-// Minimal Express server — just to confirm the dev environment pipeline works
-// end to end before writing any real OmniCore logic.
+// OmniCore entry point. Starts Express and hands off to the module loader,
+// which reads config/omnicore.config.json and mounts each enabled module.
 
-const express = require("express"); // load the Express library we installed earlier
-const app = express(); // create the Express application
+const express = require("express");
+const loadModules = require("./core/module-loader");
 
-const PORT = 3000; // matches the port we forwarded in devcontainer.json
+const app = express();
+const PORT = 3000;
 
-// A "route" — when someone visits the root URL ("/"), run this function
+// Keep this route as a basic health check for the server itself
 app.get("/", (req, res) => {
-	res.send("OmniCore is alive"); // send this text back as the response
+	res.send("OmniCore is alive");
 });
 
-// Start the server and listen for incoming requests on PORT
+// Load and mount every module marked "enabled" in the config
+loadModules(app);
+
 app.listen(PORT, () => {
 	console.log(`OmniCore listening on port ${PORT}`);
 });

@@ -1,0 +1,20 @@
+{
+	"modules": {
+		"system-stats": {
+			"enabled": true,
+			"options": {}
+		},
+		"docker-control": {
+			"enabled": false,
+			"options": {}
+		},
+		"ntfy-bridge": {
+			"enabled": false,
+			"options": {}
+		},
+		"presence": {
+			"enabled": false,
+			"options": {}
+		}
+	}
+}
