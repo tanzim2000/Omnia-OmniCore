@@ -5,39 +5,133 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Omnia</title>
 	<style>
-		body {
-			background: #1a1a1a;
-			color: #fff;
-			font-family: "Segoe UI", system-ui, sans-serif;
-			margin: 0;
-			padding: 40px;
-			font-weight: 300;
+		:root {
+			/* Windows 8 Metro: flat solid colours, no gradients or shadows */
+			--bg: #1d1d1d;
+			--tile: #0078d7;
+			--text: #ffffff;
+
+			/* Real Metro grid: 70px base unit with 10px gutters, so a
+			   medium tile is 150px (70+10+70) and a wide one is 310px */
+			--unit: 70px;
+			--gutter: 10px;
 		}
 
-		h1 { font-size: 32px; font-weight: 200; margin: 0 0 32px 0; }
+		* { box-sizing: border-box; }
 
-		/* Asymmetric tile grid — the Windows 8 start screen look */
+		body {
+			background: var(--bg);
+			color: var(--text);
+			font-family: "Segoe UI", system-ui, sans-serif;
+			font-weight: 300;
+			margin: 0;
+			padding: 48px 40px;
+		}
+
+		h1 {
+			font-size: 34px;
+			font-weight: 200;
+			margin: 0 0 28px 0;
+			letter-spacing: -0.01em;
+		}
+
 		.tiles {
 			display: grid;
-			grid-template-columns: repeat(auto-fill, 150px);
-			grid-auto-rows: 150px;
-			gap: 8px;
+			grid-template-columns: repeat(auto-fill, var(--unit));
+			grid-auto-rows: var(--unit);
+			gap: var(--gutter);
 		}
 
+		/* Metro tiles are fixed sizes — content adapts to the tile,
+		   never the other way round */
 		.tile {
-			background: #0078d7;
-			padding: 16px;
+			background: var(--tile);
+			padding: 12px;
+			overflow: hidden;
+			cursor: pointer;
 			display: flex;
 			flex-direction: column;
-			justify-content: flex-end;
+			position: relative;
+			/* Respect users who've asked for less motion */
+			transition: transform 0.1s ease;
+		}
+
+		.tile:active { transform: scale(0.97); }
+
+		@media (prefers-reduced-motion: reduce) {
+			.tile { transition: none; }
+			.tile:active { transform: none; }
+		}
+
+		.tile:focus-visible {
+			outline: 2px solid #fff;
+			outline-offset: -4px;
+		}
+
+		/* The four authentic Metro sizes */
+		.tile.small  { grid-column: span 1; grid-row: span 1; }
+		.tile.medium { grid-column: span 2; grid-row: span 2; }
+		.tile.wide   { grid-column: span 4; grid-row: span 2; }
+		.tile.large  { grid-column: span 4; grid-row: span 4; }
+
+		.tile .body {
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			min-height: 0; /* lets flex children actually shrink */
+		}
+
+		.tile .primary {
+			font-weight: 200;
+			line-height: 1;
+			white-space: nowrap;
+		}
+
+		.tile .secondary {
+			font-size: 13px;
+			opacity: 0.75;
+			margin-top: 6px;
+		}
+
+		/* The tile label sits at the bottom, as it did in Metro */
+		.tile .label {
+			font-size: 13px;
+			font-weight: 400;
+			margin-top: 8px;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.tile .details {
+			font-size: 12px;
+			opacity: 0.85;
+			margin-top: 10px;
+			display: flex;
+			flex-direction: column;
+			gap: 3px;
+			min-height: 0;
 			overflow: hidden;
 		}
 
-		/* Wide tiles span two columns, like live tiles do */
-		.tile.wide { grid-column: span 2; }
+		.tile .details div {
+			display: flex;
+			justify-content: space-between;
+			gap: 14px;
+			white-space: nowrap;
+		}
 
-		.tile h2 { font-size: 14px; font-weight: 400; margin: 0; opacity: 0.8; }
-		.tile .value { font-size: 20px; margin-bottom: 4px; }
+		/* Primary text scales with the tile it lives in */
+		.tile.small  .primary { font-size: 20px; }
+		.tile.medium .primary { font-size: 40px; }
+		.tile.wide   .primary { font-size: 44px; }
+		.tile.large  .primary { font-size: 56px; }
+
+		.tile.small .secondary,
+		.tile.small .details { display: none; }
+
+		.tile.medium .details { display: none; }
 	</style>
 </head>
 <body>
@@ -45,37 +139,137 @@
 	<div class="tiles" id="tiles"></div>
 
 	<script>
-		// Ask the face who it is and which modules it has
-		async function load() {
-			const identity = await (await fetch("/identity")).json();
-			document.getElementById("face-name").textContent = identity.name;
+		// Metro tile sizes, in the order clicking cycles through them
+		const SIZES = ["small", "medium", "wide", "large"];
 
-			const tiles = document.getElementById("tiles");
+		// Which size each module's tile is currently shown at.
+		// Not saved yet — per-face tile settings will handle that later.
+		const tileSizes = {};
 
-			// Render one tile per module this face was given
-			for (const moduleId of identity.modules) {
-				const tile = document.createElement("div");
-				tile.className = "tile wide";
+		let identity = null;
 
-				// Ask the module for its data — this is the only thing a
-				// theme ever does with a module: read it and draw it
-				let value = "";
-				try {
-					const data = await (await fetch("/api/" + moduleId)).json();
-					value = data.message || JSON.stringify(data);
-				} catch (error) {
-					value = "unavailable";
+		function escapeHtml(text) {
+			return String(text).replace(/[&<>"]/g, function (character) {
+				return {
+					"&": "&amp;",
+					"<": "&lt;",
+					">": "&gt;",
+					'"': "&quot;"
+				}[character];
+			});
+		}
+
+		// Every module returns the same envelope, so this renders any module
+		// without knowing what it does. How it LOOKS is entirely our call.
+		function renderTile(moduleId, data) {
+			const size = tileSizes[moduleId] || "wide";
+
+			const details = (data.details || [])
+				.map(function (item) {
+					return "<div><span>" + escapeHtml(item.label) + "</span>" +
+					       "<span>" + escapeHtml(item.value) + "</span></div>";
+				})
+				.join("");
+
+			return '<div class="tile ' + size + '" tabindex="0" ' +
+				'data-module="' + escapeHtml(moduleId) + '">' +
+				'<div class="body">' +
+					'<div class="primary">' + escapeHtml(data.primary || "") + "</div>" +
+					'<div class="secondary">' + escapeHtml(data.secondary || "") + "</div>" +
+					'<div class="details">' + details + "</div>" +
+				"</div>" +
+				'<div class="label">' + escapeHtml(data.title || moduleId) + "</div>" +
+			"</div>";
+		}
+
+		function renderUnavailable(moduleId) {
+			const size = tileSizes[moduleId] || "wide";
+
+			return '<div class="tile ' + size + '" tabindex="0" ' +
+				'data-module="' + escapeHtml(moduleId) + '">' +
+				'<div class="body">' +
+					'<div class="primary">—</div>' +
+					'<div class="secondary">Not responding</div>' +
+				"</div>" +
+				'<div class="label">' + escapeHtml(moduleId) + "</div>" +
+			"</div>";
+		}
+
+		// The size rules above cover the expected cases, but a module can
+		// return any number of details. This drops rows that still don't fit
+		// so no module can ever overflow a tile, whatever it sends.
+		function trimToFit() {
+			const tiles = document.querySelectorAll(".tile");
+
+			for (const tile of tiles) {
+				const details = tile.querySelector(".details");
+				if (!details) continue;
+
+				// Remove the last row until the content fits the tile
+				while (
+					details.children.length > 0 &&
+					tile.scrollHeight > tile.clientHeight
+				) {
+					details.removeChild(details.lastElementChild);
 				}
-
-				tile.innerHTML =
-					'<div class="value">' + value + "</div>" +
-					"<h2>" + moduleId + "</h2>";
-
-				tiles.appendChild(tile);
 			}
 		}
 
-		load();
+		// Fetch each module's current data and redraw its tile
+		async function refresh() {
+			const container = document.getElementById("tiles");
+			let html = "";
+
+			for (const moduleId of identity.modules) {
+				try {
+					const data = await (await fetch("/api/" + moduleId)).json();
+					html += renderTile(moduleId, data);
+				} catch (error) {
+					html += renderUnavailable(moduleId);
+				}
+			}
+
+			container.innerHTML = html;
+			trimToFit();
+		}
+
+		// Clicking a tile cycles its size, the way Metro let you resize tiles
+		function resizeTile(moduleId) {
+			const current = tileSizes[moduleId] || "wide";
+			const next = SIZES[(SIZES.indexOf(current) + 1) % SIZES.length];
+
+			tileSizes[moduleId] = next;
+			refresh();
+		}
+
+		document.getElementById("tiles").addEventListener("click", function (event) {
+			const tile = event.target.closest(".tile");
+			if (tile) resizeTile(tile.dataset.module);
+		});
+
+		document.getElementById("tiles").addEventListener("keydown", function (event) {
+			if (event.key !== "Enter" && event.key !== " ") return;
+
+			const tile = event.target.closest(".tile");
+			if (tile) {
+				event.preventDefault();
+				resizeTile(tile.dataset.module);
+			}
+		});
+
+		async function start() {
+			// Ask the face who it is and which modules it has
+			identity = await (await fetch("/identity")).json();
+			document.getElementById("face-name").textContent = identity.name;
+
+			await refresh();
+
+			// Keep the numbers current — a dashboard showing stale stats is
+			// worse than one showing none
+			setInterval(refresh, 5000);
+		}
+
+		start();
 	</script>
 </body>
 </html>
