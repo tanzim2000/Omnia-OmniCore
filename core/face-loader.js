@@ -4,11 +4,13 @@
 // no OmniCore restart needed.
 
 const express = require("express");
+const fs = require("fs");
 const path = require("path");
 const { mountModules } = require("./module-loader");
 const { listThemes } = require("./theme-loader");
 const { updateFace } = require("./face-store");
 const renderFallbackPage = require("./fallback-page");
+const { attachEvents, pushToFace, CLIENT_SCRIPT } = require("./face-events");
 
 // Tracks which faces are currently running, keyed by port
 const runningFaces = new Map();
@@ -29,23 +31,27 @@ function startFace(face) {
 		// Only the modules this face lists — not every module on the system
 		mountModules(app, face.modules);
 
+		// OmniCore's push channel — the /events stream browsers listen on
+		attachEvents(app, face);
+
 		// The face's own identity — themes fetch this to know which modules
-		// they can render. Registered before the theme's static files so a
-		// theme can never shadow it with its own file.
+		// they can render. Registered before the theme's files so a theme
+		// can never shadow it with its own file.
 		app.get("/identity", (req, res) => {
 			res.json(face);
 		});
 
-		// Called by the fallback screen when the user picks a theme
+		// Called when the user picks a theme — from this face's fallback
+		// screen, or later from a phone or admin face
 		app.post("/select-theme", (req, res) => {
 			const updated = updateFace(face.id, { theme: req.body.theme });
-
-			// Keep the in-memory copy in sync with what was just persisted.
-			// The handler below reads face.theme on every request, so the
-			// new theme takes effect on the next page load — no restart.
 			face.theme = updated.theme;
 
 			res.json(updated);
+
+			// Tell every browser showing this face to pick up the new theme,
+			// so an unattended display switches without anyone touching it
+			pushToFace(face.id, "theme-changed", { theme: updated.theme });
 		});
 
 		// Caches one static-file handler per theme, so we aren't rebuilding
@@ -60,6 +66,22 @@ function startFace(face) {
 			return themeHandlers.get(themeId);
 		}
 
+		// Work out which file on disk a request is asking for.
+		// A bare "/" means the theme's index.html.
+		function resolveThemeFile(themeId, urlPath) {
+			const themeDir = path.join(__dirname, "..", "themes", themeId);
+			const requested = urlPath === "/" ? "/index.html" : urlPath;
+
+			const filePath = path.join(themeDir, requested);
+
+			// Refuse anything that escapes the theme folder (e.g. "../../")
+			if (!filePath.startsWith(themeDir)) {
+				return null;
+			}
+
+			return filePath;
+		}
+
 		// Resolve the theme on EVERY request rather than once at startup —
 		// this is what lets a theme change take effect without a restart.
 		// Themes are pure frontend: served as static files, never executed
@@ -70,14 +92,35 @@ function startFace(face) {
 			const themeIsValid =
 				face.theme && themes.some((theme) => theme.id === face.theme);
 
-			if (themeIsValid) {
-				// Hand the request to this theme's static file handler
-				themeHandler(face.theme)(req, res, next);
+			if (!themeIsValid) {
+				// No usable theme — show OmniCore's built-in fallback screen
+				res.send(renderFallbackPage(themes));
 				return;
 			}
 
-			// No usable theme — show OmniCore's built-in fallback screen
-			res.send(renderFallbackPage(themes));
+			const filePath = resolveThemeFile(face.theme, req.path);
+
+			// HTML pages get OmniCore's client script injected, so a theme
+			// physically cannot ship without it — that guarantees an
+			// unattended display can always be switched away from.
+			// Everything else (CSS, JS, images) is served untouched.
+			if (filePath && filePath.endsWith(".html") && fs.existsSync(filePath)) {
+				let html = fs.readFileSync(filePath, "utf-8");
+
+				if (html.includes("</body>")) {
+					html = html.replace("</body>", CLIENT_SCRIPT + "\n</body>");
+				} else {
+					// Malformed theme HTML with no </body> — append anyway
+					html = html + CLIENT_SCRIPT;
+				}
+
+				res.setHeader("Content-Type", "text/html");
+				res.send(html);
+				return;
+			}
+
+			// Not an HTML page — hand it to the normal static file handler
+			themeHandler(face.theme)(req, res, next);
 		});
 
 		// Only resolve once the server is genuinely accepting connections
