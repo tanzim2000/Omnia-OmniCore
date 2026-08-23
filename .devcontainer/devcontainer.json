@@ -1,39 +1,25 @@
 {
-	// Human-readable name shown in the Codespaces UI / VS Code
 	"name": "OmniCore Dev",
-
-	// Base image: official Node.js dev container, LTS (Node 20) on Debian Bookworm
-	// Using the Microsoft-maintained devcontainer image gives us git, npm, etc. pre-installed
 	"image": "mcr.microsoft.com/devcontainers/javascript-node:20-bookworm",
-
-	// VS Code-specific settings for this container
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
+	},
 	"customizations": {
 		"vscode": {
-			// Extensions auto-installed the moment the Codespace opens
 			"extensions": [
-				"dbaeumer.vscode-eslint",     // lint JS/Node code as you write it
-				"esbenp.prettier-vscode",     // auto-formatting
-				"eamodio.gitlens",            // richer git history/blame info
-				"ms-azuretools.vscode-docker" // handy later once OmniCore talks to Docker
+				"dbaeumer.vscode-eslint",
+				"esbenp.prettier-vscode",
+				"eamodio.gitlens",
+				"ms-azuretools.vscode-docker"
 			],
-			// Editor settings scoped to this container only (won't affect your local VS Code)
 			"settings": {
 				"editor.tabSize": 4,
-				"editor.insertSpaces": false, // tabs, not spaces — matches your preference
+				"editor.insertSpaces": false,
 				"editor.formatOnSave": true
 			}
 		}
 	},
-
-	// Ports OmniCore's Express server will run on — Codespaces auto-forwards these
-	// and gives you a clickable preview link. 3000 is the common Express default.
 	"forwardPorts": [3000, 4000],
-
-	// Runs once, right after the container is created — sets up npm project + Express
-	// (safe to re-run: npm init -y won't overwrite an existing package.json)
 	"postCreateCommand": "npm init -y && npm install express",
-
-	// Which user the container runs as. The base image ships a non-root "node" user,
-	// which is safer than running everything as root inside the container.
 	"remoteUser": "node"
 }

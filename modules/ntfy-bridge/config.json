@@ -1,0 +1,6 @@
+{
+	"server": "https://ntfy.sh",
+	"topic": "GitHub",
+	"since": "24h",
+	"limit": 6
+}

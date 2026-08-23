@@ -5,7 +5,7 @@
 			"name": "test",
 			"theme": "windows8",
 			"modules": [
-				"system-stats"
+				"system-stats", "docker-status", "ntfy-bridge"
 			]
 		}
 	]
