@@ -1,17 +1,12 @@
 // modules/prayer-times/index.js
 // Prayer times from the Aladhan API. Free, no key required.
-// Read-only.
 //
-// The tile leads with the NEXT prayer, since that's the thing worth
-// glancing at, and lists the rest of the day underneath.
+// Leads with the NEXT prayer, since that's what's worth glancing at, and
+// lists the rest of the day underneath.
 //
-// Times change once a day, so the cache is deliberately long — there's no
-// reason to ask a free API for the same answer every few seconds.
+// Times change once a day, so the cache is deliberately long.
 
-const { readConfig } = require("../../core/module-config");
 const { fetchCached } = require("../../core/module-fetch");
-
-const MODULE_ID = "prayer-times";
 
 // Aladhan identifies calculation methods by number. We store the readable
 // name in settings and map it here, so the admin page shows words rather
@@ -59,67 +54,61 @@ function unavailable() {
 	};
 }
 
-module.exports = function prayerTimesModule(app, options) {
-	app.get("/api/prayer-times", async (req, res) => {
-		const config = readConfig(MODULE_ID);
+module.exports = async function prayerTimes(config) {
+	const use12Hour = config.timeFormat === "12-hour";
+	const method = METHODS[config.method] || 2;
 
-		const use12Hour = config.timeFormat === "12-hour";
-		const method = METHODS[config.method] || 2;
+	// school: 0 = Shafi (earlier Asr), 1 = Hanafi (later Asr)
+	const school = config.school === "Hanafi" ? 1 : 0;
 
-		// school: 0 = Shafi (earlier Asr), 1 = Hanafi (later Asr)
-		const school = config.school === "Hanafi" ? 1 : 0;
+	const url =
+		"https://api.aladhan.com/v1/timings" +
+		"?latitude=" + encodeURIComponent(config.latitude) +
+		"&longitude=" + encodeURIComponent(config.longitude) +
+		"&method=" + method +
+		"&school=" + school;
 
-		const url =
-			"https://api.aladhan.com/v1/timings" +
-			"?latitude=" + encodeURIComponent(config.latitude) +
-			"&longitude=" + encodeURIComponent(config.longitude) +
-			"&method=" + method +
-			"&school=" + school;
-
-		// Include today's date in the cache key so the cached answer is
-		// dropped at midnight rather than carrying yesterday's times over
-		const { data } = await fetchCached(url, {
-			key: "prayer-times:" + new Date().toDateString() + ":" + url,
-			cacheSeconds: Number(config.refreshMinutes) * 60
-		});
-
-		if (!data || !data.data || !data.data.timings) {
-			res.json(unavailable());
-			return;
-		}
-
-		const timings = data.data.timings;
-
-		// Aladhan sometimes appends a timezone, e.g. "17:42 (CST)"
-		const clean = {};
-		for (const prayer of PRAYERS) {
-			if (!timings[prayer]) {
-				res.json(unavailable());
-				return;
-			}
-			clean[prayer] = timings[prayer].split(" ")[0];
-		}
-
-		const now = new Date();
-		const nowMinutes = now.getHours() * 60 + now.getMinutes();
-
-		// The first prayer still ahead of us today. If they've all passed,
-		// the next one is tomorrow's Fajr.
-		const upcoming = PRAYERS.find(
-			(prayer) => toMinutes(clean[prayer]) > nowMinutes
-		);
-
-		const nextPrayer = upcoming || "Fajr";
-
-		res.json({
-			title: "Prayer",
-			primary: formatTime(clean[nextPrayer], use12Hour),
-			secondary: upcoming ? nextPrayer : "Fajr (tomorrow)",
-			details: PRAYERS.map((prayer) => ({
-				label: prayer,
-				value: formatTime(clean[prayer], use12Hour)
-			})),
-			updated: new Date().toISOString()
-		});
+	// Include today's date in the cache key so the cached answer is dropped
+	// at midnight rather than carrying yesterday's times over
+	const { data } = await fetchCached(url, {
+		key: "prayer-times:" + new Date().toDateString() + ":" + url,
+		cacheSeconds: Number(config.refreshMinutes) * 60
 	});
+
+	if (!data || !data.data || !data.data.timings) {
+		return unavailable();
+	}
+
+	const timings = data.data.timings;
+
+	// Aladhan sometimes appends a timezone, e.g. "17:42 (CST)"
+	const clean = {};
+	for (const prayer of PRAYERS) {
+		if (!timings[prayer]) {
+			return unavailable();
+		}
+		clean[prayer] = timings[prayer].split(" ")[0];
+	}
+
+	const now = new Date();
+	const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+	// The first prayer still ahead of us today. If they've all passed, the
+	// next one is tomorrow's Fajr.
+	const upcoming = PRAYERS.find(
+		(prayer) => toMinutes(clean[prayer]) > nowMinutes
+	);
+
+	const nextPrayer = upcoming || "Fajr";
+
+	return {
+		title: "Prayer",
+		primary: formatTime(clean[nextPrayer], use12Hour),
+		secondary: upcoming ? nextPrayer : "Fajr (tomorrow)",
+		details: PRAYERS.map((prayer) => ({
+			label: prayer,
+			value: formatTime(clean[prayer], use12Hour)
+		})),
+		updated: new Date().toISOString()
+	};
 };

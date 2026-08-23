@@ -1,12 +1,6 @@
 {
 	"settings": [
 		{
-			"key": "label",
-			"label": "Tile title",
-			"type": "text",
-			"default": "Docker"
-		},
-		{
 			"key": "socketPath",
 			"label": "Docker socket",
 			"type": "text",

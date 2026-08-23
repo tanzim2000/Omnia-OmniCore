@@ -1,16 +1,8 @@
 // modules/ntfy-bridge/index.js
 // Shows recent notifications from an ntfy topic.
 // Read-only — it reads messages, it never sends them.
-//
-// Settings are DECLARED in settings.json next to this file, and the values
-// live in data/module-config/. We read them on every request rather than
-// once at startup, so changing a setting in the admin face takes effect
-// straight away with no restart.
 
-const { readConfig } = require("../../core/module-config");
 const { fetchCached } = require("../../core/module-fetch");
-
-const MODULE_ID = "ntfy-bridge";
 
 // Turn a timestamp into "3m", "2h", "4d" — short enough for a tile
 function timeAgo(seconds) {
@@ -22,74 +14,65 @@ function timeAgo(seconds) {
 	return Math.floor(elapsed / 86400) + "d";
 }
 
-module.exports = function ntfyBridgeModule(app, options) {
-	app.get("/api/ntfy-bridge", async (req, res) => {
-		// Read settings fresh each time so admin changes apply immediately
-		const config = readConfig(MODULE_ID);
-
-		if (!config.topic) {
-			res.json({
-				title: "Notifications",
-				primary: "—",
-				secondary: "No topic set",
-				details: [{ label: "Set a topic", value: "in Settings" }],
-				updated: new Date().toISOString()
-			});
-			return;
-		}
-
-		const url =
-			config.server + "/" + config.topic +
-			"/json?poll=1&since=" + config.since;
-
-		// ntfy streams one JSON object per line, so read it as text
-		const { data, stale } = await fetchCached(url, {
-			as: "text",
-			cacheSeconds: Number(config.refreshMinutes) * 60
-		});
-
-		if (data === null) {
-			res.json({
-				title: "Notifications",
-				primary: "—",
-				secondary: "Not reachable",
-				details: [{ label: "Server", value: config.server }],
-				updated: new Date().toISOString()
-			});
-			return;
-		}
-
-		let messages;
-
-		try {
-			messages = data
-				.split("\n")
-				.filter((line) => line.trim() !== "")
-				.map((line) => JSON.parse(line))
-				// ntfy also sends keepalive and open events — we only want
-				// actual messages
-				.filter((entry) => entry.event === "message")
-				.reverse(); // newest first
-		} catch (error) {
-			res.json({
-				title: "Notifications",
-				primary: "—",
-				secondary: "Unreadable reply",
-				details: [{ label: "Server", value: config.server }],
-				updated: new Date().toISOString()
-			});
-			return;
-		}
-
-		res.json({
+module.exports = async function ntfyBridge(config) {
+	if (!config.topic) {
+		return {
 			title: "Notifications",
-			primary: String(messages.length),
-			secondary: config.topic + (stale ? " (last known)" : ""),
-			details: messages.slice(0, config.limit).map((message) => ({
-				label: timeAgo(message.time),
-				value: message.title || message.message || ""
-			})),
+			primary: "—",
+			secondary: "No topic set",
+			details: [{ label: "Set a topic", value: "in Settings" }],
 			updated: new Date().toISOString()
-		});
+		};
+	}
+
+	const url =
+		config.server + "/" + config.topic + "/json?poll=1&since=" + config.since;
+
+	// ntfy streams one JSON object per line, so read it as text
+	const { data, stale } = await fetchCached(url, {
+		as: "text",
+		cacheSeconds: Number(config.refreshMinutes) * 60
 	});
+
+	if (data === null) {
+		return {
+			title: "Notifications",
+			primary: "—",
+			secondary: "Not reachable",
+			details: [{ label: "Server", value: config.server }],
+			updated: new Date().toISOString()
+		};
+	}
+
+	let messages;
+
+	try {
+		messages = data
+			.split("\n")
+			.filter((line) => line.trim() !== "")
+			.map((line) => JSON.parse(line))
+			// ntfy also sends keepalive and open events — we only want
+			// actual messages
+			.filter((entry) => entry.event === "message")
+			.reverse(); // newest first
+	} catch (error) {
+		return {
+			title: "Notifications",
+			primary: "—",
+			secondary: "Unreadable reply",
+			details: [{ label: "Server", value: config.server }],
+			updated: new Date().toISOString()
+		};
+	}
+
+	return {
+		title: "Notifications",
+		primary: String(messages.length),
+		secondary: config.topic + (stale ? " (last known)" : ""),
+		details: messages.slice(0, config.limit).map((message) => ({
+			label: timeAgo(message.time),
+			value: message.title || message.message || ""
+		})),
+		updated: new Date().toISOString()
+	};
 };

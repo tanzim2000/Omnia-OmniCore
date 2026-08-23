@@ -6,9 +6,17 @@
 // place for anything that WRITES.
 //
 // Structure:
-//   /                  Settings — the sections of OmniCore you can change
-//   /modules           Modules that have settings
-//   /modules/:id       One module's settings form
+//   /                                    Settings
+//   /faces                               Every dashboard face
+//   /faces/:id                           One face: name, theme, link to modules
+//   /faces/:id/modules                   The module instances on that face
+//   /faces/:id/modules/add               Pick a module to add
+//   /faces/:id/modules/:instanceId       One instance's settings
+//
+// Modules sit under a face because a module instance belongs to a face. The
+// same module can appear more than once with different settings — two
+// weather tiles for two cities — so there's no single global "weather" to
+// configure.
 //
 // Every settings form is generated from what a module declared in its
 // settings.json. Modules never supply HTML, which is what keeps admin pages
@@ -19,12 +27,12 @@ const { listModules } = require("./module-loader");
 const {
 	readManifest,
 	readSchema,
-	readConfig,
-	writeConfig
+	applyDefaults,
+	cleanConfig
 } = require("./module-config");
 const { listThemes } = require("./theme-loader");
-const { readFaces } = require("./face-store");
-const { updateFace } = require("./face-loader");
+const faceStore = require("./face-store");
+const { refresh } = require("./face-loader");
 const auth = require("./admin-auth");
 
 const ADMIN_PORT = 3000;
@@ -141,6 +149,7 @@ const styles = `
 	.status.bad { color: #ff8a8a; }
 
 	.footer { opacity: 0.4; font-size: 13px; }
+	.danger { color: #ff8a8a; font-size: 14px; cursor: pointer; }
 
 	/* Glass-style button with a soft light reflection */
 	.glass {
@@ -197,6 +206,66 @@ function page(title, body, script, bodyClass) {
 	<script>${script || ""}</script>
 </body>
 </html>`;
+}
+
+function notFound(heading, backHref, backLabel) {
+	return page(
+		"Not found",
+		`<div class="panel">
+			<h1>${escapeHtml(heading)}</h1>
+			<p><a class="back" href="${backHref}">← ${escapeHtml(backLabel)}</a></p>
+		</div>`
+	);
+}
+
+// Turn a module's declared settings into form fields
+function renderFields(schema, config) {
+	return schema
+		.map((field) => {
+			const value = config[field.key];
+			const help = field.help
+				? `<div class="help">${escapeHtml(field.help)}</div>`
+				: "";
+
+			let input;
+
+			if (field.type === "boolean") {
+				input =
+					`<input type="checkbox" data-key="${escapeHtml(field.key)}" ` +
+					`data-type="boolean" ${value ? "checked" : ""}>`;
+			} else if (field.type === "select") {
+				const options = (field.options || [])
+					.map(
+						(option) =>
+							`<option value="${escapeHtml(option)}" ` +
+							`${option === value ? "selected" : ""}>` +
+							`${escapeHtml(option)}</option>`
+					)
+					.join("");
+
+				input =
+					`<select data-key="${escapeHtml(field.key)}" ` +
+					`data-type="select">${options}</select>`;
+			} else {
+				// text, url, number, password all render as an input
+				const type = ["url", "number", "password"].includes(field.type)
+					? field.type
+					: "text";
+
+				input =
+					`<input type="${type}" data-key="${escapeHtml(field.key)}" ` +
+					`data-type="${escapeHtml(field.type)}" ` +
+					`value="${escapeHtml(value === undefined ? "" : value)}">`;
+			}
+
+			return `
+				<div class="field">
+					<label>${escapeHtml(field.label || field.key)}</label>
+					${input}
+					${help}
+				</div>`;
+		})
+		.join("");
 }
 
 // Shared by the setup and login pages — both are a username, a password,
@@ -342,18 +411,9 @@ function startAdminFace() {
 	});
 
 	// Settings — the sections of OmniCore you can change.
-	// OmniCore's own settings will join these as they appear.
+	// OmniCore's own settings will join Faces here as they appear.
 	app.get("/", (req, res) => {
-		const moduleCount = listModules().filter((id) => readSchema(id)).length;
-		const faceCount = readFaces().length;
-
-		const moduleDetail = moduleCount
-			? moduleCount + (moduleCount === 1 ? " module" : " modules")
-			: "Nothing to configure";
-
-		const faceDetail = faceCount
-			? faceCount + (faceCount === 1 ? " face" : " faces")
-			: "No faces yet";
+		const count = faceStore.readFaces().length;
 
 		const body = `
 			<div class="panel">
@@ -362,11 +422,7 @@ function startAdminFace() {
 			<div class="panel">
 				<a class="row" href="/faces">
 					<strong>Faces</strong>
-					<span>${faceDetail}</span>
-				</a>
-				<a class="row" href="/modules">
-					<strong>Modules</strong>
-					<span>${moduleDetail}</span>
+					<span>${count ? count + (count === 1 ? " face" : " faces") : "No faces yet"}</span>
 				</a>
 			</div>
 			<div class="panel footer">
@@ -378,14 +434,19 @@ function startAdminFace() {
 
 	// Every dashboard face
 	app.get("/faces", (req, res) => {
-		const faces = readFaces()
-			.map(
-				(face) => `
+		const faces = faceStore
+			.readFaces()
+			.map((face) => {
+				const count = face.instances.length;
+
+				return `
 				<a class="row" href="/faces/${face.id}">
 					<strong>${escapeHtml(face.name)}</strong>
-					<span>port ${face.id} · ${escapeHtml(face.theme || "no theme")}</span>
-				</a>`
-			)
+					<span>port ${face.id} · ${count}${
+						count === 1 ? " module" : " modules"
+					}</span>
+				</a>`;
+			})
 			.join("");
 
 		const body = `
@@ -400,22 +461,12 @@ function startAdminFace() {
 		res.send(page("Faces", body));
 	});
 
-	// One face's settings. A face has exactly four attributes; its ID is its
-	// port number and can't change, so the other three are what's editable.
+	// One face: its name, its theme, and a way into its modules
 	app.get("/faces/:id", (req, res) => {
-		const id = Number(req.params.id);
-		const face = readFaces().find((candidate) => candidate.id === id);
+		const face = faceStore.findFace(Number(req.params.id));
 
 		if (!face) {
-			res.status(404).send(
-				page(
-					"Not found",
-					`<div class="panel">
-						<h1>No such face</h1>
-						<p><a class="back" href="/faces">← Faces</a></p>
-					</div>`
-				)
-			);
+			res.status(404).send(notFound("No such face", "/faces", "Faces"));
 			return;
 		}
 
@@ -430,22 +481,19 @@ function startAdminFace() {
 			)
 			.join("");
 
-		const moduleOptions = listModules()
-			.map(
-				(moduleId) => `
-				<label class="option">
-					<input type="checkbox" name="module" value="${escapeHtml(moduleId)}"
-						${face.modules.includes(moduleId) ? "checked" : ""}>
-					<span>${escapeHtml(readManifest(moduleId).name)}</span>
-				</label>`
-			)
-			.join("");
+		const count = face.instances.length;
 
 		const body = `
 			<div class="panel">
 				<a class="back" href="/faces">← Faces</a>
 				<h1 style="margin-top:12px">${escapeHtml(face.name)}</h1>
 				<p class="lede">Running on port ${face.id}</p>
+			</div>
+			<div class="panel">
+				<a class="row" href="/faces/${face.id}/modules">
+					<strong>Modules</strong>
+					<span>${count ? count + (count === 1 ? " module" : " modules") : "None added yet"}</span>
+				</a>
 			</div>
 			<div class="panel">
 				<div class="field">
@@ -458,47 +506,32 @@ function startAdminFace() {
 					${themeOptions || '<div class="empty">No themes installed.</div>'}
 				</div>
 
-				<div class="field">
-					<label>Modules</label>
-					${moduleOptions || '<div class="empty">No modules installed.</div>'}
-				</div>
-
 				<button class="glass" id="save">Save face</button>
 				<p class="status" id="status"></p>
 			</div>`;
 
 		const script = `
-			const faceId = ${face.id};
-
 			document.getElementById("save").addEventListener("click", async function () {
 				const button = this;
 				const status = document.getElementById("status");
-
 				const themeInput = document.querySelector('input[name="theme"]:checked');
-
-				const modules = Array.from(
-					document.querySelectorAll('input[name="module"]:checked')
-				).map(function (input) { return input.value; });
 
 				button.disabled = true;
 				status.textContent = "";
 				status.className = "status";
 
 				try {
-					const response = await fetch("/faces/" + faceId, {
+					const response = await fetch("/faces/${face.id}", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
 							name: document.getElementById("name").value,
-							theme: themeInput ? themeInput.value : null,
-							modules: modules
+							theme: themeInput ? themeInput.value : null
 						})
 					});
 
 					if (!response.ok) throw new Error();
 
-					// The face resolves all of this per request, so it's
-					// already live — and any display showing it reloads itself
 					status.textContent = "Saved. The face has updated itself.";
 					status.className = "status good";
 				} catch (error) {
@@ -513,153 +546,211 @@ function startAdminFace() {
 		res.send(page(face.name, body, script));
 	});
 
-	// Save a face. Goes through face-loader so the change is persisted,
-	// applied to the running face, and pushed to any display showing it.
 	app.post("/faces/:id", (req, res) => {
-		const updated = updateFace(Number(req.params.id), {
-			name: req.body.name,
-			theme: req.body.theme,
-			modules: req.body.modules
-		});
+		const id = Number(req.params.id);
 
-		if (!updated) {
+		if (!faceStore.updateFace(id, {
+			name: req.body.name,
+			theme: req.body.theme
+		})) {
 			res.status(404).json({ error: "No such face" });
 			return;
 		}
 
-		res.json(updated);
+		res.json(refresh(id));
 	});
 
-	// Modules that have settings. Ones with nothing to change aren't listed,
-	// since there'd be nowhere for them to go.
-	app.get("/modules", (req, res) => {
-		const modules = listModules()
-			.filter((id) => readSchema(id))
-			.map((id) => {
-				const manifest = readManifest(id);
-				const count = readSchema(id).length;
+	// The module instances on a face. The same module may appear more than
+	// once, each with its own settings.
+	app.get("/faces/:id/modules", (req, res) => {
+		const face = faceStore.findFace(Number(req.params.id));
 
-				// Prefer the module's own description; fall back to a count
-				const detail =
-					manifest.description ||
-					count + (count === 1 ? " setting" : " settings");
+		if (!face) {
+			res.status(404).send(notFound("No such face", "/faces", "Faces"));
+			return;
+		}
+
+		const instances = face.instances
+			.map((instance) => {
+				const manifest = readManifest(instance.module);
 
 				return `
-					<a class="row" href="/modules/${encodeURIComponent(id)}">
-						<strong>${escapeHtml(manifest.name)}</strong>
-						<span>${escapeHtml(detail)}</span>
-					</a>`;
+				<a class="row" href="/faces/${face.id}/modules/${encodeURIComponent(instance.id)}">
+					<strong>${escapeHtml(instance.label || manifest.name)}</strong>
+					<span>${escapeHtml(manifest.name)}</span>
+				</a>`;
 			})
 			.join("");
 
 		const body = `
 			<div class="panel">
-				<a class="back" href="/">← Settings</a>
+				<a class="back" href="/faces/${face.id}">← ${escapeHtml(face.name)}</a>
 				<h1 style="margin-top:12px">Modules</h1>
 			</div>
 			<div class="panel">
-				${modules || '<div class="empty">No installed module has settings.</div>'}
+				${instances || '<div class="empty">No modules on this face yet.</div>'}
+			</div>
+			<div class="panel">
+				<a class="glass" href="/faces/${face.id}/modules/add"
+					style="display:block;text-align:center;box-sizing:border-box">
+					Add a module
+				</a>
 			</div>`;
 
 		res.send(page("Modules", body));
 	});
 
-	// A module's settings form, generated from what the module declared
-	app.get("/modules/:moduleId", (req, res) => {
-		const moduleId = req.params.moduleId;
-		const schema = readSchema(moduleId);
+	// Pick a module to add. Every installed module is listed, including ones
+	// already on this face — adding a second weather is the whole point.
+	app.get("/faces/:id/modules/add", (req, res) => {
+		const face = faceStore.findFace(Number(req.params.id));
 
-		if (!schema) {
-			res.status(404).send(
-				page(
-					"Not found",
-					`<div class="panel">
-						<h1>No settings</h1>
-						<p class="empty">This module has nothing to configure.</p>
-						<p><a class="back" href="/modules">← Modules</a></p>
-					</div>`
-				)
-			);
+		if (!face) {
+			res.status(404).send(notFound("No such face", "/faces", "Faces"));
 			return;
 		}
 
-		const config = readConfig(moduleId);
-		const manifest = readManifest(moduleId);
-
-		const fields = schema
-			.map((field) => {
-				const value = config[field.key];
-				const help = field.help
-					? `<div class="help">${escapeHtml(field.help)}</div>`
-					: "";
-
-				let input;
-
-				if (field.type === "boolean") {
-					input =
-						`<input type="checkbox" data-key="${escapeHtml(field.key)}" ` +
-						`data-type="boolean" ${value ? "checked" : ""}>`;
-				} else if (field.type === "select") {
-					const options = (field.options || [])
-						.map(
-							(option) =>
-								`<option value="${escapeHtml(option)}" ` +
-								`${option === value ? "selected" : ""}>` +
-								`${escapeHtml(option)}</option>`
-						)
-						.join("");
-
-					input =
-						`<select data-key="${escapeHtml(field.key)}" ` +
-						`data-type="select">${options}</select>`;
-				} else {
-					// text, url, number, password all render as an input
-					const type = ["url", "number", "password"].includes(field.type)
-						? field.type
-						: "text";
-
-					input =
-						`<input type="${type}" data-key="${escapeHtml(field.key)}" ` +
-						`data-type="${escapeHtml(field.type)}" ` +
-						`value="${escapeHtml(value === undefined ? "" : value)}">`;
-				}
+		const modules = listModules()
+			.map((moduleId) => {
+				const manifest = readManifest(moduleId);
 
 				return `
-					<div class="field">
-						<label>${escapeHtml(field.label || field.key)}</label>
-						${input}
-						${help}
-					</div>`;
+				<a class="row" href="#" onclick="addModule('${escapeHtml(moduleId)}'); return false;">
+					<strong>${escapeHtml(manifest.name)}</strong>
+					<span>${escapeHtml(manifest.description || moduleId)}</span>
+				</a>`;
 			})
 			.join("");
 
 		const body = `
 			<div class="panel">
-				<a class="back" href="/modules">← Modules</a>
-				<h1 style="margin-top:12px">${escapeHtml(manifest.name)}</h1>
-				${
-					manifest.description
-						? `<p class="lede">${escapeHtml(manifest.description)}</p>`
-						: ""
-				}
+				<a class="back" href="/faces/${face.id}/modules">← Modules</a>
+				<h1 style="margin-top:12px">Add a module</h1>
+				<p class="lede">You can add the same module more than once.</p>
 			</div>
 			<div class="panel">
-				${fields}
-				<button class="glass" id="save">Save settings</button>
+				${modules || '<div class="empty">No modules installed.</div>'}
+			</div>
+			<p class="status" id="status"></p>`;
+
+		const script = `
+			async function addModule(moduleId) {
+				const status = document.getElementById("status");
+
+				try {
+					const response = await fetch("/faces/${face.id}/modules", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ module: moduleId })
+					});
+
+					if (!response.ok) throw new Error();
+
+					const instance = await response.json();
+
+					// Straight into its settings — a new instance usually
+					// needs configuring before it's useful
+					location.href = "/faces/${face.id}/modules/" +
+						encodeURIComponent(instance.id);
+				} catch (error) {
+					status.textContent = "Couldn't add that module.";
+					status.className = "status bad";
+				}
+			}
+		`;
+
+		res.send(page("Add a module", body, script));
+	});
+
+	app.post("/faces/:id/modules", (req, res) => {
+		const id = Number(req.params.id);
+		const moduleId = req.body.module;
+
+		if (!listModules().includes(moduleId)) {
+			res.status(400).json({ error: "No such module installed" });
+			return;
+		}
+
+		const instance = faceStore.addInstance(
+			id,
+			moduleId,
+			readManifest(moduleId).name,
+			{}
+		);
+
+		if (!instance) {
+			res.status(404).json({ error: "No such face" });
+			return;
+		}
+
+		refresh(id);
+		res.json(instance);
+	});
+
+	// One instance's settings: its label, plus whatever its module declared
+	app.get("/faces/:id/modules/:instanceId", (req, res) => {
+		const face = faceStore.findFace(Number(req.params.id));
+
+		if (!face) {
+			res.status(404).send(notFound("No such face", "/faces", "Faces"));
+			return;
+		}
+
+		const instance = face.instances.find(
+			(candidate) => candidate.id === req.params.instanceId
+		);
+
+		if (!instance) {
+			res.status(404).send(
+				notFound("No such module", `/faces/${face.id}/modules`, "Modules")
+			);
+			return;
+		}
+
+		const manifest = readManifest(instance.module);
+		const schema = readSchema(instance.module);
+		const config = applyDefaults(instance.module, instance.config);
+
+		const body = `
+			<div class="panel">
+				<a class="back" href="/faces/${face.id}/modules">← Modules</a>
+				<h1 style="margin-top:12px">${escapeHtml(instance.label || manifest.name)}</h1>
+				<p class="lede">${escapeHtml(manifest.description || manifest.name)}</p>
+			</div>
+			<div class="panel">
+				<div class="field">
+					<label for="label">Label</label>
+					<input type="text" id="label" value="${escapeHtml(instance.label)}">
+					<div class="help">
+						Shown as the tile's title. Useful when the same module
+						appears more than once.
+					</div>
+				</div>
+
+				${
+					schema.length
+						? renderFields(schema, config)
+						: '<div class="empty">This module has nothing else to configure.</div>'
+				}
+
+				<button class="glass" id="save">Save</button>
 				<p class="status" id="status"></p>
+			</div>
+			<div class="panel footer">
+				<span class="danger" id="remove">Remove from this face</span>
 			</div>`;
 
 		const script = `
-			const moduleId = ${JSON.stringify(moduleId)};
+			const base = "/faces/${face.id}/modules/${encodeURIComponent(instance.id)}";
 
 			document.getElementById("save").addEventListener("click", async function () {
 				const button = this;
 				const status = document.getElementById("status");
-				const values = {};
+				const config = {};
 
-				// Collect every field on the page by the key it declared
+				// Collect every module field by the key it declared
 				for (const input of document.querySelectorAll("[data-key]")) {
-					values[input.dataset.key] =
+					config[input.dataset.key] =
 						input.dataset.type === "boolean" ? input.checked : input.value;
 				}
 
@@ -668,19 +759,18 @@ function startAdminFace() {
 				status.className = "status";
 
 				try {
-					const response = await fetch(
-						"/modules/" + encodeURIComponent(moduleId),
-						{
-							method: "POST",
-							headers: { "Content-Type": "application/json" },
-							body: JSON.stringify(values)
-						}
-					);
+					const response = await fetch(base, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							label: document.getElementById("label").value,
+							config: config
+						})
+					});
 
 					if (!response.ok) throw new Error();
 
-					// Modules read their settings per request, so this is
-					// already live — no restart needed
+					// The face reads this per request, so it's already live
 					status.textContent = "Saved. Already in effect.";
 					status.className = "status good";
 				} catch (error) {
@@ -690,21 +780,56 @@ function startAdminFace() {
 
 				button.disabled = false;
 			});
+
+			document.getElementById("remove").addEventListener("click", async function () {
+				if (!confirm("Remove this module from the face?")) return;
+
+				await fetch(base, { method: "DELETE" });
+				location.href = "/faces/${face.id}/modules";
+			});
 		`;
 
-		res.send(page(manifest.name, body, script));
+		res.send(page(instance.label || manifest.name, body, script));
 	});
 
-	// Save a module's settings
-	app.post("/modules/:moduleId", (req, res) => {
-		const moduleId = req.params.moduleId;
+	app.post("/faces/:id/modules/:instanceId", (req, res) => {
+		const id = Number(req.params.id);
+		const face = faceStore.findFace(id);
 
-		if (!readSchema(moduleId)) {
-			res.status(404).json({ error: "This module has no settings" });
+		if (!face) {
+			res.status(404).json({ error: "No such face" });
 			return;
 		}
 
-		res.json(writeConfig(moduleId, req.body));
+		const instance = face.instances.find(
+			(candidate) => candidate.id === req.params.instanceId
+		);
+
+		if (!instance) {
+			res.status(404).json({ error: "No such module on this face" });
+			return;
+		}
+
+		const updated = faceStore.updateInstance(id, instance.id, {
+			label: req.body.label,
+			// Keep only what the module declared, converted to its real types
+			config: cleanConfig(instance.module, req.body.config)
+		});
+
+		refresh(id);
+		res.json(updated);
+	});
+
+	app.delete("/faces/:id/modules/:instanceId", (req, res) => {
+		const id = Number(req.params.id);
+
+		if (!faceStore.removeInstance(id, req.params.instanceId)) {
+			res.status(404).json({ error: "No such module on this face" });
+			return;
+		}
+
+		refresh(id);
+		res.json({ ok: true });
 	});
 
 	app.listen(ADMIN_PORT, () => {

@@ -1,13 +1,6 @@
 {
 	"settings": [
 		{
-			"key": "label",
-			"label": "Place name",
-			"type": "text",
-			"default": "Weather",
-			"help": "Shown as the tile's title"
-		},
-		{
 			"key": "latitude",
 			"label": "Latitude",
 			"type": "number",

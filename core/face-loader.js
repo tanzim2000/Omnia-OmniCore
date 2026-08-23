@@ -4,13 +4,14 @@
 // no OmniCore restart needed.
 //
 // Everything about a face is resolved PER REQUEST — its theme, its name,
-// and which modules it may use. That's what lets any of them be edited
-// while OmniCore keeps running.
+// and its module instances. That's what lets any of them be edited while
+// OmniCore keeps running.
 
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const { mountModules, listModules } = require("./module-loader");
+const { loadModule } = require("./module-loader");
+const { applyDefaults } = require("./module-config");
 const { listThemes } = require("./theme-loader");
 const faceStore = require("./face-store");
 const renderFallbackPage = require("./fallback-page");
@@ -18,6 +19,18 @@ const { attachEvents, pushToFace, CLIENT_SCRIPT } = require("./face-events");
 
 // Running faces, keyed by port: { server, face }
 const runningFaces = new Map();
+
+// A valid envelope saying something went wrong, so a failing module shows
+// as one dead tile rather than breaking the page
+function problemEnvelope(label, reason) {
+	return {
+		title: label,
+		primary: "—",
+		secondary: reason,
+		details: [],
+		updated: new Date().toISOString()
+	};
+}
 
 function startFace(face) {
 	return new Promise((resolve) => {
@@ -35,34 +48,61 @@ function startFace(face) {
 		// OmniCore's push channel — the /events stream browsers listen on
 		attachEvents(app, face);
 
-		// The face's own identity — themes fetch this to know which modules
-		// they can render. Registered before the theme's files so a theme
-		// can never shadow it with its own file.
+		// The face's own identity — themes fetch this to know what to draw.
+		// Registered before the theme's files so a theme can never shadow it.
 		app.get("/identity", (req, res) => {
 			res.json(face);
+		});
+
+		// One route for every module instance on this face. OmniCore owns
+		// the routing: it finds the instance, hands the module its settings,
+		// and returns whatever the module gives back.
+		//
+		// Only instances belonging to THIS face resolve here, so per-face
+		// scoping needs no separate check.
+		app.get("/api/:instanceId", async (req, res) => {
+			const instance = face.instances.find(
+				(candidate) => candidate.id === req.params.instanceId
+			);
+
+			if (!instance) {
+				res.status(404).json({ error: "No such instance on this face" });
+				return;
+			}
+
+			const label = instance.label || instance.module;
+			const moduleFn = loadModule(instance.module);
+
+			if (!moduleFn) {
+				res.json(problemEnvelope(label, "Module not installed"));
+				return;
+			}
+
+			try {
+				const config = applyDefaults(instance.module, instance.config);
+				const envelope = await moduleFn(config);
+
+				// The instance's label wins over whatever the module called
+				// itself — that's how two weather tiles get told apart
+				if (instance.label) {
+					envelope.title = instance.label;
+				}
+
+				res.json(envelope);
+			} catch (error) {
+				// Catching here means a badly written module costs you one
+				// tile, not the whole face
+				console.log(
+					`  Module "${instance.module}" failed: ${error.message}`
+				);
+				res.json(problemEnvelope(label, "Module error"));
+			}
 		});
 
 		// Called when the user picks a theme from the fallback screen
 		app.post("/select-theme", (req, res) => {
 			res.json(updateFace(face.id, { theme: req.body.theme }));
 		});
-
-		// Only the modules this face has been given are reachable here.
-		// We mount every module's routes below, then check this list on each
-		// request — so changing a face's modules takes effect immediately
-		// instead of needing the face restarted.
-		app.use((req, res, next) => {
-			const match = req.path.match(/^\/api\/([^/]+)/);
-
-			if (match && !face.modules.includes(match[1])) {
-				res.status(404).json({ error: "Module not enabled for this face" });
-				return;
-			}
-
-			next();
-		});
-
-		mountModules(app, listModules());
 
 		// Caches one static-file handler per theme, so we aren't rebuilding
 		// it on every single request
@@ -140,13 +180,10 @@ function startFace(face) {
 	});
 }
 
-// Change a face and have it take effect right away.
-//
-// Three things have to happen together, which is why they live in one
-// place: the change is saved to disk, the copy the running face is using
-// is updated, and every browser showing that face is told to reload.
-function updateFace(id, changes) {
-	const updated = faceStore.updateFace(id, changes);
+// Keep a running face in step with what's just been saved, and tell any
+// display showing it to pick up the change.
+function refresh(id) {
+	const updated = faceStore.findFace(id);
 
 	if (!updated) {
 		return null;
@@ -161,8 +198,16 @@ function updateFace(id, changes) {
 	}
 
 	pushToFace(id, "face-changed", updated);
-
 	return updated;
 }
 
-module.exports = { startFace, updateFace };
+// Change a face's own attributes and have it take effect right away
+function updateFace(id, changes) {
+	if (!faceStore.updateFace(id, changes)) {
+		return null;
+	}
+
+	return refresh(id);
+}
+
+module.exports = { startFace, updateFace, refresh };

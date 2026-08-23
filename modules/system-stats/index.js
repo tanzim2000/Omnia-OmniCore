@@ -1,12 +1,11 @@
 // modules/system-stats/index.js
 // Reports how the machine running OmniCore is doing.
-// Backend only — it returns data in the standard display envelope and
-// takes no view on how any of it should look. That's the theme's job.
+//
+// A module is one function: it's handed its settings and returns data.
+// It never renders anything and never touches routing — the theme decides
+// how this looks, OmniCore decides where it lives.
 
 const os = require("os");
-const { readConfig } = require("../../core/module-config");
-
-const MODULE_ID = "system-stats";
 
 // Turn raw bytes into something readable, e.g. "3.1 GB"
 function formatBytes(bytes) {
@@ -58,33 +57,28 @@ function cpuUsage() {
 				return;
 			}
 
-			const usage = 100 - (idleDiff / totalDiff) * 100;
-			resolve(Math.round(usage));
+			resolve(Math.round(100 - (idleDiff / totalDiff) * 100));
 		}, 200);
 	});
 }
 
-module.exports = function systemStatsModule(app, options) {
-	app.get("/api/system-stats", async (req, res) => {
-		const config = readConfig(MODULE_ID);
+module.exports = async function systemStats(config) {
+	const usedMemory = os.totalmem() - os.freemem();
+	const cpu = await cpuUsage();
 
-		const usedMemory = os.totalmem() - os.freemem();
-		const cpu = await cpuUsage();
-
-		res.json({
-			title: config.label || "System",
-			primary: cpu + "%",
-			secondary: "CPU",
-			details: [
-				{
-					label: "Memory",
-					value: formatBytes(usedMemory) + " / " + formatBytes(os.totalmem())
-				},
-				{ label: "Uptime", value: formatUptime(os.uptime()) },
-				{ label: "Host", value: os.hostname() },
-				{ label: "Cores", value: String(os.cpus().length) }
-			],
-			updated: new Date().toISOString()
-		});
-	});
+	return {
+		title: "System",
+		primary: cpu + "%",
+		secondary: "CPU",
+		details: [
+			{
+				label: "Memory",
+				value: formatBytes(usedMemory) + " / " + formatBytes(os.totalmem())
+			},
+			{ label: "Uptime", value: formatUptime(os.uptime()) },
+			{ label: "Host", value: os.hostname() },
+			{ label: "Cores", value: String(os.cpus().length) }
+		],
+		updated: new Date().toISOString()
+	};
 };

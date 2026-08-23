@@ -1,66 +1,131 @@
 // core/control-face.js
 // The control face on port 4000. OmniVision talks to this to discover and
-// pick which dashboard face to display. Also where new dashboard faces
-// (4001, 4002, ...) get created via a proper setup page.
+// pick which dashboard face to display. It's also where new faces are set
+// up, through a step-by-step wizard.
+//
+// The wizard holds everything in the browser and only commits at "Finish".
+// Nothing is written along the way, so Cancel leaves no half-configured
+// modules behind on a face that might be live on a display.
+//
+// This is the SETUP path. Changing one setting later is done in the admin
+// face, which edits directly — a wizard is good at setting things up and
+// bad at changing one thing afterwards.
 
 const express = require("express");
-const { readFaces, createFace } = require("./face-store");
+const faceStore = require("./face-store");
 const { startFace } = require("./face-loader");
 const { listThemes } = require("./theme-loader");
 const { listModules } = require("./module-loader");
+const { readManifest, readSchema, applyDefaults } = require("./module-config");
 
 const CONTROL_PORT = 4000;
 
-// Shared styling for both control pages — black bg, white text, glass buttons
 const styles = `
+	* { box-sizing: border-box; }
+
 	body {
 		background: #000;
 		color: #fff;
 		font-family: system-ui, sans-serif;
 		min-height: 100vh;
 		margin: 0;
+		padding: 40px 24px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		justify-content: center;
 		gap: 24px;
-		padding: 40px 20px;
-		box-sizing: border-box;
 	}
 
 	h1 { font-weight: 300; font-size: 28px; margin: 0; }
-	h2 { font-weight: 300; font-size: 18px; margin: 0 0 12px 0; opacity: 0.7; }
+	h2 { font-weight: 400; font-size: 15px; margin: 0 0 14px 0; opacity: 0.6; }
 
-	.list { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; }
+	.lede { opacity: 0.55; font-size: 14px; margin: 10px 0 0 0; }
 
-	.face {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		padding: 12px 20px;
+	a { color: #fff; text-decoration: none; }
+
+	.panel { width: 100%; max-width: 900px; }
+	.narrow { max-width: 460px; }
+
+	/* The two rounded squares, side by side */
+	.columns {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 20px;
+		width: 100%;
+	}
+
+	.square {
 		border: 1px solid rgba(255, 255, 255, 0.12);
-		border-radius: 10px;
+		border-radius: 16px;
+		padding: 20px;
+		min-height: 340px;
+	}
+
+	/* Flat buttons — the module picker. Deliberately plainer than the
+	   glass buttons, which are reserved for moving through the wizard. */
+	.flat {
+		display: block;
+		width: 100%;
+		text-align: left;
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 8px;
 		color: #fff;
-		text-decoration: none;
+		font-size: 15px;
+		font-family: inherit;
+		padding: 12px 16px;
+		margin-bottom: 8px;
 		cursor: pointer;
 	}
 
-	.face:hover { background: rgba(255, 255, 255, 0.05); }
-	.face span { opacity: 0.6; font-size: 14px; }
+	.flat:hover { background: rgba(255, 255, 255, 0.1); }
+	.flat small { display: block; opacity: 0.45; font-size: 12px; margin-top: 3px; }
 
-	.panel {
+	/* An item in the bucket. Removable while picking, read-only afterwards. */
+	.picked {
+		display: block;
 		width: 100%;
-		max-width: 420px;
-		display: flex;
-		flex-direction: column;
-		gap: 20px;
+		text-align: left;
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 8px;
+		color: #fff;
+		font-size: 15px;
+		font-family: inherit;
+		padding: 12px 16px;
+		margin-bottom: 8px;
 	}
 
-	label { display: block; font-size: 14px; opacity: 0.7; margin-bottom: 8px; }
+	.picked.removable { cursor: pointer; }
+	.picked.removable:hover {
+		background: rgba(255, 120, 120, 0.12);
+		border-color: rgba(255, 120, 120, 0.3);
+	}
 
-	input[type="text"] {
+	.picked small { display: block; opacity: 0.45; font-size: 12px; margin-top: 3px; }
+
+	/* The instance being configured right now */
+	.picked.current {
+		background: rgba(255, 255, 255, 0.12);
+		border-color: rgba(255, 255, 255, 0.35);
+	}
+
+	.field { margin-bottom: 18px; }
+
+	label {
+		display: block;
+		font-size: 14px;
+		opacity: 0.7;
+		margin-bottom: 8px;
+	}
+
+	.help { font-size: 12px; opacity: 0.45; margin-top: 6px; }
+
+	input[type="text"],
+	input[type="url"],
+	input[type="number"],
+	select {
 		width: 100%;
-		box-sizing: border-box;
 		background: rgba(255, 255, 255, 0.06);
 		border: 1px solid rgba(255, 255, 255, 0.15);
 		border-radius: 10px;
@@ -78,11 +143,37 @@ const styles = `
 		border-radius: 10px;
 		margin-bottom: 8px;
 		cursor: pointer;
+		font-size: 15px;
 	}
 
 	.option:hover { background: rgba(255, 255, 255, 0.05); }
+	.option input { width: 17px; height: 17px; }
 
-	.empty { opacity: 0.5; font-size: 14px; }
+	.empty { opacity: 0.4; font-size: 14px; }
+	.status { font-size: 14px; min-height: 20px; color: #ff8a8a; }
+
+	.review-row {
+		display: flex;
+		justify-content: space-between;
+		gap: 16px;
+		padding: 11px 0;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		font-size: 15px;
+	}
+
+	.review-row span { opacity: 0.55; }
+
+	/* Wizard navigation, bottom right */
+	.actions {
+		display: flex;
+		justify-content: flex-end;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		max-width: 900px;
+	}
+
+	.actions.narrow { max-width: 460px; }
 
 	/* Glass-style button with a soft light reflection */
 	.glass {
@@ -93,18 +184,45 @@ const styles = `
 		border-radius: 12px;
 		backdrop-filter: blur(12px);
 		color: #fff;
-		font-size: 16px;
-		padding: 16px 32px;
+		font-size: 15px;
+		font-family: inherit;
+		padding: 13px 30px;
 		cursor: pointer;
-		text-decoration: none;
-		display: inline-block;
-		text-align: center;
 	}
 
 	.glass:hover { background: rgba(255, 255, 255, 0.12); }
-	.glass:disabled { opacity: 0.35; cursor: not-allowed; }
+	.glass:disabled { opacity: 0.3; cursor: not-allowed; }
 
 	.glass::before {
+		content: "";
+		position: absolute;
+		top: 0; left: 0; right: 0;
+		height: 50%;
+		background: linear-gradient(
+			to bottom, rgba(255, 255, 255, 0.14), transparent
+		);
+		pointer-events: none;
+	}
+
+	.face {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 14px 20px;
+		border-radius: 12px;
+		margin-bottom: 10px;
+		position: relative;
+		overflow: hidden;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		backdrop-filter: blur(12px);
+		cursor: pointer;
+	}
+
+	.face:hover { background: rgba(255, 255, 255, 0.12); }
+	.face span { opacity: 0.55; font-size: 13px; }
+
+	.face::before {
 		content: "";
 		position: absolute;
 		top: 0; left: 0; right: 0;
@@ -134,18 +252,45 @@ const portLinkScript = `
 	}
 `;
 
+function escapeHtml(text) {
+	return String(text).replace(/[&<>"]/g, function (character) {
+		return {
+			"&": "&amp;",
+			"<": "&lt;",
+			">": "&gt;",
+			'"': "&quot;"
+		}[character];
+	});
+}
+
+function page(title, body, script) {
+	return `<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>${escapeHtml(title)} — OmniCore</title>
+	<style>${styles}</style>
+</head>
+<body>
+	${body}
+	<script>${script || ""}</script>
+</body>
+</html>`;
+}
+
 function startControlFace() {
 	const app = express();
 	app.use(express.json());
 
 	// Machine-readable face registry — this is what OmniVision will call
 	app.get("/faces", (req, res) => {
-		res.json(readFaces());
+		res.json(faceStore.readFaces());
 	});
 
-	// Create a new dashboard face and start it immediately
+	// Create a face, with all its modules, in one go — the wizard's commit
 	app.post("/faces", async (req, res) => {
-		const { name, theme, modules } = req.body;
+		const { name, theme, instances } = req.body;
 
 		// A face cannot exist without a theme
 		if (!theme) {
@@ -153,7 +298,16 @@ function startControlFace() {
 			return;
 		}
 
-		const face = createFace(name || "Untitled Face", theme, modules || []);
+		const installed = listModules();
+
+		const face = faceStore.createFace(
+			name || "Untitled Face",
+			theme,
+			// Ignore anything referring to a module that isn't installed
+			(instances || []).filter((instance) =>
+				installed.includes(instance.module)
+			)
+		);
 
 		// Wait until the face's server is genuinely accepting connections
 		// before responding, so the browser never redirects too early
@@ -162,14 +316,79 @@ function startControlFace() {
 		res.json(face);
 	});
 
-	// The face setup page
+	// The setup wizard
 	app.get("/faces/new", (req, res) => {
-		res.send(renderSetupPage(listThemes(), listModules()));
+		// Everything the wizard needs, handed over up front so it can run
+		// entirely in the browser without saving anything as it goes
+		const modules = listModules().map((moduleId) => {
+			const manifest = readManifest(moduleId);
+
+			return {
+				id: moduleId,
+				name: manifest.name,
+				description: manifest.description,
+				schema: readSchema(moduleId),
+				defaults: applyDefaults(moduleId, {})
+			};
+		});
+
+		res.send(
+			renderWizard({
+				modules: modules,
+				themes: listThemes(),
+				// What port this face WOULD get. Accurate unless two faces
+				// are being created at the same moment.
+				nextPort: faceStore.nextDashboardPort()
+			})
+		);
 	});
 
-	// Human-facing page: list existing faces, or create the first one
+	// Human-facing page: list existing faces, or start the wizard
 	app.get("/", (req, res) => {
-		res.send(renderControlPage(readFaces()));
+		const faces = faceStore.readFaces();
+
+		const list = faces
+			.map(
+				(face) => `
+			<div class="face" onclick="goToFace(${face.id})">
+				<strong>${escapeHtml(face.name)}</strong>
+				<span>port ${face.id} · ${escapeHtml(face.theme || "no theme")}</span>
+			</div>`
+			)
+			.join("");
+
+		const body = faces.length
+			? `<div class="panel narrow">
+					<h1>Faces</h1>
+				</div>
+				<div class="panel narrow">${list}</div>
+				<div class="actions narrow">
+					<button class="glass" onclick="location.href='/faces/new'">
+						Create a new face
+					</button>
+				</div>`
+			: `<div class="panel narrow">
+					<h1>No faces yet</h1>
+					<p class="lede">Set one up to get started.</p>
+				</div>
+				<div class="actions narrow">
+					<button class="glass" onclick="location.href='/faces/new'">
+						Create your first face
+					</button>
+				</div>`;
+
+		res.send(
+			page(
+				"OmniCore Control",
+				body,
+				portLinkScript +
+					`
+			function goToFace(port) {
+				location.href = faceUrl(port);
+			}
+		`
+			)
+		);
 	});
 
 	app.listen(CONTROL_PORT, () => {
@@ -177,153 +396,344 @@ function startControlFace() {
 	});
 }
 
-function renderControlPage(faces) {
-	const hasFaces = faces.length > 0;
+// The wizard is one page that swaps out its own contents as you move
+// through the steps. Nothing is saved until Finish.
+function renderWizard(data) {
+	const body = `
+		<div class="panel" id="header"></div>
+		<div class="panel" id="content"></div>
+		<div class="actions">
+			<p class="status" id="status" style="margin-right:auto"></p>
+			<button class="glass" id="cancel">Cancel</button>
+			<button class="glass" id="back">Back</button>
+			<button class="glass" id="next">Next</button>
+		</div>`;
 
-	// Each face is a clickable link straight to its own port
-	const faceList = faces
-		.map(
-			(face) => `
-			<a class="face" href="#" onclick="goToFace(${face.id}); return false;">
-				<strong>${face.name}</strong>
-				<span>port ${face.id} · theme: ${face.theme || "none"}</span>
-			</a>`
-		)
-		.join("");
-
-	const body = hasFaces
-		? `<h1>Faces</h1>
-		   <div class="list">${faceList}</div>
-		   <a class="glass" href="/faces/new">Create a new face</a>`
-		: `<h1>No faces yet</h1>
-		   <a class="glass" href="/faces/new">Create your first face</a>`;
-
-	return `<!DOCTYPE html>
-<html>
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>OmniCore Control</title>
-	<style>${styles}</style>
-</head>
-<body>
-	${body}
-	<script>
+	const script = `
 		${portLinkScript}
 
-		function goToFace(port) {
-			location.href = faceUrl(port);
+		const MODULES = ${JSON.stringify(data.modules)};
+		const THEMES = ${JSON.stringify(data.themes)};
+		const NEXT_PORT = ${data.nextPort};
+
+		// Everything the wizard is building, held here and only sent to the
+		// server at Finish. Cancel simply throws this away.
+		const face = { name: "", theme: null, instances: [] };
+
+		// step 0        name and theme
+		// step 1        pick modules
+		// step 2..n+1   one settings page per picked module
+		// step n+2      review
+		let step = 0;
+
+		function lastStep() {
+			return face.instances.length + 2;
 		}
-	</script>
-</body>
-</html>`;
-}
 
-function renderSetupPage(themes, modules) {
-	// Themes are radio buttons — exactly one is required
-	const themeOptions = themes.length
-		? themes
-				.map(
-					(theme) => `
-			<label class="option">
-				<input type="radio" name="theme" value="${theme.id}">
-				<span>${theme.name}</span>
-			</label>`
-				)
-				.join("")
-		: `<div class="empty">No themes installed — add one to themes/ first.</div>`;
+		function moduleById(id) {
+			return MODULES.find(function (m) { return m.id === id; });
+		}
 
-	// Modules are checkboxes — a face can have any number, including none
-	const moduleOptions = modules.length
-		? modules
-				.map(
-					(moduleId) => `
-			<label class="option">
-				<input type="checkbox" name="module" value="${moduleId}">
-				<span>${moduleId}</span>
-			</label>`
-				)
-				.join("")
-		: `<div class="empty">No modules installed.</div>`;
+		function escapeHtml(text) {
+			return String(text).replace(/[&<>"]/g, function (c) {
+				return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+			});
+		}
 
-	return `<!DOCTYPE html>
-<html>
-<head>
-	<meta charset="utf-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>New Face — OmniCore</title>
-	<style>${styles}</style>
-</head>
-<body>
-	<h1>New face</h1>
+		// ---- reading the current step's inputs back into "face" ----
 
-	<div class="panel">
-		<div>
-			<label for="name">Name</label>
-			<input type="text" id="name" placeholder="Living room display">
-		</div>
+		function captureStep() {
+			if (step === 0) {
+				const nameField = document.getElementById("name");
+				if (nameField) face.name = nameField.value.trim();
 
-		<div>
-			<h2>Theme</h2>
-			${themeOptions}
-		</div>
-
-		<div>
-			<h2>Modules</h2>
-			${moduleOptions}
-		</div>
-
-		<button class="glass" id="submit" onclick="submitFace()">Create face</button>
-	</div>
-
-	<script>
-		${portLinkScript}
-
-		async function submitFace() {
-			const button = document.getElementById("submit");
-			const name = document.getElementById("name").value.trim();
-
-			const themeInput = document.querySelector('input[name="theme"]:checked');
-			if (!themeInput) {
-				alert("Please select a theme.");
+				const chosen = document.querySelector('input[name="theme"]:checked');
+				face.theme = chosen ? chosen.value : face.theme;
 				return;
 			}
 
-			// Collect every checked module checkbox
-			const modules = Array.from(
-				document.querySelectorAll('input[name="module"]:checked')
-			).map((input) => input.value);
+			if (step >= 2 && step < lastStep()) {
+				const instance = face.instances[step - 2];
+				if (!instance) return;
 
-			// Show progress — creating a face can take a few seconds
-			button.disabled = true;
-			button.textContent = "Creating face…";
+				const labelField = document.getElementById("label");
+				if (labelField) instance.label = labelField.value.trim();
 
-			const response = await fetch("/faces", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ name, theme: themeInput.value, modules })
-			});
-
-			const face = await response.json();
-			const url = faceUrl(face.id);
-
-			// Poll until the new face actually answers before redirecting.
-			// On a normal server this passes instantly; in Codespaces it covers
-			// the short delay before the new port's hostname is published.
-			for (let attempt = 0; attempt < 20; attempt++) {
-				try {
-					await fetch(url, { mode: "no-cors" });
-					break;
-				} catch (error) {
-					await new Promise((r) => setTimeout(r, 500));
+				for (const input of document.querySelectorAll("[data-key]")) {
+					instance.config[input.dataset.key] =
+						input.dataset.type === "boolean" ? input.checked : input.value;
 				}
 			}
-
-			location.href = url;
 		}
-	</script>
-</body>
-</html>`;
+
+		// ---- the steps ----
+
+		function renderNameStep() {
+			const themes = THEMES.map(function (theme) {
+				return '<label class="option">' +
+					'<input type="radio" name="theme" value="' + escapeHtml(theme.id) + '"' +
+					(face.theme === theme.id ? " checked" : "") + ">" +
+					"<span>" + escapeHtml(theme.name) + "</span>" +
+				"</label>";
+			}).join("");
+
+			return '<div class="square" style="min-height:0;max-width:460px">' +
+				'<div class="field">' +
+					'<label for="name">Name</label>' +
+					'<input type="text" id="name" value="' + escapeHtml(face.name) +
+						'" placeholder="Living room display">' +
+				"</div>" +
+				'<div class="field">' +
+					"<h2>Theme</h2>" +
+					(themes || '<div class="empty">No themes installed.</div>') +
+				"</div>" +
+			"</div>";
+		}
+
+		function renderPickStep() {
+			const available = MODULES.map(function (module) {
+				return '<button class="flat" onclick="addInstance(\\'' +
+					module.id + '\\')">' +
+					escapeHtml(module.name) +
+					"<small>" + escapeHtml(module.description || module.id) + "</small>" +
+				"</button>";
+			}).join("");
+
+			const picked = face.instances.map(function (instance, index) {
+				return '<div class="picked removable" onclick="removeInstance(' +
+					index + ')">' +
+					escapeHtml(instance.label) +
+					"<small>" + escapeHtml(moduleById(instance.module).name) +
+						" · click to remove</small>" +
+				"</div>";
+			}).join("");
+
+			return '<div class="columns">' +
+				'<div class="square">' +
+					"<h2>Available modules</h2>" +
+					(available || '<div class="empty">No modules installed.</div>') +
+				"</div>" +
+				'<div class="square">' +
+					"<h2>On this face</h2>" +
+					(picked || '<div class="empty">Nothing added yet.</div>') +
+				"</div>" +
+			"</div>";
+		}
+
+		function renderSettingsStep() {
+			const index = step - 2;
+			const instance = face.instances[index];
+			const module = moduleById(instance.module);
+
+			// The bucket moves to the left and loses its remove behaviour;
+			// the one being configured is highlighted
+			const bucket = face.instances.map(function (item, itemIndex) {
+				return '<div class="picked' +
+					(itemIndex === index ? " current" : "") + '">' +
+					escapeHtml(item.label) +
+					"<small>" + escapeHtml(moduleById(item.module).name) + "</small>" +
+				"</div>";
+			}).join("");
+
+			const fields = module.schema.map(function (field) {
+				const value = instance.config[field.key];
+				const help = field.help
+					? '<div class="help">' + escapeHtml(field.help) + "</div>"
+					: "";
+
+				let input;
+
+				if (field.type === "boolean") {
+					input = '<input type="checkbox" data-key="' +
+						escapeHtml(field.key) + '" data-type="boolean"' +
+						(value ? " checked" : "") + ">";
+				} else if (field.type === "select") {
+					const options = (field.options || []).map(function (option) {
+						return '<option value="' + escapeHtml(option) + '"' +
+							(option === value ? " selected" : "") + ">" +
+							escapeHtml(option) + "</option>";
+					}).join("");
+
+					input = '<select data-key="' + escapeHtml(field.key) +
+						'" data-type="select">' + options + "</select>";
+				} else {
+					const type = ["url", "number"].indexOf(field.type) >= 0
+						? field.type : "text";
+
+					input = '<input type="' + type + '" data-key="' +
+						escapeHtml(field.key) + '" data-type="' +
+						escapeHtml(field.type) + '" value="' +
+						escapeHtml(value === undefined ? "" : value) + '">';
+				}
+
+				return '<div class="field"><label>' +
+					escapeHtml(field.label || field.key) + "</label>" +
+					input + help +
+				"</div>";
+			}).join("");
+
+			return '<div class="columns">' +
+				'<div class="square">' +
+					"<h2>On this face</h2>" + bucket +
+				"</div>" +
+				'<div class="square">' +
+					"<h2>" + escapeHtml(module.name) + "</h2>" +
+					'<div class="field">' +
+						'<label for="label">Label</label>' +
+						'<input type="text" id="label" value="' +
+							escapeHtml(instance.label) + '">' +
+						'<div class="help">Shown as the tile title.</div>' +
+					"</div>" +
+					(fields || '<div class="empty">Nothing to configure.</div>') +
+				"</div>" +
+			"</div>";
+		}
+
+		function renderReviewStep() {
+			const rows = face.instances.map(function (instance) {
+				return '<div class="review-row">' +
+					"<strong>" + escapeHtml(instance.label) + "</strong>" +
+					"<span>" + escapeHtml(moduleById(instance.module).name) + "</span>" +
+				"</div>";
+			}).join("");
+
+			const theme = THEMES.find(function (t) { return t.id === face.theme; });
+
+			return '<div class="square" style="max-width:560px">' +
+				'<div class="review-row"><strong>Name</strong><span>' +
+					escapeHtml(face.name || "Untitled Face") + "</span></div>" +
+				'<div class="review-row"><strong>Theme</strong><span>' +
+					escapeHtml(theme ? theme.name : "none") + "</span></div>" +
+				'<div class="review-row"><strong>ID</strong><span>port ' +
+					NEXT_PORT + "</span></div>" +
+				'<div style="margin-top:22px"><h2>Modules</h2>' +
+					(rows || '<div class="empty">No modules on this face.</div>') +
+				"</div>" +
+			"</div>";
+		}
+
+		// ---- moving between steps ----
+
+		function headingFor() {
+			if (step === 0) {
+				return ["New face", "Give it a name and pick a theme."];
+			}
+			if (step === 1) {
+				return [
+					"Add modules",
+					"Click to add. Add the same one more than once if you like."
+				];
+			}
+			if (step === lastStep()) {
+				return ["Review", "This is what will be created."];
+			}
+
+			return ["Configure", "Set up each module in turn."];
+		}
+
+		function draw() {
+			const heading = headingFor();
+
+			document.getElementById("header").innerHTML =
+				"<h1>" + heading[0] + '</h1><p class="lede">' + heading[1] + "</p>";
+
+			let content;
+			if (step === 0) content = renderNameStep();
+			else if (step === 1) content = renderPickStep();
+			else if (step === lastStep()) content = renderReviewStep();
+			else content = renderSettingsStep();
+
+			document.getElementById("content").innerHTML = content;
+			document.getElementById("status").textContent = "";
+
+			document.getElementById("back").disabled = step === 0;
+			document.getElementById("next").textContent =
+				step === lastStep() ? "Finish" : "Next";
+		}
+
+		window.addInstance = function (moduleId) {
+			captureStep();
+
+			const module = moduleById(moduleId);
+
+			// Number repeats so two of the same module are tellable apart
+			// before you've had a chance to rename them
+			const sameModule = face.instances.filter(function (instance) {
+				return instance.module === moduleId;
+			}).length;
+
+			face.instances.push({
+				module: moduleId,
+				label: sameModule ? module.name + " " + (sameModule + 1) : module.name,
+				// Start from the module's own defaults
+				config: Object.assign({}, module.defaults)
+			});
+
+			draw();
+		};
+
+		window.removeInstance = function (index) {
+			face.instances.splice(index, 1);
+			draw();
+		};
+
+		document.getElementById("back").addEventListener("click", function () {
+			captureStep();
+			if (step > 0) step--;
+			draw();
+		});
+
+		document.getElementById("cancel").addEventListener("click", function () {
+			// Nothing has been written, so there's nothing to undo
+			location.href = "/";
+		});
+
+		document.getElementById("next").addEventListener("click", async function () {
+			captureStep();
+
+			const status = document.getElementById("status");
+
+			if (step === 0 && !face.theme) {
+				status.textContent = "Pick a theme to continue.";
+				return;
+			}
+
+			if (step < lastStep()) {
+				step++;
+				draw();
+				return;
+			}
+
+			// Finish — this is the only point anything is saved
+			this.disabled = true;
+			this.textContent = "Creating…";
+
+			try {
+				const response = await fetch("/faces", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(face)
+				});
+
+				if (!response.ok) throw new Error();
+
+				const created = await response.json();
+
+				// Note: in Codespaces you may hit a 404 on first load — the
+				// port takes a moment to get published by the forwarding
+				// proxy. Just reload. Doesn't happen on a real host.
+				location.href = faceUrl(created.id);
+			} catch (error) {
+				status.textContent = "Couldn't create the face.";
+				this.disabled = false;
+				this.textContent = "Finish";
+			}
+		});
+
+		draw();
+	`;
+
+	return page("New face", body, script);
 }
 
 module.exports = startControlFace;

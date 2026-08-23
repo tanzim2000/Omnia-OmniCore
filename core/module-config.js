@@ -1,19 +1,14 @@
 // core/module-config.js
-// Handles module settings.
+// What a module SAYS about itself: its name, and what settings it accepts.
 //
-// A module DECLARES what settings it has, in a settings.json inside its own
-// folder. It never ships a form or any HTML — the admin face renders the UI,
-// which is what keeps every settings page looking the same.
-//
-// The VALUES the user picks are stored separately, under data/module-config/,
-// not in the module's folder. That way updating a module from the marketplace
-// replaces its code without wiping the user's settings.
+// Note this file no longer stores any values. A module's settings are now
+// held on the instance that uses them, inside the face — so the same module
+// can be configured differently for each tile that shows it.
 
 const fs = require("fs");
 const path = require("path");
 
 const modulesDir = path.join(__dirname, "..", "modules");
-const configDir = path.join(__dirname, "..", "data", "module-config");
 
 // A module's manifest: a readable name and description, from a module.json
 // in its folder. Mirrors how themes describe themselves in theme.json.
@@ -38,13 +33,13 @@ function readManifest(moduleId) {
 	}
 }
 
-// Read a module's declared settings. Returns null if it has none —
-// a module without settings simply has no settings page.
+// What settings a module accepts, from its settings.json.
+// Returns an empty list if it has none — plenty of modules need nothing.
 function readSchema(moduleId) {
 	const schemaPath = path.join(modulesDir, moduleId, "settings.json");
 
 	if (!fs.existsSync(schemaPath)) {
-		return null;
+		return [];
 	}
 
 	try {
@@ -52,57 +47,40 @@ function readSchema(moduleId) {
 		return parsed.settings || [];
 	} catch (error) {
 		console.log(`  Unreadable settings.json in module: ${moduleId}`);
-		return null;
+		return [];
 	}
 }
 
-// The values the user has actually saved, if any
-function savedValues(moduleId) {
-	const valuesPath = path.join(configDir, moduleId + ".json");
-
-	if (!fs.existsSync(valuesPath)) {
-		return {};
-	}
-
-	try {
-		return JSON.parse(fs.readFileSync(valuesPath, "utf-8"));
-	} catch (error) {
-		return {};
-	}
-}
-
-// A module's current settings: saved values layered over the schema's
-// defaults, so a setting the user never touched still has a sensible value.
-//
-// Modules should call this on every request rather than once at startup —
-// that's what lets a settings change take effect without a restart.
-function readConfig(moduleId) {
-	const schema = readSchema(moduleId) || [];
-	const saved = savedValues(moduleId);
+// An instance's stored settings, with the schema's defaults filling any gap.
+// A setting the user never touched still arrives with a sensible value.
+function applyDefaults(moduleId, stored) {
+	const schema = readSchema(moduleId);
 	const config = {};
 
 	for (const field of schema) {
 		config[field.key] =
-			saved[field.key] !== undefined ? saved[field.key] : field.default;
+			stored && stored[field.key] !== undefined
+				? stored[field.key]
+				: field.default;
 	}
 
 	return config;
 }
 
-// Save settings for a module. Only keys the module actually declared are
-// written, so nothing unexpected ends up in the file.
-function writeConfig(moduleId, values) {
-	const schema = readSchema(moduleId) || [];
+// Tidy up values coming from a settings form: keep only keys the module
+// actually declared, and convert them to the declared type, since form
+// fields arrive as strings.
+function cleanConfig(moduleId, values) {
+	const schema = readSchema(moduleId);
 	const clean = {};
 
 	for (const field of schema) {
-		if (values[field.key] === undefined) {
+		if (!values || values[field.key] === undefined) {
 			continue;
 		}
 
 		let value = values[field.key];
 
-		// Form fields arrive as strings — convert to the declared type
 		if (field.type === "number") {
 			value = Number(value);
 			if (Number.isNaN(value)) continue;
@@ -115,14 +93,7 @@ function writeConfig(moduleId, values) {
 		clean[field.key] = value;
 	}
 
-	fs.mkdirSync(configDir, { recursive: true });
-
-	fs.writeFileSync(
-		path.join(configDir, moduleId + ".json"),
-		JSON.stringify(clean, null, "\t")
-	);
-
 	return clean;
 }
 
-module.exports = { readManifest, readSchema, readConfig, writeConfig };
+module.exports = { readManifest, readSchema, applyDefaults, cleanConfig };

@@ -142,7 +142,7 @@
 		// Metro tile sizes, in the order clicking cycles through them
 		const SIZES = ["small", "medium", "wide", "large"];
 
-		// Which size each module's tile is currently shown at.
+		// Which size each tile is currently shown at, keyed by instance.
 		// Not saved yet — per-face tile settings will handle that later.
 		const tileSizes = {};
 
@@ -161,8 +161,11 @@
 
 		// Every module returns the same envelope, so this renders any module
 		// without knowing what it does. How it LOOKS is entirely our call.
-		function renderTile(moduleId, data) {
-			const size = tileSizes[moduleId] || "wide";
+		//
+		// Tiles are keyed by INSTANCE, not by module — the same module can
+		// appear several times on one face with different settings.
+		function renderTile(instanceId, data) {
+			const size = tileSizes[instanceId] || "wide";
 
 			const details = (data.details || [])
 				.map(function (item) {
@@ -172,13 +175,13 @@
 				.join("");
 
 			return '<div class="tile ' + size + '" tabindex="0" ' +
-				'data-module="' + escapeHtml(moduleId) + '">' +
+				'data-instance="' + escapeHtml(instanceId) + '">' +
 				'<div class="body">' +
 					'<div class="primary">' + escapeHtml(data.primary || "") + "</div>" +
 					'<div class="secondary">' + escapeHtml(data.secondary || "") + "</div>" +
 					'<div class="details">' + details + "</div>" +
 				"</div>" +
-				'<div class="label">' + escapeHtml(data.title || moduleId) + "</div>" +
+				'<div class="label">' + escapeHtml(data.title || "") + "</div>" +
 			"</div>";
 		}
 
@@ -221,13 +224,13 @@
 		// module hold up every tile behind it.
 		async function refresh() {
 			const results = await Promise.all(
-				identity.modules.map(async function (moduleId) {
+				identity.instances.map(async function (instance) {
 					try {
-						const response = await fetch("/api/" + moduleId);
+						const response = await fetch("/api/" + instance.id);
 						if (!response.ok) throw new Error();
-						return renderTile(moduleId, await response.json());
+						return renderTile(instance.id, await response.json());
 					} catch (error) {
-						return renderUnavailable(moduleId);
+						return renderUnavailable(instance);
 					}
 				})
 			);
@@ -237,17 +240,17 @@
 		}
 
 		// Clicking a tile cycles its size, the way Metro let you resize tiles
-		function resizeTile(moduleId) {
-			const current = tileSizes[moduleId] || "wide";
+		function resizeTile(instanceId) {
+			const current = tileSizes[instanceId] || "wide";
 			const next = SIZES[(SIZES.indexOf(current) + 1) % SIZES.length];
 
-			tileSizes[moduleId] = next;
+			tileSizes[instanceId] = next;
 			refresh();
 		}
 
 		document.getElementById("tiles").addEventListener("click", function (event) {
 			const tile = event.target.closest(".tile");
-			if (tile) resizeTile(tile.dataset.module);
+			if (tile) resizeTile(tile.dataset.instance);
 		});
 
 		document.getElementById("tiles").addEventListener("keydown", function (event) {
@@ -256,7 +259,7 @@
 			const tile = event.target.closest(".tile");
 			if (tile) {
 				event.preventDefault();
-				resizeTile(tile.dataset.module);
+				resizeTile(tile.dataset.instance);
 			}
 		});
 

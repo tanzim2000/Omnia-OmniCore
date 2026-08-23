@@ -10,10 +10,7 @@
 // Feeds can be large, so the fetch is cached — re-downloading the whole
 // calendar every few seconds would be wasteful for both ends.
 
-const { readConfig } = require("../../core/module-config");
 const { fetchCached } = require("../../core/module-fetch");
-
-const MODULE_ID = "calendar";
 
 // ICS wraps long lines by starting the continuation with a space or tab.
 // Join those back together before parsing anything.
@@ -122,61 +119,55 @@ function whenLabel(event) {
 	return day + " " + time;
 }
 
-module.exports = function calendarModule(app, options) {
-	app.get("/api/calendar", async (req, res) => {
-		const config = readConfig(MODULE_ID);
-
-		if (!config.url) {
-			res.json({
-				title: "Calendar",
-				primary: "—",
-				secondary: "No feed set",
-				details: [{ label: "Set a feed URL", value: "in Settings" }],
-				updated: new Date().toISOString()
-			});
-			return;
-		}
-
-		// Calendar feeds are plain text, not JSON
-		const { data, stale } = await fetchCached(config.url, {
-			as: "text",
-			cacheSeconds: Number(config.refreshMinutes) * 60
-		});
-
-		if (!data) {
-			res.json({
-				title: "Calendar",
-				primary: "—",
-				secondary: "Not reachable",
-				details: [{ label: "Check", value: "the feed URL" }],
-				updated: new Date().toISOString()
-			});
-			return;
-		}
-
-		const now = new Date();
-		const horizon = new Date(now);
-		horizon.setDate(now.getDate() + Number(config.daysAhead));
-
-		// Note this filtering runs on every request even when the feed came
-		// from cache, so "Today" and "Tmrw" stay correct as time passes
-		const upcoming = parseEvents(data)
-			.filter((event) => event.start >= now && event.start <= horizon)
-			.sort((a, b) => a.start - b.start);
-
-		const window =
-			"in " + config.daysAhead +
-			(Number(config.daysAhead) === 1 ? " day" : " days");
-
-		res.json({
+module.exports = async function calendar(config) {
+	if (!config.url) {
+		return {
 			title: "Calendar",
-			primary: String(upcoming.length),
-			secondary: window + (stale ? " (last known)" : ""),
-			details: upcoming.slice(0, config.limit).map((event) => ({
-				label: whenLabel(event),
-				value: event.summary
-			})),
+			primary: "—",
+			secondary: "No feed set",
+			details: [{ label: "Set a feed URL", value: "in Settings" }],
 			updated: new Date().toISOString()
-		});
+		};
+	}
+
+	// Calendar feeds are plain text, not JSON
+	const { data, stale } = await fetchCached(config.url, {
+		as: "text",
+		cacheSeconds: Number(config.refreshMinutes) * 60
 	});
+
+	if (!data) {
+		return {
+			title: "Calendar",
+			primary: "—",
+			secondary: "Not reachable",
+			details: [{ label: "Check", value: "the feed URL" }],
+			updated: new Date().toISOString()
+		};
+	}
+
+	const now = new Date();
+	const horizon = new Date(now);
+	horizon.setDate(now.getDate() + Number(config.daysAhead));
+
+	// Note this filtering runs on every request even when the feed came from
+	// cache, so "Today" and "Tmrw" stay correct as time passes
+	const upcoming = parseEvents(data)
+		.filter((event) => event.start >= now && event.start <= horizon)
+		.sort((a, b) => a.start - b.start);
+
+	const window =
+		"in " + config.daysAhead +
+		(Number(config.daysAhead) === 1 ? " day" : " days");
+
+	return {
+		title: "Calendar",
+		primary: String(upcoming.length),
+		secondary: window + (stale ? " (last known)" : ""),
+		details: upcoming.slice(0, config.limit).map((event) => ({
+			label: whenLabel(event),
+			value: event.summary
+		})),
+		updated: new Date().toISOString()
+	};
 };
