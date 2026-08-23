@@ -1,0 +1,5 @@
+
+# Runtime data — per-install, never shared
+data/admin.json
+data/faces.json
+data/module-config/

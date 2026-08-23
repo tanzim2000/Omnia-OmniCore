@@ -15,11 +15,16 @@ const dataPath = path.join(__dirname, "..", "data", "faces.json");
 const DASHBOARD_PORT_START = 4001;
 
 function readFaces() {
+	if (!fs.existsSync(dataPath)) {
+		return [];
+	}
+
 	const raw = fs.readFileSync(dataPath, "utf-8");
 	return JSON.parse(raw).faces;
 }
 
 function writeFaces(faces) {
+	fs.mkdirSync(path.dirname(dataPath), { recursive: true });
 	fs.writeFileSync(dataPath, JSON.stringify({ faces }, null, "\t"));
 }
 

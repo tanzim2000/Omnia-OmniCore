@@ -1,0 +1,44 @@
+{
+	"settings": [
+		{
+			"key": "latitude",
+			"label": "Latitude",
+			"type": "number",
+			"default": 50.4452
+		},
+		{
+			"key": "longitude",
+			"label": "Longitude",
+			"type": "number",
+			"default": -104.6189
+		},
+		{
+			"key": "method",
+			"label": "Calculation method",
+			"type": "select",
+			"options": [
+				"ISNA (North America)",
+				"Muslim World League",
+				"Egyptian General Authority",
+				"Umm Al-Qura, Makkah",
+				"University of Islamic Sciences, Karachi"
+			],
+			"default": "ISNA (North America)"
+		},
+		{
+			"key": "school",
+			"label": "Asr calculation",
+			"type": "select",
+			"options": ["Shafi", "Hanafi"],
+			"default": "Shafi",
+			"help": "Hanafi gives a later Asr time"
+		},
+		{
+			"key": "timeFormat",
+			"label": "Time format",
+			"type": "select",
+			"options": ["12-hour", "24-hour"],
+			"default": "12-hour"
+		}
+	]
+}

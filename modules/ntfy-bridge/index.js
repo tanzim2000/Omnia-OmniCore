@@ -2,15 +2,14 @@
 // Shows recent notifications from an ntfy topic.
 // Read-only — it reads messages, it never sends them.
 //
-// Settings live in config.json next to this file, so the module is
-// self-contained and can ship with sensible defaults.
+// Settings are DECLARED in settings.json next to this file, and the values
+// live in data/module-config/. We read them on every request rather than
+// once at startup, so changing a setting in the admin face takes effect
+// straight away with no restart.
 
-const fs = require("fs");
-const path = require("path");
+const { readConfig } = require("../../core/module-config");
 
-// Read settings once at startup
-const configPath = path.join(__dirname, "config.json");
-const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+const MODULE_ID = "ntfy-bridge";
 
 // Turn a timestamp into "3m", "2h", "4d" — short enough for a tile
 function timeAgo(seconds) {
@@ -24,6 +23,9 @@ function timeAgo(seconds) {
 
 module.exports = function ntfyBridgeModule(app, options) {
 	app.get("/api/ntfy-bridge", async (req, res) => {
+		// Read settings fresh each time so admin changes apply immediately
+		const config = readConfig(MODULE_ID);
+
 		const url =
 			config.server + "/" + config.topic +
 			"/json?poll=1&since=" + config.since;
@@ -57,9 +59,7 @@ module.exports = function ntfyBridgeModule(app, options) {
 				title: "Notifications",
 				primary: "—",
 				secondary: "Not reachable",
-				details: [
-					{ label: "Server", value: config.server }
-				],
+				details: [{ label: "Server", value: config.server }],
 				updated: new Date().toISOString()
 			});
 		}

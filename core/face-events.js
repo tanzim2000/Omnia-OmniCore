@@ -12,11 +12,15 @@ const connections = new Map();
 // OmniCore's own client script, injected into every theme page by
 // face-loader.js. Themes never implement this themselves — that way a
 // theme can't make itself un-switchable by forgetting to handle it.
+//
+// "face-changed" means anything about this face was edited — its theme,
+// its name, its modules. The page just reloads and picks up whatever
+// changed, so displays nobody is standing in front of stay current.
 const CLIENT_SCRIPT = `<script>
 	(function () {
 		const events = new EventSource("/events");
 
-		events.addEventListener("theme-changed", function () {
+		events.addEventListener("face-changed", function () {
 			location.reload();
 		});
 	})();

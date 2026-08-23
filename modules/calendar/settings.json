@@ -1,0 +1,23 @@
+{
+	"settings": [
+		{
+			"key": "url",
+			"label": "Calendar feed URL",
+			"type": "url",
+			"default": "",
+			"help": "A public .ics link from Google Calendar, Nextcloud, Outlook, etc."
+		},
+		{
+			"key": "daysAhead",
+			"label": "Days to look ahead",
+			"type": "number",
+			"default": 7
+		},
+		{
+			"key": "limit",
+			"label": "Events to show",
+			"type": "number",
+			"default": 6
+		}
+	]
+}

@@ -1,0 +1,31 @@
+{
+	"settings": [
+		{
+			"key": "server",
+			"label": "Server",
+			"type": "url",
+			"default": "https://ntfy.sh",
+			"help": "The ntfy server to read from"
+		},
+		{
+			"key": "topic",
+			"label": "Topic",
+			"type": "text",
+			"default": "GitHub",
+			"help": "Which topic to show messages from"
+		},
+		{
+			"key": "since",
+			"label": "Look back",
+			"type": "text",
+			"default": "24h",
+			"help": "How far back to fetch, e.g. 24h or 7d"
+		},
+		{
+			"key": "limit",
+			"label": "Rows to show",
+			"type": "number",
+			"default": 6
+		}
+	]
+}

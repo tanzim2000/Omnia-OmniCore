@@ -1,0 +1,11 @@
+{
+	"settings": [
+		{
+			"key": "path",
+			"label": "Path to check",
+			"type": "text",
+			"default": "/",
+			"help": "Any path on the filesystem you want to measure"
+		}
+	]
+}

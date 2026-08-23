@@ -1,0 +1,30 @@
+{
+	"settings": [
+		{
+			"key": "label",
+			"label": "Place name",
+			"type": "text",
+			"default": "Weather",
+			"help": "Shown as the tile's title"
+		},
+		{
+			"key": "latitude",
+			"label": "Latitude",
+			"type": "number",
+			"default": 50.4452
+		},
+		{
+			"key": "longitude",
+			"label": "Longitude",
+			"type": "number",
+			"default": -104.6189
+		},
+		{
+			"key": "units",
+			"label": "Units",
+			"type": "select",
+			"options": ["Celsius", "Fahrenheit"],
+			"default": "Celsius"
+		}
+	]
+}

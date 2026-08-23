@@ -2,17 +2,21 @@
 // Starts a face — one Express server on the face's own port.
 // A face's ID *is* its port number. Faces can be started live at runtime,
 // no OmniCore restart needed.
+//
+// Everything about a face is resolved PER REQUEST — its theme, its name,
+// and which modules it may use. That's what lets any of them be edited
+// while OmniCore keeps running.
 
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const { mountModules } = require("./module-loader");
+const { mountModules, listModules } = require("./module-loader");
 const { listThemes } = require("./theme-loader");
-const { updateFace } = require("./face-store");
+const faceStore = require("./face-store");
 const renderFallbackPage = require("./fallback-page");
 const { attachEvents, pushToFace, CLIENT_SCRIPT } = require("./face-events");
 
-// Tracks which faces are currently running, keyed by port
+// Running faces, keyed by port: { server, face }
 const runningFaces = new Map();
 
 function startFace(face) {
@@ -28,9 +32,6 @@ function startFace(face) {
 
 		console.log(`Starting face "${face.name}" on port ${face.id}`);
 
-		// Only the modules this face lists — not every module on the system
-		mountModules(app, face.modules);
-
 		// OmniCore's push channel — the /events stream browsers listen on
 		attachEvents(app, face);
 
@@ -41,18 +42,27 @@ function startFace(face) {
 			res.json(face);
 		});
 
-		// Called when the user picks a theme — from this face's fallback
-		// screen, or later from a phone or admin face
+		// Called when the user picks a theme from the fallback screen
 		app.post("/select-theme", (req, res) => {
-			const updated = updateFace(face.id, { theme: req.body.theme });
-			face.theme = updated.theme;
-
-			res.json(updated);
-
-			// Tell every browser showing this face to pick up the new theme,
-			// so an unattended display switches without anyone touching it
-			pushToFace(face.id, "theme-changed", { theme: updated.theme });
+			res.json(updateFace(face.id, { theme: req.body.theme }));
 		});
+
+		// Only the modules this face has been given are reachable here.
+		// We mount every module's routes below, then check this list on each
+		// request — so changing a face's modules takes effect immediately
+		// instead of needing the face restarted.
+		app.use((req, res, next) => {
+			const match = req.path.match(/^\/api\/([^/]+)/);
+
+			if (match && !face.modules.includes(match[1])) {
+				res.status(404).json({ error: "Module not enabled for this face" });
+				return;
+			}
+
+			next();
+		});
+
+		mountModules(app, listModules());
 
 		// Caches one static-file handler per theme, so we aren't rebuilding
 		// it on every single request
@@ -82,8 +92,7 @@ function startFace(face) {
 			return filePath;
 		}
 
-		// Resolve the theme on EVERY request rather than once at startup —
-		// this is what lets a theme change take effect without a restart.
+		// Resolve the theme on EVERY request rather than once at startup.
 		// Themes are pure frontend: served as static files, never executed
 		// on the server, so a downloaded theme can only render data the
 		// face already exposes.
@@ -125,10 +134,35 @@ function startFace(face) {
 
 		// Only resolve once the server is genuinely accepting connections
 		const server = app.listen(face.id, () => {
-			runningFaces.set(face.id, server);
+			runningFaces.set(face.id, { server, face });
 			resolve();
 		});
 	});
 }
 
-module.exports = { startFace };
+// Change a face and have it take effect right away.
+//
+// Three things have to happen together, which is why they live in one
+// place: the change is saved to disk, the copy the running face is using
+// is updated, and every browser showing that face is told to reload.
+function updateFace(id, changes) {
+	const updated = faceStore.updateFace(id, changes);
+
+	if (!updated) {
+		return null;
+	}
+
+	const running = runningFaces.get(id);
+
+	if (running) {
+		// Mutate the object the face's routes already hold a reference to,
+		// rather than replacing it
+		Object.assign(running.face, updated);
+	}
+
+	pushToFace(id, "face-changed", updated);
+
+	return updated;
+}
+
+module.exports = { startFace, updateFace };
