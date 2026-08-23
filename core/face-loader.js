@@ -4,6 +4,7 @@
 // no OmniCore restart needed.
 
 const express = require("express");
+const path = require("path");
 const { mountModules } = require("./module-loader");
 const { listThemes } = require("./theme-loader");
 const { updateFace } = require("./face-store");
@@ -28,29 +29,39 @@ function startFace(face) {
 		// Only the modules this face lists — not every module on the system
 		mountModules(app, face.modules);
 
-		app.get("/", (req, res) => {
-			const themes = listThemes();
-			const themeIsValid =
-				face.theme && themes.some((theme) => theme.id === face.theme);
-
-			if (!themeIsValid) {
-				res.send(renderFallbackPage(themes));
-				return;
-			}
-
-			// TODO: render the actual theme frontend here
-			res.send(`Face "${face.name}" is running theme "${face.theme}"`);
-		});
-
-		app.post("/select-theme", (req, res) => {
-			const updated = updateFace(face.id, { theme: req.body.theme });
-			face.theme = updated.theme;
-			res.json(updated);
-		});
-
+		// The face's own identity — themes fetch this to know which modules
+		// they can render. Registered before the theme's static files so a
+		// theme can never shadow it with its own file.
 		app.get("/identity", (req, res) => {
 			res.json(face);
 		});
+
+		// Called by the fallback screen when the user picks a theme
+		app.post("/select-theme", (req, res) => {
+			const updated = updateFace(face.id, { theme: req.body.theme });
+
+			// Keep the in-memory copy in sync with what was just persisted
+			face.theme = updated.theme;
+
+			res.json(updated);
+		});
+
+		const themes = listThemes();
+		const themeIsValid =
+			face.theme && themes.some((theme) => theme.id === face.theme);
+
+		if (themeIsValid) {
+			// Themes are pure frontend — served as static files, never
+			// executed on the server. A downloaded theme cannot touch
+			// OmniCore itself, only render data the face already exposes.
+			const themeDir = path.join(__dirname, "..", "themes", face.theme);
+			app.use(express.static(themeDir));
+		} else {
+			// No usable theme — show OmniCore's built-in fallback screen
+			app.get("/", (req, res) => {
+				res.send(renderFallbackPage(listThemes()));
+			});
+		}
 
 		// Only resolve once the server is genuinely accepting connections
 		const server = app.listen(face.id, () => {

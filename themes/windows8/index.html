@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Omnia</title>
+	<style>
+		body {
+			background: #1a1a1a;
+			color: #fff;
+			font-family: "Segoe UI", system-ui, sans-serif;
+			margin: 0;
+			padding: 40px;
+			font-weight: 300;
+		}
+
+		h1 { font-size: 32px; font-weight: 200; margin: 0 0 32px 0; }
+
+		/* Asymmetric tile grid — the Windows 8 start screen look */
+		.tiles {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, 150px);
+			grid-auto-rows: 150px;
+			gap: 8px;
+		}
+
+		.tile {
+			background: #0078d7;
+			padding: 16px;
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-end;
+			overflow: hidden;
+		}
+
+		/* Wide tiles span two columns, like live tiles do */
+		.tile.wide { grid-column: span 2; }
+
+		.tile h2 { font-size: 14px; font-weight: 400; margin: 0; opacity: 0.8; }
+		.tile .value { font-size: 20px; margin-bottom: 4px; }
+	</style>
+</head>
+<body>
+	<h1 id="face-name">Loading…</h1>
+	<div class="tiles" id="tiles"></div>
+
+	<script>
+		// Ask the face who it is and which modules it has
+		async function load() {
+			const identity = await (await fetch("/identity")).json();
+			document.getElementById("face-name").textContent = identity.name;
+
+			const tiles = document.getElementById("tiles");
+
+			// Render one tile per module this face was given
+			for (const moduleId of identity.modules) {
+				const tile = document.createElement("div");
+				tile.className = "tile wide";
+
+				// Ask the module for its data — this is the only thing a
+				// theme ever does with a module: read it and draw it
+				let value = "";
+				try {
+					const data = await (await fetch("/api/" + moduleId)).json();
+					value = data.message || JSON.stringify(data);
+				} catch (error) {
+					value = "unavailable";
+				}
+
+				tile.innerHTML =
+					'<div class="value">' + value + "</div>" +
+					"<h2>" + moduleId + "</h2>";
+
+				tiles.appendChild(tile);
+			}
+		}
+
+		load();
+	</script>
+</body>
+</html>
