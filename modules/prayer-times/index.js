@@ -4,8 +4,12 @@
 //
 // The tile leads with the NEXT prayer, since that's the thing worth
 // glancing at, and lists the rest of the day underneath.
+//
+// Times change once a day, so the cache is deliberately long — there's no
+// reason to ask a free API for the same answer every few seconds.
 
 const { readConfig } = require("../../core/module-config");
+const { fetchCached } = require("../../core/module-fetch");
 
 const MODULE_ID = "prayer-times";
 
@@ -45,6 +49,16 @@ function formatTime(time, use12Hour) {
 	return hours + ":" + String(minutes).padStart(2, "0") + " " + suffix;
 }
 
+function unavailable() {
+	return {
+		title: "Prayer",
+		primary: "—",
+		secondary: "Not reachable",
+		details: [{ label: "Source", value: "Aladhan" }],
+		updated: new Date().toISOString()
+	};
+}
+
 module.exports = function prayerTimesModule(app, options) {
 	app.get("/api/prayer-times", async (req, res) => {
 		const config = readConfig(MODULE_ID);
@@ -62,47 +76,50 @@ module.exports = function prayerTimesModule(app, options) {
 			"&method=" + method +
 			"&school=" + school;
 
-		try {
-			const response = await fetch(url);
-			const data = await response.json();
-			const timings = data.data.timings;
+		// Include today's date in the cache key so the cached answer is
+		// dropped at midnight rather than carrying yesterday's times over
+		const { data } = await fetchCached(url, {
+			key: "prayer-times:" + new Date().toDateString() + ":" + url,
+			cacheSeconds: Number(config.refreshMinutes) * 60
+		});
 
-			// Aladhan sometimes appends a timezone, e.g. "17:42 (CST)"
-			const clean = {};
-			for (const prayer of PRAYERS) {
-				clean[prayer] = timings[prayer].split(" ")[0];
-			}
-
-			const now = new Date();
-			const nowMinutes = now.getHours() * 60 + now.getMinutes();
-
-			// The first prayer still ahead of us today. If they've all passed,
-			// the next one is tomorrow's Fajr.
-			const upcoming = PRAYERS.find(
-				(prayer) => toMinutes(clean[prayer]) > nowMinutes
-			);
-
-			const nextPrayer = upcoming || "Fajr";
-			const nextLabel = upcoming ? nextPrayer : "Fajr (tomorrow)";
-
-			res.json({
-				title: "Prayer",
-				primary: formatTime(clean[nextPrayer], use12Hour),
-				secondary: nextLabel,
-				details: PRAYERS.map((prayer) => ({
-					label: prayer,
-					value: formatTime(clean[prayer], use12Hour)
-				})),
-				updated: new Date().toISOString()
-			});
-		} catch (error) {
-			res.json({
-				title: "Prayer",
-				primary: "—",
-				secondary: "Not reachable",
-				details: [{ label: "Source", value: "Aladhan" }],
-				updated: new Date().toISOString()
-			});
+		if (!data || !data.data || !data.data.timings) {
+			res.json(unavailable());
+			return;
 		}
+
+		const timings = data.data.timings;
+
+		// Aladhan sometimes appends a timezone, e.g. "17:42 (CST)"
+		const clean = {};
+		for (const prayer of PRAYERS) {
+			if (!timings[prayer]) {
+				res.json(unavailable());
+				return;
+			}
+			clean[prayer] = timings[prayer].split(" ")[0];
+		}
+
+		const now = new Date();
+		const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+		// The first prayer still ahead of us today. If they've all passed,
+		// the next one is tomorrow's Fajr.
+		const upcoming = PRAYERS.find(
+			(prayer) => toMinutes(clean[prayer]) > nowMinutes
+		);
+
+		const nextPrayer = upcoming || "Fajr";
+
+		res.json({
+			title: "Prayer",
+			primary: formatTime(clean[nextPrayer], use12Hour),
+			secondary: upcoming ? nextPrayer : "Fajr (tomorrow)",
+			details: PRAYERS.map((prayer) => ({
+				label: prayer,
+				value: formatTime(clean[prayer], use12Hour)
+			})),
+			updated: new Date().toISOString()
+		});
 	});
 };

@@ -26,6 +26,13 @@
 			"label": "Rows to show",
 			"type": "number",
 			"default": 6
+		},
+		{
+			"key": "refreshMinutes",
+			"label": "Refresh every",
+			"type": "number",
+			"default": 2,
+			"help": "Minutes between checks for new messages"
 		}
 	]
 }

@@ -1,0 +1,17 @@
+{
+	"settings": [
+		{
+			"key": "label",
+			"label": "Tile title",
+			"type": "text",
+			"default": "Docker"
+		},
+		{
+			"key": "socketPath",
+			"label": "Docker socket",
+			"type": "text",
+			"default": "/var/run/docker.sock",
+			"help": "Where Docker's API socket lives on this machine"
+		}
+	]
+}

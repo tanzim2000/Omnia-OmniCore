@@ -18,6 +18,13 @@
 			"label": "Events to show",
 			"type": "number",
 			"default": 6
+		},
+		{
+			"key": "refreshMinutes",
+			"label": "Refresh every",
+			"type": "number",
+			"default": 15,
+			"help": "Minutes between downloads of the feed"
 		}
 	]
 }

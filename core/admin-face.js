@@ -16,7 +16,12 @@
 
 const express = require("express");
 const { listModules } = require("./module-loader");
-const { readSchema, readConfig, writeConfig } = require("./module-config");
+const {
+	readManifest,
+	readSchema,
+	readConfig,
+	writeConfig
+} = require("./module-config");
 const { listThemes } = require("./theme-loader");
 const { readFaces } = require("./face-store");
 const { updateFace } = require("./face-loader");
@@ -431,7 +436,7 @@ function startAdminFace() {
 				<label class="option">
 					<input type="checkbox" name="module" value="${escapeHtml(moduleId)}"
 						${face.modules.includes(moduleId) ? "checked" : ""}>
-					<span>${escapeHtml(moduleId)}</span>
+					<span>${escapeHtml(readManifest(moduleId).name)}</span>
 				</label>`
 			)
 			.join("");
@@ -531,12 +536,18 @@ function startAdminFace() {
 		const modules = listModules()
 			.filter((id) => readSchema(id))
 			.map((id) => {
+				const manifest = readManifest(id);
 				const count = readSchema(id).length;
+
+				// Prefer the module's own description; fall back to a count
+				const detail =
+					manifest.description ||
+					count + (count === 1 ? " setting" : " settings");
 
 				return `
 					<a class="row" href="/modules/${encodeURIComponent(id)}">
-						<strong>${escapeHtml(id)}</strong>
-						<span>${count}${count === 1 ? " setting" : " settings"}</span>
+						<strong>${escapeHtml(manifest.name)}</strong>
+						<span>${escapeHtml(detail)}</span>
 					</a>`;
 			})
 			.join("");
@@ -573,6 +584,7 @@ function startAdminFace() {
 		}
 
 		const config = readConfig(moduleId);
+		const manifest = readManifest(moduleId);
 
 		const fields = schema
 			.map((field) => {
@@ -624,7 +636,12 @@ function startAdminFace() {
 		const body = `
 			<div class="panel">
 				<a class="back" href="/modules">← Modules</a>
-				<h1 style="margin-top:12px">${escapeHtml(moduleId)}</h1>
+				<h1 style="margin-top:12px">${escapeHtml(manifest.name)}</h1>
+				${
+					manifest.description
+						? `<p class="lede">${escapeHtml(manifest.description)}</p>`
+						: ""
+				}
 			</div>
 			<div class="panel">
 				${fields}
@@ -675,7 +692,7 @@ function startAdminFace() {
 			});
 		`;
 
-		res.send(page(moduleId, body, script));
+		res.send(page(manifest.name, body, script));
 	});
 
 	// Save a module's settings

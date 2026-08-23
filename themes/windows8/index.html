@@ -215,21 +215,24 @@
 			}
 		}
 
-		// Fetch each module's current data and redraw its tile
+		// Fetch each module's current data and redraw its tile.
+		// All modules are asked at once rather than one after another — with
+		// several tiles, waiting for each in turn would make the slowest
+		// module hold up every tile behind it.
 		async function refresh() {
-			const container = document.getElementById("tiles");
-			let html = "";
+			const results = await Promise.all(
+				identity.modules.map(async function (moduleId) {
+					try {
+						const response = await fetch("/api/" + moduleId);
+						if (!response.ok) throw new Error();
+						return renderTile(moduleId, await response.json());
+					} catch (error) {
+						return renderUnavailable(moduleId);
+					}
+				})
+			);
 
-			for (const moduleId of identity.modules) {
-				try {
-					const data = await (await fetch("/api/" + moduleId)).json();
-					html += renderTile(moduleId, data);
-				} catch (error) {
-					html += renderUnavailable(moduleId);
-				}
-			}
-
-			container.innerHTML = html;
+			document.getElementById("tiles").innerHTML = results.join("");
 			trimToFit();
 		}
 

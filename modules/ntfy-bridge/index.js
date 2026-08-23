@@ -8,6 +8,7 @@
 // straight away with no restart.
 
 const { readConfig } = require("../../core/module-config");
+const { fetchCached } = require("../../core/module-fetch");
 
 const MODULE_ID = "ntfy-bridge";
 
@@ -26,35 +27,28 @@ module.exports = function ntfyBridgeModule(app, options) {
 		// Read settings fresh each time so admin changes apply immediately
 		const config = readConfig(MODULE_ID);
 
+		if (!config.topic) {
+			res.json({
+				title: "Notifications",
+				primary: "—",
+				secondary: "No topic set",
+				details: [{ label: "Set a topic", value: "in Settings" }],
+				updated: new Date().toISOString()
+			});
+			return;
+		}
+
 		const url =
 			config.server + "/" + config.topic +
 			"/json?poll=1&since=" + config.since;
 
-		try {
-			const response = await fetch(url);
-			const text = await response.text();
+		// ntfy streams one JSON object per line, so read it as text
+		const { data, stale } = await fetchCached(url, {
+			as: "text",
+			cacheSeconds: Number(config.refreshMinutes) * 60
+		});
 
-			// ntfy returns one JSON object per line, not a JSON array
-			const messages = text
-				.split("\n")
-				.filter((line) => line.trim() !== "")
-				.map((line) => JSON.parse(line))
-				// ntfy also sends keepalive and open events — we only want
-				// actual messages
-				.filter((entry) => entry.event === "message")
-				.reverse(); // newest first
-
-			res.json({
-				title: "Notifications",
-				primary: String(messages.length),
-				secondary: config.topic,
-				details: messages.slice(0, config.limit).map((message) => ({
-					label: timeAgo(message.time),
-					value: message.title || message.message || ""
-				})),
-				updated: new Date().toISOString()
-			});
-		} catch (error) {
+		if (data === null) {
 			res.json({
 				title: "Notifications",
 				primary: "—",
@@ -62,6 +56,40 @@ module.exports = function ntfyBridgeModule(app, options) {
 				details: [{ label: "Server", value: config.server }],
 				updated: new Date().toISOString()
 			});
+			return;
 		}
+
+		let messages;
+
+		try {
+			messages = data
+				.split("\n")
+				.filter((line) => line.trim() !== "")
+				.map((line) => JSON.parse(line))
+				// ntfy also sends keepalive and open events — we only want
+				// actual messages
+				.filter((entry) => entry.event === "message")
+				.reverse(); // newest first
+		} catch (error) {
+			res.json({
+				title: "Notifications",
+				primary: "—",
+				secondary: "Unreadable reply",
+				details: [{ label: "Server", value: config.server }],
+				updated: new Date().toISOString()
+			});
+			return;
+		}
+
+		res.json({
+			title: "Notifications",
+			primary: String(messages.length),
+			secondary: config.topic + (stale ? " (last known)" : ""),
+			details: messages.slice(0, config.limit).map((message) => ({
+				label: timeAgo(message.time),
+				value: message.title || message.message || ""
+			})),
+			updated: new Date().toISOString()
+		});
 	});
 };

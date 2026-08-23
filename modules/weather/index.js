@@ -2,8 +2,13 @@
 // Current conditions from Open-Meteo.
 // Read-only. Open-Meteo needs no API key and no account, which is why it's
 // a good fit for something people self-host.
+//
+// Requests go through OmniCore's shared fetch helper, so the result is
+// cached and the call has a timeout — a face polling every few seconds
+// doesn't turn into hundreds of calls an hour to somebody else's free API.
 
 const { readConfig } = require("../../core/module-config");
+const { fetchCached } = require("../../core/module-fetch");
 
 const MODULE_ID = "weather";
 
@@ -59,43 +64,13 @@ module.exports = function weatherModule(app, options) {
 			"weather_code,wind_speed_10m" +
 			"&daily=temperature_2m_max,temperature_2m_min" +
 			"&forecast_days=1&timezone=auto" +
-			(fahrenheit
-				? "&temperature_unit=fahrenheit&wind_speed_unit=mph"
-				: "");
+			(fahrenheit ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : "");
 
-		try {
-			const response = await fetch(url);
-			const data = await response.json();
+		const { data, stale } = await fetchCached(url, {
+			cacheSeconds: Number(config.refreshMinutes) * 60
+		});
 
-			const now = data.current;
-			const today = data.daily;
-
-			res.json({
-				title: config.label || "Weather",
-				primary: Math.round(now.temperature_2m) + degrees,
-				secondary: describe(now.weather_code),
-				details: [
-					{
-						label: "Feels like",
-						value: Math.round(now.apparent_temperature) + degrees
-					},
-					{
-						label: "High / low",
-						value:
-							Math.round(today.temperature_2m_max[0]) + degrees + " / " +
-							Math.round(today.temperature_2m_min[0]) + degrees
-					},
-					{ label: "Humidity", value: now.relative_humidity_2m + "%" },
-					{
-						label: "Wind",
-						value:
-							Math.round(now.wind_speed_10m) +
-							(fahrenheit ? " mph" : " km/h")
-					}
-				],
-				updated: new Date().toISOString()
-			});
-		} catch (error) {
+		if (!data || !data.current) {
 			res.json({
 				title: config.label || "Weather",
 				primary: "—",
@@ -103,6 +78,37 @@ module.exports = function weatherModule(app, options) {
 				details: [{ label: "Source", value: "Open-Meteo" }],
 				updated: new Date().toISOString()
 			});
+			return;
 		}
+
+		const now = data.current;
+		const today = data.daily;
+
+		res.json({
+			title: config.label || "Weather",
+			primary: Math.round(now.temperature_2m) + degrees,
+			// Say so when we're showing an older reading, rather than
+			// quietly presenting it as current
+			secondary: describe(now.weather_code) + (stale ? " (last known)" : ""),
+			details: [
+				{
+					label: "Feels like",
+					value: Math.round(now.apparent_temperature) + degrees
+				},
+				{
+					label: "High / low",
+					value:
+						Math.round(today.temperature_2m_max[0]) + degrees + " / " +
+						Math.round(today.temperature_2m_min[0]) + degrees
+				},
+				{ label: "Humidity", value: now.relative_humidity_2m + "%" },
+				{
+					label: "Wind",
+					value:
+						Math.round(now.wind_speed_10m) + (fahrenheit ? " mph" : " km/h")
+				}
+			],
+			updated: new Date().toISOString()
+		});
 	});
 };

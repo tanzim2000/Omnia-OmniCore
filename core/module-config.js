@@ -15,6 +15,29 @@ const path = require("path");
 const modulesDir = path.join(__dirname, "..", "modules");
 const configDir = path.join(__dirname, "..", "data", "module-config");
 
+// A module's manifest: a readable name and description, from a module.json
+// in its folder. Mirrors how themes describe themselves in theme.json.
+// Falls back to the folder name so a module without one still works.
+function readManifest(moduleId) {
+	const manifestPath = path.join(modulesDir, moduleId, "module.json");
+
+	if (!fs.existsSync(manifestPath)) {
+		return { id: moduleId, name: moduleId, description: "" };
+	}
+
+	try {
+		const parsed = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+
+		return {
+			id: moduleId,
+			name: parsed.name || moduleId,
+			description: parsed.description || ""
+		};
+	} catch (error) {
+		return { id: moduleId, name: moduleId, description: "" };
+	}
+}
+
 // Read a module's declared settings. Returns null if it has none —
 // a module without settings simply has no settings page.
 function readSchema(moduleId) {
@@ -102,4 +125,4 @@ function writeConfig(moduleId, values) {
 	return clean;
 }
 
-module.exports = { readSchema, readConfig, writeConfig };
+module.exports = { readManifest, readSchema, readConfig, writeConfig };

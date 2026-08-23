@@ -1,4 +1,4 @@
-// modules/docker-control/index.js
+// modules/docker-status/index.js
 // Reports what Docker is running on this machine.
 // Read-only — it never starts or stops anything.
 //
@@ -7,14 +7,19 @@
 // No library needed.
 
 const http = require("http");
+const { readConfig } = require("../../core/module-config");
 
-const DOCKER_SOCKET = "/var/run/docker.sock";
+const MODULE_ID = "docker-status";
+
+// Docker is local so it should answer instantly. If it doesn't, something
+// is wrong and we'd rather say so than leave the tile hanging.
+const TIMEOUT_MS = 3000;
 
 // Make a GET request to Docker's API over its unix socket
-function dockerRequest(path) {
+function dockerRequest(socketPath, path) {
 	return new Promise((resolve, reject) => {
 		const request = http.request(
-			{ socketPath: DOCKER_SOCKET, path: path, method: "GET" },
+			{ socketPath: socketPath, path: path, method: "GET" },
 			(response) => {
 				let body = "";
 
@@ -32,6 +37,10 @@ function dockerRequest(path) {
 			}
 		);
 
+		request.setTimeout(TIMEOUT_MS, () => {
+			request.destroy(new Error("Docker didn't answer in time"));
+		});
+
 		request.on("error", reject);
 		request.end();
 	});
@@ -43,11 +52,17 @@ function containerName(container) {
 	return raw.replace(/^\//, "");
 }
 
-module.exports = function dockerControlModule(app, options) {
+module.exports = function dockerStatusModule(app, options) {
 	app.get("/api/docker-status", async (req, res) => {
+		const config = readConfig(MODULE_ID);
+		const title = config.label || "Docker";
+
 		try {
 			// all=true so we see stopped containers too, not just running ones
-			const containers = await dockerRequest("/containers/json?all=true");
+			const containers = await dockerRequest(
+				config.socketPath,
+				"/containers/json?all=true"
+			);
 
 			const running = containers.filter((c) => c.State === "running");
 
@@ -58,7 +73,7 @@ module.exports = function dockerControlModule(app, options) {
 			];
 
 			res.json({
-				title: "Docker",
+				title: title,
 				primary: String(running.length),
 				secondary: "of " + containers.length + " running",
 				details: sorted.map((container) => ({
@@ -72,12 +87,10 @@ module.exports = function dockerControlModule(app, options) {
 			// Most likely there's no Docker on this machine, or OmniCore
 			// can't read the socket.
 			res.json({
-				title: "Docker",
+				title: title,
 				primary: "—",
 				secondary: "Not reachable",
-				details: [
-					{ label: "Socket", value: DOCKER_SOCKET }
-				],
+				details: [{ label: "Socket", value: config.socketPath }],
 				updated: new Date().toISOString()
 			});
 		}

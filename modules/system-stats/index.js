@@ -4,6 +4,9 @@
 // takes no view on how any of it should look. That's the theme's job.
 
 const os = require("os");
+const { readConfig } = require("../../core/module-config");
+
+const MODULE_ID = "system-stats";
 
 // Turn raw bytes into something readable, e.g. "3.1 GB"
 function formatBytes(bytes) {
@@ -63,11 +66,13 @@ function cpuUsage() {
 
 module.exports = function systemStatsModule(app, options) {
 	app.get("/api/system-stats", async (req, res) => {
+		const config = readConfig(MODULE_ID);
+
 		const usedMemory = os.totalmem() - os.freemem();
 		const cpu = await cpuUsage();
 
 		res.json({
-			title: "System",
+			title: config.label || "System",
 			primary: cpu + "%",
 			secondary: "CPU",
 			details: [
