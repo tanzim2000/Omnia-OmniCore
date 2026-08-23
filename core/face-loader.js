@@ -40,28 +40,45 @@ function startFace(face) {
 		app.post("/select-theme", (req, res) => {
 			const updated = updateFace(face.id, { theme: req.body.theme });
 
-			// Keep the in-memory copy in sync with what was just persisted
+			// Keep the in-memory copy in sync with what was just persisted.
+			// The handler below reads face.theme on every request, so the
+			// new theme takes effect on the next page load — no restart.
 			face.theme = updated.theme;
 
 			res.json(updated);
 		});
 
-		const themes = listThemes();
-		const themeIsValid =
-			face.theme && themes.some((theme) => theme.id === face.theme);
+		// Caches one static-file handler per theme, so we aren't rebuilding
+		// it on every single request
+		const themeHandlers = new Map();
 
-		if (themeIsValid) {
-			// Themes are pure frontend — served as static files, never
-			// executed on the server. A downloaded theme cannot touch
-			// OmniCore itself, only render data the face already exposes.
-			const themeDir = path.join(__dirname, "..", "themes", face.theme);
-			app.use(express.static(themeDir));
-		} else {
-			// No usable theme — show OmniCore's built-in fallback screen
-			app.get("/", (req, res) => {
-				res.send(renderFallbackPage(listThemes()));
-			});
+		function themeHandler(themeId) {
+			if (!themeHandlers.has(themeId)) {
+				const themeDir = path.join(__dirname, "..", "themes", themeId);
+				themeHandlers.set(themeId, express.static(themeDir));
+			}
+			return themeHandlers.get(themeId);
 		}
+
+		// Resolve the theme on EVERY request rather than once at startup —
+		// this is what lets a theme change take effect without a restart.
+		// Themes are pure frontend: served as static files, never executed
+		// on the server, so a downloaded theme can only render data the
+		// face already exposes.
+		app.use((req, res, next) => {
+			const themes = listThemes();
+			const themeIsValid =
+				face.theme && themes.some((theme) => theme.id === face.theme);
+
+			if (themeIsValid) {
+				// Hand the request to this theme's static file handler
+				themeHandler(face.theme)(req, res, next);
+				return;
+			}
+
+			// No usable theme — show OmniCore's built-in fallback screen
+			res.send(renderFallbackPage(themes));
+		});
 
 		// Only resolve once the server is genuinely accepting connections
 		const server = app.listen(face.id, () => {
