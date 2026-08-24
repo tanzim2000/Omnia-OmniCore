@@ -135,7 +135,7 @@
 	</style>
 </head>
 <body>
-	<h1 id="face-name">Loading…</h1>
+	<h1 id="face-title"></h1>
 	<div class="tiles" id="tiles"></div>
 
 	<script>
@@ -266,7 +266,16 @@
 		async function start() {
 			// Ask the face who it is and which modules it has
 			identity = await (await fetch("/identity")).json();
-			document.getElementById("face-name").textContent = identity.name;
+
+			// The face's title is cosmetic and may be blank, which means no
+			// heading at all. Its name is for the admin, not the display.
+			const heading = document.getElementById("face-title");
+
+			if (identity.title) {
+				heading.textContent = identity.title;
+			} else {
+				heading.style.display = "none";
+			}
 
 			await refresh();
 

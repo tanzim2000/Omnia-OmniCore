@@ -58,12 +58,18 @@ function nextDashboardPort() {
 // Instances can be supplied up front — the setup wizard builds the whole
 // face in the browser and commits it in one go, so abandoning the wizard
 // leaves nothing behind. IDs are generated here, never trusted from input.
-function createFace(name, theme, instances) {
+function createFace(name, title, theme, instances) {
 	const faces = readFaces();
+	const id = nextDashboardPort(); // the port number IS the face's ID
 
 	const face = {
-		id: nextDashboardPort(), // the port number IS the face's ID
-		name: name,
+		id: id,
+		// name is how the ADMIN recognises this face. Blank falls back to
+		// the port, which is always unique.
+		name: name && name.trim() ? name.trim() : "Face " + id,
+		// title is cosmetic — what a theme displays, if it displays one at
+		// all. Blank is fine and means no heading.
+		title: title || "",
 		theme: theme,
 		instances: (instances || []).map((instance) => ({
 			id: newInstanceId(instance.module),
@@ -88,7 +94,10 @@ function updateFace(id, changes) {
 	}
 
 	// id is fixed — it's the port the face runs on
-	if (changes.name !== undefined) face.name = changes.name;
+	if (changes.name !== undefined) {
+		face.name = changes.name.trim() ? changes.name.trim() : "Face " + face.id;
+	}
+	if (changes.title !== undefined) face.title = changes.title;
 	if (changes.theme !== undefined) face.theme = changes.theme;
 
 	writeFaces(faces);

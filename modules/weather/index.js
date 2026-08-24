@@ -52,10 +52,23 @@ module.exports = async function weather(config) {
 	const fahrenheit = config.units === "Fahrenheit";
 	const degrees = fahrenheit ? "°F" : "°C";
 
+	// OmniCore resolves the location setting before we see it. Null means
+	// there's no location to work with — either location services are off,
+	// or detection failed and nothing was set by hand.
+	if (!config.location) {
+		return {
+			title: "Weather",
+			primary: "—",
+			secondary: "No location",
+			details: [{ label: "Set a location", value: "in Settings" }],
+			updated: new Date().toISOString()
+		};
+	}
+
 	const url =
 		"https://api.open-meteo.com/v1/forecast" +
-		"?latitude=" + encodeURIComponent(config.latitude) +
-		"&longitude=" + encodeURIComponent(config.longitude) +
+		"?latitude=" + encodeURIComponent(config.location.latitude) +
+		"&longitude=" + encodeURIComponent(config.location.longitude) +
 		"&current=temperature_2m,apparent_temperature,relative_humidity_2m," +
 		"weather_code,wind_speed_10m" +
 		"&daily=temperature_2m_max,temperature_2m_min" +

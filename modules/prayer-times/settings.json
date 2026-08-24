@@ -1,16 +1,10 @@
 {
 	"settings": [
 		{
-			"key": "latitude",
-			"label": "Latitude",
-			"type": "number",
-			"default": 50.4452
-		},
-		{
-			"key": "longitude",
-			"label": "Longitude",
-			"type": "number",
-			"default": -104.6189
+			"key": "location",
+			"label": "Location",
+			"type": "location",
+			"help": "Where to calculate prayer times for"
 		},
 		{
 			"key": "method",

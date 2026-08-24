@@ -17,6 +17,7 @@ const { startFace } = require("./face-loader");
 const { listThemes } = require("./theme-loader");
 const { listModules } = require("./module-loader");
 const { readManifest, readSchema, applyDefaults } = require("./module-config");
+const { searchCities } = require("./location-service");
 
 const CONTROL_PORT = 4000;
 
@@ -45,6 +46,12 @@ const styles = `
 
 	.panel { width: 100%; max-width: 900px; }
 	.narrow { max-width: 460px; }
+
+	/* Steps with a single panel are centred; the two-column steps are not,
+	   since a centred pair of wide columns just looks lopsided */
+	body.single { align-items: center; }
+	body.single .panel { display: flex; flex-direction: column; align-items: center; }
+	body.single .actions { justify-content: center; }
 
 	/* The two rounded squares, side by side */
 	.columns {
@@ -150,6 +157,26 @@ const styles = `
 	.option input { width: 17px; height: 17px; }
 
 	.empty { opacity: 0.4; font-size: 14px; }
+
+	.search-row { display: flex; gap: 8px; }
+	.search-row input { flex: 1; }
+
+	.result {
+		display: block;
+		width: 100%;
+		text-align: left;
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 8px;
+		color: #fff;
+		font-size: 14px;
+		font-family: inherit;
+		padding: 10px 14px;
+		margin-top: 8px;
+		cursor: pointer;
+	}
+
+	.result:hover { background: rgba(255, 255, 255, 0.1); }
 	.status { font-size: 14px; min-height: 20px; color: #ff8a8a; }
 
 	.review-row {
@@ -290,7 +317,7 @@ function startControlFace() {
 
 	// Create a face, with all its modules, in one go — the wizard's commit
 	app.post("/faces", async (req, res) => {
-		const { name, theme, instances } = req.body;
+		const { name, title, theme, instances } = req.body;
 
 		// A face cannot exist without a theme
 		if (!theme) {
@@ -301,7 +328,8 @@ function startControlFace() {
 		const installed = listModules();
 
 		const face = faceStore.createFace(
-			name || "Untitled Face",
+			name,
+			title,
 			theme,
 			// Ignore anything referring to a module that isn't installed
 			(instances || []).filter((instance) =>
@@ -314,6 +342,13 @@ function startControlFace() {
 		await startFace(face);
 
 		res.json(face);
+	});
+
+	// City lookup for the location fields. Goes through OmniCore rather
+	// than letting the browser call out directly, so the only thing talking
+	// to the outside world is the server.
+	app.get("/geocode", async (req, res) => {
+		res.json(await searchCities(req.query.q || ""));
 	});
 
 	// The setup wizard
@@ -418,7 +453,7 @@ function renderWizard(data) {
 
 		// Everything the wizard is building, held here and only sent to the
 		// server at Finish. Cancel simply throws this away.
-		const face = { name: "", theme: null, instances: [] };
+		const face = { name: "", title: "", theme: null, instances: [] };
 
 		// step 0        name and theme
 		// step 1        pick modules
@@ -447,6 +482,9 @@ function renderWizard(data) {
 				const nameField = document.getElementById("name");
 				if (nameField) face.name = nameField.value.trim();
 
+				const titleField = document.getElementById("title");
+				if (titleField) face.title = titleField.value.trim();
+
 				const chosen = document.querySelector('input[name="theme"]:checked');
 				face.theme = chosen ? chosen.value : face.theme;
 				return;
@@ -463,6 +501,22 @@ function renderWizard(data) {
 					instance.config[input.dataset.key] =
 						input.dataset.type === "boolean" ? input.checked : input.value;
 				}
+
+				// Location fields are a radio pair plus optional coordinates
+				const seen = {};
+				for (const radio of document.querySelectorAll("[data-loc]")) {
+					const key = radio.dataset.loc;
+					if (seen[key] || !radio.checked) continue;
+					seen[key] = true;
+
+					instance.config[key] = radio.value === "manual"
+						? {
+							mode: "manual",
+							latitude: document.querySelector('[data-loc-lat="' + key + '"]').value,
+							longitude: document.querySelector('[data-loc-lon="' + key + '"]').value
+						}
+						: { mode: "core" };
+				}
 			}
 		}
 
@@ -477,11 +531,21 @@ function renderWizard(data) {
 				"</label>";
 			}).join("");
 
-			return '<div class="square" style="min-height:0;max-width:460px">' +
+			return '<div class="square" style="min-height:0;width:100%;min-width:320px;max-width:460px">' +
 				'<div class="field">' +
 					'<label for="name">Name</label>' +
 					'<input type="text" id="name" value="' + escapeHtml(face.name) +
-						'" placeholder="Living room display">' +
+						'" placeholder="Face ' + NEXT_PORT + '">' +
+					'<div class="help">How you recognise this face in settings. ' +
+						'Leave it blank and it will be called Face ' + NEXT_PORT +
+						".</div>" +
+				"</div>" +
+				'<div class="field">' +
+					'<label for="title">Title</label>' +
+					'<input type="text" id="title" value="' + escapeHtml(face.title) +
+						'" placeholder="Optional">' +
+					'<div class="help">Shown on the dashboard itself, if the ' +
+						"theme displays one. Leave it blank for no heading.</div>" +
 				"</div>" +
 				'<div class="field">' +
 					"<h2>Theme</h2>" +
@@ -543,7 +607,47 @@ function renderWizard(data) {
 
 				let input;
 
-				if (field.type === "boolean") {
+				if (field.type === "location") {
+					// Either lean on OmniCore's location, or give this
+					// instance coordinates of its own
+					const stored = value || { mode: "core" };
+					const manual = stored.mode === "manual";
+					const key = escapeHtml(field.key);
+
+					input =
+						'<label class="option">' +
+							'<input type="radio" name="loc-' + key + '" data-loc="' + key +
+								'" value="core"' + (manual ? "" : " checked") + ">" +
+							"<span>Use OmniCore's location</span>" +
+						"</label>" +
+						'<label class="option">' +
+							'<input type="radio" name="loc-' + key + '" data-loc="' + key +
+								'" value="manual"' + (manual ? " checked" : "") + ">" +
+							"<span>Set coordinates here</span>" +
+						"</label>" +
+						'<div data-loc-fields="' + key + '" style="' +
+							(manual ? "" : "display:none") + ';margin-top:10px">' +
+							'<div class="field"><label>Search for a city</label>' +
+								'<div class="search-row">' +
+									'<input type="text" data-loc-query="' + key +
+										'" placeholder="Regina">' +
+									'<button class="glass" style="padding:12px 20px" ' +
+										'data-loc-search="' + key + '">Search</button>' +
+								"</div>" +
+								'<div data-loc-results="' + key + '"></div>' +
+							"</div>" +
+							'<div class="field"><label>Latitude</label>' +
+								'<input type="number" step="any" data-loc-lat="' + key +
+								'" value="' + escapeHtml(
+									manual && stored.latitude !== undefined ? stored.latitude : ""
+								) + '"></div>' +
+							'<div class="field"><label>Longitude</label>' +
+								'<input type="number" step="any" data-loc-lon="' + key +
+								'" value="' + escapeHtml(
+									manual && stored.longitude !== undefined ? stored.longitude : ""
+								) + '"></div>' +
+						"</div>";
+				} else if (field.type === "boolean") {
 					input = '<input type="checkbox" data-key="' +
 						escapeHtml(field.key) + '" data-type="boolean"' +
 						(value ? " checked" : "") + ">";
@@ -599,12 +703,14 @@ function renderWizard(data) {
 
 			const theme = THEMES.find(function (t) { return t.id === face.theme; });
 
-			return '<div class="square" style="max-width:560px">' +
+			return '<div class="square" style="width:100%;min-width:320px;max-width:560px">' +
 				'<div class="review-row"><strong>Name</strong><span>' +
-					escapeHtml(face.name || "Untitled Face") + "</span></div>" +
+					escapeHtml(face.name || "Face " + NEXT_PORT) + "</span></div>" +
+				'<div class="review-row"><strong>Title</strong><span>' +
+					escapeHtml(face.title || "none") + "</span></div>" +
 				'<div class="review-row"><strong>Theme</strong><span>' +
 					escapeHtml(theme ? theme.name : "none") + "</span></div>" +
-				'<div class="review-row"><strong>ID</strong><span>port ' +
+				'<div class="review-row"><strong>ID</strong><span>' +
 					NEXT_PORT + "</span></div>" +
 				'<div style="margin-top:22px"><h2>Modules</h2>' +
 					(rows || '<div class="empty">No modules on this face.</div>') +
@@ -634,6 +740,11 @@ function renderWizard(data) {
 		function draw() {
 			const heading = headingFor();
 
+			// Name/theme and review are single panels, so they get centred.
+			// The picker and settings steps are two columns and are not.
+			const single = step === 0 || step === lastStep();
+			document.body.className = single ? "single" : "";
+
 			document.getElementById("header").innerHTML =
 				"<h1>" + heading[0] + '</h1><p class="lede">' + heading[1] + "</p>";
 
@@ -646,10 +757,86 @@ function renderWizard(data) {
 			document.getElementById("content").innerHTML = content;
 			document.getElementById("status").textContent = "";
 
+			for (const button of document.querySelectorAll("[data-loc-search]")) {
+				button.addEventListener("click", function () {
+					searchCity(this.dataset.locSearch);
+				});
+			}
+
+			// Enter in a city box searches, rather than doing nothing
+			for (const box of document.querySelectorAll("[data-loc-query]")) {
+				box.addEventListener("keydown", function (event) {
+					if (event.key === "Enter") {
+						event.preventDefault();
+						searchCity(this.dataset.locQuery);
+					}
+				});
+			}
+
+			// Show or hide coordinate boxes as the location radio changes
+			for (const radio of document.querySelectorAll("[data-loc]")) {
+				radio.addEventListener("change", function () {
+					const fields = document.querySelector(
+						'[data-loc-fields="' + this.dataset.loc + '"]'
+					);
+					if (fields) {
+						fields.style.display = this.value === "manual" ? "" : "none";
+					}
+				});
+			}
+
 			document.getElementById("back").disabled = step === 0;
 			document.getElementById("next").textContent =
 				step === lastStep() ? "Finish" : "Next";
 		}
+
+		// Look a city up and offer the matches. Clicking one fills in the
+		// coordinate boxes — the stored value is still just coordinates.
+		window.searchCity = async function (key) {
+			const query = document.querySelector('[data-loc-query="' + key + '"]').value;
+			const results = document.querySelector('[data-loc-results="' + key + '"]');
+
+			results.innerHTML = '<div class="empty" style="margin-top:8px">Searching…</div>';
+
+			try {
+				const found = await (
+					await fetch("/geocode?q=" + encodeURIComponent(query))
+				).json();
+
+				if (!found.length) {
+					results.innerHTML =
+						'<div class="empty" style="margin-top:8px">Nothing found.</div>';
+					return;
+				}
+
+				window["cities_" + key] = found;
+
+				results.innerHTML = found.map(function (place, index) {
+					return '<button class="result" data-loc-pick="' + key +
+						'" data-index="' + index + '">' +
+						escapeHtml(place.label) + "</button>";
+				}).join("");
+
+				// Wire the results up rather than relying on inline handlers
+				for (const button of results.querySelectorAll("[data-loc-pick]")) {
+					button.addEventListener("click", function () {
+						pickCity(this.dataset.locPick, Number(this.dataset.index));
+					});
+				}
+			} catch (error) {
+				results.innerHTML =
+					'<div class="empty" style="margin-top:8px">Search failed.</div>';
+			}
+		};
+
+		window.pickCity = function (key, index) {
+			const place = window["cities_" + key][index];
+
+			document.querySelector('[data-loc-lat="' + key + '"]').value = place.latitude;
+			document.querySelector('[data-loc-lon="' + key + '"]').value = place.longitude;
+			document.querySelector('[data-loc-query="' + key + '"]').value = place.label;
+			document.querySelector('[data-loc-results="' + key + '"]').innerHTML = "";
+		};
 
 		window.addInstance = function (moduleId) {
 			captureStep();

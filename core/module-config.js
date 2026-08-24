@@ -90,6 +90,26 @@ function cleanConfig(moduleId, values) {
 			value = value === true || value === "true" || value === "on";
 		}
 
+		if (field.type === "location") {
+			// Either "use OmniCore's location", or coordinates typed in here
+			value =
+				value && value.mode === "manual"
+					? {
+							mode: "manual",
+							latitude: Number(value.latitude),
+							longitude: Number(value.longitude),
+							label: value.label || ""
+					  }
+					: { mode: "core" };
+
+			if (
+				value.mode === "manual" &&
+				(Number.isNaN(value.latitude) || Number.isNaN(value.longitude))
+			) {
+				continue; // incomplete coordinates — leave the old value alone
+			}
+		}
+
 		clean[field.key] = value;
 	}
 

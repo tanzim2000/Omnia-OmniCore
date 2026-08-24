@@ -31,6 +31,8 @@ const {
 	cleanConfig
 } = require("./module-config");
 const { listThemes } = require("./theme-loader");
+const { readSettings, writeSettings } = require("./settings-store");
+const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
 const { refresh } = require("./face-loader");
 const auth = require("./admin-auth");
@@ -144,6 +146,26 @@ const styles = `
 
 	.back { font-size: 14px; opacity: 0.6; }
 	.empty { opacity: 0.5; font-size: 14px; }
+
+	.search-row { display: flex; gap: 8px; }
+	.search-row input { flex: 1; }
+
+	.result {
+		display: block;
+		width: 100%;
+		text-align: left;
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 8px;
+		color: #fff;
+		font-size: 14px;
+		font-family: inherit;
+		padding: 10px 14px;
+		margin-top: 8px;
+		cursor: pointer;
+	}
+
+	.result:hover { background: rgba(255, 255, 255, 0.1); }
 	.status { font-size: 14px; min-height: 20px; margin-top: 14px; }
 	.status.good { color: #6bd968; }
 	.status.bad { color: #ff8a8a; }
@@ -208,6 +230,122 @@ function page(title, body, script, bodyClass) {
 </html>`;
 }
 
+// One line describing how location is set up, for the settings list
+function describeLocationSetting(settings) {
+	if (!settings.locationEnabled) {
+		return "Off";
+	}
+
+	if (settings.locationMode !== "manual") {
+		return "Automatic (IP based)";
+	}
+
+	if (settings.locationLabel) {
+		return "Manual (" + settings.locationLabel + ")";
+	}
+
+	if (settings.latitude === null || settings.longitude === null) {
+		return "Manual (not set)";
+	}
+
+	return (
+		"Manual (" +
+		Number(settings.latitude).toFixed(2) + ", " +
+		Number(settings.longitude).toFixed(2) + ")"
+	);
+}
+
+// Shared by every page that renders a settings form: show or hide the
+// coordinate boxes as the radio changes, and read location fields back out
+const locationScript = `
+	// Look a city up and offer the matches. Clicking one fills in the
+	// coordinate boxes — the stored value is still just coordinates.
+	async function searchCity(key) {
+		const query = document.querySelector('[data-loc-query="' + key + '"]').value;
+		const results = document.querySelector('[data-loc-results="' + key + '"]');
+
+		results.innerHTML = '<div class="empty" style="margin-top:8px">Searching…</div>';
+
+		try {
+			const found = await (
+				await fetch("/geocode?q=" + encodeURIComponent(query))
+			).json();
+
+			if (!found.length) {
+				results.innerHTML =
+					'<div class="empty" style="margin-top:8px">Nothing found.</div>';
+				return;
+			}
+
+			window["cities_" + key] = found;
+
+			results.innerHTML = found.map(function (place, index) {
+				const safe = place.label
+					.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+				return '<button class="result" data-loc-pick="' + key +
+					'" data-index="' + index + '">' + safe + "</button>";
+			}).join("");
+
+			// Wire the results up rather than relying on inline handlers
+			for (const button of results.querySelectorAll("[data-loc-pick]")) {
+				button.addEventListener("click", function () {
+					pickCity(this.dataset.locPick, Number(this.dataset.index));
+				});
+			}
+		} catch (error) {
+			results.innerHTML =
+				'<div class="empty" style="margin-top:8px">Search failed.</div>';
+		}
+	}
+
+	function pickCity(key, index) {
+		const place = window["cities_" + key][index];
+
+		document.querySelector('[data-loc-lat="' + key + '"]').value = place.latitude;
+		document.querySelector('[data-loc-lon="' + key + '"]').value = place.longitude;
+		document.querySelector('[data-loc-query="' + key + '"]').value = place.label;
+		document.querySelector('[data-loc-results="' + key + '"]').innerHTML = "";
+	}
+
+	for (const box of document.querySelectorAll("[data-loc-query]")) {
+		box.addEventListener("keydown", function (event) {
+			if (event.key === "Enter") {
+				event.preventDefault();
+				searchCity(this.dataset.locQuery);
+			}
+		});
+	}
+
+	for (const radio of document.querySelectorAll("[data-loc]")) {
+		radio.addEventListener("change", function () {
+			const fields = document.querySelector(
+				'[data-loc-fields="' + this.dataset.loc + '"]'
+			);
+			if (fields) fields.style.display = this.value === "manual" ? "" : "none";
+		});
+	}
+
+	function collectLocations(into) {
+		const seen = {};
+
+		for (const radio of document.querySelectorAll("[data-loc]")) {
+			const key = radio.dataset.loc;
+			if (seen[key] || !radio.checked) continue;
+			seen[key] = true;
+
+			if (radio.value === "manual") {
+				into[key] = {
+					mode: "manual",
+					latitude: document.querySelector('[data-loc-lat="' + key + '"]').value,
+					longitude: document.querySelector('[data-loc-lon="' + key + '"]').value
+				};
+			} else {
+				into[key] = { mode: "core" };
+			}
+		}
+	}
+`;
+
 function notFound(heading, backHref, backLabel) {
 	return page(
 		"Not found",
@@ -229,7 +367,60 @@ function renderFields(schema, config) {
 
 			let input;
 
-			if (field.type === "boolean") {
+			if (field.type === "location") {
+				// Two choices: lean on OmniCore's location, or type in
+				// coordinates for this instance specifically. The second is
+				// what makes two weather tiles for two cities possible.
+				const stored = value || { mode: "core" };
+				const manual = stored.mode === "manual";
+
+				input = `
+					<label class="option">
+						<input type="radio" name="loc-${escapeHtml(field.key)}"
+							data-loc="${escapeHtml(field.key)}" value="core"
+							${manual ? "" : "checked"}>
+						<span>Use OmniCore's location</span>
+					</label>
+					<label class="option">
+						<input type="radio" name="loc-${escapeHtml(field.key)}"
+							data-loc="${escapeHtml(field.key)}" value="manual"
+							${manual ? "checked" : ""}>
+						<span>Set coordinates here</span>
+					</label>
+					<div data-loc-fields="${escapeHtml(field.key)}"
+						style="${manual ? "" : "display:none"};margin-top:10px">
+						<div class="field">
+							<label>Search for a city</label>
+							<div class="search-row">
+								<input type="text" data-loc-query="${escapeHtml(field.key)}"
+									placeholder="Regina">
+								<button class="glass" style="width:auto;padding:12px 20px"
+									onclick="searchCity('${escapeHtml(field.key)}')">Search</button>
+							</div>
+							<div data-loc-results="${escapeHtml(field.key)}"></div>
+						</div>
+						<div class="field">
+							<label>Latitude</label>
+							<input type="number" step="any"
+								data-loc-lat="${escapeHtml(field.key)}"
+								value="${escapeHtml(
+									manual && stored.latitude !== undefined
+										? stored.latitude
+										: ""
+								)}">
+						</div>
+						<div class="field">
+							<label>Longitude</label>
+							<input type="number" step="any"
+								data-loc-lon="${escapeHtml(field.key)}"
+								value="${escapeHtml(
+									manual && stored.longitude !== undefined
+										? stored.longitude
+										: ""
+								)}">
+						</div>
+					</div>`;
+			} else if (field.type === "boolean") {
 				input =
 					`<input type="checkbox" data-key="${escapeHtml(field.key)}" ` +
 					`data-type="boolean" ${value ? "checked" : ""}>`;
@@ -410,16 +601,28 @@ function startAdminFace() {
 		res.redirect("/");
 	});
 
+	// City lookup, used by every location field. Goes through OmniCore
+	// rather than letting the browser call out directly.
+	app.get("/geocode", async (req, res) => {
+		res.json(await searchCities(req.query.q || ""));
+	});
+
 	// Settings — the sections of OmniCore you can change.
 	// OmniCore's own settings will join Faces here as they appear.
 	app.get("/", (req, res) => {
 		const count = faceStore.readFaces().length;
+
+		const settings = readSettings();
 
 		const body = `
 			<div class="panel">
 				<h1>Settings</h1>
 			</div>
 			<div class="panel">
+				<a class="row" href="/location">
+					<strong>Location service</strong>
+					<span>${escapeHtml(describeLocationSetting(settings))}</span>
+				</a>
 				<a class="row" href="/faces">
 					<strong>Faces</strong>
 					<span>${count ? count + (count === 1 ? " face" : " faces") : "No faces yet"}</span>
@@ -430,6 +633,228 @@ function startAdminFace() {
 			</div>`;
 
 		res.send(page("Settings", body));
+	});
+
+	// OmniCore's own settings — things that apply to the whole install
+	// rather than to one face.
+	app.get("/location", async (req, res) => {
+		const settings = readSettings();
+
+		// Show what OmniCore currently believes, so it's obvious whether
+		// automatic detection actually worked
+		const current = await getLocation();
+
+		const currentText = !settings.locationEnabled
+			? "Location services are off."
+			: current
+			? `Currently ${current.label || "unnamed"} — ` +
+			  `${current.latitude.toFixed(3)}, ${current.longitude.toFixed(3)}` +
+			  ` (${current.source === "auto" ? "detected" : "set by hand"})`
+			: "No location available. Detection may have failed.";
+
+		const manual = settings.locationMode === "manual";
+
+		const body = `
+			<div class="panel">
+				<a class="back" href="/">← Settings</a>
+				<h1 style="margin-top:12px">Location service</h1>
+			</div>
+			<div class="panel">
+				<h2 style="margin-bottom:14px">Location services</h2>
+
+				<label class="option">
+					<input type="checkbox" id="enabled"
+						${settings.locationEnabled ? "checked" : ""}>
+					<span>Let OmniCore know where it is</span>
+				</label>
+
+				<div class="help" style="margin-bottom:18px">
+					Modules like weather and prayer times ask OmniCore for a
+					location rather than working it out themselves. Turn this
+					off and OmniCore never looks one up and never hands one
+					out — those modules will have nothing to go on unless you
+					give each of them coordinates directly.
+				</div>
+
+				<div id="detail" style="${settings.locationEnabled ? "" : "display:none"}">
+					<label class="option">
+						<input type="radio" name="mode" value="auto"
+							${manual ? "" : "checked"}>
+						<span>Work it out automatically</span>
+					</label>
+					<label class="option">
+						<input type="radio" name="mode" value="manual"
+							${manual ? "checked" : ""}>
+						<span>Set it myself</span>
+					</label>
+
+					<div class="help" style="margin:10px 0 18px 0">
+						Automatic uses the server's public IP address, which is
+						usually close enough — but not if you're behind a VPN,
+						in which case set it by hand.
+					</div>
+
+					<div id="coords" style="${manual ? "" : "display:none"}">
+						<div class="field">
+							<label for="city">Search for a city</label>
+							<div class="search-row">
+								<input type="text" id="city" placeholder="Regina">
+								<button class="glass" style="width:auto;padding:12px 20px"
+									id="search">Search</button>
+							</div>
+							<div id="results"></div>
+						</div>
+						<div class="field">
+							<label for="label">Place name</label>
+							<input type="text" id="label"
+								value="${escapeHtml(settings.locationLabel || "")}"
+								placeholder="Home">
+						</div>
+						<div class="field">
+							<label for="latitude">Latitude</label>
+							<input type="number" step="any" id="latitude"
+								value="${escapeHtml(
+									settings.latitude === null ? "" : settings.latitude
+								)}">
+						</div>
+						<div class="field">
+							<label for="longitude">Longitude</label>
+							<input type="number" step="any" id="longitude"
+								value="${escapeHtml(
+									settings.longitude === null ? "" : settings.longitude
+								)}">
+						</div>
+					</div>
+				</div>
+
+				<p class="lede" style="margin-bottom:18px">${escapeHtml(currentText)}</p>
+
+				<button class="glass" id="save">Save</button>
+				<p class="status" id="status"></p>
+			</div>`;
+
+		const script = `
+			const enabled = document.getElementById("enabled");
+			const detail = document.getElementById("detail");
+			const coords = document.getElementById("coords");
+
+			enabled.addEventListener("change", function () {
+				detail.style.display = this.checked ? "" : "none";
+			});
+
+			for (const radio of document.querySelectorAll('input[name="mode"]')) {
+				radio.addEventListener("change", function () {
+					coords.style.display = this.value === "manual" ? "" : "none";
+				});
+			}
+
+			// City lookup fills in the coordinates and the place name, so
+			// nobody has to go and find them by hand
+			let matches = [];
+
+			async function runSearch() {
+				const results = document.getElementById("results");
+				const query = document.getElementById("city").value;
+
+				results.innerHTML = '<div class="empty" style="margin-top:8px">Searching…</div>';
+
+				try {
+					matches = await (
+						await fetch("/geocode?q=" + encodeURIComponent(query))
+					).json();
+
+					if (!matches.length) {
+						results.innerHTML =
+							'<div class="empty" style="margin-top:8px">Nothing found.</div>';
+						return;
+					}
+
+					results.innerHTML = matches.map(function (place, index) {
+						const safe = place.label
+							.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+						return '<button class="result" data-pick="' + index + '">' +
+							safe + "</button>";
+					}).join("");
+
+					for (const button of results.querySelectorAll("[data-pick]")) {
+						button.addEventListener("click", function () {
+							const place = matches[Number(this.dataset.pick)];
+
+							document.getElementById("latitude").value = place.latitude;
+							document.getElementById("longitude").value = place.longitude;
+							document.getElementById("label").value = place.label;
+							results.innerHTML = "";
+						});
+					}
+				} catch (error) {
+					results.innerHTML =
+						'<div class="empty" style="margin-top:8px">Search failed.</div>';
+				}
+			}
+
+			document.getElementById("search").addEventListener("click", runSearch);
+
+			document.getElementById("city").addEventListener("keydown", function (event) {
+				if (event.key === "Enter") {
+					event.preventDefault();
+					runSearch();
+				}
+			});
+
+			document.getElementById("save").addEventListener("click", async function () {
+				const button = this;
+				const status = document.getElementById("status");
+				const mode = document.querySelector('input[name="mode"]:checked');
+
+				button.disabled = true;
+				status.textContent = "";
+				status.className = "status";
+
+				try {
+					const response = await fetch("/location", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							locationEnabled: enabled.checked,
+							locationMode: mode ? mode.value : "auto",
+							locationLabel: document.getElementById("label").value,
+							latitude: document.getElementById("latitude").value,
+							longitude: document.getElementById("longitude").value
+						})
+					});
+
+					if (!response.ok) throw new Error();
+
+					// Reload so the "currently" line reflects what was saved
+					location.reload();
+				} catch (error) {
+					status.textContent = "Couldn't save.";
+					status.className = "status bad";
+					button.disabled = false;
+				}
+			});
+		`;
+
+		res.send(page("Location service", body, script));
+	});
+
+	app.post("/location", (req, res) => {
+		const latitude = Number(req.body.latitude);
+		const longitude = Number(req.body.longitude);
+
+		res.json(
+			writeSettings({
+				locationEnabled: Boolean(req.body.locationEnabled),
+				locationMode:
+					req.body.locationMode === "manual" ? "manual" : "auto",
+				locationLabel: req.body.locationLabel || "",
+				// Blank or unparseable coordinates are stored as "none"
+				// rather than NaN
+				latitude: Number.isNaN(latitude) || req.body.latitude === "" ? null : latitude,
+				longitude:
+					Number.isNaN(longitude) || req.body.longitude === "" ? null : longitude
+			})
+		);
 	});
 
 	// Every dashboard face
@@ -499,6 +924,20 @@ function startAdminFace() {
 				<div class="field">
 					<label for="name">Name</label>
 					<input type="text" id="name" value="${escapeHtml(face.name)}">
+					<div class="help">
+						How you recognise this face here. Blank falls back to
+						Face ${face.id}.
+					</div>
+				</div>
+
+				<div class="field">
+					<label for="title">Title</label>
+					<input type="text" id="title"
+						value="${escapeHtml(face.title || "")}" placeholder="Optional">
+					<div class="help">
+						Shown on the dashboard itself, if the theme displays
+						one. Blank means no heading.
+					</div>
 				</div>
 
 				<div class="field">
@@ -526,6 +965,7 @@ function startAdminFace() {
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
 							name: document.getElementById("name").value,
+							title: document.getElementById("title").value,
 							theme: themeInput ? themeInput.value : null
 						})
 					});
@@ -551,6 +991,7 @@ function startAdminFace() {
 
 		if (!faceStore.updateFace(id, {
 			name: req.body.name,
+			title: req.body.title,
 			theme: req.body.theme
 		})) {
 			res.status(404).json({ error: "No such face" });
@@ -741,6 +1182,8 @@ function startAdminFace() {
 			</div>`;
 
 		const script = `
+			${locationScript}
+
 			const base = "/faces/${face.id}/modules/${encodeURIComponent(instance.id)}";
 
 			document.getElementById("save").addEventListener("click", async function () {
@@ -753,6 +1196,8 @@ function startAdminFace() {
 					config[input.dataset.key] =
 						input.dataset.type === "boolean" ? input.checked : input.value;
 				}
+
+				collectLocations(config);
 
 				button.disabled = true;
 				status.textContent = "";

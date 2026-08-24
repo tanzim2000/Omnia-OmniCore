@@ -12,6 +12,7 @@ const fs = require("fs");
 const path = require("path");
 const { loadModule } = require("./module-loader");
 const { applyDefaults } = require("./module-config");
+const { resolveLocations } = require("./location-service");
 const { listThemes } = require("./theme-loader");
 const faceStore = require("./face-store");
 const renderFallbackPage = require("./fallback-page");
@@ -80,6 +81,12 @@ function startFace(face) {
 
 			try {
 				const config = applyDefaults(instance.module, instance.config);
+
+				// Turn any location setting into real coordinates before the
+				// module sees it. Modules never implement location logic —
+				// they just receive it, or receive null if OmniCore has none.
+				await resolveLocations(instance.module, config);
+
 				const envelope = await moduleFn(config);
 
 				// The instance's label wins over whatever the module called

@@ -55,6 +55,16 @@ function unavailable() {
 }
 
 module.exports = async function prayerTimes(config) {
+	if (!config.location) {
+		return {
+			title: "Prayer",
+			primary: "—",
+			secondary: "No location",
+			details: [{ label: "Set a location", value: "in Settings" }],
+			updated: new Date().toISOString()
+		};
+	}
+
 	const use12Hour = config.timeFormat === "12-hour";
 	const method = METHODS[config.method] || 2;
 
@@ -63,8 +73,8 @@ module.exports = async function prayerTimes(config) {
 
 	const url =
 		"https://api.aladhan.com/v1/timings" +
-		"?latitude=" + encodeURIComponent(config.latitude) +
-		"&longitude=" + encodeURIComponent(config.longitude) +
+		"?latitude=" + encodeURIComponent(config.location.latitude) +
+		"&longitude=" + encodeURIComponent(config.location.longitude) +
 		"&method=" + method +
 		"&school=" + school;
 
