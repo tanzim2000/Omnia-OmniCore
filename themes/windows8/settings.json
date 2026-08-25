@@ -1,0 +1,59 @@
+{
+	"settings": [
+		{
+			"key": "accent",
+			"label": "Accent colour",
+			"type": "select",
+			"options": [
+				"Blue",
+				"Teal",
+				"Green",
+				"Orange",
+				"Red",
+				"Purple",
+				"Magenta",
+				"Slate"
+			],
+			"default": "Blue",
+			"help": "The tile colour, as Windows 8 let you pick"
+		},
+		{
+			"key": "tileSize",
+			"label": "Tile size",
+			"type": "select",
+			"options": ["Compact", "Normal", "Large", "Huge"],
+			"default": "Normal",
+			"help": "Smaller tiles fit more on a big screen; larger ones read better from across a room"
+		},
+		{
+			"key": "background",
+			"label": "Background",
+			"type": "select",
+			"options": ["Solid colour", "Gradient", "Wallpaper"],
+			"default": "Solid colour"
+		},
+		{
+			"key": "backgroundColor",
+			"label": "Colour",
+			"type": "color",
+			"default": "#1d1d1d",
+			"showWhen": { "key": "background", "equals": ["Solid colour", "Gradient"] }
+		},
+		{
+			"key": "backgroundColor2",
+			"label": "Gradient ends at",
+			"type": "color",
+			"default": "#3a3a3a",
+			"showWhen": { "key": "background", "equals": "Gradient" }
+		},
+		{
+			"key": "wallpaper",
+			"label": "Wallpaper from",
+			"type": "instance",
+			"provides": "background",
+			"default": "",
+			"showWhen": { "key": "background", "equals": "Wallpaper" },
+			"help": "Only modules that can supply a picture are listed"
+		}
+	]
+}

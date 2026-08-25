@@ -71,10 +71,14 @@ function createFace(name, title, theme, instances) {
 		// all. Blank is fine and means no heading.
 		title: title || "",
 		theme: theme,
+		// Theme settings are kept per theme, not just per face, so
+		// switching away and back doesn't lose how you had it set up
+		themeConfigs: {},
 		instances: (instances || []).map((instance) => ({
 			id: newInstanceId(instance.module),
 			module: instance.module,
 			label: instance.label || "",
+			hidden: Boolean(instance.hidden),
 			config: instance.config || {}
 		}))
 	};
@@ -112,7 +116,7 @@ function newInstanceId(moduleId) {
 }
 
 // Add a module to an existing face. Returns the new instance.
-function addInstance(faceId, moduleId, label, config) {
+function addInstance(faceId, moduleId, label, config, hidden) {
 	const faces = readFaces();
 	const face = faces.find((candidate) => candidate.id === faceId);
 
@@ -124,6 +128,9 @@ function addInstance(faceId, moduleId, label, config) {
 		id: newInstanceId(moduleId),
 		module: moduleId,
 		label: label || "",
+		// Whether this instance gets a tile. Modules that work behind the
+		// scenes start hidden; they still run and still supply data.
+		hidden: Boolean(hidden),
 		config: config || {}
 	};
 
@@ -149,6 +156,7 @@ function updateInstance(faceId, instanceId, changes) {
 	}
 
 	if (changes.label !== undefined) instance.label = changes.label;
+	if (changes.hidden !== undefined) instance.hidden = Boolean(changes.hidden);
 	if (changes.config !== undefined) instance.config = changes.config;
 
 	writeFaces(faces);
@@ -176,10 +184,30 @@ function removeInstance(faceId, instanceId) {
 	return face;
 }
 
+// Save a face's settings for one particular theme
+function updateThemeConfig(faceId, themeId, config) {
+	const faces = readFaces();
+	const face = faces.find((candidate) => candidate.id === faceId);
+
+	if (!face) {
+		return null;
+	}
+
+	if (!face.themeConfigs) {
+		face.themeConfigs = {};
+	}
+
+	face.themeConfigs[themeId] = config;
+
+	writeFaces(faces);
+	return face;
+}
+
 module.exports = {
 	readFaces,
 	findFace,
 	nextDashboardPort,
+	updateThemeConfig,
 	createFace,
 	updateFace,
 	addInstance,

@@ -13,10 +13,12 @@ const path = require("path");
 const { loadModule } = require("./module-loader");
 const { applyDefaults } = require("./module-config");
 const { resolveLocations } = require("./location-service");
-const { listThemes } = require("./theme-loader");
+const themeLoader = require("./theme-loader");
 const faceStore = require("./face-store");
 const renderFallbackPage = require("./fallback-page");
 const { attachEvents, pushToFace, CLIENT_SCRIPT } = require("./face-events");
+const { toBlocks, proxyImages } = require("./envelope");
+const imageProxy = require("./image-proxy");
 
 // Running faces, keyed by port: { server, face }
 const runningFaces = new Map();
@@ -26,9 +28,10 @@ const runningFaces = new Map();
 function problemEnvelope(label, reason) {
 	return {
 		title: label,
-		primary: "—",
-		secondary: reason,
-		details: [],
+		content: [
+			{ type: "text", emphasis: "primary", value: "—" },
+			{ type: "text", emphasis: "secondary", value: reason }
+		],
 		updated: new Date().toISOString()
 	};
 }
@@ -49,10 +52,23 @@ function startFace(face) {
 		// OmniCore's push channel — the /events stream browsers listen on
 		attachEvents(app, face);
 
+		// Images are fetched by OmniCore rather than by the display
+		imageProxy.attachImageRoute(app);
+
 		// The face's own identity — themes fetch this to know what to draw.
 		// Registered before the theme's files so a theme can never shadow it.
 		app.get("/identity", (req, res) => {
-			res.json(face);
+			// A theme gets its OWN settings, resolved against its defaults —
+			// not the raw store, and not other themes' settings
+			const { themeConfigs, ...rest } = face;
+
+			res.json({
+				...rest,
+				themeConfig: themeLoader.applyDefaults(
+					face.theme,
+					(themeConfigs || {})[face.theme]
+				)
+			});
 		});
 
 		// One route for every module instance on this face. OmniCore owns
@@ -75,7 +91,8 @@ function startFace(face) {
 			const moduleFn = loadModule(instance.module);
 
 			if (!moduleFn) {
-				res.json(problemEnvelope(label, "Module not installed"));
+				const problem = problemEnvelope(label, "Module not installed");
+				res.json({ ...problem, content: toBlocks(problem) });
 				return;
 			}
 
@@ -89,20 +106,30 @@ function startFace(face) {
 
 				const envelope = await moduleFn(config);
 
-				// The instance's label wins over whatever the module called
-				// itself — that's how two weather tiles get told apart
-				if (instance.label) {
-					envelope.title = instance.label;
-				}
+				// Themes only ever see blocks, whichever shape the module
+				// chose to return
+				const blocks = proxyImages(
+					toBlocks(envelope),
+					instance.id,
+					imageProxy.remember
+				);
 
-				res.json(envelope);
+				res.json({
+					// The instance's label wins over whatever the module
+					// called itself — that's how two weather tiles get told
+					// apart
+					title: instance.label || envelope.title || instance.module,
+					content: blocks,
+					updated: envelope.updated || new Date().toISOString()
+				});
 			} catch (error) {
 				// Catching here means a badly written module costs you one
 				// tile, not the whole face
 				console.log(
 					`  Module "${instance.module}" failed: ${error.message}`
 				);
-				res.json(problemEnvelope(label, "Module error"));
+				const problem = problemEnvelope(label, "Module error");
+				res.json({ ...problem, content: toBlocks(problem) });
 			}
 		});
 
@@ -144,7 +171,7 @@ function startFace(face) {
 		// on the server, so a downloaded theme can only render data the
 		// face already exposes.
 		app.use((req, res, next) => {
-			const themes = listThemes();
+			const themes = themeLoader.listThemes();
 			const themeIsValid =
 				face.theme && themes.some((theme) => theme.id === face.theme);
 

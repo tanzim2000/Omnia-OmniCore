@@ -16,8 +16,19 @@ const modulesDir = path.join(__dirname, "..", "modules");
 function readManifest(moduleId) {
 	const manifestPath = path.join(modulesDir, moduleId, "module.json");
 
+	// `provides` lists the block types this module can emit — "background",
+	// "image", and so on. It lets OmniCore offer only the modules that could
+	// actually do a job: a wallpaper picker shouldn't list Docker.
+	const blank = {
+		id: moduleId,
+		name: moduleId,
+		description: "",
+		provides: [],
+		tile: true
+	};
+
 	if (!fs.existsSync(manifestPath)) {
-		return { id: moduleId, name: moduleId, description: "" };
+		return blank;
 	}
 
 	try {
@@ -26,10 +37,15 @@ function readManifest(moduleId) {
 		return {
 			id: moduleId,
 			name: parsed.name || moduleId,
-			description: parsed.description || ""
+			description: parsed.description || "",
+			provides: Array.isArray(parsed.provides) ? parsed.provides : [],
+			// Some modules work behind the scenes — a wallpaper source has
+			// nothing useful to show in a tile of its own, and giving it one
+			// just wastes a slot. They can still be switched on per instance.
+			tile: parsed.tile !== false
 		};
 	} catch (error) {
-		return { id: moduleId, name: moduleId, description: "" };
+		return blank;
 	}
 }
 

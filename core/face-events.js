@@ -19,9 +19,24 @@ const connections = new Map();
 const CLIENT_SCRIPT = `<script>
 	(function () {
 		const events = new EventSource("/events");
+		let everConnected = false;
 
 		events.addEventListener("face-changed", function () {
 			location.reload();
+		});
+
+		// EventSource reconnects on its own after a dropout, but a page that
+		// has been disconnected has no idea what it missed while it was
+		// away. Reloading on RE-connection is what lets an unattended
+		// display recover by itself after OmniCore restarts, rather than
+		// sitting there showing something stale until somebody notices.
+		events.addEventListener("open", function () {
+			if (everConnected) {
+				location.reload();
+				return;
+			}
+
+			everConnected = true;
 		});
 	})();
 </script>`;

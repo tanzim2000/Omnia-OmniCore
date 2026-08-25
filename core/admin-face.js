@@ -30,7 +30,7 @@ const {
 	applyDefaults,
 	cleanConfig
 } = require("./module-config");
-const { listThemes } = require("./theme-loader");
+const themeLoader = require("./theme-loader");
 const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
@@ -143,6 +143,24 @@ const styles = `
 	}
 
 	input[type="checkbox"] { width: 18px; height: 18px; }
+
+	input[type="color"] {
+		width: 100%;
+		height: 46px;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 10px;
+		padding: 4px;
+		cursor: pointer;
+	}
+
+	/* Dropdown options fall back to the browser's own popup colours unless
+	   we say otherwise, which means white on white in a dark interface */
+	option {
+		background: #1a1a1a;
+		color: #fff;
+	}
+
 
 	.back { font-size: 14px; opacity: 0.6; }
 	.empty { opacity: 0.5; font-size: 14px; }
@@ -257,6 +275,29 @@ function describeLocationSetting(settings) {
 
 // Shared by every page that renders a settings form: show or hide the
 // coordinate boxes as the radio changes, and read location fields back out
+const conditionalScript = `
+	// Show or hide fields that depend on another field's value, and keep
+	// doing so as that value changes
+	function applyFieldConditions() {
+		for (const field of document.querySelectorAll("[data-when-key]")) {
+			const control = document.querySelector(
+				'[data-key="' + field.dataset.whenKey + '"]'
+			);
+
+			if (!control) continue;
+
+			const allowed = field.dataset.whenIs.split("|");
+			field.style.display = allowed.indexOf(control.value) === -1 ? "none" : "";
+		}
+	}
+
+	for (const control of document.querySelectorAll("[data-key]")) {
+		control.addEventListener("change", applyFieldConditions);
+	}
+
+	applyFieldConditions();
+`;
+
 const locationScript = `
 	// Look a city up and offer the matches. Clicking one fills in the
 	// coordinate boxes — the stored value is still just coordinates.
@@ -356,8 +397,12 @@ function notFound(heading, backHref, backLabel) {
 	);
 }
 
-// Turn a module's declared settings into form fields
-function renderFields(schema, config) {
+// Turn declared settings into form fields.
+//
+// `context` carries anything a field type needs that the schema can't know
+// on its own — right now that's the face's instances, so a theme can ask
+// which module should feed something like a wallpaper.
+function renderFields(schema, config, context) {
 	return schema
 		.map((field) => {
 			const value = config[field.key];
@@ -367,7 +412,43 @@ function renderFields(schema, config) {
 
 			let input;
 
-			if (field.type === "location") {
+			if (field.type === "color") {
+				input =
+					`<input type="color" data-key="${escapeHtml(field.key)}" ` +
+					`data-type="color" value="${escapeHtml(value || "#000000")}">`;
+			} else if (field.type === "instance") {
+				// A theme naming an instance is a placement decision, not a
+				// content one — the module doesn't know or care that it's
+				// being used as a wallpaper.
+				//
+				// Only modules that declared they can produce what the field
+				// asks for are offered. No point listing Docker as a
+				// possible wallpaper.
+				const instances = ((context && context.instances) || []).filter(
+					(instance) => {
+						if (!field.provides) return true;
+
+						return readManifest(instance.module).provides.includes(
+							field.provides
+						);
+					}
+				);
+
+				const options = instances
+					.map(
+						(instance) =>
+							`<option value="${escapeHtml(instance.id)}" ` +
+							`${instance.id === value ? "selected" : ""}>` +
+							`${escapeHtml(instance.label || instance.module)}</option>`
+					)
+					.join("");
+
+				input =
+					`<select data-key="${escapeHtml(field.key)}" data-type="instance">` +
+					`<option value="" ${value ? "" : "selected"}>None</option>` +
+					options +
+					"</select>";
+			} else if (field.type === "location") {
 				// Two choices: lean on OmniCore's location, or type in
 				// coordinates for this instance specifically. The second is
 				// what makes two weather tiles for two cities possible.
@@ -449,8 +530,17 @@ function renderFields(schema, config) {
 					`value="${escapeHtml(value === undefined ? "" : value)}">`;
 			}
 
+			// A field can depend on another one — no point showing a
+			// gradient's second colour when the background isn't a gradient
+			const condition = field.showWhen
+				? ` data-when-key="${escapeHtml(field.showWhen.key)}" ` +
+				  `data-when-is="${escapeHtml(
+						[].concat(field.showWhen.equals).join("|")
+				  )}"`
+				: "";
+
 			return `
-				<div class="field">
+				<div class="field"${condition}>
 					<label>${escapeHtml(field.label || field.key)}</label>
 					${input}
 					${help}
@@ -895,18 +985,8 @@ function startAdminFace() {
 			return;
 		}
 
-		const themeOptions = listThemes()
-			.map(
-				(theme) => `
-				<label class="option">
-					<input type="radio" name="theme" value="${escapeHtml(theme.id)}"
-						${theme.id === face.theme ? "checked" : ""}>
-					<span>${escapeHtml(theme.name)}</span>
-				</label>`
-			)
-			.join("");
-
 		const count = face.instances.length;
+		const themeName = themeLoader.readManifest(face.theme).name;
 
 		const body = `
 			<div class="panel">
@@ -918,6 +998,10 @@ function startAdminFace() {
 				<a class="row" href="/faces/${face.id}/modules">
 					<strong>Modules</strong>
 					<span>${count ? count + (count === 1 ? " module" : " modules") : "None added yet"}</span>
+				</a>
+				<a class="row" href="/faces/${face.id}/theme">
+					<strong>Theme</strong>
+					<span>${escapeHtml(themeName)}</span>
 				</a>
 			</div>
 			<div class="panel">
@@ -940,11 +1024,6 @@ function startAdminFace() {
 					</div>
 				</div>
 
-				<div class="field">
-					<label>Theme</label>
-					${themeOptions || '<div class="empty">No themes installed.</div>'}
-				</div>
-
 				<button class="glass" id="save">Save face</button>
 				<p class="status" id="status"></p>
 			</div>`;
@@ -953,7 +1032,6 @@ function startAdminFace() {
 			document.getElementById("save").addEventListener("click", async function () {
 				const button = this;
 				const status = document.getElementById("status");
-				const themeInput = document.querySelector('input[name="theme"]:checked');
 
 				button.disabled = true;
 				status.textContent = "";
@@ -965,8 +1043,7 @@ function startAdminFace() {
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
 							name: document.getElementById("name").value,
-							title: document.getElementById("title").value,
-							theme: themeInput ? themeInput.value : null
+							title: document.getElementById("title").value
 						})
 					});
 
@@ -999,6 +1076,177 @@ function startAdminFace() {
 		}
 
 		res.json(refresh(id));
+	});
+
+	// A face's theme: what it's using, and how that theme is set up.
+	//
+	// Changing the theme is a separate page. It replaces the entire
+	// dashboard, so it shouldn't sit one stray click away from a settings
+	// form you haven't saved yet.
+	app.get("/faces/:id/theme", (req, res) => {
+		const face = faceStore.findFace(Number(req.params.id));
+
+		if (!face) {
+			res.status(404).send(notFound("No such face", "/faces", "Faces"));
+			return;
+		}
+
+		const manifest = themeLoader.readManifest(face.theme);
+		const schema = themeLoader.readSchema(face.theme);
+		const config = themeLoader.applyDefaults(
+			face.theme,
+			(face.themeConfigs || {})[face.theme]
+		);
+
+		const body = `
+			<div class="panel">
+				<a class="back" href="/faces/${face.id}">← ${escapeHtml(face.name)}</a>
+				<h1 style="margin-top:12px">${escapeHtml(manifest.name)}</h1>
+				<p class="lede">${escapeHtml(
+					manifest.description || "The theme this face is using"
+				)}</p>
+			</div>
+			<div class="panel">
+				<a class="row" href="/faces/${face.id}/theme/change">
+					<strong>Change theme</strong>
+					<span>Use a different theme on this face</span>
+				</a>
+			</div>
+			<div class="panel">
+				${
+					schema.length
+						? renderFields(schema, config, { instances: face.instances }) +
+						  '<button class="glass" id="save">Save</button>' +
+						  '<p class="status" id="status"></p>'
+						: '<div class="empty">This theme has nothing to configure.</div>'
+				}
+			</div>`;
+
+		const script = schema.length
+			? `
+			${conditionalScript}
+			${locationScript}
+
+			document.getElementById("save").addEventListener("click", async function () {
+				const button = this;
+				const status = document.getElementById("status");
+				const config = {};
+
+				for (const input of document.querySelectorAll("[data-key]")) {
+					config[input.dataset.key] =
+						input.dataset.type === "boolean" ? input.checked : input.value;
+				}
+
+				collectLocations(config);
+
+				button.disabled = true;
+				status.textContent = "";
+				status.className = "status";
+
+				try {
+					const response = await fetch("/faces/${face.id}/theme", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(config)
+					});
+
+					if (!response.ok) throw new Error();
+
+					status.textContent = "Saved. The face has updated itself.";
+					status.className = "status good";
+				} catch (error) {
+					status.textContent = "Couldn't save.";
+					status.className = "status bad";
+				}
+
+				button.disabled = false;
+			});
+		`
+			: "";
+
+		res.send(page(manifest.name, body, script));
+	});
+
+	app.post("/faces/:id/theme", (req, res) => {
+		const id = Number(req.params.id);
+		const face = faceStore.findFace(id);
+
+		if (!face) {
+			res.status(404).json({ error: "No such face" });
+			return;
+		}
+
+		faceStore.updateThemeConfig(
+			id,
+			face.theme,
+			themeLoader.cleanConfig(face.theme, req.body)
+		);
+
+		res.json(refresh(id));
+	});
+
+	// Picking a different theme. Its own page, because it's a bigger
+	// decision than changing a setting.
+	app.get("/faces/:id/theme/change", (req, res) => {
+		const face = faceStore.findFace(Number(req.params.id));
+
+		if (!face) {
+			res.status(404).send(notFound("No such face", "/faces", "Faces"));
+			return;
+		}
+
+		const themes = themeLoader
+			.listThemes()
+			.map((theme) => {
+				const current = theme.id === face.theme;
+
+				return `
+				<a class="row" href="#" data-theme="${escapeHtml(theme.id)}">
+					<strong>${escapeHtml(theme.name)}${current ? " · in use" : ""}</strong>
+					<span>${escapeHtml(theme.description || theme.id)}</span>
+				</a>`;
+			})
+			.join("");
+
+		const body = `
+			<div class="panel">
+				<a class="back" href="/faces/${face.id}/theme">← Theme</a>
+				<h1 style="margin-top:12px">Change theme</h1>
+				<p class="lede">
+					Settings you've already made are kept per theme, so
+					switching back later restores them.
+				</p>
+			</div>
+			<div class="panel">
+				${themes || '<div class="empty">No themes installed.</div>'}
+			</div>
+			<p class="status" id="status"></p>`;
+
+		const script = `
+			for (const row of document.querySelectorAll("[data-theme]")) {
+				row.addEventListener("click", async function (event) {
+					event.preventDefault();
+
+					try {
+						const response = await fetch("/faces/${face.id}", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({ theme: this.dataset.theme })
+						});
+
+						if (!response.ok) throw new Error();
+
+						location.href = "/faces/${face.id}/theme";
+					} catch (error) {
+						const status = document.getElementById("status");
+						status.textContent = "Couldn't change the theme.";
+						status.className = "status bad";
+					}
+				});
+			}
+		`;
+
+		res.send(page("Change theme", body, script));
 	});
 
 	// The module instances on a face. The same module may appear more than
@@ -1112,11 +1360,16 @@ function startAdminFace() {
 			return;
 		}
 
+		const manifest = readManifest(moduleId);
+
 		const instance = faceStore.addInstance(
 			id,
 			moduleId,
-			readManifest(moduleId).name,
-			{}
+			manifest.name,
+			{},
+			// Modules that work behind the scenes don't get a tile unless
+			// asked for one
+			manifest.tile === false
 		);
 
 		if (!instance) {
@@ -1168,6 +1421,19 @@ function startAdminFace() {
 					</div>
 				</div>
 
+				<div class="field">
+					<label class="option">
+						<input type="checkbox" id="visible"
+							${instance.hidden ? "" : "checked"}>
+						<span>Show a tile for this</span>
+					</label>
+					<div class="help">
+						Some modules only work behind the scenes — a wallpaper
+						source has nothing useful to put in a tile. It still
+						runs either way.
+					</div>
+				</div>
+
 				${
 					schema.length
 						? renderFields(schema, config)
@@ -1182,6 +1448,7 @@ function startAdminFace() {
 			</div>`;
 
 		const script = `
+			${conditionalScript}
 			${locationScript}
 
 			const base = "/faces/${face.id}/modules/${encodeURIComponent(instance.id)}";
@@ -1209,6 +1476,7 @@ function startAdminFace() {
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
 							label: document.getElementById("label").value,
+							hidden: !document.getElementById("visible").checked,
 							config: config
 						})
 					});
@@ -1257,6 +1525,7 @@ function startAdminFace() {
 
 		const updated = faceStore.updateInstance(id, instance.id, {
 			label: req.body.label,
+			hidden: req.body.hidden,
 			// Keep only what the module declared, converted to its real types
 			config: cleanConfig(instance.module, req.body.config)
 		});

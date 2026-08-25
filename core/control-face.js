@@ -14,7 +14,7 @@
 const express = require("express");
 const faceStore = require("./face-store");
 const { startFace } = require("./face-loader");
-const { listThemes } = require("./theme-loader");
+const themeLoader = require("./theme-loader");
 const { listModules } = require("./module-loader");
 const { readManifest, readSchema, applyDefaults } = require("./module-config");
 const { searchCities } = require("./location-service");
@@ -128,6 +128,16 @@ const styles = `
 
 	.help { font-size: 12px; opacity: 0.45; margin-top: 6px; }
 
+	input[type="color"] {
+		width: 100%;
+		height: 46px;
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 10px;
+		padding: 4px;
+		cursor: pointer;
+	}
+
 	input[type="text"],
 	input[type="url"],
 	input[type="number"],
@@ -155,6 +165,14 @@ const styles = `
 
 	.option:hover { background: rgba(255, 255, 255, 0.05); }
 	.option input { width: 17px; height: 17px; }
+
+	/* Dropdown options fall back to the browser's own popup colours unless
+	   we say otherwise, which means white on white in a dark interface */
+	option {
+		background: #1a1a1a;
+		color: #fff;
+	}
+
 
 	.empty { opacity: 0.4; font-size: 14px; }
 
@@ -317,7 +335,7 @@ function startControlFace() {
 
 	// Create a face, with all its modules, in one go — the wizard's commit
 	app.post("/faces", async (req, res) => {
-		const { name, title, theme, instances } = req.body;
+		const { name, title, theme, instances, themeConfig } = req.body;
 
 		// A face cannot exist without a theme
 		if (!theme) {
@@ -336,6 +354,28 @@ function startControlFace() {
 				installed.includes(instance.module)
 			)
 		);
+
+		// Theme settings, if the theme declared any and the wizard collected
+		// them. Stored against the theme so switching back keeps them.
+		if (themeConfig) {
+			const clean = themeLoader.cleanConfig(theme, themeConfig);
+
+			// During the wizard an instance doesn't have an ID yet — it only
+			// gets one when the face is written. So a setting that names an
+			// instance refers to it by position, and we translate that into
+			// the real ID now that they exist.
+			for (const field of themeLoader.readSchema(theme)) {
+				if (field.type !== "instance") continue;
+
+				const match = /^wizard-instance-(\d+)$/.exec(clean[field.key] || "");
+				const instance = match && face.instances[Number(match[1])];
+
+				clean[field.key] = instance ? instance.id : "";
+			}
+
+			faceStore.updateThemeConfig(face.id, theme, clean);
+			face.themeConfigs = { [theme]: clean };
+		}
 
 		// Wait until the face's server is genuinely accepting connections
 		// before responding, so the browser never redirects too early
@@ -362,6 +402,11 @@ function startControlFace() {
 				id: moduleId,
 				name: manifest.name,
 				description: manifest.description,
+				// What block types this module can emit, so a field asking
+				// for one only offers modules that could supply it
+				provides: manifest.provides || [],
+				// Whether this module wants a tile by default
+				tile: manifest.tile !== false,
 				schema: readSchema(moduleId),
 				defaults: applyDefaults(moduleId, {})
 			};
@@ -370,7 +415,13 @@ function startControlFace() {
 		res.send(
 			renderWizard({
 				modules: modules,
-				themes: listThemes(),
+				// Themes carry their settings schema so the wizard can offer
+				// a configuration step without another round trip
+				themes: themeLoader.listThemes().map((theme) => ({
+					...theme,
+					schema: themeLoader.readSchema(theme.id),
+					defaults: themeLoader.applyDefaults(theme.id, {})
+				})),
 				// What port this face WOULD get. Accurate unless two faces
 				// are being created at the same moment.
 				nextPort: faceStore.nextDashboardPort()
@@ -453,7 +504,21 @@ function renderWizard(data) {
 
 		// Everything the wizard is building, held here and only sent to the
 		// server at Finish. Cancel simply throws this away.
-		const face = { name: "", title: "", theme: null, instances: [] };
+		const face = { name: "", title: "", theme: null, instances: [], themeConfig: {} };
+
+		function selectedTheme() {
+			return THEMES.find(function (t) { return t.id === face.theme; });
+		}
+
+		// The theme step only exists if the theme actually has settings
+		function hasThemeStep() {
+			const theme = selectedTheme();
+			return Boolean(theme && theme.schema && theme.schema.length);
+		}
+
+		function themeStep() {
+			return 2 + face.instances.length;
+		}
 
 		// step 0        name and theme
 		// step 1        pick modules
@@ -461,8 +526,13 @@ function renderWizard(data) {
 		// step n+2      review
 		let step = 0;
 
+		// step 0            name, title, theme
+		// step 1            pick modules
+		// step 2..n+1       one settings page per picked module
+		// step n+2          theme settings, if the theme has any
+		// last              review
 		function lastStep() {
-			return face.instances.length + 2;
+			return face.instances.length + 2 + (hasThemeStep() ? 1 : 0);
 		}
 
 		function moduleById(id) {
@@ -490,7 +560,16 @@ function renderWizard(data) {
 				return;
 			}
 
-			if (step >= 2 && step < lastStep()) {
+			// The theme settings step
+			if (hasThemeStep() && step === themeStep()) {
+				for (const input of document.querySelectorAll("[data-key]")) {
+					face.themeConfig[input.dataset.key] =
+						input.dataset.type === "boolean" ? input.checked : input.value;
+				}
+				return;
+			}
+
+			if (step >= 2 && step < themeStep()) {
 				const instance = face.instances[step - 2];
 				if (!instance) return;
 
@@ -600,7 +679,69 @@ function renderWizard(data) {
 			}).join("");
 
 			const fields = module.schema.map(function (field) {
-				const value = instance.config[field.key];
+				return renderField(field, instance.config[field.key]);
+			}).join("");
+
+			return '<div class="columns">' +
+				'<div class="square">' +
+					"<h2>On this face</h2>" + bucket +
+				"</div>" +
+				'<div class="square">' +
+					"<h2>" + escapeHtml(module.name) + "</h2>" +
+					'<div class="field">' +
+						'<label for="label">Label</label>' +
+						'<input type="text" id="label" value="' +
+							escapeHtml(instance.label) + '">' +
+						'<div class="help">Shown as the tile title.</div>' +
+					"</div>" +
+					(fields || '<div class="empty">Nothing to configure.</div>') +
+				"</div>" +
+			"</div>";
+		}
+
+		// One settings field. Shared by the module step and the theme step,
+		// so both look identical — which is the point of declaring settings
+		// rather than shipping a form.
+		function renderField(field, value) {
+			{
+				// A theme naming an instance is a placement decision — which
+				// module should feed something like a wallpaper
+				if (field.type === "color") {
+					return wrapField(field,
+						'<input type="color" data-key="' + escapeHtml(field.key) +
+						'" data-type="color" value="' +
+						escapeHtml(value || "#000000") + '">' +
+						(field.help ? '<div class="help">' + escapeHtml(field.help) + "</div>" : "")
+					);
+				}
+
+				if (field.type === "instance") {
+					// Only modules that declared they can produce what the
+					// field asks for are offered
+					const options = face.instances.map(function (instance, index) {
+						const module = moduleById(instance.module);
+
+						if (field.provides &&
+							(module.provides || []).indexOf(field.provides) === -1) {
+							return "";
+						}
+
+						const id = "wizard-instance-" + index;
+						return '<option value="' + escapeHtml(id) + '"' +
+							(id === value ? " selected" : "") + ">" +
+							escapeHtml(instance.label || instance.module) + "</option>";
+					}).join("");
+
+					return wrapField(field,
+						'<select data-key="' + escapeHtml(field.key) +
+							'" data-type="instance">' +
+							'<option value=""' + (value ? "" : " selected") + ">None</option>" +
+							options +
+						"</select>" +
+						(field.help ? '<div class="help">' + escapeHtml(field.help) + "</div>" : "")
+					);
+				}
+
 				const help = field.help
 					? '<div class="help">' + escapeHtml(field.help) + "</div>"
 					: "";
@@ -670,26 +811,51 @@ function renderWizard(data) {
 						escapeHtml(value === undefined ? "" : value) + '">';
 				}
 
-				return '<div class="field"><label>' +
-					escapeHtml(field.label || field.key) + "</label>" +
-					input + help +
-				"</div>";
+				return wrapField(field, input + help);
+			}
+		}
+
+		// A field can depend on another one's value — no point offering a
+		// gradient's second colour when the background isn't a gradient
+		function wrapField(field, inner) {
+			const condition = field.showWhen
+				? ' data-when-key="' + escapeHtml(field.showWhen.key) + '"' +
+				  ' data-when-is="' + escapeHtml(
+						[].concat(field.showWhen.equals).join("|")
+				  ) + '"'
+				: "";
+
+			return '<div class="field"' + condition + ">" +
+				"<label>" + escapeHtml(field.label || field.key) + "</label>" +
+				inner +
+			"</div>";
+		}
+
+		function applyFieldConditions() {
+			for (const field of document.querySelectorAll("[data-when-key]")) {
+				const control = document.querySelector(
+					'[data-key="' + field.dataset.whenKey + '"]'
+				);
+
+				if (!control) continue;
+
+				const allowed = field.dataset.whenIs.split("|");
+				field.style.display =
+					allowed.indexOf(control.value) === -1 ? "none" : "";
+			}
+		}
+
+		function renderThemeStep() {
+			const theme = selectedTheme();
+
+			const fields = theme.schema.map(function (field) {
+				return renderField(field, face.themeConfig[field.key]);
 			}).join("");
 
-			return '<div class="columns">' +
-				'<div class="square">' +
-					"<h2>On this face</h2>" + bucket +
-				"</div>" +
-				'<div class="square">' +
-					"<h2>" + escapeHtml(module.name) + "</h2>" +
-					'<div class="field">' +
-						'<label for="label">Label</label>' +
-						'<input type="text" id="label" value="' +
-							escapeHtml(instance.label) + '">' +
-						'<div class="help">Shown as the tile title.</div>' +
-					"</div>" +
-					(fields || '<div class="empty">Nothing to configure.</div>') +
-				"</div>" +
+			return '<div class="square" style="min-height:0;width:100%;' +
+				'min-width:320px;max-width:460px">' +
+				"<h2>" + escapeHtml(theme.name) + "</h2>" +
+				fields +
 			"</div>";
 		}
 
@@ -733,6 +899,9 @@ function renderWizard(data) {
 			if (step === lastStep()) {
 				return ["Review", "This is what will be created."];
 			}
+			if (hasThemeStep() && step === themeStep()) {
+				return ["Theme", "How this face should look."];
+			}
 
 			return ["Configure", "Set up each module in turn."];
 		}
@@ -742,7 +911,10 @@ function renderWizard(data) {
 
 			// Name/theme and review are single panels, so they get centred.
 			// The picker and settings steps are two columns and are not.
-			const single = step === 0 || step === lastStep();
+			const single =
+				step === 0 ||
+				step === lastStep() ||
+				(hasThemeStep() && step === themeStep());
 			document.body.className = single ? "single" : "";
 
 			document.getElementById("header").innerHTML =
@@ -752,10 +924,17 @@ function renderWizard(data) {
 			if (step === 0) content = renderNameStep();
 			else if (step === 1) content = renderPickStep();
 			else if (step === lastStep()) content = renderReviewStep();
+			else if (hasThemeStep() && step === themeStep()) content = renderThemeStep();
 			else content = renderSettingsStep();
 
 			document.getElementById("content").innerHTML = content;
 			document.getElementById("status").textContent = "";
+
+			for (const control of document.querySelectorAll("[data-key]")) {
+				control.addEventListener("change", applyFieldConditions);
+			}
+
+			applyFieldConditions();
 
 			for (const button of document.querySelectorAll("[data-loc-search]")) {
 				button.addEventListener("click", function () {
@@ -852,6 +1031,9 @@ function renderWizard(data) {
 			face.instances.push({
 				module: moduleId,
 				label: sameModule ? module.name + " " + (sameModule + 1) : module.name,
+				// Modules that work behind the scenes don't get a tile unless
+				// asked for one
+				hidden: module.tile === false,
 				// Start from the module's own defaults
 				config: Object.assign({}, module.defaults)
 			});
@@ -859,8 +1041,27 @@ function renderWizard(data) {
 			draw();
 		};
 
+		// Any theme setting that names an instance, so it can be cleared when
+		// the instance list changes underneath it
+		function instanceSettingKeys() {
+			const theme = selectedTheme();
+			if (!theme || !theme.schema) return [];
+
+			return theme.schema
+				.filter(function (field) { return field.type === "instance"; })
+				.map(function (field) { return field.key; });
+		}
+
 		window.removeInstance = function (index) {
 			face.instances.splice(index, 1);
+
+			// Instances are referred to by position until the face is saved,
+			// so removing one shifts every reference after it. Clearing is
+			// better than silently pointing at the wrong module.
+			for (const key of instanceSettingKeys()) {
+				face.themeConfig[key] = "";
+			}
+
 			draw();
 		};
 
@@ -883,6 +1084,15 @@ function renderWizard(data) {
 			if (step === 0 && !face.theme) {
 				status.textContent = "Pick a theme to continue.";
 				return;
+			}
+
+			// Start the theme's settings from its own defaults, so the theme
+			// step opens with sensible values rather than empty boxes
+			if (step === 0) {
+				const theme = selectedTheme();
+				if (theme && !Object.keys(face.themeConfig).length) {
+					face.themeConfig = Object.assign({}, theme.defaults);
+				}
 			}
 
 			if (step < lastStep()) {

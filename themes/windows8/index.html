@@ -6,7 +6,8 @@
 	<title>Omnia</title>
 	<style>
 		:root {
-			/* Windows 8 Metro: flat solid colours, no gradients or shadows */
+			/* Windows 8 Metro: flat solid colours, no gradients or shadows.
+			   These are set from the theme's settings when the page loads. */
 			--bg: #1d1d1d;
 			--tile: #0078d7;
 			--text: #ffffff;
@@ -19,8 +20,22 @@
 
 		* { box-sizing: border-box; }
 
+		/* The background lives on its own fixed layer rather than on the
+		   body. A body-level background is sized to the BODY box, so it
+		   rescaled every time a tile changed size — this is pinned to the
+		   viewport and stays put. */
+		#backdrop {
+			position: fixed;
+			inset: 0;
+			z-index: -1;
+			background-color: var(--bg);
+			background-size: cover;
+			background-position: center;
+			background-repeat: no-repeat;
+		}
+
 		body {
-			background: var(--bg);
+			background: transparent;
 			color: var(--text);
 			font-family: "Segoe UI", system-ui, sans-serif;
 			font-weight: 300;
@@ -46,6 +61,9 @@
 		   never the other way round */
 		.tile {
 			background: var(--tile);
+			/* Tiles keep white text whatever the page background is, since
+			   they're always a solid accent colour */
+			color: #fff;
 			padding: 12px;
 			overflow: hidden;
 			cursor: pointer;
@@ -78,20 +96,30 @@
 			flex: 1;
 			display: flex;
 			flex-direction: column;
-			justify-content: center;
+			/* Top-aligned, not centred. Centring pushed overflow out of BOTH
+			   ends, and scrollHeight only sees what spills past the bottom —
+			   so half the overflow was invisible and trimming under-measured.
+			   It's also closer to how Metro actually laid tiles out. */
+			justify-content: flex-start;
 			min-height: 0; /* lets flex children actually shrink */
+			overflow: hidden;
 		}
 
 		.tile .primary {
 			font-weight: 200;
-			line-height: 1;
-			white-space: nowrap;
+			/* Slightly open so two wrapped lines don't crowd each other,
+			   unlike the label/secondary text which stay single-line */
+			line-height: 1.05;
+			overflow-wrap: break-word;
 		}
 
 		.tile .secondary {
 			font-size: 13px;
 			opacity: 0.75;
 			margin-top: 6px;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
 		}
 
 		/* The tile label sits at the bottom, as it did in Metro */
@@ -104,43 +132,206 @@
 			text-overflow: ellipsis;
 		}
 
-		.tile .details {
-			font-size: 12px;
-			opacity: 0.85;
-			margin-top: 10px;
-			display: flex;
-			flex-direction: column;
-			gap: 3px;
-			min-height: 0;
-			overflow: hidden;
-		}
-
-		.tile .details div {
+		.tile .body > .pair {
 			display: flex;
 			justify-content: space-between;
 			gap: 14px;
-			white-space: nowrap;
+			font-size: 12px;
+			opacity: 0.85;
+			margin-top: 3px;
 		}
 
-		/* Primary text scales with the tile it lives in */
-		.tile.small  .primary { font-size: 20px; }
-		.tile.medium .primary { font-size: 40px; }
+		/* Either half of a pair can be long. Let each ellipsis rather than
+		   letting one shove the other off the tile. */
+		.tile .body > .pair span {
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.tile .body > .pair span:last-child { flex-shrink: 0; }
+
+		.tile .body > .body {
+			font-size: 13px;
+			opacity: 0.9;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.tile .quote {
+			font-size: 15px;
+			font-style: italic;
+			font-weight: 300;
+			line-height: 1.35;
+			opacity: 0.95;
+		}
+
+		/* An image fills the tile and sits behind the text */
+		.tile .tile-image {
+			position: absolute;
+			inset: 0;
+			background-position: center;
+			background-repeat: no-repeat;
+		}
+
+		/* Text over an image needs help staying readable */
+		.tile .tile-image ~ .body,
+		.tile .tile-image ~ .label {
+			position: relative;
+			text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+		}
+
+		.tile .progress {
+			height: 3px;
+			background: rgba(255, 255, 255, 0.25);
+			margin-top: 8px;
+		}
+
+		.tile .progress div { height: 100%; background: #fff; }
+
+		/* Everything scales with the tile it lives in — a small tile with
+		   13px text runs out of room long before the words do */
+		.tile.small  .primary { font-size: 18px; }
+		.tile.medium .primary { font-size: 26px; }
 		.tile.wide   .primary { font-size: 44px; }
 		.tile.large  .primary { font-size: 56px; }
 
-		.tile.small .secondary,
-		.tile.small .details { display: none; }
+		.tile.small  .label { font-size: 10px; margin-top: 4px; }
+		.tile.medium .label { font-size: 12px; }
 
-		.tile.medium .details { display: none; }
+		.tile.small  .secondary { font-size: 11px; margin-top: 3px; }
+		.tile.medium .secondary { font-size: 12px; }
+
+		.tile.small { padding: 8px; }
+
+		/* Content adapts to the tile. These target the block classes the
+		   renderer actually emits — pairs are the first thing to go, since
+		   they're the least important thing on a tile. */
+		.tile.small .body > .secondary,
+		.tile.small .body > .pair,
+		.tile.small .body > .progress,
+		.tile.small .body > .quote { display: none; }
+
+		.tile.medium .body > .pair { display: none; }
 	</style>
 </head>
 <body>
+	<div id="backdrop"></div>
 	<h1 id="face-title"></h1>
 	<div class="tiles" id="tiles"></div>
 
 	<script>
 		// Metro tile sizes, in the order clicking cycles through them
 		const SIZES = ["small", "medium", "wide", "large"];
+
+		// The accent colours Windows 8 actually offered
+		const ACCENTS = {
+			Blue: "#0078d7",
+			Teal: "#00b294",
+			Green: "#107c10",
+			Orange: "#d83b01",
+			Red: "#e81123",
+			Purple: "#5c2d91",
+			Magenta: "#b4009e",
+			Slate: "#515c6b"
+		};
+
+		// Rough perceived brightness of a colour, 0 to 1. Used to decide
+		// whether text over it should be dark or light, so a pale background
+		// doesn't end up with white text on it.
+		function brightness(hex) {
+			const value = String(hex || "").replace("#", "");
+			if (value.length !== 6) return 0;
+
+			const r = parseInt(value.slice(0, 2), 16);
+			const g = parseInt(value.slice(2, 4), 16);
+			const b = parseInt(value.slice(4, 6), 16);
+
+			// Green reads brighter to the eye than red, and red than blue
+			return (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+		}
+
+		// Apply whatever the theme was configured with. Unknown values fall
+		// back to the defaults rather than producing an unstyled page.
+		// How big a tile is. A bigger screen can carry more, smaller tiles;
+		// a small one is better off with fewer, larger ones.
+		const TILE_UNITS = {
+			Compact: "56px",
+			Normal: "70px",
+			Large: "88px",
+			Huge: "110px"
+		};
+
+		function applyThemeSettings(config) {
+			const accent = ACCENTS[config.accent] || ACCENTS.Blue;
+			const colour = config.backgroundColor || "#1d1d1d";
+			const colour2 = config.backgroundColor2 || "#3a3a3a";
+
+			const root = document.documentElement.style;
+			root.setProperty("--tile", accent);
+			root.setProperty("--unit", TILE_UNITS[config.tileSize] || TILE_UNITS.Normal);
+
+			const backdrop = document.getElementById("backdrop");
+
+			if (config.background === "Gradient") {
+				backdrop.style.backgroundImage =
+					"linear-gradient(160deg, " + colour + ", " + colour2 + ")";
+			} else {
+				backdrop.style.backgroundImage = "";
+			}
+
+			root.setProperty("--bg", colour);
+
+			// Work out the text colour rather than making it another setting
+			// to get wrong. A wallpaper could be anything, so assume dark.
+			const light =
+				config.background === "Wallpaper"
+					? false
+					: brightness(colour) > 0.6;
+
+			root.setProperty("--text", light ? "#1a1a1a" : "#ffffff");
+		}
+
+		// The wallpaper comes from whichever instance the user nominated —
+		// any module producing an image can serve the role, and the module
+		// itself has no idea it's being used this way.
+		function applyWallpaper(fetched) {
+			const config = identity.themeConfig || {};
+			const backdrop = document.getElementById("backdrop");
+
+			if (config.background !== "Wallpaper" || !config.wallpaper) {
+				return;
+			}
+
+			const source = config.wallpaper;
+
+			const result = fetched.find(function (entry) {
+				return entry.instance.id === source;
+			});
+
+			// Leave whatever is already showing rather than blanking the
+			// screen because one fetch failed
+			if (!result || !result.data) {
+				return;
+			}
+
+			const blocks = result.data.content || [];
+
+			// A background block is the module saying "this is meant to go
+			// behind everything". Failing that, any image it offers will do —
+			// the user did nominate this instance, after all.
+			const picture =
+				blocks.find(function (b) {
+					return b.type === "background" && b.url;
+				}) ||
+				blocks.find(function (b) {
+					return b.type === "image" && b.url;
+				});
+
+			backdrop.style.backgroundImage = picture
+				? "url(" + picture.url + ")"
+				: "";
+		}
 
 		// Which size each tile is currently shown at, keyed by instance.
 		// Not saved yet — per-face tile settings will handle that later.
@@ -159,28 +350,70 @@
 			});
 		}
 
-		// Every module returns the same envelope, so this renders any module
-		// without knowing what it does. How it LOOKS is entirely our call.
+		// A module hands us content BLOCKS describing what it has. We decide
+		// entirely how each one looks — that's the whole split.
 		//
+		// A block type we don't recognise falls back to its plain-text form,
+		// so a module using something newer than this theme still works,
+		// just plainer.
+		function renderBlock(block) {
+			if (block.type === "text") {
+				const cls = block.emphasis === "primary" ? "primary"
+					: block.emphasis === "secondary" ? "secondary" : "body";
+
+				return '<div class="' + cls + '">' +
+					escapeHtml(block.value || "") + "</div>";
+			}
+
+			if (block.type === "quote") {
+				return '<div class="quote">' + escapeHtml(block.value || "") + "</div>";
+			}
+
+			if (block.type === "pair") {
+				return '<div class="pair"><span>' + escapeHtml(block.label) +
+					"</span><span>" + escapeHtml(block.value) + "</span></div>";
+			}
+
+			if (block.type === "image") {
+				return '<div class="tile-image" style="background-image:url(' +
+					encodeURI(block.url) + ');background-size:' +
+					(block.fit === "contain" ? "contain" : "cover") + '"></div>';
+			}
+
+			// A background belongs to the page, not to a tile — it's handled
+			// separately and draws nothing here
+			if (block.type === "background") {
+				return "";
+			}
+
+			if (block.type === "progress") {
+				const pct = Math.max(0, Math.min(1, Number(block.value))) * 100;
+				return '<div class="progress"><div style="width:' + pct + '%"></div></div>';
+			}
+
+			// Unknown type — show whatever plain text it gave us
+			return block.text
+				? '<div class="body">' + escapeHtml(block.text) + "</div>"
+				: "";
+		}
+
 		// Tiles are keyed by INSTANCE, not by module — the same module can
 		// appear several times on one face with different settings.
 		function renderTile(instanceId, data) {
 			const size = tileSizes[instanceId] || "wide";
+			const blocks = data.content || [];
 
-			const details = (data.details || [])
-				.map(function (item) {
-					return "<div><span>" + escapeHtml(item.label) + "</span>" +
-					       "<span>" + escapeHtml(item.value) + "</span></div>";
-				})
-				.join("");
+			// Images fill the tile, so they sit behind everything else.
+			// Backgrounds are page-level and never appear on a tile.
+			const images = blocks.filter(function (b) { return b.type === "image"; });
+			const rest = blocks.filter(function (b) {
+				return b.type !== "image" && b.type !== "background";
+			});
 
 			return '<div class="tile ' + size + '" tabindex="0" ' +
 				'data-instance="' + escapeHtml(instanceId) + '">' +
-				'<div class="body">' +
-					'<div class="primary">' + escapeHtml(data.primary || "") + "</div>" +
-					'<div class="secondary">' + escapeHtml(data.secondary || "") + "</div>" +
-					'<div class="details">' + details + "</div>" +
-				"</div>" +
+				images.map(renderBlock).join("") +
+				'<div class="body">' + rest.map(renderBlock).join("") + "</div>" +
 				'<div class="label">' + escapeHtml(data.title || "") + "</div>" +
 			"</div>";
 		}
@@ -205,15 +438,19 @@
 			const tiles = document.querySelectorAll(".tile");
 
 			for (const tile of tiles) {
-				const details = tile.querySelector(".details");
-				if (!details) continue;
+				const body = tile.querySelector(".body");
+				if (!body) continue;
 
-				// Remove the last row until the content fits the tile
-				while (
-					details.children.length > 0 &&
-					tile.scrollHeight > tile.clientHeight
-				) {
-					details.removeChild(details.lastElementChild);
+				// Drop trailing content until it fits, least important
+				// first: pairs, then plain body text. The primary value,
+				// its label and the tile name always survive.
+				for (const selector of [".pair", ".body"]) {
+					let rows = body.querySelectorAll(":scope > " + selector);
+
+					while (rows.length > 0 && tile.scrollHeight > tile.clientHeight) {
+						rows[rows.length - 1].remove();
+						rows = body.querySelectorAll(":scope > " + selector);
+					}
 				}
 			}
 		}
@@ -223,20 +460,37 @@
 		// several tiles, waiting for each in turn would make the slowest
 		// module hold up every tile behind it.
 		async function refresh() {
-			const results = await Promise.all(
+			// Every instance is asked at once rather than one after another,
+			// so the slowest module doesn't hold up the tiles behind it.
+			//
+			// Hidden instances are still fetched — a wallpaper source has no
+			// tile but very much still has a job.
+			const fetched = await Promise.all(
 				identity.instances.map(async function (instance) {
 					try {
 						const response = await fetch("/api/" + instance.id);
 						if (!response.ok) throw new Error();
-						return renderTile(instance.id, await response.json());
+						return { instance: instance, data: await response.json() };
 					} catch (error) {
-						return renderUnavailable(instance);
+						return { instance: instance, data: null };
 					}
 				})
 			);
 
-			document.getElementById("tiles").innerHTML = results.join("");
+			document.getElementById("tiles").innerHTML = fetched
+				.filter(function (result) { return !result.instance.hidden; })
+				.map(function (result) {
+					return result.data
+						? renderTile(result.instance.id, result.data)
+						: renderUnavailable(result.instance);
+				})
+				.join("");
+
 			trimToFit();
+
+			// The wallpaper comes out of the same pass rather than a fetch of
+			// its own, so it stays current without any extra requests
+			applyWallpaper(fetched);
 		}
 
 		// Clicking a tile cycles its size, the way Metro let you resize tiles
@@ -266,6 +520,10 @@
 		async function start() {
 			// Ask the face who it is and which modules it has
 			identity = await (await fetch("/identity")).json();
+
+			// OmniCore hands us our own settings, already resolved against
+			// the defaults we declared in settings.json
+			applyThemeSettings(identity.themeConfig || {});
 
 			// The face's title is cosmetic and may be blank, which means no
 			// heading at all. Its name is for the admin, not the display.
