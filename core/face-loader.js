@@ -58,16 +58,31 @@ function startFace(face) {
 		// The face's own identity — themes fetch this to know what to draw.
 		// Registered before the theme's files so a theme can never shadow it.
 		app.get("/identity", (req, res) => {
-			// A theme gets its OWN settings, resolved against its defaults —
-			// not the raw store, and not other themes' settings
-			const { themeConfigs, ...rest } = face;
+			// A theme gets its OWN settings and state, resolved against its
+			// defaults — not the raw store, and not other themes'
+			const { themeConfigs, instances, ...rest } = face;
 
 			res.json({
 				...rest,
 				themeConfig: themeLoader.applyDefaults(
 					face.theme,
 					(themeConfigs || {})[face.theme]
-				)
+				),
+				instances: instances.map((instance) => {
+					const { themeConfigs: perTheme, ...instanceRest } = instance;
+
+					return {
+						...instanceRest,
+						// This theme's settings for this instance — its size,
+						// mostly. Resolved against the theme's own defaults,
+						// and only ever this theme's: another theme's choices
+						// aren't exposed here.
+						themeConfig: themeLoader.applyInstanceDefaults(
+							face.theme,
+							(perTheme || {})[face.theme]
+						)
+					};
+				})
 			});
 		});
 

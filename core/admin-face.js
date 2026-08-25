@@ -402,7 +402,9 @@ function notFound(heading, backHref, backLabel) {
 // `context` carries anything a field type needs that the schema can't know
 // on its own — right now that's the face's instances, so a theme can ask
 // which module should feed something like a wallpaper.
-function renderFields(schema, config, context) {
+function renderFields(schema, config, context, scope) {
+	const owner = scope || "module";
+
 	return schema
 		.map((field) => {
 			const value = config[field.key];
@@ -415,6 +417,7 @@ function renderFields(schema, config, context) {
 			if (field.type === "color") {
 				input =
 					`<input type="color" data-key="${escapeHtml(field.key)}" ` +
+					`data-scope="${owner}" ` +
 					`data-type="color" value="${escapeHtml(value || "#000000")}">`;
 			} else if (field.type === "instance") {
 				// A theme naming an instance is a placement decision, not a
@@ -444,7 +447,8 @@ function renderFields(schema, config, context) {
 					.join("");
 
 				input =
-					`<select data-key="${escapeHtml(field.key)}" data-type="instance">` +
+					`<select data-key="${escapeHtml(field.key)}" data-scope="${owner}" ` +
+					`data-type="instance">` +
 					`<option value="" ${value ? "" : "selected"}>None</option>` +
 					options +
 					"</select>";
@@ -504,6 +508,7 @@ function renderFields(schema, config, context) {
 			} else if (field.type === "boolean") {
 				input =
 					`<input type="checkbox" data-key="${escapeHtml(field.key)}" ` +
+					`data-scope="${owner}" ` +
 					`data-type="boolean" ${value ? "checked" : ""}>`;
 			} else if (field.type === "select") {
 				const options = (field.options || [])
@@ -516,7 +521,7 @@ function renderFields(schema, config, context) {
 					.join("");
 
 				input =
-					`<select data-key="${escapeHtml(field.key)}" ` +
+					`<select data-key="${escapeHtml(field.key)}" data-scope="${owner}" ` +
 					`data-type="select">${options}</select>`;
 			} else {
 				// text, url, number, password all render as an input
@@ -526,6 +531,7 @@ function renderFields(schema, config, context) {
 
 				input =
 					`<input type="${type}" data-key="${escapeHtml(field.key)}" ` +
+					`data-scope="${owner}" ` +
 					`data-type="${escapeHtml(field.type)}" ` +
 					`value="${escapeHtml(value === undefined ? "" : value)}">`;
 			}
@@ -1361,15 +1367,26 @@ function startAdminFace() {
 		}
 
 		const manifest = readManifest(moduleId);
+		const face = faceStore.findFace(id);
+
+		if (!face) {
+			res.status(404).json({ error: "No such face" });
+			return;
+		}
 
 		const instance = faceStore.addInstance(
 			id,
 			moduleId,
 			manifest.name,
 			{},
-			// Modules that work behind the scenes don't get a tile unless
-			// asked for one
-			manifest.tile === false
+			// Start from the theme's defaults for an instance. A module that
+			// works behind the scenes gets whatever that theme calls hidden.
+			{
+				[face.theme]: themeLoader.instanceDefaults(
+					face.theme,
+					manifest.tile
+				)
+			}
 		);
 
 		if (!instance) {
@@ -1405,6 +1422,16 @@ function startAdminFace() {
 		const schema = readSchema(instance.module);
 		const config = applyDefaults(instance.module, instance.config);
 
+		// The face's theme may want things configured per instance — how big
+		// this tile is, usually. Those fields come from the THEME, not the
+		// module, and are stored separately under the theme's own key.
+		const themeSchema = themeLoader.readInstanceSchema(face.theme);
+		const themeConfig = themeLoader.applyInstanceDefaults(
+			face.theme,
+			(instance.themeConfigs || {})[face.theme]
+		);
+		const themeName = themeLoader.readManifest(face.theme).name;
+
 		const body = `
 			<div class="panel">
 				<a class="back" href="/faces/${face.id}/modules">← Modules</a>
@@ -1421,25 +1448,26 @@ function startAdminFace() {
 					</div>
 				</div>
 
-				<div class="field">
-					<label class="option">
-						<input type="checkbox" id="visible"
-							${instance.hidden ? "" : "checked"}>
-						<span>Show a tile for this</span>
-					</label>
-					<div class="help">
-						Some modules only work behind the scenes — a wallpaper
-						source has nothing useful to put in a tile. It still
-						runs either way.
-					</div>
-				</div>
-
 				${
 					schema.length
-						? renderFields(schema, config)
+						? renderFields(schema, config, null, "module")
 						: '<div class="empty">This module has nothing else to configure.</div>'
 				}
-
+			</div>
+			${
+				themeSchema.length
+					? `<div class="panel">
+							<h2>In ${escapeHtml(themeName)}</h2>
+							${renderFields(
+								themeSchema,
+								themeConfig,
+								{ instances: face.instances },
+								"theme"
+							)}
+						</div>`
+					: ""
+			}
+			<div class="panel">
 				<button class="glass" id="save">Save</button>
 				<p class="status" id="status"></p>
 			</div>
@@ -1458,9 +1486,15 @@ function startAdminFace() {
 				const status = document.getElementById("status");
 				const config = {};
 
-				// Collect every module field by the key it declared
+				const themeConfig = {};
+
+				// The form carries fields from two authors — the module and
+				// the face's theme. Keep them apart; they're stored apart.
 				for (const input of document.querySelectorAll("[data-key]")) {
-					config[input.dataset.key] =
+					const target =
+						input.dataset.scope === "theme" ? themeConfig : config;
+
+					target[input.dataset.key] =
 						input.dataset.type === "boolean" ? input.checked : input.value;
 				}
 
@@ -1476,8 +1510,8 @@ function startAdminFace() {
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
 							label: document.getElementById("label").value,
-							hidden: !document.getElementById("visible").checked,
-							config: config
+							config: config,
+							themeConfig: themeConfig
 						})
 					});
 
@@ -1525,9 +1559,15 @@ function startAdminFace() {
 
 		const updated = faceStore.updateInstance(id, instance.id, {
 			label: req.body.label,
-			hidden: req.body.hidden,
 			// Keep only what the module declared, converted to its real types
-			config: cleanConfig(instance.module, req.body.config)
+			config: cleanConfig(instance.module, req.body.config),
+			// And separately, what the face's theme declared for this
+			// instance — stored under that theme's key
+			themeId: face.theme,
+			themeConfig: themeLoader.cleanInstanceConfig(
+				face.theme,
+				req.body.themeConfig
+			)
 		});
 
 		refresh(id);

@@ -74,12 +74,16 @@ function createFace(name, title, theme, instances) {
 		// Theme settings are kept per theme, not just per face, so
 		// switching away and back doesn't lose how you had it set up
 		themeConfigs: {},
+		// Whatever a theme wants to remember for itself — tile sizes, and
+		// anything else it decides. Kept apart from themeConfigs, which the
+		// admin owns and OmniCore validates against a schema.
+		themeStates: {},
 		instances: (instances || []).map((instance) => ({
 			id: newInstanceId(instance.module),
 			module: instance.module,
 			label: instance.label || "",
-			hidden: Boolean(instance.hidden),
-			config: instance.config || {}
+			config: instance.config || {},
+			themeConfigs: instance.themeConfigs || {}
 		}))
 	};
 
@@ -116,7 +120,7 @@ function newInstanceId(moduleId) {
 }
 
 // Add a module to an existing face. Returns the new instance.
-function addInstance(faceId, moduleId, label, config, hidden) {
+function addInstance(faceId, moduleId, label, config, themeConfigs) {
 	const faces = readFaces();
 	const face = faces.find((candidate) => candidate.id === faceId);
 
@@ -128,10 +132,10 @@ function addInstance(faceId, moduleId, label, config, hidden) {
 		id: newInstanceId(moduleId),
 		module: moduleId,
 		label: label || "",
-		// Whether this instance gets a tile. Modules that work behind the
-		// scenes start hidden; they still run and still supply data.
-		hidden: Boolean(hidden),
-		config: config || {}
+		config: config || {},
+		// Per-theme settings, keyed by theme id. Whether this instance shows
+		// at all is one of these — every theme spells "hidden" its own way.
+		themeConfigs: themeConfigs || {}
 	};
 
 	face.instances.push(instance);
@@ -156,8 +160,17 @@ function updateInstance(faceId, instanceId, changes) {
 	}
 
 	if (changes.label !== undefined) instance.label = changes.label;
-	if (changes.hidden !== undefined) instance.hidden = Boolean(changes.hidden);
 	if (changes.config !== undefined) instance.config = changes.config;
+
+	// A theme's per-instance settings, kept under that theme's own key.
+	// Switching themes leaves the other theme's choices alone, and none of
+	// this ever touches the module's own config above.
+	if (changes.themeId && changes.themeConfig !== undefined) {
+		if (!instance.themeConfigs) {
+			instance.themeConfigs = {};
+		}
+		instance.themeConfigs[changes.themeId] = changes.themeConfig;
+	}
 
 	writeFaces(faces);
 	return instance;

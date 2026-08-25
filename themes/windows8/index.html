@@ -59,31 +59,13 @@
 
 		/* Metro tiles are fixed sizes — content adapts to the tile,
 		   never the other way round */
+		/* The tile is only a slot in the grid now. Everything you can see
+		   lives on the flip surface inside it — which is the whole point:
+		   rotating that turns the entire face of the tile, colour and all,
+		   rather than just the words inside a box that stays put. */
 		.tile {
-			background: var(--tile);
-			/* Tiles keep white text whatever the page background is, since
-			   they're always a solid accent colour */
-			color: #fff;
-			padding: 12px;
-			overflow: hidden;
-			cursor: pointer;
-			display: flex;
-			flex-direction: column;
 			position: relative;
-			/* Respect users who've asked for less motion */
-			transition: transform 0.1s ease;
-		}
-
-		.tile:active { transform: scale(0.97); }
-
-		@media (prefers-reduced-motion: reduce) {
-			.tile { transition: none; }
-			.tile:active { transform: none; }
-		}
-
-		.tile:focus-visible {
-			outline: 2px solid #fff;
-			outline-offset: -4px;
+			perspective: 900px;
 		}
 
 		/* The four authentic Metro sizes */
@@ -91,6 +73,54 @@
 		.tile.medium { grid-column: span 2; grid-row: span 2; }
 		.tile.wide   { grid-column: span 4; grid-row: span 2; }
 		.tile.large  { grid-column: span 4; grid-row: span 4; }
+
+		/* The visible face of a tile: its colour, its padding, its content.
+		   Tiles are updated in place rather than rebuilt, so this element
+		   survives a refresh and can be animated. */
+		.tile .flip {
+			position: absolute;
+			inset: 0;
+			background: var(--tile);
+			/* White text whatever the page background is, since a tile is
+			   always a solid accent colour */
+			color: #fff;
+			padding: 12px;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+			transform-origin: center center;
+			backface-visibility: hidden;
+		}
+
+		/* Half a second each way. Faster than this and the eye never
+		   registers the rotation — it just reads as a flicker. */
+		.tile .flip.turning {
+			transition: transform 0.32s ease-in;
+			transform: rotateX(-90deg);
+		}
+
+		.tile .flip.returning {
+			transition: transform 0.32s ease-out;
+			transform: rotateX(0deg);
+		}
+
+		.tile.small .flip { padding: 8px; }
+
+		/* A tile that has just appeared or changed size settles in rather
+		   than snapping. CSS grid can't animate a span change, so this is
+		   the honest approximation. */
+		@keyframes tile-settle {
+			from { transform: scale(0.94); opacity: 0.6; }
+			to   { transform: scale(1); opacity: 1; }
+		}
+
+		.tile.settling { animation: tile-settle 0.18s ease-out; }
+
+		@media (prefers-reduced-motion: reduce) {
+			.tile .flip.turning,
+			.tile .flip.returning { transition: none; }
+			.tile.settling { animation: none; }
+		}
 
 		.tile .body {
 			flex: 1;
@@ -202,7 +232,7 @@
 		.tile.small  .secondary { font-size: 11px; margin-top: 3px; }
 		.tile.medium .secondary { font-size: 12px; }
 
-		.tile.small { padding: 8px; }
+
 
 		/* Content adapts to the tile. These target the block classes the
 		   renderer actually emits — pairs are the first thing to go, since
@@ -213,16 +243,18 @@
 		.tile.small .body > .quote { display: none; }
 
 		.tile.medium .body > .pair { display: none; }
-	</style>
-</head>
+	</style></head>
 <body>
 	<div id="backdrop"></div>
 	<h1 id="face-title"></h1>
 	<div class="tiles" id="tiles"></div>
 
 	<script>
-		// Metro tile sizes, in the order clicking cycles through them
-		const SIZES = ["small", "medium", "wide", "large"];
+		// The sizes this theme offers. These are the values it declared in
+		// instance-settings.json — OmniCore puts that field on each
+		// instance's settings form and hands the choice back through
+		// /identity. The theme never writes anything.
+		const SIZES = ["hidden", "small", "medium", "wide", "large"];
 
 		// The accent colours Windows 8 actually offered
 		const ACCENTS = {
@@ -235,6 +267,34 @@
 			Magenta: "#b4009e",
 			Slate: "#515c6b"
 		};
+
+		// How big a tile is. A bigger screen can carry more, smaller tiles;
+		// a small one is better off with fewer, larger ones.
+		const TILE_UNITS = {
+			Compact: "56px",
+			Normal: "70px",
+			Large: "88px",
+			Huge: "110px"
+		};
+
+		// Long enough to actually read as a rotation. Much under this and
+		// the eye sees a flicker rather than a flip.
+		const FLIP_MS = 320;
+
+		let identity = null;
+
+		function escapeHtml(text) {
+			return String(text).replace(/[&<>"]/g, function (character) {
+				return {
+					"&": "&amp;",
+					"<": "&lt;",
+					">": "&gt;",
+					'"': "&quot;"
+				}[character];
+			});
+		}
+
+		// ---- theme settings -------------------------------------------
 
 		// Rough perceived brightness of a colour, 0 to 1. Used to decide
 		// whether text over it should be dark or light, so a pale background
@@ -253,15 +313,6 @@
 
 		// Apply whatever the theme was configured with. Unknown values fall
 		// back to the defaults rather than producing an unstyled page.
-		// How big a tile is. A bigger screen can carry more, smaller tiles;
-		// a small one is better off with fewer, larger ones.
-		const TILE_UNITS = {
-			Compact: "56px",
-			Normal: "70px",
-			Large: "88px",
-			Huge: "110px"
-		};
-
 		function applyThemeSettings(config) {
 			const accent = ACCENTS[config.accent] || ACCENTS.Blue;
 			const colour = config.backgroundColor || "#1d1d1d";
@@ -270,43 +321,35 @@
 			const root = document.documentElement.style;
 			root.setProperty("--tile", accent);
 			root.setProperty("--unit", TILE_UNITS[config.tileSize] || TILE_UNITS.Normal);
+			root.setProperty("--bg", colour);
 
 			const backdrop = document.getElementById("backdrop");
 
-			if (config.background === "Gradient") {
-				backdrop.style.backgroundImage =
-					"linear-gradient(160deg, " + colour + ", " + colour2 + ")";
-			} else {
-				backdrop.style.backgroundImage = "";
-			}
-
-			root.setProperty("--bg", colour);
+			backdrop.style.backgroundImage =
+				config.background === "Gradient"
+					? "linear-gradient(160deg, " + colour + ", " + colour2 + ")"
+					: "";
 
 			// Work out the text colour rather than making it another setting
 			// to get wrong. A wallpaper could be anything, so assume dark.
 			const light =
-				config.background === "Wallpaper"
-					? false
-					: brightness(colour) > 0.6;
+				config.background === "Wallpaper" ? false : brightness(colour) > 0.6;
 
 			root.setProperty("--text", light ? "#1a1a1a" : "#ffffff");
 		}
 
 		// The wallpaper comes from whichever instance the user nominated —
-		// any module producing an image can serve the role, and the module
-		// itself has no idea it's being used this way.
+		// any module producing a background can serve the role, and the
+		// module itself has no idea it's being used this way.
 		function applyWallpaper(fetched) {
 			const config = identity.themeConfig || {};
-			const backdrop = document.getElementById("backdrop");
 
 			if (config.background !== "Wallpaper" || !config.wallpaper) {
 				return;
 			}
 
-			const source = config.wallpaper;
-
 			const result = fetched.find(function (entry) {
-				return entry.instance.id === source;
+				return entry.instance.id === config.wallpaper;
 			});
 
 			// Leave whatever is already showing rather than blanking the
@@ -321,34 +364,15 @@
 			// behind everything". Failing that, any image it offers will do —
 			// the user did nominate this instance, after all.
 			const picture =
-				blocks.find(function (b) {
-					return b.type === "background" && b.url;
-				}) ||
-				blocks.find(function (b) {
-					return b.type === "image" && b.url;
-				});
+				blocks.find(function (b) { return b.type === "background" && b.url; }) ||
+				blocks.find(function (b) { return b.type === "image" && b.url; });
 
-			backdrop.style.backgroundImage = picture
+			document.getElementById("backdrop").style.backgroundImage = picture
 				? "url(" + picture.url + ")"
 				: "";
 		}
 
-		// Which size each tile is currently shown at, keyed by instance.
-		// Not saved yet — per-face tile settings will handle that later.
-		const tileSizes = {};
-
-		let identity = null;
-
-		function escapeHtml(text) {
-			return String(text).replace(/[&<>"]/g, function (character) {
-				return {
-					"&": "&amp;",
-					"<": "&lt;",
-					">": "&gt;",
-					'"': "&quot;"
-				}[character];
-			});
-		}
+		// ---- rendering ------------------------------------------------
 
 		// A module hands us content BLOCKS describing what it has. We decide
 		// entirely how each one looks — that's the whole split.
@@ -397,10 +421,8 @@
 				: "";
 		}
 
-		// Tiles are keyed by INSTANCE, not by module — the same module can
-		// appear several times on one face with different settings.
-		function renderTile(instanceId, data) {
-			const size = tileSizes[instanceId] || "wide";
+		// The inside of a tile's face.
+		function renderContents(data) {
 			const blocks = data.content || [];
 
 			// Images fill the tile, so they sit behind everything else.
@@ -410,61 +432,116 @@
 				return b.type !== "image" && b.type !== "background";
 			});
 
-			return '<div class="tile ' + size + '" tabindex="0" ' +
-				'data-instance="' + escapeHtml(instanceId) + '">' +
-				images.map(renderBlock).join("") +
+			return images.map(renderBlock).join("") +
 				'<div class="body">' + rest.map(renderBlock).join("") + "</div>" +
-				'<div class="label">' + escapeHtml(data.title || "") + "</div>" +
-			"</div>";
+				'<div class="label">' + escapeHtml(data.title || "") + "</div>";
 		}
 
-		function renderUnavailable(moduleId) {
-			const size = tileSizes[moduleId] || "wide";
-
-			return '<div class="tile ' + size + '" tabindex="0" ' +
-				'data-module="' + escapeHtml(moduleId) + '">' +
-				'<div class="body">' +
+		function renderUnavailable(instance) {
+			return '<div class="body">' +
 					'<div class="primary">—</div>' +
 					'<div class="secondary">Not responding</div>' +
 				"</div>" +
-				'<div class="label">' + escapeHtml(moduleId) + "</div>" +
-			"</div>";
+				'<div class="label">' +
+					escapeHtml(instance.label || instance.module) + "</div>";
 		}
 
-		// The size rules above cover the expected cases, but a module can
-		// return any number of details. This drops rows that still don't fit
-		// so no module can ever overflow a tile, whatever it sends.
-		function trimToFit() {
-			const tiles = document.querySelectorAll(".tile");
+		// The size rules in CSS cover the expected cases, but a module can
+		// return any number of blocks. This drops what still doesn't fit so
+		// no module can overflow a tile, whatever it sends.
+		function trimToFit(flip) {
+			const body = flip.querySelector(".body");
+			if (!body) return;
 
-			for (const tile of tiles) {
-				const body = tile.querySelector(".body");
-				if (!body) continue;
+			// Least important first: pairs, then plain body text. The primary
+			// value, its label and the tile name always survive.
+			for (const selector of [".pair", ".body"]) {
+				let rows = body.querySelectorAll(":scope > " + selector);
 
-				// Drop trailing content until it fits, least important
-				// first: pairs, then plain body text. The primary value,
-				// its label and the tile name always survive.
-				for (const selector of [".pair", ".body"]) {
-					let rows = body.querySelectorAll(":scope > " + selector);
-
-					while (rows.length > 0 && tile.scrollHeight > tile.clientHeight) {
-						rows[rows.length - 1].remove();
-						rows = body.querySelectorAll(":scope > " + selector);
-					}
+				while (rows.length > 0 && flip.scrollHeight > flip.clientHeight) {
+					rows[rows.length - 1].remove();
+					rows = body.querySelectorAll(":scope > " + selector);
 				}
 			}
 		}
 
-		// Fetch each module's current data and redraw its tile.
-		// All modules are asked at once rather than one after another — with
-		// several tiles, waiting for each in turn would make the slowest
-		// module hold up every tile behind it.
+		// ---- tiles ----------------------------------------------------
+
+		// The size comes from this instance's theme settings, chosen in the
+		// admin face. The theme reads it; it never sets it.
+		function sizeOf(instance) {
+			const chosen = String((instance.themeConfig || {}).size || "").toLowerCase();
+			return SIZES.indexOf(chosen) === -1 ? "wide" : chosen;
+		}
+
+		// Hidden is a size like any other here — the module still runs and
+		// still supplies data, it just isn't drawn. That's how a wallpaper
+		// source earns its keep without taking up a slot.
+		function isHidden(instance) {
+			return sizeOf(instance) === "hidden";
+		}
+
+		function makeTile(instance) {
+			const tile = document.createElement("div");
+			tile.className = "tile " + sizeOf(instance);
+			tile.dataset.instance = instance.id;
+
+			const flip = document.createElement("div");
+			flip.className = "flip";
+			tile.appendChild(flip);
+
+			return tile;
+		}
+
+		// Put new content into a tile. If it actually differs, the tile flips
+		// to reveal it, the way a live tile did — rather than the text simply
+		// blinking into something else.
+		function setContents(tile, html) {
+			const flip = tile.querySelector(".flip");
+
+			if (flip.dataset.html === html) {
+				return; // nothing changed, so nothing should move
+			}
+
+			const first = flip.dataset.html === undefined;
+			flip.dataset.html = html;
+
+			if (first) {
+				flip.innerHTML = html;
+				trimToFit(flip);
+				return;
+			}
+
+			// Turn the old face away...
+			flip.classList.remove("returning");
+			flip.classList.add("turning");
+
+			setTimeout(function () {
+				// ...swap it while edge-on, where nothing is visible...
+				flip.classList.remove("turning");
+				flip.innerHTML = html;
+				trimToFit(flip);
+
+				// ...then bring the new face back round. The reflow forces
+				// the browser to notice the rotated state before we animate
+				// out of it, otherwise it jumps straight to the end.
+				void flip.offsetWidth;
+				flip.classList.add("returning");
+
+				setTimeout(function () {
+					flip.classList.remove("returning");
+				}, FLIP_MS);
+			}, FLIP_MS);
+		}
+
+		// ---- refresh --------------------------------------------------
+
 		async function refresh() {
 			// Every instance is asked at once rather than one after another,
 			// so the slowest module doesn't hold up the tiles behind it.
 			//
-			// Hidden instances are still fetched — a wallpaper source has no
-			// tile but very much still has a job.
+			// Instances sized Hidden are still fetched — a wallpaper source
+			// has no tile but very much still has a job.
 			const fetched = await Promise.all(
 				identity.instances.map(async function (instance) {
 					try {
@@ -477,53 +554,56 @@
 				})
 			);
 
-			document.getElementById("tiles").innerHTML = fetched
-				.filter(function (result) { return !result.instance.hidden; })
-				.map(function (result) {
-					return result.data
-						? renderTile(result.instance.id, result.data)
-						: renderUnavailable(result.instance);
-				})
-				.join("");
+			const container = document.getElementById("tiles");
+			const wanted = [];
 
-			trimToFit();
+			for (const result of fetched) {
+				if (isHidden(result.instance)) continue;
+
+				wanted.push(result.instance.id);
+
+				// Reuse the tile if it's already there. Rebuilding the grid
+				// every few seconds would throw away the very element the
+				// flip animates.
+				let tile = container.querySelector(
+					'[data-instance="' + result.instance.id + '"]'
+				);
+
+				if (!tile) {
+					tile = makeTile(result.instance);
+					container.appendChild(tile);
+				} else {
+					// The size may have been changed in settings since the
+					// last look — a face-changed push reloads the page, but
+					// this keeps the class honest either way
+					tile.className = "tile " + sizeOf(result.instance);
+				}
+
+				setContents(
+					tile,
+					result.data
+						? renderContents(result.data)
+						: renderUnavailable(result.instance)
+				);
+			}
+
+			// Drop tiles for instances that are no longer on this face
+			for (const tile of container.querySelectorAll(".tile")) {
+				if (wanted.indexOf(tile.dataset.instance) === -1) {
+					tile.remove();
+				}
+			}
 
 			// The wallpaper comes out of the same pass rather than a fetch of
 			// its own, so it stays current without any extra requests
 			applyWallpaper(fetched);
 		}
 
-		// Clicking a tile cycles its size, the way Metro let you resize tiles
-		function resizeTile(instanceId) {
-			const current = tileSizes[instanceId] || "wide";
-			const next = SIZES[(SIZES.indexOf(current) + 1) % SIZES.length];
-
-			tileSizes[instanceId] = next;
-			refresh();
-		}
-
-		document.getElementById("tiles").addEventListener("click", function (event) {
-			const tile = event.target.closest(".tile");
-			if (tile) resizeTile(tile.dataset.instance);
-		});
-
-		document.getElementById("tiles").addEventListener("keydown", function (event) {
-			if (event.key !== "Enter" && event.key !== " ") return;
-
-			const tile = event.target.closest(".tile");
-			if (tile) {
-				event.preventDefault();
-				resizeTile(tile.dataset.instance);
-			}
-		});
+		// ---- start ----------------------------------------------------
 
 		async function start() {
-			// Ask the face who it is and which modules it has
+			// Ask the face who it is and what's on it
 			identity = await (await fetch("/identity")).json();
-
-			// OmniCore hands us our own settings, already resolved against
-			// the defaults we declared in settings.json
-			applyThemeSettings(identity.themeConfig || {});
 
 			// The face's title is cosmetic and may be blank, which means no
 			// heading at all. Its name is for the admin, not the display.
@@ -534,6 +614,10 @@
 			} else {
 				heading.style.display = "none";
 			}
+
+			// OmniCore hands us our own settings, already resolved against
+			// the defaults we declared in settings.json
+			applyThemeSettings(identity.themeConfig || {});
 
 			await refresh();
 

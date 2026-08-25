@@ -345,14 +345,26 @@ function startControlFace() {
 
 		const installed = listModules();
 
+		const wanted = (instances || []).filter((instance) =>
+			// Ignore anything referring to a module that isn't installed
+			installed.includes(instance.module)
+		);
+
 		const face = faceStore.createFace(
 			name,
 			title,
 			theme,
-			// Ignore anything referring to a module that isn't installed
-			(instances || []).filter((instance) =>
-				installed.includes(instance.module)
-			)
+			wanted.map((instance) => ({
+				...instance,
+				// The theme's settings for this instance, under the theme's
+				// own key — separate from the module's own config
+				themeConfigs: {
+					[theme]: themeLoader.cleanInstanceConfig(
+						theme,
+						instance.themeConfig
+					)
+				}
+			}))
 		);
 
 		// Theme settings, if the theme declared any and the wizard collected
@@ -420,7 +432,17 @@ function startControlFace() {
 				themes: themeLoader.listThemes().map((theme) => ({
 					...theme,
 					schema: themeLoader.readSchema(theme.id),
-					defaults: themeLoader.applyDefaults(theme.id, {})
+					defaults: themeLoader.applyDefaults(theme.id, {}),
+					// What this theme wants configured for each instance —
+					// its size, usually. Empty when the theme sizes things
+					// for itself.
+					instanceSchema: themeLoader.readInstanceSchema(theme.id),
+					// Two sets of defaults: one for a module that wants a
+					// tile, one for a module that works behind the scenes.
+					// The theme decides what "behind the scenes" means in its
+					// own vocabulary.
+					instanceDefaults: themeLoader.instanceDefaults(theme.id, true),
+					hiddenDefaults: themeLoader.instanceDefaults(theme.id, false)
 				})),
 				// What port this face WOULD get. Accurate unless two faces
 				// are being created at the same moment.
@@ -576,8 +598,17 @@ function renderWizard(data) {
 				const labelField = document.getElementById("label");
 				if (labelField) instance.label = labelField.value.trim();
 
+				if (!instance.themeConfig) instance.themeConfig = {};
+
+				// Two authors on one form — the module and the theme. Keep
+				// their values apart; they're stored apart.
 				for (const input of document.querySelectorAll("[data-key]")) {
-					instance.config[input.dataset.key] =
+					const target =
+						input.dataset.scope === "theme"
+							? instance.themeConfig
+							: instance.config;
+
+					target[input.dataset.key] =
 						input.dataset.type === "boolean" ? input.checked : input.value;
 				}
 
@@ -679,7 +710,20 @@ function renderWizard(data) {
 			}).join("");
 
 			const fields = module.schema.map(function (field) {
-				return renderField(field, instance.config[field.key]);
+				return renderField(field, instance.config[field.key], "module");
+			}).join("");
+
+			// The chosen theme may want this instance sized. Those fields
+			// come from the THEME, not the module, and are kept apart.
+			const theme = selectedTheme();
+			const themeSchema = (theme && theme.instanceSchema) || [];
+
+			const themeFields = themeSchema.map(function (field) {
+				return renderField(
+					field,
+					(instance.themeConfig || {})[field.key],
+					"theme"
+				);
 			}).join("");
 
 			return '<div class="columns">' +
@@ -695,6 +739,10 @@ function renderWizard(data) {
 						'<div class="help">Shown as the tile title.</div>' +
 					"</div>" +
 					(fields || '<div class="empty">Nothing to configure.</div>') +
+					(themeFields
+						? '<h2 style="margin-top:22px">In ' +
+							escapeHtml(theme.name) + "</h2>" + themeFields
+						: "") +
 				"</div>" +
 			"</div>";
 		}
@@ -702,14 +750,15 @@ function renderWizard(data) {
 		// One settings field. Shared by the module step and the theme step,
 		// so both look identical — which is the point of declaring settings
 		// rather than shipping a form.
-		function renderField(field, value) {
+		function renderField(field, value, scope) {
+			const owner = scope || "module";
 			{
 				// A theme naming an instance is a placement decision — which
 				// module should feed something like a wallpaper
 				if (field.type === "color") {
 					return wrapField(field,
 						'<input type="color" data-key="' + escapeHtml(field.key) +
-						'" data-type="color" value="' +
+						'" data-scope="' + owner + '" data-type="color" value="' +
 						escapeHtml(value || "#000000") + '">' +
 						(field.help ? '<div class="help">' + escapeHtml(field.help) + "</div>" : "")
 					);
@@ -734,7 +783,7 @@ function renderWizard(data) {
 
 					return wrapField(field,
 						'<select data-key="' + escapeHtml(field.key) +
-							'" data-type="instance">' +
+							'" data-scope="' + owner + '" data-type="instance">' +
 							'<option value=""' + (value ? "" : " selected") + ">None</option>" +
 							options +
 						"</select>" +
@@ -790,7 +839,8 @@ function renderWizard(data) {
 						"</div>";
 				} else if (field.type === "boolean") {
 					input = '<input type="checkbox" data-key="' +
-						escapeHtml(field.key) + '" data-type="boolean"' +
+						escapeHtml(field.key) + '" data-scope="' + owner +
+						'" data-type="boolean"' +
 						(value ? " checked" : "") + ">";
 				} else if (field.type === "select") {
 					const options = (field.options || []).map(function (option) {
@@ -800,13 +850,15 @@ function renderWizard(data) {
 					}).join("");
 
 					input = '<select data-key="' + escapeHtml(field.key) +
-						'" data-type="select">' + options + "</select>";
+						'" data-scope="' + owner + '" data-type="select">' +
+						options + "</select>";
 				} else {
 					const type = ["url", "number"].indexOf(field.type) >= 0
 						? field.type : "text";
 
 					input = '<input type="' + type + '" data-key="' +
-						escapeHtml(field.key) + '" data-type="' +
+						escapeHtml(field.key) + '" data-scope="' + owner +
+						'" data-type="' +
 						escapeHtml(field.type) + '" value="' +
 						escapeHtml(value === undefined ? "" : value) + '">';
 				}
@@ -1028,12 +1080,20 @@ function renderWizard(data) {
 				return instance.module === moduleId;
 			}).length;
 
+			const theme = selectedTheme();
+
+			// A module that works behind the scenes starts at whatever this
+			// theme calls hidden — the theme's own vocabulary, not ours
+			const themeStart = theme
+				? module.tile === false
+					? theme.hiddenDefaults
+					: theme.instanceDefaults
+				: {};
+
 			face.instances.push({
 				module: moduleId,
 				label: sameModule ? module.name + " " + (sameModule + 1) : module.name,
-				// Modules that work behind the scenes don't get a tile unless
-				// asked for one
-				hidden: module.tile === false,
+				themeConfig: Object.assign({}, themeStart),
 				// Start from the module's own defaults
 				config: Object.assign({}, module.defaults)
 			});
