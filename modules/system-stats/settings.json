@@ -1,0 +1,12 @@
+{
+	"settings": [
+		{
+			"key": "fieldOrder",
+			"label": "Info order",
+			"type": "priority",
+			"options": ["CPU", "Memory", "Uptime", "Host", "Cores"],
+			"default": ["CPU", "Memory", "Uptime", "Host", "Cores"],
+			"help": "What matters most to you. The top one shows even on the smallest tile; the rest appear as the tile gets bigger."
+		}
+	]
+}

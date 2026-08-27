@@ -8,10 +8,17 @@
 //
 //   { type: "text",       value, emphasis: "primary"|"secondary"|"body" }
 //   { type: "quote",      value }
-//   { type: "pair",       label, value }
+//   { type: "pair",       label, value, emphasis?: "primary"|"secondary" }
 //   { type: "image",      url, alt, fit: "cover"|"contain" }
 //   { type: "background", url }
 //   { type: "progress",   value: 0..1, label }
+//
+// A "pair" is a NAME and a VALUE kept apart. A module always sends both;
+// whether a theme draws the name, hides it, or puts it elsewhere is the
+// theme's decision. A module must never fold a label into a value string —
+// that is a module deciding how it looks, which is exactly what the split
+// exists to prevent. `emphasis` says which pair matters most; what that
+// looks like is still the theme's call.
 //
 // "image" is a picture the tile should show. "background" is a picture
 // meant to sit behind something — the module says what the picture is FOR,

@@ -7,6 +7,7 @@
 // No library needed.
 
 const http = require("http");
+const { share } = require("../../core/priority");
 
 // Docker is local so it should answer instantly. If it doesn't, something
 // is wrong and we'd rather say so than leave the tile hanging.
@@ -48,7 +49,7 @@ function containerName(container) {
 	return raw.replace(/^\//, "");
 }
 
-module.exports = async function dockerStatus(config) {
+module.exports = async function dockerStatus(config, richness) {
 	try {
 		// all=true so we see stopped containers too, not just running ones
 		const containers = await dockerRequest(
@@ -64,23 +65,49 @@ module.exports = async function dockerStatus(config) {
 			...containers.filter((c) => c.State !== "running")
 		];
 
-		return {
-			title: "Docker",
-			primary: String(running.length),
-			secondary: "of " + containers.length + " running",
-			details: sorted.map((container) => ({
+		// RICHNESS
+		//
+		// Every row is the same kind of thing — one container — so there is
+		// nothing for a user to reorder. Richness just decides how many of
+		// them fit. The running count leads at every size.
+		const content = [
+			{ type: "text", emphasis: "primary", value: String(running.length) }
+		];
+
+		if (richness >= 25) {
+			content.push({
+				type: "text",
+				emphasis: "secondary",
+				value: "of " + containers.length + " running"
+			});
+		}
+
+		// minimum 0: a tile with room only for the count shows only the
+		// count rather than one arbitrary container
+		const room = share(sorted.length, richness, { minimum: 0 });
+
+		for (const container of sorted.slice(0, room)) {
+			content.push({
+				type: "pair",
 				label: containerName(container),
 				value: container.Status || container.State
-			})),
+			});
+		}
+
+		return {
+			title: "Docker",
+			content: content,
 			updated: new Date().toISOString()
 		};
 	} catch (error) {
 		// Most likely there's no Docker here, or OmniCore can't read the socket
 		return {
 			title: "Docker",
-			primary: "—",
-			secondary: "Not reachable",
-			details: [{ label: "Socket", value: config.socketPath }],
+			content: [
+				{ type: "text", emphasis: "primary", value: "—" },
+				{ type: "text", emphasis: "secondary", value: "Not reachable" },
+				{ type: "pair", label: "Socket", value: config.socketPath }
+			],
 			updated: new Date().toISOString()
 		};
 	}

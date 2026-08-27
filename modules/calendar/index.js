@@ -11,6 +11,7 @@
 // calendar every few seconds would be wasteful for both ends.
 
 const { fetchCached } = require("../../core/module-fetch");
+const { share } = require("../../core/priority");
 
 // ICS wraps long lines by starting the continuation with a space or tab.
 // Join those back together before parsing anything.
@@ -119,13 +120,14 @@ function whenLabel(event) {
 	return day + " " + time;
 }
 
-module.exports = async function calendar(config) {
+module.exports = async function calendar(config, richness) {
 	if (!config.url) {
 		return {
 			title: "Calendar",
-			primary: "—",
-			secondary: "No feed set",
-			details: [{ label: "Set a feed URL", value: "in Settings" }],
+			content: [
+				{ type: "text", emphasis: "primary", value: "—" },
+				{ type: "text", emphasis: "secondary", value: "No feed set" }
+			],
 			updated: new Date().toISOString()
 		};
 	}
@@ -139,9 +141,10 @@ module.exports = async function calendar(config) {
 	if (!data) {
 		return {
 			title: "Calendar",
-			primary: "—",
-			secondary: "Not reachable",
-			details: [{ label: "Check", value: "the feed URL" }],
+			content: [
+				{ type: "text", emphasis: "primary", value: "—" },
+				{ type: "text", emphasis: "secondary", value: "Not reachable" }
+			],
 			updated: new Date().toISOString()
 		};
 	}
@@ -160,14 +163,44 @@ module.exports = async function calendar(config) {
 		"in " + config.daysAhead +
 		(Number(config.daysAhead) === 1 ? " day" : " days");
 
-	return {
-		title: "Calendar",
-		primary: String(upcoming.length),
-		secondary: window + (stale ? " (last known)" : ""),
-		details: upcoming.slice(0, config.limit).map((event) => ({
+	// RICHNESS
+	//
+	// Every row here is the same kind of thing — one event — so there is
+	// nothing meaningful for a user to reorder. What changes with the size
+	// of the tile is simply how many of them fit. The count leads at every
+	// size, because it is the one thing worth reading from across a room.
+	const content = [
+		{ type: "text", emphasis: "primary", value: String(upcoming.length) }
+	];
+
+	if (richness >= 25) {
+		content.push({
+			type: "text",
+			emphasis: "secondary",
+			value: window + (stale ? " (last known)" : "")
+		});
+	}
+
+	// The user's own limit is the ceiling; richness decides how much of it
+	// a given tile actually earns. minimum 0 because a tile with room for
+	// nothing but the count should show nothing but the count.
+	const room = share(
+		Math.min(upcoming.length, Number(config.limit)),
+		richness,
+		{ minimum: 0 }
+	);
+
+	for (const event of upcoming.slice(0, room)) {
+		content.push({
+			type: "pair",
 			label: whenLabel(event),
 			value: event.summary
-		})),
+		});
+	}
+
+	return {
+		title: "Calendar",
+		content: content,
 		updated: new Date().toISOString()
 	};
 };

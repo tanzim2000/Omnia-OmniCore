@@ -117,7 +117,7 @@ The block types you'll see:
 ```js
 { type: "text",       value, emphasis: "primary" | "secondary" | "body" }
 { type: "quote",      value }
-{ type: "pair",       label, value }
+{ type: "pair",       label, value, emphasis: "primary" | "secondary" }
 { type: "image",      url, alt, fit: "cover" | "contain" }
 { type: "background", url }
 { type: "progress",   value: 0..1, label }
@@ -261,7 +261,8 @@ wrote it.
 ```
 
 Available `type`s: `text`, `url`, `number`, `password`, `boolean`,
-`select` (needs `options`), `color`, `location`, `instance`.
+`select` (needs `options`), `color`, `location`, `instance`, `priority`
+(a reorderable list — stores an array, in the user's order).
 
 **`showWhen: { key, equals }`** hides a field unless another field on the
 same form currently has a matching value (`equals` can be a string or an

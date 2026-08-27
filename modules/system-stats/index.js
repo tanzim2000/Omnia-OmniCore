@@ -4,8 +4,16 @@
 // A module is one function: it's handed its settings and returns data.
 // It never renders anything and never touches routing — the theme decides
 // how this looks, OmniCore decides where it lives.
+//
+// RICHNESS
+//
+// Five distinct facts rather than a list of rows, so which of them matter
+// is a setting rather than a decision made here. Whatever the user puts at
+// the top of "Info order" survives the smallest tile; the rest appear as
+// the tile grows.
 
 const os = require("os");
+const { visible } = require("../../core/priority");
 
 // Turn raw bytes into something readable, e.g. "3.1 GB"
 function formatBytes(bytes) {
@@ -62,23 +70,56 @@ function cpuUsage() {
 	});
 }
 
-module.exports = async function systemStats(config) {
+module.exports = async function systemStats(config, richness) {
 	const usedMemory = os.totalmem() - os.freemem();
 	const cpu = await cpuUsage();
 
+	// Everything this module can say: a name and a value for each.
+	//
+	// Note there is no notion here of a value that "reads fine without its
+	// label". That is a judgement about how something LOOKS, and it
+	// belongs to whichever theme is drawing the tile — not to this file.
+	// A module hands over the name and the value as separate things and
+	// lets the theme decide what to do with them.
+	const pieces = {
+		"CPU": cpu + "%",
+		"Memory": formatBytes(usedMemory) + " / " + formatBytes(os.totalmem()),
+		"Uptime": formatUptime(os.uptime()),
+		"Host": os.hostname(),
+		"Cores": String(os.cpus().length)
+	};
+
+	const showing = visible(config.fieldOrder, richness);
+
+		const content = showing
+		.map((name, position) => {
+			const value = pieces[name];
+
+			// Named in the setting but unknown here means the setting
+			// and this file have drifted. Skip rather than crash.
+			if (value === undefined) {
+				return null;
+			}
+
+			// Always both halves, always separate. A theme is then free
+			// to show the name, hide it, or place it elsewhere — none
+			// of which is this module's business.
+			const block = { type: "pair", label: name, value: value };
+
+			// Position in the user's order IS importance, so the first
+			// piece is flagged as the one worth reading from across a
+			// room. What "primary" looks like is the theme's decision.
+			if (position === 0) {
+				block.emphasis = "primary";
+			}
+
+			return block;
+		})
+		.filter(Boolean);
+
 	return {
 		title: "System",
-		primary: cpu + "%",
-		secondary: "CPU",
-		details: [
-			{
-				label: "Memory",
-				value: formatBytes(usedMemory) + " / " + formatBytes(os.totalmem())
-			},
-			{ label: "Uptime", value: formatUptime(os.uptime()) },
-			{ label: "Host", value: os.hostname() },
-			{ label: "Cores", value: String(os.cpus().length) }
-		],
+		content: content,
 		updated: new Date().toISOString()
 	};
 };

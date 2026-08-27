@@ -151,6 +151,49 @@ const styles = `
 		padding: 12px 16px;
 	}
 
+	/* A reorderable priority list. Matches .option rows on purpose — it's
+	   the same kind of choice, made a different way. */
+	.priority-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 12px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 10px;
+		margin-bottom: 8px;
+		font-size: 15px;
+	}
+
+	.priority-rank {
+		opacity: 0.4;
+		font-size: 12px;
+		min-width: 16px;
+		text-align: right;
+	}
+
+	.priority-name { flex: 1; }
+
+	.priority-move {
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		margin: 0;
+		flex: none;
+		font-size: 13px;
+		line-height: 1;
+		cursor: pointer;
+		color: inherit;
+		border-radius: 8px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		background: rgba(255, 255, 255, 0.06);
+	}
+
+	.priority-move:hover:not(:disabled) {
+		background: rgba(255, 255, 255, 0.12);
+	}
+
+	.priority-move:disabled { opacity: 0.2; cursor: default; }
+
 	.option {
 		display: flex;
 		align-items: center;
@@ -747,6 +790,101 @@ function renderWizard(data) {
 			"</div>";
 		}
 
+		// A priority value can reach here in two shapes. Fresh from the
+		// server it's a real array, already reconciled against what the
+		// module declares. Once this step has been filled in and left, it's
+		// the JSON string the hidden input held. Accept both, and fall back
+		// to the declared order if it's neither.
+		function priorityOrder(value, options) {
+			const declared = options || [];
+			let stored = value;
+
+			if (typeof stored === "string") {
+				try {
+					stored = JSON.parse(stored);
+				} catch (error) {
+					stored = [];
+				}
+			}
+
+			if (!Array.isArray(stored)) stored = [];
+
+			const kept = [];
+
+			for (const item of stored) {
+				if (declared.indexOf(item) >= 0 && kept.indexOf(item) === -1) {
+					kept.push(item);
+				}
+			}
+
+			for (const item of declared) {
+				if (kept.indexOf(item) === -1) kept.push(item);
+			}
+
+			return kept;
+		}
+
+		// Rewrite the hidden input a priority list is stored in, and keep
+		// the numbering and the disabled arrows honest
+		function syncPriority(container) {
+			const rows = Array.prototype.slice.call(
+				container.querySelectorAll("[data-priority-item]")
+			);
+			const store = container.querySelector("[data-type='priority']");
+
+			if (store) {
+				store.value = JSON.stringify(rows.map(function (row) {
+					return row.dataset.priorityItem;
+				}));
+			}
+
+			rows.forEach(function (row, index) {
+				const rank = row.querySelector("[data-priority-rank]");
+				if (rank) rank.textContent = index + 1;
+
+				const up = row.querySelector("[data-priority-move='up']");
+				const down = row.querySelector("[data-priority-move='down']");
+
+				if (up) up.disabled = index === 0;
+				if (down) down.disabled = index === rows.length - 1;
+			});
+		}
+
+		function syncAllPriorities() {
+			for (const container of document.querySelectorAll("[data-priority]")) {
+				syncPriority(container);
+			}
+		}
+
+		// One listener for every list on the page. The wizard rebuilds its
+		// form on each step, so delegation is what keeps this working —
+		// per-button listeners would be thrown away on the next render.
+		document.addEventListener("click", function (event) {
+			const button = event.target.closest("[data-priority-move]");
+			if (!button) return;
+
+			event.preventDefault();
+
+			const container = button.closest("[data-priority]");
+			const row = button.closest("[data-priority-item]");
+			const rows = Array.prototype.slice.call(
+				container.querySelectorAll("[data-priority-item]")
+			);
+			const index = rows.indexOf(row);
+			const target =
+				button.dataset.priorityMove === "up" ? index - 1 : index + 1;
+
+			if (target < 0 || target >= rows.length) return;
+
+			if (target < index) {
+				container.insertBefore(row, rows[target]);
+			} else {
+				container.insertBefore(rows[target], row);
+			}
+
+			syncPriority(container);
+		});
+
 		// One settings field. Shared by the module step and the theme step,
 		// so both look identical — which is the point of declaring settings
 		// rather than shipping a form.
@@ -837,6 +975,32 @@ function renderWizard(data) {
 									manual && stored.longitude !== undefined ? stored.longitude : ""
 								) + '"></div>' +
 						"</div>";
+				} else if (field.type === "priority") {
+					// What matters most to this user. The top item survives
+					// the smallest tile; the rest appear as it gets bigger.
+					const order = priorityOrder(value, field.options);
+
+					const rows = order.map(function (item, index) {
+						return '<div class="priority-row" data-priority-item="' +
+							escapeHtml(item) + '">' +
+							'<span class="priority-rank" data-priority-rank>' +
+								(index + 1) + "</span>" +
+							'<span class="priority-name">' + escapeHtml(item) + "</span>" +
+							'<button type="button" class="priority-move" ' +
+								'data-priority-move="up" title="Move up">↑</button>' +
+							'<button type="button" class="priority-move" ' +
+								'data-priority-move="down" title="Move down">↓</button>' +
+						"</div>";
+					}).join("");
+
+					// The order lives in a hidden input so the step's collect
+					// loop reads it like any other field — off .value
+					input = '<div data-priority>' +
+						'<input type="hidden" data-key="' + escapeHtml(field.key) +
+							'" data-scope="' + owner + '" data-type="priority" value="' +
+							escapeHtml(JSON.stringify(order)) + '">' +
+						rows +
+					"</div>";
 				} else if (field.type === "boolean") {
 					input = '<input type="checkbox" data-key="' +
 						escapeHtml(field.key) + '" data-scope="' + owner +
@@ -987,6 +1151,10 @@ function renderWizard(data) {
 			}
 
 			applyFieldConditions();
+
+			// The rows were just rebuilt, so their numbering and disabled
+			// arrows need setting for the order they're actually in
+			syncAllPriorities();
 
 			for (const button of document.querySelectorAll("[data-loc-search]")) {
 				button.addEventListener("click", function () {

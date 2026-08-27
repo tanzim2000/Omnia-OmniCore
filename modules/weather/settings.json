@@ -14,6 +14,28 @@
 			"default": "Celsius"
 		},
 		{
+			"key": "fieldOrder",
+			"label": "Info order",
+			"type": "priority",
+			"options": [
+				"Temperature",
+				"Condition",
+				"Feels like",
+				"High / low",
+				"Humidity",
+				"Wind"
+			],
+			"default": [
+				"Temperature",
+				"Condition",
+				"Feels like",
+				"High / low",
+				"Humidity",
+				"Wind"
+			],
+			"help": "What matters most to you. The top one shows even on the smallest tile; the rest appear as the tile gets bigger."
+		},
+		{
 			"key": "refreshMinutes",
 			"label": "Refresh every",
 			"type": "number",

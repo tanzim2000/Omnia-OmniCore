@@ -6,6 +6,14 @@
 			"type": "text",
 			"default": "/",
 			"help": "Any path on the filesystem you want to measure"
+		},
+		{
+			"key": "fieldOrder",
+			"label": "Info order",
+			"type": "priority",
+			"options": ["Percent used", "Free", "Used", "Total", "Path"],
+			"default": ["Percent used", "Free", "Used", "Total", "Path"],
+			"help": "What matters most to you. The top one shows even on the smallest tile; the rest appear as the tile gets bigger."
 		}
 	]
 }

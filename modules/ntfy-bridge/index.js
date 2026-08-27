@@ -3,6 +3,7 @@
 // Read-only — it reads messages, it never sends them.
 
 const { fetchCached } = require("../../core/module-fetch");
+const { share } = require("../../core/priority");
 
 // Turn a timestamp into "3m", "2h", "4d" — short enough for a tile
 function timeAgo(seconds) {
@@ -14,13 +15,14 @@ function timeAgo(seconds) {
 	return Math.floor(elapsed / 86400) + "d";
 }
 
-module.exports = async function ntfyBridge(config) {
+module.exports = async function ntfyBridge(config, richness) {
 	if (!config.topic) {
 		return {
 			title: "Notifications",
-			primary: "—",
-			secondary: "No topic set",
-			details: [{ label: "Set a topic", value: "in Settings" }],
+			content: [
+				{ type: "text", emphasis: "primary", value: "—" },
+				{ type: "text", emphasis: "secondary", value: "No topic set" }
+			],
 			updated: new Date().toISOString()
 		};
 	}
@@ -37,9 +39,11 @@ module.exports = async function ntfyBridge(config) {
 	if (data === null) {
 		return {
 			title: "Notifications",
-			primary: "—",
-			secondary: "Not reachable",
-			details: [{ label: "Server", value: config.server }],
+			content: [
+				{ type: "text", emphasis: "primary", value: "—" },
+				{ type: "text", emphasis: "secondary", value: "Not reachable" },
+				{ type: "pair", label: "Server", value: config.server }
+			],
 			updated: new Date().toISOString()
 		};
 	}
@@ -58,21 +62,52 @@ module.exports = async function ntfyBridge(config) {
 	} catch (error) {
 		return {
 			title: "Notifications",
-			primary: "—",
-			secondary: "Unreadable reply",
-			details: [{ label: "Server", value: config.server }],
+			content: [
+				{ type: "text", emphasis: "primary", value: "—" },
+				{ type: "text", emphasis: "secondary", value: "Unreadable reply" },
+				{ type: "pair", label: "Server", value: config.server }
+			],
 			updated: new Date().toISOString()
 		};
 	}
 
-	return {
-		title: "Notifications",
-		primary: String(messages.length),
-		secondary: config.topic + (stale ? " (last known)" : ""),
-		details: messages.slice(0, config.limit).map((message) => ({
+	// RICHNESS
+	//
+	// Every row is the same kind of thing — one message — so there is
+	// nothing for a user to reorder. Richness decides how many fit. The
+	// count leads at every size.
+	const content = [
+		{ type: "text", emphasis: "primary", value: String(messages.length) }
+	];
+
+	if (richness >= 25) {
+		content.push({
+			type: "text",
+			emphasis: "secondary",
+			value: config.topic + (stale ? " (last known)" : "")
+		});
+	}
+
+	// The user's own limit is the ceiling; richness decides how much of it
+	// this tile earns. minimum 0 so a tile with room only for the count
+	// shows only the count.
+	const room = share(
+		Math.min(messages.length, Number(config.limit)),
+		richness,
+		{ minimum: 0 }
+	);
+
+	for (const message of messages.slice(0, room)) {
+		content.push({
+			type: "pair",
 			label: timeAgo(message.time),
 			value: message.title || message.message || ""
-		})),
+		});
+	}
+
+	return {
+		title: "Notifications",
+		content: content,
 		updated: new Date().toISOString()
 	};
 };

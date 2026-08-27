@@ -24,11 +24,13 @@ modules/my-module/
 
 ```js
 module.exports = async function (config, richness) {
-	return {
-		title: "My Module",
-		content: [ /* blocks — see §3 */ ],
-		updated: new Date().toISOString()
-	};
+  return {
+    title: "My Module",
+    content: [
+      /* blocks — see §3 */
+    ],
+    updated: new Date().toISOString(),
+  };
 };
 ```
 
@@ -78,30 +80,30 @@ pick steps around what's actually useful to see, not evenly-spaced filler.
 Here's `modules/prayer-times`, in full, as the reference example — it has
 exactly four steps:
 
-| Richness | Returns |
-| --- | --- |
-| 1–24 | The next prayer's time. Nothing else. |
-| 25–49 | That time, plus which prayer it is. |
-| 50–79 | The above, plus the two prayers after it. |
-| 80–100 | The above, plus the entire day. |
+| Richness | Returns                                   |
+| -------- | ----------------------------------------- |
+| 1–24     | The next prayer's time. Nothing else.     |
+| 25–49    | That time, plus which prayer it is.       |
+| 50–79    | The above, plus the two prayers after it. |
+| 80–100   | The above, plus the entire day.           |
 
 ```js
 const content = [
-	{ type: "text", emphasis: "primary", value: formatTime(next) }
+  { type: "text", emphasis: "primary", value: formatTime(next) },
 ];
 
 if (richness >= 25) {
-	content.push({ type: "text", emphasis: "secondary", value: nextName });
+  content.push({ type: "text", emphasis: "secondary", value: nextName });
 }
 
 if (richness >= 80) {
-	for (const prayer of ALL_FIVE) {
-		content.push({ type: "pair", label: prayer, value: formatTime(prayer) });
-	}
+  for (const prayer of ALL_FIVE) {
+    content.push({ type: "pair", label: prayer, value: formatTime(prayer) });
+  }
 } else if (richness >= 50) {
-	for (const prayer of NEXT_TWO) {
-		content.push({ type: "pair", label: prayer, value: formatTime(prayer) });
-	}
+  for (const prayer of NEXT_TWO) {
+    content.push({ type: "pair", label: prayer, value: formatTime(prayer) });
+  }
 }
 ```
 
@@ -109,15 +111,15 @@ if (richness >= 80) {
 
 The theme side of this is symmetrical to yours. A theme has its own
 vocabulary for sizes — named steps, a number, or no concept of size at all —
-and *it* decides which richness number to ask for, based on how much room
+and _it_ decides which richness number to ask for, based on how much room
 a given size actually has. `windows8`, for example, hardcodes:
 
 | Its size | Asks your module for |
-| --- | --- |
-| Small | 10 |
-| Medium | 35 |
-| Wide | 65 |
-| Large | 95 |
+| -------- | -------------------- |
+| Small    | 10                   |
+| Medium   | 35                   |
+| Wide     | 65                   |
+| Large    | 95                   |
 
 **Neither side ever learns the other's vocabulary.** You never find out
 whether "65" came from a tile called "Wide," a slider at 65%, or a theme
@@ -142,7 +144,7 @@ your module will be judged against.
 
 ## 3. Content blocks
 
-You describe *what you have*, never *how it should look*. No colors, no
+You describe _what you have_, never _how it should look_. No colors, no
 sizes, no HTML. That decision belongs entirely to the theme, and it's what
 lets any theme render any module without knowing what the module does.
 
@@ -151,15 +153,24 @@ The current block types:
 ```js
 { type: "text",       value, emphasis: "primary" | "secondary" | "body" }
 { type: "quote",      value }
-{ type: "pair",       label, value }
+{ type: "pair",       label, value, emphasis: "primary" | "secondary" }
 { type: "image",      url, alt, fit: "cover" | "contain" }
 { type: "background", url }
 { type: "progress",   value: 0..1, label }
 ```
 
+**Never fold a label into a value.** `{ type: "pair", label: "Humidity",
+value: "62%" }` is right; `{ type: "text", value: "Humidity 62%" }` is not.
+The second looks identical in one theme and is broken in every other one —
+no theme can hide that label, restyle it, or lay it out differently,
+because by the time it arrives it is just a sentence. If your content has a
+name and a value, send both, separately, every time. Use `emphasis:
+"primary"` to say which one leads; what that looks like is the theme's
+business.
+
 **`image` vs `background`** — both carry a picture, but they mean different
 things. An `image` is content that belongs inside your tile. A `background`
-is a picture meant to sit behind *everything on the dashboard*, not just
+is a picture meant to sit behind _everything on the dashboard_, not just
 your tile — a theme may offer to use it as wallpaper. Use whichever matches
 what you're actually providing; a wallpaper-style module (Bing's picture of
 the day, say) should emit both, since it's simultaneously a tile's content
@@ -184,14 +195,14 @@ you:
 
 ```js
 return {
-	title: "My Module",
-	primary: "72°F",
-	secondary: "Partly cloudy",
-	details: [
-		{ label: "Humidity", value: "58%" },
-		{ label: "Wind", value: "12 mph" }
-	],
-	updated: new Date().toISOString()
+  title: "My Module",
+  primary: "72°F",
+  secondary: "Partly cloudy",
+  details: [
+    { label: "Humidity", value: "58%" },
+    { label: "Wind", value: "12 mph" },
+  ],
+  updated: new Date().toISOString(),
 };
 ```
 
@@ -212,27 +223,27 @@ looking the same.
 
 ```json
 {
-	"settings": [
-		{
-			"key": "refreshMinutes",
-			"label": "Refresh every",
-			"type": "number",
-			"default": 15,
-			"help": "Minutes between calls. Lower means more calls."
-		},
-		{
-			"key": "units",
-			"label": "Units",
-			"type": "select",
-			"options": ["Celsius", "Fahrenheit"],
-			"default": "Celsius"
-		}
-	]
+  "settings": [
+    {
+      "key": "refreshMinutes",
+      "label": "Refresh every",
+      "type": "number",
+      "default": 15,
+      "help": "Minutes between calls. Lower means more calls."
+    },
+    {
+      "key": "units",
+      "label": "Units",
+      "type": "select",
+      "options": ["Celsius", "Fahrenheit"],
+      "default": "Celsius"
+    }
+  ]
 }
 ```
 
 Available `type`s: `text`, `url`, `number`, `password`, `boolean`, `select`
-(needs `options`), `color`, `location`, `instance`.
+(needs `options`), `color`, `location`, `instance`, `priority`.
 
 Every field can carry `default`, `help` (a one-line explanation shown under
 the field), and `showWhen: { key, equals }` to hide it unless another field
@@ -240,6 +251,55 @@ has a matching value — useful for "only show this when that mode is on."
 
 Your function receives the resolved values as `config[key]`, with defaults
 already filled in for anything unset.
+
+### The `priority` type — letting the user order your content
+
+If your module has several distinct facts rather than a list of like rows,
+consider handing the _ordering_ to the user instead of hardcoding it.
+
+```json
+{
+  "key": "fieldOrder",
+  "label": "Info order",
+  "type": "priority",
+  "options": ["Temperature", "Condition", "Humidity", "Wind"],
+  "default": ["Temperature", "Condition", "Humidity", "Wind"]
+}
+```
+
+You get `config.fieldOrder` back as an array in the user's order, already
+reconciled against your `options` — names you no longer declare are dropped,
+and ones you have since added are appended. You never have to handle a stale
+order yourself.
+
+Pair it with the shared helper:
+
+```js
+const { visible } = require("../../core/priority");
+
+const showing = visible(config.fieldOrder, richness);
+```
+
+`visible` spreads the 1-100 scale across however many items there are and
+returns the ones to show, **in the user's order**. Whatever they put at the
+top survives the smallest tile. `modules/weather` is the worked example.
+
+**This is not right for every module.** If every row you emit is the same
+kind of thing — one event, one container, one message — there is nothing
+meaningful to reorder, and a priority setting would be a second way to do a
+job richness already does. Use `share` instead:
+
+```js
+const { share } = require("../../core/priority");
+
+// How many rows this tile has earned. minimum: 0 because a tile with room
+// only for the summary should show only the summary.
+const room = share(rows.length, richness, { minimum: 0 });
+```
+
+`modules/calendar`, `modules/docker-status` and `modules/ntfy-bridge` all do
+this. Neither helper is compulsory — a module is free to hardcode its own
+steps, as `prayer-times` does.
 
 ### The `location` type
 
@@ -259,14 +319,14 @@ envelope explaining that; don't throw.
 
 ```js
 if (!config.location) {
-	return {
-		title: "My Module",
-		content: [
-			{ type: "text", emphasis: "primary", value: "—" },
-			{ type: "text", emphasis: "secondary", value: "No location" }
-		],
-		updated: new Date().toISOString()
-	};
+  return {
+    title: "My Module",
+    content: [
+      { type: "text", emphasis: "primary", value: "—" },
+      { type: "text", emphasis: "secondary", value: "No location" },
+    ],
+    updated: new Date().toISOString(),
+  };
 }
 ```
 
@@ -278,19 +338,19 @@ Optional, but worth having:
 
 ```json
 {
-	"name": "Bing Wallpaper",
-	"description": "Bing's picture of the day",
-	"provides": ["background", "image"],
-	"tile": false
+  "name": "Bing Wallpaper",
+  "description": "Bing's picture of the day",
+  "provides": ["background", "image"],
+  "tile": false
 }
 ```
 
-| Field | Meaning |
-| --- | --- |
-| `name` | Readable name, shown wherever your module appears in settings. Falls back to the folder name if you skip this. |
-| `description` | One line. |
-| `provides` | Which block types you can emit. This is what lets OmniCore correctly offer your module wherever something needs a `background` — a theme's wallpaper picker uses this to *not* offer, say, a Docker status module. Only list what you actually emit. |
-| `tile` | Set to `false` if your module is meant to work invisibly — feeding a background, say, with nothing worth putting on screen itself. Instances of it start hidden by default; the user can still turn a tile on for it if they want to. |
+| Field         | Meaning                                                                                                                                                                                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | Readable name, shown wherever your module appears in settings. Falls back to the folder name if you skip this.                                                                                                                                       |
+| `description` | One line.                                                                                                                                                                                                                                            |
+| `provides`    | Which block types you can emit. This is what lets OmniCore correctly offer your module wherever something needs a `background` — a theme's wallpaper picker uses this to _not_ offer, say, a Docker status module. Only list what you actually emit. |
+| `tile`        | Set to `false` if your module is meant to work invisibly — feeding a background, say, with nothing worth putting on screen itself. Instances of it start hidden by default; the user can still turn a tile on for it if they want to.                |
 
 ---
 
@@ -302,10 +362,10 @@ Optional, but worth having:
 const { fetchCached } = require("../../core/module-fetch");
 
 const { data, stale } = await fetchCached(url, {
-	cacheSeconds: 300,   // default 300 — how long a cached answer stays fresh
-	timeoutSeconds: 10,  // default 10 — give up after this long
-	as: "json",          // default "json"; use "text" for non-JSON responses
-	key: "custom-key"    // optional — defaults to the URL itself
+  cacheSeconds: 300, // default 300 — how long a cached answer stays fresh
+  timeoutSeconds: 10, // default 10 — give up after this long
+  as: "json", // default "json"; use "text" for non-JSON responses
+  key: "custom-key", // optional — defaults to the URL itself
 });
 ```
 
@@ -330,14 +390,14 @@ yourself, and every module gets them for free:
 
 ```js
 if (!data) {
-	return {
-		title: "My Module",
-		content: [
-			{ type: "text", emphasis: "primary", value: "—" },
-			{ type: "text", emphasis: "secondary", value: "Not reachable" }
-		],
-		updated: new Date().toISOString()
-	};
+  return {
+    title: "My Module",
+    content: [
+      { type: "text", emphasis: "primary", value: "—" },
+      { type: "text", emphasis: "secondary", value: "Not reachable" },
+    ],
+    updated: new Date().toISOString(),
+  };
 }
 ```
 
@@ -385,93 +445,91 @@ detail at higher richness, with a configurable target date:
 // modules/countdown/index.js
 
 module.exports = async function countdown(config, richness) {
-	if (!config.targetDate) {
-		return {
-			title: "Countdown",
-			content: [
-				{ type: "text", emphasis: "primary", value: "—" },
-				{ type: "text", emphasis: "secondary", value: "No date set" }
-			],
-			updated: new Date().toISOString()
-		};
-	}
+  if (!config.targetDate) {
+    return {
+      title: "Countdown",
+      content: [
+        { type: "text", emphasis: "primary", value: "—" },
+        { type: "text", emphasis: "secondary", value: "No date set" },
+      ],
+      updated: new Date().toISOString(),
+    };
+  }
 
-	const target = new Date(config.targetDate);
-	const now = new Date();
-	const msRemaining = target - now;
+  const target = new Date(config.targetDate);
+  const now = new Date();
+  const msRemaining = target - now;
 
-	if (msRemaining <= 0) {
-		return {
-			title: config.label || "Countdown",
-			content: [{ type: "text", emphasis: "primary", value: "Today" }],
-			updated: new Date().toISOString()
-		};
-	}
+  if (msRemaining <= 0) {
+    return {
+      title: config.label || "Countdown",
+      content: [{ type: "text", emphasis: "primary", value: "Today" }],
+      updated: new Date().toISOString(),
+    };
+  }
 
-	const days = Math.ceil(msRemaining / (1000 * 60 * 60 * 24));
+  const days = Math.ceil(msRemaining / (1000 * 60 * 60 * 24));
 
-	const content = [
-		{ type: "text", emphasis: "primary", value: days + "d" }
-	];
+  const content = [{ type: "text", emphasis: "primary", value: days + "d" }];
 
-	// 25+: say what it's counting down to
-	if (richness >= 25) {
-		content.push({
-			type: "text",
-			emphasis: "secondary",
-			value: config.label || "days to go"
-		});
-	}
+  // 25+: say what it's counting down to
+  if (richness >= 25) {
+    content.push({
+      type: "text",
+      emphasis: "secondary",
+      value: config.label || "days to go",
+    });
+  }
 
-	// 60+: break it down further
-	if (richness >= 60) {
-		const hours = Math.floor((msRemaining / (1000 * 60 * 60)) % 24);
-		content.push({ type: "pair", label: "Hours", value: String(hours) });
-	}
+  // 60+: break it down further
+  if (richness >= 60) {
+    const hours = Math.floor((msRemaining / (1000 * 60 * 60)) % 24);
+    content.push({ type: "pair", label: "Hours", value: String(hours) });
+  }
 
-	// 85+: the exact target date
-	if (richness >= 85) {
-		content.push({
-			type: "pair",
-			label: "Target",
-			value: target.toLocaleDateString()
-		});
-	}
+  // 85+: the exact target date
+  if (richness >= 85) {
+    content.push({
+      type: "pair",
+      label: "Target",
+      value: target.toLocaleDateString(),
+    });
+  }
 
-	return {
-		title: config.label || "Countdown",
-		content: content,
-		updated: new Date().toISOString()
-	};
+  return {
+    title: config.label || "Countdown",
+    content: content,
+    updated: new Date().toISOString(),
+  };
 };
 ```
 
 ```json
 // modules/countdown/settings.json
 {
-	"settings": [
-		{
-			"key": "targetDate",
-			"label": "Target date",
-			"type": "text",
-			"default": "",
-			"help": "YYYY-MM-DD"
-		},
-		{
-			"key": "label",
-			"label": "What's it counting down to?",
-			"type": "text",
-			"default": ""
-		}
-	]
+  "settings": [
+    {
+      "key": "targetDate",
+      "label": "Target date",
+      "type": "text",
+      "default": "",
+      "help": "YYYY-MM-DD"
+    },
+    {
+      "key": "label",
+      "label": "What's it counting down to?",
+      "type": "text",
+      "default": ""
+    }
+  ]
 }
 ```
 
 ```json
 // modules/countdown/module.json
 {
-	"name": "Countdown",
-	"description": "Days remaining until a date you set"
+  "name": "Countdown",
+  "description": "Days remaining until a date you set"
 }
 ```
 
@@ -484,11 +542,16 @@ the pattern applied.
 
 - [ ] Function signature is `(config, richness)`
 - [ ] `richness` actually changes what you return, at more than one point
+- [ ] If your module has distinct fields, you considered a `priority`
+      setting so the user can order them; if it emits like rows, you scaled
+      the row count instead
 - [ ] Every path returns a valid envelope, including failure cases —
       nothing relies on throwing
 - [ ] Outbound HTTP goes through `fetchCached`, with a `cacheSeconds` that
       matches how often your data actually changes
 - [ ] No HTML, no styling, no layout decisions anywhere in your output
+- [ ] No label folded into a value string — anything with a name and a
+      value goes out as a `pair`, both halves separate
 - [ ] `module.json` exists with an honest `provides` list if you emit
       `image` or `background`
 - [ ] Settings are declared in `settings.json`, not asked for any other way

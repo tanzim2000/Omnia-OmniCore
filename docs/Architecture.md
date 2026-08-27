@@ -203,10 +203,18 @@ A module describes **what it has**, never how it should look:
 | ------------ | ------------------------------------------------------------------ |
 | `text`       | `{ type, value, emphasis: "primary"｜"secondary"｜"body" }`        |
 | `quote`      | `{ type, value }`                                                  |
-| `pair`       | `{ type, label, value }`                                           |
+| `pair`       | `{ type, label, value, emphasis? }`                                |
 | `image`      | `{ type, url, alt, fit: "cover"｜"contain" }` — content for a tile |
 | `background` | `{ type, url }` — a surface to go behind everything                |
 | `progress`   | `{ type, value: 0..1, label }`                                     |
+
+**A `pair` keeps the name and the value apart, and a module must never
+join them.** Writing `value: "Humidity 62%"` is a module deciding how it
+looks, which is the one thing the split exists to prevent — a theme can no
+longer hide that label, restyle it, or move it. Send `label` and `value`
+separately and let the theme choose. `emphasis` marks the pair worth
+reading from across a room; what that means visually stays the theme's
+decision, including whether the label is drawn at all.
 
 **`image` and `background` both carry a picture but mean different things.**
 An image is content; a background is the surface behind everything. The
@@ -449,6 +457,7 @@ settings page consistent no matter who wrote the thing.
 | `color`    | colour picker                                        | Stores `#rrggbb`.                                                                           |
 | `location` | "use OmniCore's location" / manual, with city search | Resolved to coordinates before the module runs.                                             |
 | `instance` | dropdown of instances on this face                   | Filter with `provides: "background"` to only offer modules that can supply that block type. |
+| `priority` | reorderable list                                     | Needs `options: []`. Stores an **array**, in the user's order. See below.                   |
 
 ### Conditional fields
 
@@ -458,6 +467,37 @@ settings page consistent no matter who wrote the thing.
 
 The field is shown only when another field has one of those values, updating
 live as the controlling field changes.
+
+### Priority fields
+
+A `priority` field is a list the user reorders. It is how a module hands the
+_ordering_ of its content to the person looking at the wall, while keeping
+ownership of what that content means.
+
+```json
+{
+  "key": "fieldOrder",
+  "label": "Info order",
+  "type": "priority",
+  "options": ["Temperature", "Condition", "Humidity", "Wind"],
+  "default": ["Temperature", "Condition", "Humidity", "Wind"]
+}
+```
+
+The stored value is an **array**, not a string. OmniCore reconciles it
+against `options` on both load and save, so an order stored before a module
+gained or lost an item is repaired rather than rejected: unknown names are
+dropped, missing ones are appended at the end. A module can therefore change
+what it offers without invalidating anybody's saved settings.
+
+In the form it renders as rows with up/down arrows. The chosen order lives
+in a hidden input, so every existing save handler collects it the same way
+it collects a text box — there is no special case in the collection code.
+
+**This does not change the richness contract.** A theme still sends one
+number and learns nothing about what it buys; a module still decides what
+its own content means. The user simply gets a say in which parts of it are
+worth the smallest tile.
 
 ### Where values are stored
 
@@ -616,9 +656,16 @@ accident:
 
 ### Working
 
-Faces, themes, modules, instances. The full settings system. Location
-service. Image proxying. Live push updates. Admin login. The setup wizard.
-The `windows8` theme with three animations.
+Faces, themes, modules, instances. The full settings system, including
+`priority` fields. Location service. Image proxying. Live push updates.
+Admin login. The setup wizard. The `windows8` theme with three animations.
+
+All eight bundled modules honour richness. Those with distinct fields
+(`weather`, `disk-space`, `system-stats`) let the user order them with a
+`priority` setting; those that emit a list of like rows (`calendar`,
+`docker-status`, `ntfy-bridge`) scale the number of rows instead, since
+there is nothing meaningful to reorder. `prayer-times` and `bing-wallpaper`
+use their own fixed steps.
 
 ### Not built yet
 
@@ -632,8 +679,6 @@ The `windows8` theme with three animations.
 
 ### Known gaps
 
-- Only `prayer-times` honours richness. The other six modules run but
-  ignore it and need updating.
 - The calendar module skips repeating events (RRULE). Expanding them
   correctly is genuinely hard, and a subtly wrong recurring event on a wall
   display is worse than an absent one.

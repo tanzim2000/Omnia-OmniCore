@@ -31,6 +31,7 @@ const {
 	cleanConfig
 } = require("./module-config");
 const themeLoader = require("./theme-loader");
+const priority = require("./priority");
 const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
@@ -117,6 +118,49 @@ const styles = `
 
 	.option:hover { background: rgba(255, 255, 255, 0.05); }
 	.option input { width: 17px; height: 17px; }
+
+	/* A reorderable priority list. Deliberately looks like .option rows,
+	   since it's the same kind of choice made a different way. */
+	.priority-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 12px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 10px;
+		margin-bottom: 8px;
+		font-size: 15px;
+	}
+
+	.priority-rank {
+		opacity: 0.4;
+		font-size: 12px;
+		min-width: 16px;
+		text-align: right;
+	}
+
+	.priority-name { flex: 1; }
+
+	.priority-move {
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		margin: 0;
+		flex: none;
+		font-size: 13px;
+		line-height: 1;
+		cursor: pointer;
+		color: inherit;
+		border-radius: 8px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		background: rgba(255, 255, 255, 0.06);
+	}
+
+	.priority-move:hover:not(:disabled) {
+		background: rgba(255, 255, 255, 0.12);
+	}
+
+	.priority-move:disabled { opacity: 0.2; cursor: default; }
 
 	label {
 		display: block;
@@ -387,6 +431,71 @@ const locationScript = `
 	}
 `;
 
+// Reordering a priority list.
+//
+// The chosen order lives in a hidden input, so the save handlers on every
+// page collect it exactly the way they collect a text box — one value, read
+// off .value, with no special case anywhere.
+//
+// One listener on the document handles every list on the page. That's not
+// just tidiness: the wizard rebuilds its form on each step, and delegation
+// keeps working across a re-render where per-button listeners wouldn't.
+const priorityScript = `
+	function syncPriority(container) {
+		const rows = Array.from(container.querySelectorAll("[data-priority-item]"));
+		const store = container.querySelector("[data-type='priority']");
+
+		if (store) {
+			store.value = JSON.stringify(rows.map(function (row) {
+				return row.dataset.priorityItem;
+			}));
+		}
+
+		rows.forEach(function (row, index) {
+			const rank = row.querySelector("[data-priority-rank]");
+			if (rank) rank.textContent = index + 1;
+
+			// Nothing above the first row, nothing below the last
+			const up = row.querySelector("[data-priority-move='up']");
+			const down = row.querySelector("[data-priority-move='down']");
+
+			if (up) up.disabled = index === 0;
+			if (down) down.disabled = index === rows.length - 1;
+		});
+	}
+
+	function syncAllPriorities() {
+		for (const container of document.querySelectorAll("[data-priority]")) {
+			syncPriority(container);
+		}
+	}
+
+	document.addEventListener("click", function (event) {
+		const button = event.target.closest("[data-priority-move]");
+		if (!button) return;
+
+		event.preventDefault();
+
+		const container = button.closest("[data-priority]");
+		const row = button.closest("[data-priority-item]");
+		const rows = Array.from(container.querySelectorAll("[data-priority-item]"));
+		const index = rows.indexOf(row);
+		const target = button.dataset.priorityMove === "up" ? index - 1 : index + 1;
+
+		if (target < 0 || target >= rows.length) return;
+
+		if (target < index) {
+			container.insertBefore(row, rows[target]);
+		} else {
+			container.insertBefore(rows[target], row);
+		}
+
+		syncPriority(container);
+	});
+
+	syncAllPriorities();
+`;
+
 function notFound(heading, backHref, backLabel) {
 	return page(
 		"Not found",
@@ -505,6 +614,37 @@ function renderFields(schema, config, context, scope) {
 								)}">
 						</div>
 					</div>`;
+			} else if (field.type === "priority") {
+				// The user's own answer to "what matters most here". What
+				// sits at the top survives to the smallest tile; the rest
+				// appear as the tile gets bigger.
+				//
+				// Normalising before rendering means a module that has
+				// gained or lost an item since this was last saved still
+				// shows a complete, current list.
+				const order = priority.normalize(value, field.options);
+
+				const rows = order
+					.map(
+						(item, index) => `
+					<div class="priority-row" data-priority-item="${escapeHtml(item)}">
+						<span class="priority-rank" data-priority-rank>${index + 1}</span>
+						<span class="priority-name">${escapeHtml(item)}</span>
+						<button type="button" class="priority-move"
+							data-priority-move="up" title="Move up">↑</button>
+						<button type="button" class="priority-move"
+							data-priority-move="down" title="Move down">↓</button>
+					</div>`
+					)
+					.join("");
+
+				input =
+					`<div data-priority>` +
+					`<input type="hidden" data-key="${escapeHtml(field.key)}" ` +
+					`data-scope="${owner}" data-type="priority" ` +
+					`value="${escapeHtml(JSON.stringify(order))}">` +
+					rows +
+					`</div>`;
 			} else if (field.type === "boolean") {
 				input =
 					`<input type="checkbox" data-key="${escapeHtml(field.key)}" ` +
@@ -1131,6 +1271,7 @@ function startAdminFace() {
 		const script = schema.length
 			? `
 			${conditionalScript}
+			${priorityScript}
 			${locationScript}
 
 			document.getElementById("save").addEventListener("click", async function () {
@@ -1477,6 +1618,7 @@ function startAdminFace() {
 
 		const script = `
 			${conditionalScript}
+			${priorityScript}
 			${locationScript}
 
 			const base = "/faces/${face.id}/modules/${encodeURIComponent(instance.id)}";

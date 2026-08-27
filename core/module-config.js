@@ -7,6 +7,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const priority = require("./priority");
 
 const modulesDir = path.join(__dirname, "..", "modules");
 
@@ -74,10 +75,18 @@ function applyDefaults(moduleId, stored) {
 	const config = {};
 
 	for (const field of schema) {
-		config[field.key] =
+		const value =
 			stored && stored[field.key] !== undefined
 				? stored[field.key]
 				: field.default;
+
+		// A priority field is reconciled against what the module declares
+		// right now, so a module that has since gained or lost an item
+		// still receives a complete, current list
+		config[field.key] =
+			field.type === "priority"
+				? priority.normalize(value, field.options)
+				: value;
 	}
 
 	return config;
@@ -104,6 +113,13 @@ function cleanConfig(moduleId, values) {
 
 		if (field.type === "boolean") {
 			value = value === true || value === "true" || value === "on";
+		}
+
+		if (field.type === "priority") {
+			// Arrives from the form as a JSON string in a hidden input.
+			// Normalising here means a tampered or stale order can never
+			// reach a module — it always gets the full declared list.
+			value = priority.normalize(value, field.options);
 		}
 
 		if (field.type === "location") {

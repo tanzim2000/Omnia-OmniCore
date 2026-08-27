@@ -8,8 +8,29 @@
 // Requests go through OmniCore's shared fetch helper, so results are cached
 // and calls time out. Each instance's coordinates produce a different URL,
 // so instances cache separately without any effort on our part.
+//
+// RICHNESS
+//
+// This module has six pieces of information and shows as many of them as
+// the tile has room for. Which ones go first is NOT decided here — it's a
+// setting. The user drags "Info order" into whatever order they like, and
+// whatever sits at the top survives even the smallest tile.
+//
+// That's why there are no hardcoded richness thresholds below. The shared
+// helper spreads the 1-100 scale across however many items there are and
+// hands back the ones to show, in the user's own order. With six items and
+// the windows8 theme, that works out roughly as:
+//
+//   Small  (10)   1 item
+//   Medium (35)   2 items
+//   Wide   (65)   4 items
+//   Large  (95)   all six
+//
+// A module still owns what its content means — this one just lets the
+// person looking at the wall decide what they care about most.
 
 const { fetchCached } = require("../../core/module-fetch");
+const { visible } = require("../../core/priority");
 
 // Open-Meteo reports conditions as WMO weather codes — numbers, not words.
 // This turns them into something readable.
@@ -48,7 +69,20 @@ function describe(code) {
 	return WEATHER_CODES[code] || "Unknown";
 }
 
-module.exports = async function weather(config) {
+// Every failure returns a real envelope rather than throwing. A tile that
+// says why it's empty is more useful than one that vanishes.
+function problem(reason) {
+	return {
+		title: "Weather",
+		content: [
+			{ type: "text", emphasis: "primary", value: "—" },
+			{ type: "text", emphasis: "secondary", value: reason }
+		],
+		updated: new Date().toISOString()
+	};
+}
+
+module.exports = async function weather(config, richness) {
 	const fahrenheit = config.units === "Fahrenheit";
 	const degrees = fahrenheit ? "°F" : "°C";
 
@@ -56,13 +90,7 @@ module.exports = async function weather(config) {
 	// there's no location to work with — either location services are off,
 	// or detection failed and nothing was set by hand.
 	if (!config.location) {
-		return {
-			title: "Weather",
-			primary: "—",
-			secondary: "No location",
-			details: [{ label: "Set a location", value: "in Settings" }],
-			updated: new Date().toISOString()
-		};
+		return problem("No location");
 	}
 
 	const url =
@@ -80,41 +108,82 @@ module.exports = async function weather(config) {
 	});
 
 	if (!data || !data.current) {
-		return {
-			title: "Weather",
-			primary: "—",
-			secondary: "Not reachable",
-			details: [{ label: "Source", value: "Open-Meteo" }],
-			updated: new Date().toISOString()
-		};
+		return problem("Not reachable");
 	}
 
 	const now = data.current;
 	const today = data.daily;
 
+	// Everything this module can say: a name and a value for each, keyed
+	// by the names used in the setting.
+	//
+	// Note there is no notion here of a value that "reads fine without its
+	// label". That is a judgement about how something LOOKS, and it
+	// belongs to whichever theme is drawing the tile — not to this file.
+	// A module's job is to hand over the name and the value as separate
+	// things and let the theme decide what to do with them.
+	const pieces = {
+		"Temperature": Math.round(now.temperature_2m) + degrees,
+		"Condition": describe(now.weather_code),
+		"Feels like": Math.round(now.apparent_temperature) + degrees,
+		"High / low":
+			Math.round(today.temperature_2m_max[0]) + degrees + " / " +
+			Math.round(today.temperature_2m_min[0]) + degrees,
+		"Humidity": now.relative_humidity_2m + "%",
+		"Wind": Math.round(now.wind_speed_10m) + (fahrenheit ? " mph" : " km/h")
+	};
+
+	// Which pieces to show, in the order the user put them in
+	const showing = visible(config.fieldOrder, richness);
+
+	const content = showing
+		.map((name, position) => {
+			const value = pieces[name];
+
+			// A piece named in the setting but missing here would mean the
+			// setting and this file have drifted apart. Skip, don't crash.
+			if (value === undefined) {
+				return null;
+			}
+
+			// Always both halves, always separate. A theme is then free to
+			// show the name, hide it, or put it somewhere else entirely —
+			// none of which is this module's business.
+			const block = { type: "pair", label: name, value: value };
+
+			// Position in the user's order IS importance, so the first
+			// piece is flagged as the one worth reading from across a
+			// room. What "primary" looks like — bigger, bolder, no label
+			// at all — is the theme's decision, not ours.
+			if (position === 0) {
+				block.emphasis = "primary";
+			}
+
+			return block;
+		})
+		.filter(Boolean);
+
+	// Say so when this is an older reading rather than quietly presenting
+	// it as current. This isn't one of the pieces above — it's a caveat
+	// about the data, not something the user chose to see, so it sits
+	// outside the ordering and doesn't take a slot from it.
+	//
+	// It goes out as a pair like everything else. A single text block here
+	// would make this module stop being pair-only, and a theme that lays
+	// pairs out its own way would fall back to a different layout the
+	// moment the network hiccuped — the tile would visibly change shape
+	// for a reason that has nothing to do with what it's showing.
+	if (stale) {
+		content.push({
+			type: "pair",
+			label: "Reading",
+			value: "last known"
+		});
+	}
+
 	return {
 		title: "Weather",
-		primary: Math.round(now.temperature_2m) + degrees,
-		// Say so when we're showing an older reading, rather than quietly
-		// presenting it as current
-		secondary: describe(now.weather_code) + (stale ? " (last known)" : ""),
-		details: [
-			{
-				label: "Feels like",
-				value: Math.round(now.apparent_temperature) + degrees
-			},
-			{
-				label: "High / low",
-				value:
-					Math.round(today.temperature_2m_max[0]) + degrees + " / " +
-					Math.round(today.temperature_2m_min[0]) + degrees
-			},
-			{ label: "Humidity", value: now.relative_humidity_2m + "%" },
-			{
-				label: "Wind",
-				value: Math.round(now.wind_speed_10m) + (fahrenheit ? " mph" : " km/h")
-			}
-		],
+		content: content,
 		updated: new Date().toISOString()
 	};
 };

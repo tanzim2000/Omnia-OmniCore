@@ -21,6 +21,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const priority = require("./priority");
 
 const themesDir = path.join(__dirname, "..", "themes");
 
@@ -84,10 +85,17 @@ function fill(schema, stored) {
 	const config = {};
 
 	for (const field of schema) {
-		config[field.key] =
+		const value =
 			stored && stored[field.key] !== undefined
 				? stored[field.key]
 				: field.default;
+
+		// Reconciled against what the theme declares now, the same way a
+		// module's priority field is
+		config[field.key] =
+			field.type === "priority"
+				? priority.normalize(value, field.options)
+				: value;
 	}
 
 	return config;
@@ -112,6 +120,10 @@ function tidy(schema, values) {
 
 		if (field.type === "boolean") {
 			value = value === true || value === "true" || value === "on";
+		}
+
+		if (field.type === "priority") {
+			value = priority.normalize(value, field.options);
 		}
 
 		clean[field.key] = value;

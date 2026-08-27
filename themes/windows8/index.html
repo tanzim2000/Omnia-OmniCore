@@ -262,7 +262,44 @@
 			white-space: nowrap;
 			overflow: hidden;
 			text-overflow: ellipsis;
+			flex: none;
 		}
+
+		/* A detail page after the prism roll: rows of names and values, in
+		   exactly the type used for the rows on a front page — nothing
+		   here is a headline.
+		   
+		   A grid rather than columns of their own, because a grid fills
+		   SIDEWAYS: with two columns, the first three items land top-left,
+		   top-right, then second-row-left. Stacked columns would have put
+		   the first two above each other instead. */
+		.table {
+			display: grid;
+			grid-template-columns: 1fr;
+			column-gap: 28px;
+			align-content: start;
+			min-width: 0;
+		}
+
+		.table.split { grid-template-columns: 1fr 1fr; }
+
+		/* The name of a pair given headline treatment. Same weight as a
+		   secondary line — it explains the big number above it. */
+		.primary-name {
+			font-size: 13px;
+			opacity: 0.75;
+			margin-top: 6px;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			/* Same reason as .pair: a squeezed line disappears behind the
+			   row below it instead of overflowing where it can be seen
+			   and trimmed. */
+			flex: none;
+		}
+
+		.tile.small  .primary-name { font-size: 11px; margin-top: 3px; }
+		.tile.medium .primary-name { font-size: 12px; }
 
 		/* The tile label sits at the bottom, as it did in Metro */
 		.label {
@@ -274,24 +311,31 @@
 			text-overflow: ellipsis;
 		}
 
-		.body > .pair {
+		/* Descendant, not direct child. On a detail page these rows sit
+		   inside a .table, and a `>` here would style none of them —
+		   name and value would run together with no gap. */
+		.body .pair {
 			display: flex;
 			justify-content: space-between;
 			gap: 14px;
 			font-size: 12px;
 			opacity: 0.85;
 			margin-top: 3px;
+			/* Never squeeze. A shrunk row hides its own text behind the
+			   next one AND stops the tile overflowing, which is what
+			   trimToFit measures — so it would never trim. */
+			flex: none;
 		}
 
 		/* Either half of a pair can be long. Let each ellipsis rather than
 		   letting one shove the other off the tile. */
-		.body > .pair span {
+		.body .pair span {
 			white-space: nowrap;
 			overflow: hidden;
 			text-overflow: ellipsis;
 		}
 
-		.body > .pair span:last-child { flex-shrink: 0; }
+		.body .pair span:last-child { flex-shrink: 0; }
 
 		.body > .body {
 			font-size: 13px;
@@ -356,12 +400,27 @@
 		// what 10 means versus 95 — and this is the theme author's judgement
 		// about how much room each size really has. Hardcoded here on
 		// purpose: it's a design decision, not something to configure.
+		// `perPage` is for mixed content — the general path further down.
+		//
+		// The rest describes how THIS theme lays out a module that sends
+		// nothing but pairs, which is the common case and the one Metro was
+		// built around:
+		//
+		//   lead   extra pair rows beside the big headline on page one.
+		//          null means no headline at all — the tile is a table.
+		//   rows   rows on a detail page, after the prism roll
+		//   cols   columns on a detail page
+		//
+		// Richness is what the theme ASKS the module for. Every size above
+		// small asks for everything, because the prism roll can page through
+		// however much arrives — the tile then uses what it has room for.
+		// Small asks for one, because one is all it will ever show.
 		const SIZES = {
 			hidden: { richness: 0, perPage: 0 },
-			small: { richness: 10, perPage: 1 },
-			medium: { richness: 35, perPage: 3 },
-			wide: { richness: 65, perPage: 5 },
-			large: { richness: 95, perPage: 10 }
+			small: { richness: 10, perPage: 1, lead: 0, rows: 0, cols: 1 },
+			medium: { richness: 100, perPage: 3, lead: 1, rows: 5, cols: 1 },
+			wide: { richness: 100, perPage: 5, lead: 2, rows: 5, cols: 2 },
+			large: { richness: 100, perPage: 10, lead: null, rows: 10, cols: 2 }
 		};
 
 		// The accent colours Windows 8 actually offered
@@ -526,6 +585,24 @@
 			}
 
 			if (block.type === "pair") {
+				// A pair is a NAME and a VALUE, handed over separately. What
+				// to do with each half is this theme's call, not the
+				// module's — a module never knows whether its label ends up
+				// drawn, hidden, or somewhere else entirely.
+				//
+				// Metro leads with one large value, so a pair marked
+				// primary gets the big treatment: the value at headline
+				// size with its name small underneath. The name still
+				// appears, because a lone "62%" or "1h 0m" tells you
+				// nothing — the user can put any field first, and this
+				// theme has no way to guess which values speak for
+				// themselves. To go pure Metro and drop it, delete the
+				// second line below.
+				if (block.emphasis === "primary") {
+					return '<div class="primary">' + escapeHtml(block.value) + "</div>" +
+						'<div class="primary-name">' + escapeHtml(block.label) + "</div>";
+				}
+
 				return '<div class="pair"><span>' + escapeHtml(block.label) +
 					"</span><span>" + escapeHtml(block.value) + "</span></div>";
 			}
@@ -552,11 +629,119 @@
 				: "";
 		}
 
+		function pairRow(block) {
+			return '<div class="pair"><span>' + escapeHtml(block.label) +
+				"</span><span>" + escapeHtml(block.value) + "</span></div>";
+		}
+
+		// A detail page: rows of names and values, no large type anywhere.
+		//
+		// The rows go in as one flat list and the grid places them, which
+		// is what fills the page sideways — first item top-left, second
+		// top-right, third back to the left on the next row. Building
+		// column elements by hand would fill downwards instead.
+		function detailPage(pairs, cols) {
+			return '<div class="table' + (cols >= 2 ? " split" : "") + '">' +
+				pairs.map(pairRow).join("") +
+			"</div>";
+		}
+
+		// Lay out a module that sends nothing but pairs.
+		//
+		// This is where the theme does its own job: the module handed over
+		// names and values and said which one leads, and nothing more. What
+		// that becomes is decided here, per size, and no module knows any
+		// of it.
+		//
+		//   small   one value, big, on its own. The tile's name is the
+		//           PARAMETER name — at this size there is no room for
+		//           both, and the value is meaningless without it.
+		//   medium  the lead value big with its name under it, plus one
+		//           row. Then prism roll through the rest, five at a time.
+		//   wide    same, plus two rows, then ten at a time in two columns.
+		//   large   no headline at all — a plain table, ten rows of two.
+		//
+		// Returns null when this isn't a pair-only module, so the caller
+		// falls back to the general path.
+		function pairPages(data, size) {
+			const spec = SIZES[size];
+			const blocks = (data.content || []).filter(function (b) {
+				return b.type !== "image" && b.type !== "background";
+			});
+
+			const everyOneAPair = blocks.length > 0 && blocks.every(function (b) {
+				return b.type === "pair";
+			});
+
+			if (!everyOneAPair || !spec) {
+				return null;
+			}
+
+			// Images stay behind the text on every page
+			const backdrop = (data.content || [])
+				.filter(function (b) { return b.type === "image"; })
+				.map(renderBlock)
+				.join("");
+
+			const named = '<div class="label">' +
+				escapeHtml(data.title || "") + "</div>";
+
+			if (size === "small") {
+				return [
+					backdrop +
+					'<div class="body"><div class="primary">' +
+						escapeHtml(blocks[0].value) +
+					"</div></div>" +
+					'<div class="label">' + escapeHtml(blocks[0].label) + "</div>"
+				];
+			}
+
+			const pages = [];
+			let rest = blocks;
+
+			if (spec.lead !== null) {
+				const head = blocks[0];
+				const beside = blocks.slice(1, 1 + spec.lead);
+				rest = blocks.slice(1 + spec.lead);
+
+				pages.push(
+					backdrop +
+					'<div class="body">' +
+						'<div class="primary">' + escapeHtml(head.value) + "</div>" +
+						'<div class="primary-name">' + escapeHtml(head.label) + "</div>" +
+						beside.map(pairRow).join("") +
+					"</div>" +
+					named
+				);
+			}
+
+			const perPage = Math.max(1, spec.rows * spec.cols);
+
+			for (let at = 0; at < rest.length; at += perPage) {
+				pages.push(
+					backdrop +
+					'<div class="body">' +
+						detailPage(rest.slice(at, at + perPage), spec.cols) +
+					"</div>" +
+					named
+				);
+			}
+
+			return pages;
+		}
+
 		// Split a module's blocks into faces this tile can show one at a
 		// time. A module honouring richness should mostly come back with
 		// one page's worth — but if it sends more, we page through it
 		// rather than silently dropping the rest.
 		function paginate(data, size) {
+			// Pairs get this theme's own layout. Anything else — text,
+			// quotes, progress, a mix — takes the general path below.
+			const laidOut = pairPages(data, size);
+			if (laidOut) {
+				return laidOut;
+			}
+
 			const blocks = data.content || [];
 			const perPage = SIZES[size].perPage;
 
@@ -608,13 +793,22 @@
 
 			// Least important first: pairs, then plain body text. The primary
 			// value, its label and the tile name always survive.
-			for (const selector of [".pair", ".body"]) {
-				let rows = body.querySelectorAll(":scope > " + selector);
+			//
+			// Pairs are matched at any depth, not just as direct children —
+			// on a wide tile they sit inside columns, and a `:scope >` match
+			// would walk straight past them and trim nothing.
+			let pairs = body.querySelectorAll(".pair");
 
-				while (rows.length > 0 && face.scrollHeight > face.clientHeight) {
-					rows[rows.length - 1].remove();
-					rows = body.querySelectorAll(":scope > " + selector);
-				}
+			while (pairs.length > 0 && face.scrollHeight > face.clientHeight) {
+				pairs[pairs.length - 1].remove();
+				pairs = body.querySelectorAll(".pair");
+			}
+
+			let rows = body.querySelectorAll(":scope > .body");
+
+			while (rows.length > 0 && face.scrollHeight > face.clientHeight) {
+				rows[rows.length - 1].remove();
+				rows = body.querySelectorAll(":scope > .body");
 			}
 		}
 
