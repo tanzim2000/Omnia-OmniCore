@@ -1,10 +1,19 @@
 // modules/prayer-times/index.js
 // Prayer times from the Aladhan API. Free, no key required.
 //
-// Leads with the NEXT prayer, since that's what's worth glancing at, and
-// lists the rest of the day underneath.
+// RICHNESS
 //
-// Times change once a day, so the cache is deliberately long.
+// This module has four steps on its own 1-100 scale. What those numbers
+// mean is this module's business — a theme only says how much room it has
+// and gets back something that fits:
+//
+//    1-24    the next prayer's time, nothing else
+//   25-49    that time, and which prayer it is
+//   50-79    the above, plus the two prayers after it
+//   80-100   the above, plus the whole day
+//
+// The steps are chosen around what's useful at a glance rather than split
+// evenly. A small tile wants the time; a large one wants the schedule.
 
 const { fetchCached } = require("../../core/module-fetch");
 
@@ -44,25 +53,23 @@ function formatTime(time, use12Hour) {
 	return hours + ":" + String(minutes).padStart(2, "0") + " " + suffix;
 }
 
-function unavailable() {
+function problem(reason) {
 	return {
 		title: "Prayer",
-		primary: "—",
-		secondary: "Not reachable",
-		details: [{ label: "Source", value: "Aladhan" }],
+		content: [
+			{ type: "text", emphasis: "primary", value: "—" },
+			{ type: "text", emphasis: "secondary", value: reason }
+		],
 		updated: new Date().toISOString()
 	};
 }
 
-module.exports = async function prayerTimes(config) {
+module.exports = async function prayerTimes(config, richness) {
+	// OmniCore resolves the location setting before we see it. Null means
+	// there's no location to work with — either location services are off,
+	// or detection failed and nothing was set by hand.
 	if (!config.location) {
-		return {
-			title: "Prayer",
-			primary: "—",
-			secondary: "No location",
-			details: [{ label: "Set a location", value: "in Settings" }],
-			updated: new Date().toISOString()
-		};
+		return problem("No location");
 	}
 
 	const use12Hour = config.timeFormat === "12-hour";
@@ -86,7 +93,7 @@ module.exports = async function prayerTimes(config) {
 	});
 
 	if (!data || !data.data || !data.data.timings) {
-		return unavailable();
+		return problem("Not reachable");
 	}
 
 	const timings = data.data.timings;
@@ -95,7 +102,7 @@ module.exports = async function prayerTimes(config) {
 	const clean = {};
 	for (const prayer of PRAYERS) {
 		if (!timings[prayer]) {
-			return unavailable();
+			return problem("Not reachable");
 		}
 		clean[prayer] = timings[prayer].split(" ")[0];
 	}
@@ -103,22 +110,59 @@ module.exports = async function prayerTimes(config) {
 	const now = new Date();
 	const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
-	// The first prayer still ahead of us today. If they've all passed, the
-	// next one is tomorrow's Fajr.
-	const upcoming = PRAYERS.find(
+	// Where in the day we are. If every prayer has passed, the next one is
+	// tomorrow's Fajr.
+	const upcomingAt = PRAYERS.findIndex(
 		(prayer) => toMinutes(clean[prayer]) > nowMinutes
 	);
 
-	const nextPrayer = upcoming || "Fajr";
+	const nextAt = upcomingAt === -1 ? 0 : upcomingAt;
+	const nextPrayer = PRAYERS[nextAt];
+
+	// The next time is the one thing worth seeing from across a room, so it
+	// leads at every richness
+	const content = [
+		{
+			type: "text",
+			emphasis: "primary",
+			value: formatTime(clean[nextPrayer], use12Hour)
+		}
+	];
+
+	if (richness >= 25) {
+		content.push({
+			type: "text",
+			emphasis: "secondary",
+			value: upcomingAt === -1 ? "Fajr, tomorrow" : nextPrayer
+		});
+	}
+
+	if (richness >= 80) {
+		// Room for the whole day
+		for (const prayer of PRAYERS) {
+			content.push({
+				type: "pair",
+				label: prayer,
+				value: formatTime(clean[prayer], use12Hour)
+			});
+		}
+	} else if (richness >= 50) {
+		// Room for what's coming, but not the whole day. Wrap round the end
+		// of the list so late evening still shows tomorrow's start.
+		for (let ahead = 1; ahead <= 2; ahead++) {
+			const prayer = PRAYERS[(nextAt + ahead) % PRAYERS.length];
+
+			content.push({
+				type: "pair",
+				label: prayer,
+				value: formatTime(clean[prayer], use12Hour)
+			});
+		}
+	}
 
 	return {
 		title: "Prayer",
-		primary: formatTime(clean[nextPrayer], use12Hour),
-		secondary: upcoming ? nextPrayer : "Fajr (tomorrow)",
-		details: PRAYERS.map((prayer) => ({
-			label: prayer,
-			value: formatTime(clean[prayer], use12Hour)
-		})),
+		content: content,
 		updated: new Date().toISOString()
 	};
 };

@@ -26,6 +26,20 @@
 			"help": "Smaller tiles fit more on a big screen; larger ones read better from across a room"
 		},
 		{
+			"key": "gentleMotion",
+			"label": "Gentle motion",
+			"type": "boolean",
+			"default": true,
+			"help": "Tiles take their time turning. Turn this off to make every animation twice as quick."
+		},
+		{
+			"key": "simplifyAnimation",
+			"label": "Simplify animation",
+			"type": "boolean",
+			"default": false,
+			"help": "Replaces the tumbling 3D tiles with a flat card sliding in from the side. For anyone who finds rotating motion uncomfortable."
+		},
+		{
 			"key": "background",
 			"label": "Background",
 			"type": "select",

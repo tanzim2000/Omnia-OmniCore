@@ -119,7 +119,17 @@ function startFace(face) {
 				// they just receive it, or receive null if OmniCore has none.
 				await resolveLocations(instance.module, config);
 
-				const envelope = await moduleFn(config);
+				// How much content the caller has room for, 1 to 100. The
+				// scale belongs to the MODULE — it decides what 10 means
+				// versus 90 — and the theme decides which number to ask for
+				// given the space it has. Neither has to understand the
+				// other's vocabulary.
+				const asked = Number(req.query.richness);
+				const richness = Number.isFinite(asked)
+					? Math.min(100, Math.max(1, Math.round(asked)))
+					: 50;
+
+				const envelope = await moduleFn(config, richness);
 
 				// Themes only ever see blocks, whichever shape the module
 				// chose to return
@@ -148,8 +158,36 @@ function startFace(face) {
 			}
 		});
 
-		// Called when the user picks a theme from the fallback screen
+		// Called when the user picks a theme from the fallback screen.
+		//
+		// This is the one write route left on a dashboard face, and it has
+		// no login — dashboard ports are meant to be walk-up-usable, with
+		// no way to type a password on a kiosk display. So instead of
+		// authenticating it, the window it can act in is kept small: it
+		// only works while the face has NO valid theme showing. Once a real
+		// theme is set, this refuses — a working display can't be quietly
+		// switched later just because the route still exists. Changing an
+		// already-working face's theme is the admin face's job.
 		app.post("/select-theme", (req, res) => {
+			const themes = themeLoader.listThemes();
+
+			const alreadyHasTheme =
+				face.theme && themes.some((theme) => theme.id === face.theme);
+
+			if (alreadyHasTheme) {
+				res.status(403).json({
+					error: "This face already has a theme. Change it from the admin face."
+				});
+				return;
+			}
+
+			const requested = themes.some((theme) => theme.id === req.body.theme);
+
+			if (!requested) {
+				res.status(400).json({ error: "Not an installed theme" });
+				return;
+			}
+
 			res.json(updateFace(face.id, { theme: req.body.theme }));
 		});
 

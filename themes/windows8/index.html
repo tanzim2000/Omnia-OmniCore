@@ -16,6 +16,26 @@
 			   medium tile is 150px (70+10+70) and a wide one is 310px */
 			--unit: 70px;
 			--gutter: 10px;
+
+			/* Animation durations live here and ONLY here. The script
+			   waits for the browser to report an animation finished
+			   rather than counting to a duration of its own, so there's
+			   no second copy that can fall out of step — which is what
+			   was cutting the swivel off midway.
+
+			   Depth Swivel is three sequential phases (recess, turn,
+			   return), not one motion, so it needs well over twice the
+			   Prism Roll's single turn or the stages blur together.
+
+			   --speed is the only thing the script touches: 1 for the
+			   unhurried default, 0.5 to run everything twice as fast.
+			   Because the real durations are derived from it, the
+			   browser's own reported duration stays correct and nothing
+			   has to be kept in sync by hand. */
+			--speed: 1;
+			--roll-ms: calc(620ms * var(--speed));
+			--swivel-ms: calc(1500ms * var(--speed));
+			--slide-ms: calc(520ms * var(--speed));
 		}
 
 		* { box-sizing: border-box; }
@@ -57,15 +77,11 @@
 			gap: var(--gutter);
 		}
 
-		/* Metro tiles are fixed sizes — content adapts to the tile,
-		   never the other way round */
-		/* The tile is only a slot in the grid now. Everything you can see
-		   lives on the flip surface inside it — which is the whole point:
-		   rotating that turns the entire face of the tile, colour and all,
-		   rather than just the words inside a box that stays put. */
+		/* A tile is only a slot in the grid. What you see is the box inside
+		   it — a solid object with depth, not a flat card. */
 		.tile {
 			position: relative;
-			perspective: 900px;
+			perspective: 1200px;
 		}
 
 		/* The four authentic Metro sizes */
@@ -74,10 +90,82 @@
 		.tile.wide   { grid-column: span 4; grid-row: span 2; }
 		.tile.large  { grid-column: span 4; grid-row: span 4; }
 
-		/* The visible face of a tile: its colour, its padding, its content.
-		   Tiles are updated in place rather than rebuilt, so this element
-		   survives a refresh and can be animated. */
-		.tile .flip {
+		/* The box's depth equals the tile's HEIGHT. That makes every face
+		   around the rotation axis the same shape as the front — which is
+		   why it reads as a solid block tumbling rather than a card
+		   flipping. Square tiles genuinely are cubes; wide ones are a
+		   longer box whose faces still match. */
+		.tile.small  { --depth: var(--unit); }
+		.tile.medium { --depth: calc(var(--unit) * 2 + var(--gutter)); }
+		.tile.wide   { --depth: calc(var(--unit) * 2 + var(--gutter)); }
+		.tile.large  { --depth: calc(var(--unit) * 4 + var(--gutter) * 3); }
+
+		.box {
+			position: absolute;
+			inset: 0;
+			transform-style: preserve-3d;
+			transform: translateZ(calc(var(--depth) / -2));
+		}
+
+		/* Constant-speed motion reads as artificial — real objects take
+		   energy to start moving and lose it settling to a stop. Both
+		   animations below launch fast and decelerate hard into rest,
+		   rather than moving at one even pace the whole way through. */
+
+		/* PRISM ROLL — one continuous 90° turn, no zoom involved. Fast
+		   launch, most of the motion happens early, then it eases down
+		   into place rather than stopping abruptly. */
+		@keyframes tile-roll {
+			from { transform: translateZ(calc(var(--depth) / -2)) rotateX(0deg); }
+			to   { transform: translateZ(calc(var(--depth) / -2)) rotateX(-90deg); }
+		}
+
+		.box.rolling {
+			animation: tile-roll var(--roll-ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+		}
+
+		/* DEPTH SWIVEL — three phases that never overlap, each with its
+		   own feel. A keyframe's timing-function governs the segment
+		   LEADING OUT of it, so each phase gets its own easing:
+		     0%  -> 18%  recess:  scale down only, quick and punchy
+		     18% -> 82%  swivel:  180° turn only, scale held fixed —
+		                          fast through the middle, easing down as
+		                          the new face finishes aligning
+		     82% -> 100% return:  scale back up only, after the turn is
+		                          fully resolved, settling in rather than
+		                          snapping to size
+		   No property moves during more than one phase, which is what
+		   keeps the recess from blending into the turn or the return from
+		   cutting in early. */
+		@keyframes tile-swivel {
+			0% {
+				transform: translateZ(calc(var(--depth) / -2)) scale(1) rotateX(0deg);
+				/* Recess: quick and punchy, dropping back to prepare */
+				animation-timing-function: cubic-bezier(0.4, 0, 0.5, 1);
+			}
+			16% {
+				transform: translateZ(calc(var(--depth) / -2)) scale(0.82) rotateX(0deg);
+				/* The turn: builds speed, then eases well down as the new
+				   face comes into alignment */
+				animation-timing-function: cubic-bezier(0.35, 0, 0.15, 1);
+			}
+			76% {
+				transform: translateZ(calc(var(--depth) / -2)) scale(0.82) rotateX(-180deg);
+				/* Return: gentle throughout, gliding back flush rather
+				   than snapping to size. A hard settle curve here is what
+				   made it pop. */
+				animation-timing-function: cubic-bezier(0.25, 0.5, 0.3, 1);
+			}
+			100% {
+				transform: translateZ(calc(var(--depth) / -2)) scale(1) rotateX(-180deg);
+			}
+		}
+
+		.box.swivelling {
+			animation: tile-swivel var(--swivel-ms) both;
+		}
+
+		.face {
 			position: absolute;
 			inset: 0;
 			background: var(--tile);
@@ -88,41 +176,66 @@
 			display: flex;
 			flex-direction: column;
 			overflow: hidden;
-			transform-origin: center center;
 			backface-visibility: hidden;
 		}
 
-		/* Half a second each way. Faster than this and the eye never
-		   registers the rotation — it just reads as a flicker. */
-		.tile .flip.turning {
-			transition: transform 0.32s ease-in;
-			transform: rotateX(-90deg);
+		.tile.small .face { padding: 8px; }
+
+		/* The four faces around the horizontal axis. Rotating the box brings
+		   whichever one we want to the front. */
+		.face.front  { transform: translateZ(calc(var(--depth) / 2)); }
+		.face.top    { transform: rotateX(90deg) translateZ(calc(var(--depth) / 2)); }
+		.face.back   { transform: rotateX(180deg) translateZ(calc(var(--depth) / 2)); }
+
+		/* Simplified animation: no 3D whatsoever.
+		
+		   Every part of the 3D setup has to go together. Leaving the
+		   perspective and the faces' own translateZ in place while only
+		   neutralising the box pushed the front face TOWARDS the viewer
+		   instead of flush — which is why every tile rendered oversized
+		   and overlapped its neighbours. Half-undoing 3D is worse than
+		   not touching it. */
+		.simplified .tile { perspective: none; }
+
+		.simplified .box {
+			transform: none;
+			transform-style: flat;
+			animation: none;
 		}
 
-		.tile .flip.returning {
-			transition: transform 0.32s ease-out;
-			transform: rotateX(0deg);
+		.simplified .face.front { transform: none; padding: 0; }
+
+		.simplified .face.top,
+		.simplified .face.back { display: none; }
+
+		/* In simplified mode the face holds cards rather than content
+		   directly. A card is a full-size pane the size of the tile — the
+		   new one slides in over the old from whichever side, like a card
+		   being pushed into a window frame. The face itself loses its
+		   padding so a card can cover it edge to edge. */
+		.card {
+			position: absolute;
+			inset: 0;
+			background: var(--tile);
+			padding: 12px;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
 		}
 
-		.tile.small .flip { padding: 8px; }
+		.tile.small .card { padding: 8px; }
 
-		/* A tile that has just appeared or changed size settles in rather
-		   than snapping. CSS grid can't animate a span change, so this is
-		   the honest approximation. */
-		@keyframes tile-settle {
-			from { transform: scale(0.94); opacity: 0.6; }
-			to   { transform: scale(1); opacity: 1; }
+		.card.sliding {
+			transition: transform var(--slide-ms) cubic-bezier(0.16, 1, 0.3, 1);
 		}
-
-		.tile.settling { animation: tile-settle 0.18s ease-out; }
 
 		@media (prefers-reduced-motion: reduce) {
-			.tile .flip.turning,
-			.tile .flip.returning { transition: none; }
-			.tile.settling { animation: none; }
+			.box.rolling,
+			.box.swivelling { animation: none; }
+			.card.sliding { transition: none; }
 		}
 
-		.tile .body {
+		.body {
 			flex: 1;
 			display: flex;
 			flex-direction: column;
@@ -131,19 +244,18 @@
 			   so half the overflow was invisible and trimming under-measured.
 			   It's also closer to how Metro actually laid tiles out. */
 			justify-content: flex-start;
-			min-height: 0; /* lets flex children actually shrink */
+			min-height: 0;
 			overflow: hidden;
 		}
 
-		.tile .primary {
+		.primary {
 			font-weight: 200;
-			/* Slightly open so two wrapped lines don't crowd each other,
-			   unlike the label/secondary text which stay single-line */
+			/* Slightly open so two wrapped lines don't crowd each other */
 			line-height: 1.05;
 			overflow-wrap: break-word;
 		}
 
-		.tile .secondary {
+		.secondary {
 			font-size: 13px;
 			opacity: 0.75;
 			margin-top: 6px;
@@ -153,7 +265,7 @@
 		}
 
 		/* The tile label sits at the bottom, as it did in Metro */
-		.tile .label {
+		.label {
 			font-size: 13px;
 			font-weight: 400;
 			margin-top: 8px;
@@ -162,7 +274,7 @@
 			text-overflow: ellipsis;
 		}
 
-		.tile .body > .pair {
+		.body > .pair {
 			display: flex;
 			justify-content: space-between;
 			gap: 14px;
@@ -173,22 +285,22 @@
 
 		/* Either half of a pair can be long. Let each ellipsis rather than
 		   letting one shove the other off the tile. */
-		.tile .body > .pair span {
+		.body > .pair span {
 			white-space: nowrap;
 			overflow: hidden;
 			text-overflow: ellipsis;
 		}
 
-		.tile .body > .pair span:last-child { flex-shrink: 0; }
+		.body > .pair span:last-child { flex-shrink: 0; }
 
-		.tile .body > .body {
+		.body > .body {
 			font-size: 13px;
 			opacity: 0.9;
 			overflow: hidden;
 			text-overflow: ellipsis;
 		}
 
-		.tile .quote {
+		.quote {
 			font-size: 15px;
 			font-style: italic;
 			font-weight: 300;
@@ -196,8 +308,8 @@
 			opacity: 0.95;
 		}
 
-		/* An image fills the tile and sits behind the text */
-		.tile .tile-image {
+		/* An image fills the face and sits behind the text */
+		.tile-image {
 			position: absolute;
 			inset: 0;
 			background-position: center;
@@ -205,19 +317,19 @@
 		}
 
 		/* Text over an image needs help staying readable */
-		.tile .tile-image ~ .body,
-		.tile .tile-image ~ .label {
+		.tile-image ~ .body,
+		.tile-image ~ .label {
 			position: relative;
 			text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 		}
 
-		.tile .progress {
+		.progress {
 			height: 3px;
 			background: rgba(255, 255, 255, 0.25);
 			margin-top: 8px;
 		}
 
-		.tile .progress div { height: 100%; background: #fff; }
+		.progress div { height: 100%; background: #fff; }
 
 		/* Everything scales with the tile it lives in — a small tile with
 		   13px text runs out of room long before the words do */
@@ -231,30 +343,26 @@
 
 		.tile.small  .secondary { font-size: 11px; margin-top: 3px; }
 		.tile.medium .secondary { font-size: 12px; }
-
-
-
-		/* Content adapts to the tile. These target the block classes the
-		   renderer actually emits — pairs are the first thing to go, since
-		   they're the least important thing on a tile. */
-		.tile.small .body > .secondary,
-		.tile.small .body > .pair,
-		.tile.small .body > .progress,
-		.tile.small .body > .quote { display: none; }
-
-		.tile.medium .body > .pair { display: none; }
-	</style></head>
+	</style>
+</head>
 <body>
 	<div id="backdrop"></div>
 	<h1 id="face-title"></h1>
 	<div class="tiles" id="tiles"></div>
 
 	<script>
-		// The sizes this theme offers. These are the values it declared in
-		// instance-settings.json — OmniCore puts that field on each
-		// instance's settings form and hands the choice back through
-		// /identity. The theme never writes anything.
-		const SIZES = ["hidden", "small", "medium", "wide", "large"];
+		// The sizes this theme offers, and how much content each one asks a
+		// module for. The richness scale belongs to the MODULE — it decides
+		// what 10 means versus 95 — and this is the theme author's judgement
+		// about how much room each size really has. Hardcoded here on
+		// purpose: it's a design decision, not something to configure.
+		const SIZES = {
+			hidden: { richness: 0, perPage: 0 },
+			small: { richness: 10, perPage: 1 },
+			medium: { richness: 35, perPage: 3 },
+			wide: { richness: 65, perPage: 5 },
+			large: { richness: 95, perPage: 10 }
+		};
 
 		// The accent colours Windows 8 actually offered
 		const ACCENTS = {
@@ -277,11 +385,24 @@
 			Huge: "110px"
 		};
 
-		// Long enough to actually read as a rotation. Much under this and
-		// the eye sees a flicker rather than a flip.
-		const FLIP_MS = 320;
+		// No durations here on purpose. They live in the stylesheet, and
+		// the browser tells us when an animation has finished — see
+		// whenFinished below. Keeping a second copy in JS is what cut the
+		// swivel off halfway when the two drifted apart.
+
+		// Tiles shouldn't all turn at once — a grid where everything moves
+		// together looks mechanical. Each tile picks its own interval in
+		// this range, so the wall feels alive rather than synchronised.
+		const PAGE_MIN_MS = 4000;
+		const PAGE_MAX_MS = 12000;
 
 		let identity = null;
+
+		// Flat sliding cards instead of tumbling 3D
+		let simplified = false;
+
+		// Everything we're tracking per tile, keyed by instance id
+		const tiles = new Map();
 
 		function escapeHtml(text) {
 			return String(text).replace(/[&<>"]/g, function (character) {
@@ -311,8 +432,6 @@
 			return (r * 0.299 + g * 0.587 + b * 0.114) / 255;
 		}
 
-		// Apply whatever the theme was configured with. Unknown values fall
-		// back to the defaults rather than producing an unstyled page.
 		function applyThemeSettings(config) {
 			const accent = ACCENTS[config.accent] || ACCENTS.Blue;
 			const colour = config.backgroundColor || "#1d1d1d";
@@ -322,6 +441,22 @@
 			root.setProperty("--tile", accent);
 			root.setProperty("--unit", TILE_UNITS[config.tileSize] || TILE_UNITS.Normal);
 			root.setProperty("--bg", colour);
+
+			simplified =
+				config.simplifyAnimation === true ||
+				config.simplifyAnimation === "true";
+
+			document.body.classList.toggle("simplified", simplified);
+
+			// Gentle motion is the unhurried default. Turning it off halves
+			// every duration — the stylesheet derives them all from this
+			// one multiplier, so nothing else has to change.
+			const unhurried =
+				config.gentleMotion === undefined ||
+				config.gentleMotion === true ||
+				config.gentleMotion === "true";
+
+			root.setProperty("--speed", unhurried ? "1" : "0.5");
 
 			const backdrop = document.getElementById("backdrop");
 
@@ -360,9 +495,6 @@
 
 			const blocks = result.data.content || [];
 
-			// A background block is the module saying "this is meant to go
-			// behind everything". Failing that, any image it offers will do —
-			// the user did nominate this instance, after all.
 			const picture =
 				blocks.find(function (b) { return b.type === "background" && b.url; }) ||
 				blocks.find(function (b) { return b.type === "image" && b.url; });
@@ -404,8 +536,7 @@
 					(block.fit === "contain" ? "contain" : "cover") + '"></div>';
 			}
 
-			// A background belongs to the page, not to a tile — it's handled
-			// separately and draws nothing here
+			// A background belongs to the page, not to a tile
 			if (block.type === "background") {
 				return "";
 			}
@@ -421,20 +552,42 @@
 				: "";
 		}
 
-		// The inside of a tile's face.
-		function renderContents(data) {
+		// Split a module's blocks into faces this tile can show one at a
+		// time. A module honouring richness should mostly come back with
+		// one page's worth — but if it sends more, we page through it
+		// rather than silently dropping the rest.
+		function paginate(data, size) {
 			const blocks = data.content || [];
+			const perPage = SIZES[size].perPage;
 
-			// Images fill the tile, so they sit behind everything else.
-			// Backgrounds are page-level and never appear on a tile.
+			// Images stay behind the text on every page
 			const images = blocks.filter(function (b) { return b.type === "image"; });
 			const rest = blocks.filter(function (b) {
 				return b.type !== "image" && b.type !== "background";
 			});
 
-			return images.map(renderBlock).join("") +
-				'<div class="body">' + rest.map(renderBlock).join("") + "</div>" +
-				'<div class="label">' + escapeHtml(data.title || "") + "</div>";
+			const label = '<div class="label">' +
+				escapeHtml(data.title || "") + "</div>";
+
+			const backdrop = images.map(renderBlock).join("");
+			const pages = [];
+
+			for (let at = 0; at < rest.length; at += perPage) {
+				pages.push(
+					backdrop +
+					'<div class="body">' +
+						rest.slice(at, at + perPage).map(renderBlock).join("") +
+					"</div>" +
+					label
+				);
+			}
+
+			// A module with nothing to say still gets a face
+			if (!pages.length) {
+				pages.push(backdrop + '<div class="body"></div>' + label);
+			}
+
+			return pages;
 		}
 
 		function renderUnavailable(instance) {
@@ -446,11 +599,11 @@
 					escapeHtml(instance.label || instance.module) + "</div>";
 		}
 
-		// The size rules in CSS cover the expected cases, but a module can
-		// return any number of blocks. This drops what still doesn't fit so
-		// no module can overflow a tile, whatever it sends.
-		function trimToFit(flip) {
-			const body = flip.querySelector(".body");
+		// Richness should mean a module returns roughly what fits, but a
+		// module can send anything. This drops what still doesn't fit so
+		// nothing overflows a face, whatever arrives.
+		function trimToFit(face) {
+			const body = face.querySelector(".body");
 			if (!body) return;
 
 			// Least important first: pairs, then plain body text. The primary
@@ -458,7 +611,7 @@
 			for (const selector of [".pair", ".body"]) {
 				let rows = body.querySelectorAll(":scope > " + selector);
 
-				while (rows.length > 0 && flip.scrollHeight > flip.clientHeight) {
+				while (rows.length > 0 && face.scrollHeight > face.clientHeight) {
 					rows[rows.length - 1].remove();
 					rows = body.querySelectorAll(":scope > " + selector);
 				}
@@ -471,14 +624,7 @@
 		// admin face. The theme reads it; it never sets it.
 		function sizeOf(instance) {
 			const chosen = String((instance.themeConfig || {}).size || "").toLowerCase();
-			return SIZES.indexOf(chosen) === -1 ? "wide" : chosen;
-		}
-
-		// Hidden is a size like any other here — the module still runs and
-		// still supplies data, it just isn't drawn. That's how a wallpaper
-		// source earns its keep without taking up a slot.
-		function isHidden(instance) {
-			return sizeOf(instance) === "hidden";
+			return SIZES[chosen] ? chosen : "wide";
 		}
 
 		function makeTile(instance) {
@@ -486,57 +632,316 @@
 			tile.className = "tile " + sizeOf(instance);
 			tile.dataset.instance = instance.id;
 
-			const flip = document.createElement("div");
-			flip.className = "flip";
-			tile.appendChild(flip);
+			const box = document.createElement("div");
+			box.className = "box";
 
+			for (const which of ["front", "top", "back"]) {
+				const face = document.createElement("div");
+				face.className = "face " + which;
+				box.appendChild(face);
+			}
+
+			tile.appendChild(box);
 			return tile;
 		}
 
-		// Put new content into a tile. If it actually differs, the tile flips
-		// to reveal it, the way a live tile did — rather than the text simply
-		// blinking into something else.
-		function setContents(tile, html) {
-			const flip = tile.querySelector(".flip");
+		function facesOf(tile) {
+			return {
+				box: tile.querySelector(".box"),
+				front: tile.querySelector(".face.front"),
+				top: tile.querySelector(".face.top"),
+				back: tile.querySelector(".face.back")
+			};
+		}
 
-			if (flip.dataset.html === html) {
-				return; // nothing changed, so nothing should move
+		// Run `done` when an animation or transition on `element` has
+		// genuinely finished.
+		//
+		// The browser knows exactly when that is; the script doesn't need
+		// to, and shouldn't guess. A guessed duration is a second copy of
+		// a number that lives in the stylesheet, and when the two drift
+		// the animation gets cut off partway through.
+		//
+		// The fallback timer covers the case where no event ever arrives —
+		// reduced-motion turns the animation off entirely, and a tile
+		// scrolled out of view may never fire. It reads the duration the
+		// browser actually resolved, so it still isn't guessing.
+		function whenFinished(element, eventName, done) {
+			let settled = false;
+
+			function finish() {
+				if (settled) return;
+				settled = true;
+
+				element.removeEventListener(eventName, onEvent);
+				clearTimeout(timer);
+				done();
 			}
 
-			const first = flip.dataset.html === undefined;
-			flip.dataset.html = html;
+			function onEvent(event) {
+				// Ignore anything bubbling up from content inside the tile
+				if (event.target !== element) return;
+				finish();
+			}
 
-			if (first) {
-				flip.innerHTML = html;
-				trimToFit(flip);
+			element.addEventListener(eventName, onEvent);
+
+			const style = getComputedStyle(element);
+			const raw =
+				eventName === "animationend"
+					? style.animationDuration
+					: style.transitionDuration;
+
+			// "1.5s" or "520ms", possibly a comma-separated list
+			const first = String(raw).split(",")[0].trim();
+			const ms = first.endsWith("ms")
+				? parseFloat(first)
+				: parseFloat(first) * 1000;
+
+			const timer = setTimeout(finish, (ms || 0) + 120);
+		}
+
+		// Put content on the front face with no animation at all
+		function showAtOnce(tile, html) {
+			const { box, front } = facesOf(tile);
+
+			box.className = "box";
+			box.style.transform = "";
+
+			if (simplified) {
+				// The face has no padding in this mode, so content always
+				// lives inside a card rather than directly on the face
+				const card = document.createElement("div");
+				card.className = "card";
+				card.innerHTML = html;
+
+				front.innerHTML = "";
+				front.appendChild(card);
+				trimToFit(card);
 				return;
 			}
 
-			// Turn the old face away...
-			flip.classList.remove("returning");
-			flip.classList.add("turning");
+			front.innerHTML = html;
+			trimToFit(front);
+		}
 
-			setTimeout(function () {
-				// ...swap it while edge-on, where nothing is visible...
-				flip.classList.remove("turning");
-				flip.innerHTML = html;
-				trimToFit(flip);
+		// THE PRISM ROLL — a 90 degree turn.
+		//
+		// The next face is already sitting at a right angle to the one you're
+		// looking at. As the front rolls back and away, that face rolls up
+		// into its place. Both are moving together, because they're two
+		// faces of the same solid block — there's no moment where the tile is
+		// edge-on and empty the way a card flip has.
+		//
+		// For cycling between pieces of the same information.
+		function prismRoll(tile, html, done) {
+			const { box, front, top } = facesOf(tile);
 
-				// ...then bring the new face back round. The reflow forces
-				// the browser to notice the rotated state before we animate
-				// out of it, otherwise it jumps straight to the end.
-				void flip.offsetWidth;
-				flip.classList.add("returning");
+			top.innerHTML = html;
+			trimToFit(top);
 
-				setTimeout(function () {
-					flip.classList.remove("returning");
-				}, FLIP_MS);
-			}, FLIP_MS);
+			// The keyframes in the stylesheet drive the whole motion —
+			// adding the class is all this needs to do. No inline
+			// transform here: an inline style would outrank the animation
+			// and the tile just wouldn't move.
+			box.classList.add("rolling");
+
+			whenFinished(box, "animationend", function () {
+				// The turn is over. Move what's now in view onto the front
+				// face and drop the animation class — the box's resting
+				// CSS rule puts it back exactly where the keyframes left
+				// it, so nothing jumps.
+				box.classList.remove("rolling");
+				front.innerHTML = top.innerHTML;
+				top.innerHTML = "";
+
+				if (done) done();
+			});
+		}
+
+		// THE DEPTH SWIVEL — a 180 degree turn, with room made for it.
+		//
+		// The tile shrinks back into the screen first, opening space around
+		// itself in the grid. Then the whole block turns half a revolution,
+		// and because it's a solid object with real depth you catch its
+		// blank side face sweeping past mid-turn. Then it comes back forward
+		// to sit flush again.
+		//
+		// The shrink isn't decoration: a box swinging through 90 degrees
+		// takes up more width than its resting footprint, and without it the
+		// corners would cut into the neighbouring tiles.
+		//
+		// For genuinely new information arriving.
+		function depthSwivel(tile, html, done) {
+			const { box, front, back } = facesOf(tile);
+
+			back.innerHTML = html;
+			trimToFit(back);
+
+			// The three-phase recess/swivel/return motion lives entirely in
+			// the tile-swivel keyframes, each phase with its own easing.
+			// Nothing here needs to know the choreography.
+			box.classList.add("swivelling");
+
+			whenFinished(box, "animationend", function () {
+				box.classList.remove("swivelling");
+				front.innerHTML = back.innerHTML;
+				back.innerHTML = "";
+
+				if (done) done();
+			});
+		}
+
+		// THE SLIDING CARD — flat, no rotation, no perspective.
+		//
+		// A new card carrying the new content slides in over the old one
+		// from the left or the right, like a card being pushed into a
+		// window frame. Nothing rotates and nothing moves in depth, which
+		// is the whole point: it's the option for anyone who finds the
+		// tumbling motion uncomfortable.
+		//
+		// The side is picked at random each time so a wall of tiles doesn't
+		// look like it's all sliding one way.
+		function slideCard(tile, html, done) {
+			const { front } = facesOf(tile);
+
+			const incoming = document.createElement("div");
+			incoming.className = "card";
+			incoming.innerHTML = html;
+
+			const fromRight = Math.random() < 0.5;
+			incoming.style.transform =
+				"translateX(" + (fromRight ? "100%" : "-100%") + ")";
+
+			front.appendChild(incoming);
+			trimToFit(incoming);
+
+			// Let the browser place the card off to the side before we
+			// animate it back, or it jumps straight to the end
+			void incoming.offsetWidth;
+
+			incoming.classList.add("sliding");
+			incoming.style.transform = "translateX(0)";
+
+			whenFinished(incoming, "transitionend", function () {
+				// The card that just arrived becomes the resting one —
+				// no need to rebuild it, just drop what it covered
+				incoming.classList.remove("sliding");
+				incoming.style.transform = "";
+
+				front.innerHTML = "";
+				front.appendChild(incoming);
+
+				if (done) done();
+			});
+		}
+
+		// ---- what moves, and when -------------------------------------
+
+		// Show a page on a tile, choosing the motion that suits the reason.
+		//
+		//   new information arrived  -> depth swivel
+		//   same data, another page  -> prism roll
+		//   simplified animation on   -> sliding card, whatever the reason
+		function present(state, html, reason) {
+			const tile = state.element;
+
+			if (state.busy) {
+				// Something arrived mid-turn. Hold onto it and show it when
+				// the current motion finishes — dropping it would mean a
+				// tile quietly stuck on stale data until the next change
+				// happened to land at a convenient moment.
+				state.pending = { html: html, reason: reason };
+				return;
+			}
+
+			if (state.blank) {
+				// Nothing there yet, so there's nothing to turn away from
+				state.blank = false;
+				showAtOnce(tile, html);
+				return;
+			}
+
+			state.busy = true;
+
+			const finished = function () {
+				state.busy = false;
+
+				const waiting = state.pending;
+
+				if (waiting) {
+					state.pending = null;
+					present(state, waiting.html, waiting.reason);
+				}
+			};
+
+			if (simplified) {
+				slideCard(tile, html, finished);
+			} else if (reason === "changed") {
+				depthSwivel(tile, html, finished);
+			} else {
+				prismRoll(tile, html, finished);
+			}
+		}
+
+		// Move a tile to its next page. Only tiles with more than one page
+		// do this — a tile showing one complete number shouldn't animate
+		// just to look busy.
+		function turnPage(state) {
+			if (state.pages.length < 2) return;
+
+			state.page = (state.page + 1) % state.pages.length;
+			present(state, state.pages[state.page], "page");
+		}
+
+		function schedulePaging(state) {
+			clearTimeout(state.timer);
+
+			if (state.pages.length < 2) return;
+
+			// Each tile picks its own interval, so the grid doesn't turn in
+			// lockstep
+			const wait =
+				PAGE_MIN_MS + Math.random() * (PAGE_MAX_MS - PAGE_MIN_MS);
+
+			state.timer = setTimeout(function () {
+				turnPage(state);
+				schedulePaging(state);
+			}, wait);
 		}
 
 		// ---- refresh --------------------------------------------------
 
 		async function refresh() {
+			// Re-read our own settings first. A change saved in the admin
+			// face normally arrives as a push, but if that push is ever
+			// missed the dashboard would sit on stale settings until
+			// somebody reloaded it by hand. Checking here costs one cheap
+			// request and makes the display self-correcting.
+			try {
+				const fresh = await (await fetch("/identity")).json();
+				const before = JSON.stringify(identity.themeConfig || {});
+				const after = JSON.stringify(fresh.themeConfig || {});
+
+				identity = fresh;
+
+				if (before !== after) {
+					applyThemeSettings(identity.themeConfig || {});
+
+					// Switching between 3D and flat changes how a tile is
+					// built, so existing tiles have to be discarded rather
+					// than reused
+					for (const [, state] of tiles) {
+						clearTimeout(state.timer);
+						state.element.remove();
+					}
+					tiles.clear();
+					document.getElementById("tiles").innerHTML = "";
+				}
+			} catch (error) {
+				// Couldn't reach OmniCore — carry on with what we have
+			}
+
 			// Every instance is asked at once rather than one after another,
 			// so the slowest module doesn't hold up the tiles behind it.
 			//
@@ -544,8 +949,16 @@
 			// has no tile but very much still has a job.
 			const fetched = await Promise.all(
 				identity.instances.map(async function (instance) {
+					const size = sizeOf(instance);
+
+					// Ask for as much as this size can actually show. The
+					// module decides what that number means for its content.
+					const richness = SIZES[size].richness || 1;
+
 					try {
-						const response = await fetch("/api/" + instance.id);
+						const response = await fetch(
+							"/api/" + instance.id + "?richness=" + richness
+						);
 						if (!response.ok) throw new Error();
 						return { instance: instance, data: await response.json() };
 					} catch (error) {
@@ -558,39 +971,62 @@
 			const wanted = [];
 
 			for (const result of fetched) {
-				if (isHidden(result.instance)) continue;
+				const instance = result.instance;
+				const size = sizeOf(instance);
 
-				wanted.push(result.instance.id);
+				if (size === "hidden") continue;
 
-				// Reuse the tile if it's already there. Rebuilding the grid
-				// every few seconds would throw away the very element the
-				// flip animates.
-				let tile = container.querySelector(
-					'[data-instance="' + result.instance.id + '"]'
-				);
+				wanted.push(instance.id);
 
-				if (!tile) {
-					tile = makeTile(result.instance);
-					container.appendChild(tile);
-				} else {
-					// The size may have been changed in settings since the
-					// last look — a face-changed push reloads the page, but
-					// this keeps the class honest either way
-					tile.className = "tile " + sizeOf(result.instance);
+				let state = tiles.get(instance.id);
+
+				if (!state) {
+					const element = makeTile(instance);
+					container.appendChild(element);
+
+					state = {
+						element: element,
+						pages: [],
+						page: 0,
+						blank: true,
+						busy: false,
+						pending: null,
+						timer: null,
+						signature: null
+					};
+
+					tiles.set(instance.id, state);
 				}
 
-				setContents(
-					tile,
-					result.data
-						? renderContents(result.data)
-						: renderUnavailable(result.instance)
-				);
+				// The size may have changed in settings since the last look
+				state.element.className = "tile " + size;
+
+				const pages = result.data
+					? paginate(result.data, size)
+					: [renderUnavailable(instance)];
+
+				// Only turn the tile when what it's showing actually
+				// changed. A tile whose numbers held steady stays still.
+				const signature = pages.join("\u0000");
+
+				if (signature === state.signature) {
+					continue;
+				}
+
+				state.signature = signature;
+				state.pages = pages;
+				state.page = 0;
+
+				present(state, pages[0], "changed");
+				schedulePaging(state);
 			}
 
-			// Drop tiles for instances that are no longer on this face
-			for (const tile of container.querySelectorAll(".tile")) {
-				if (wanted.indexOf(tile.dataset.instance) === -1) {
-					tile.remove();
+			// Drop tiles for instances no longer on this face
+			for (const [id, state] of tiles) {
+				if (wanted.indexOf(id) === -1) {
+					clearTimeout(state.timer);
+					state.element.remove();
+					tiles.delete(id);
 				}
 			}
 
@@ -602,7 +1038,6 @@
 		// ---- start ----------------------------------------------------
 
 		async function start() {
-			// Ask the face who it is and what's on it
 			identity = await (await fetch("/identity")).json();
 
 			// The face's title is cosmetic and may be blank, which means no
