@@ -11,6 +11,7 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const { loadModule } = require("./module-loader");
+const { makeModuleApi } = require("./module-api");
 const { applyDefaults } = require("./module-config");
 const { resolveLocations } = require("./location-service");
 const themeLoader = require("./theme-loader");
@@ -129,7 +130,13 @@ function startFace(face) {
 					? Math.min(100, Math.max(1, Math.round(asked)))
 					: 50;
 
-				const envelope = await moduleFn(config, richness);
+				// Everything the module is allowed to use, handed to it
+				// rather than reached for. See core/module-api.js.
+				const envelope = await moduleFn(
+					config,
+					richness,
+					makeModuleApi()
+				);
 
 				// Themes only ever see blocks, whichever shape the module
 				// chose to return

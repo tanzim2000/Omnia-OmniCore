@@ -58,7 +58,7 @@ Requires Node 20 or newer.
 git clone https://github.com/tanzim2000/Omnia-OmniCore
 cd Omnia-OmniCore
 npm install
-node index.js
+node start.OmniCore
 ```
 
 Then:
@@ -77,11 +77,11 @@ dedicated OS image later on.
 ## Layout
 
 ```
-core/       OmniCore itself — faces, routing, admin, settings
-modules/    installed modules
-themes/     installed themes
-data/       your faces, settings and admin account
-index.js    entry point
+core/             OmniCore itself — faces, routing, admin, settings
+modules/          installed modules
+themes/           installed themes
+data/             your faces, settings and admin account
+start.OmniCore    entry point
 ```
 
 Everything under `data/` is specific to your install and is deliberately

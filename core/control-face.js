@@ -702,7 +702,15 @@ function renderWizard(data) {
 				"</div>" +
 				'<div class="field">' +
 					"<h2>Theme</h2>" +
-					(themes || '<div class="empty">No themes installed.</div>') +
+					// OmniCore ships bare, so an install with no themes yet
+					// is the normal first run — not a fault. Say where
+					// they come from rather than leaving a dead end: a
+					// face can't be created without one.
+					(themes || '<div class="empty">' +
+						"No themes installed yet. Open the admin face on " +
+						"port 3000 and go to Marketplace to install one, " +
+						"then come back here." +
+					"</div>") +
 				"</div>" +
 			"</div>";
 		}

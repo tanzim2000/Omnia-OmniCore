@@ -32,6 +32,7 @@ const {
 } = require("./module-config");
 const themeLoader = require("./theme-loader");
 const priority = require("./priority");
+const marketplace = require("./marketplace");
 const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
@@ -863,6 +864,10 @@ function startAdminFace() {
 					<strong>Faces</strong>
 					<span>${count ? count + (count === 1 ? " face" : " faces") : "No faces yet"}</span>
 				</a>
+				<a class="row" href="/marketplace">
+					<strong>Marketplace</strong>
+					<span>Add modules and themes</span>
+				</a>
 			</div>
 			<div class="panel footer">
 				<a href="/logout">Sign out</a>
@@ -1094,6 +1099,187 @@ function startAdminFace() {
 	});
 
 	// Every dashboard face
+	// ---- marketplace -------------------------------------------------
+	//
+	// Browsing and installing what has been reviewed into the registry.
+	// Nothing here executes anything it downloads; it only places files.
+	// Installed code starts running the same way built-in code does, when
+	// module-loader or theme-loader require() it.
+
+	function marketplaceRows(entries, kind) {
+		if (!entries.length) {
+			return '<div class="row"><span>Nothing listed yet</span></div>';
+		}
+
+		return entries
+			.map((entry) => {
+				const id = escapeHtml(entry.id);
+				const action = entry.installed
+					? '<span>Installed</span>'
+					: `<button type="button" data-install="${id}" ` +
+					  `data-kind="${kind}">Install</button>`;
+
+				return `
+					<div class="row">
+						<div>
+							<strong>${escapeHtml(entry.name || entry.id)}</strong>
+							<div class="help">${escapeHtml(entry.description || "")}</div>
+						</div>
+						${action}
+					</div>`;
+			})
+			.join("");
+	}
+
+	app.get("/marketplace", async (req, res) => {
+		const settings = readSettings();
+		let available = null;
+		let failure = "";
+
+		try {
+			available = await marketplace.listAvailable();
+		} catch (error) {
+			// An unreachable or malformed registry is worth saying plainly
+			// rather than showing an empty page that looks like there is
+			// simply nothing to install
+			failure = error.message;
+		}
+
+		const body = `
+			<div class="panel">
+				<h1>Marketplace</h1>
+				<p class="help">
+					Modules and themes reviewed into the registry. Installing
+					downloads the exact reviewed version.
+				</p>
+			</div>
+
+			${failure ? `
+			<div class="panel">
+				<div class="row">
+					<div>
+						<strong>Can't reach the registry</strong>
+						<div class="help">${escapeHtml(failure)}</div>
+					</div>
+				</div>
+			</div>` : `
+			<div class="panel">
+				<h2>Modules</h2>
+				${marketplaceRows(available.modules, "module")}
+			</div>
+
+			<div class="panel">
+				<h2>Themes</h2>
+				${marketplaceRows(available.themes, "theme")}
+			</div>`}
+
+			<div class="panel">
+				<label for="registryUrl">Registry</label>
+				<input type="url" id="registryUrl"
+					value="${escapeHtml(settings.registryUrl || "")}"
+					placeholder="${escapeHtml(marketplace.DEFAULT_REGISTRY_URL)}">
+				<div class="help">
+					Leave blank to use the project's own registry.
+				</div>
+				<button type="button" data-save-registry>Save</button>
+			</div>
+
+			<div class="panel footer">
+				<a href="/">Back</a>
+			</div>`;
+
+		const script = `
+			const note = document.createElement("div");
+
+			async function post(url, payload, button, working, done) {
+				const was = button.textContent;
+				button.disabled = true;
+				button.textContent = working;
+
+				try {
+					const response = await fetch(url, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(payload)
+					});
+
+					const result = await response.json();
+
+					if (!response.ok) {
+						throw new Error(result.error || "Failed");
+					}
+
+					button.textContent = done;
+					return true;
+				} catch (error) {
+					// Put the reason on the button itself — there is no
+					// other obvious place on this page for it to go
+					button.disabled = false;
+					button.textContent = error.message.slice(0, 60);
+					setTimeout(function () { button.textContent = was; }, 4000);
+					return false;
+				}
+			}
+
+			for (const button of document.querySelectorAll("[data-install]")) {
+				button.addEventListener("click", async function () {
+					const ok = await post(
+						"/marketplace/install",
+						{ id: button.dataset.install, kind: button.dataset.kind },
+						button,
+						"Installing...",
+						"Installed"
+					);
+
+					if (ok) {
+						setTimeout(function () { location.reload(); }, 800);
+					}
+				});
+			}
+
+			const saveRegistry = document.querySelector("[data-save-registry]");
+
+			if (saveRegistry) {
+				saveRegistry.addEventListener("click", async function () {
+					const ok = await post(
+						"/marketplace/registry",
+						{ registryUrl: document.getElementById("registryUrl").value },
+						saveRegistry,
+						"Saving...",
+						"Saved"
+					);
+
+					if (ok) {
+						setTimeout(function () { location.reload(); }, 600);
+					}
+				});
+			}
+		`;
+
+		res.send(page("Marketplace", body, script));
+	});
+
+	app.post("/marketplace/registry", (req, res) => {
+		writeSettings({ registryUrl: String((req.body || {}).registryUrl || "").trim() });
+		res.json({ ok: true });
+	});
+
+	app.post("/marketplace/install", async (req, res) => {
+		const { id, kind, update } = req.body || {};
+
+		try {
+			const installed = await marketplace.installEntry(
+				kind === "theme" ? "theme" : "module",
+				id,
+				update === true
+			);
+
+			res.json({ ok: true, installed });
+		} catch (error) {
+			res.status(400).json({ error: error.message });
+		}
+	});
+
 	app.get("/faces", (req, res) => {
 		const faces = faceStore
 			.readFaces()

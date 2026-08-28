@@ -1,0 +1,388 @@
+// core/marketplace.js
+// Browsing and installing modules and themes reviewed into the public
+// registry, and only that — nothing here ever runs installed code. The
+// point where installed code starts running is core/module-loader.js and
+// core/theme-loader.js's own require() calls, unchanged by any of this.
+//
+// THE REGISTRY
+//
+// A single JSON file, hosted wherever the admin points OmniCore at — by
+// default the project's own registry repo. Getting listed there means a
+// pull request against that repo was reviewed and merged, so review already
+// happened before this file ever runs. What this file does is narrower and
+// entirely mechanical: fetch that list, and fetch exactly the pinned commit
+// an entry names, never "whatever is on the branch right now".
+//
+// An entry is usually a whole repo — one module, one repo. It doesn't have
+// to be: an optional `path` names a subfolder, so a studio can publish ten
+// themes from a single repo and list each one separately. Everything else
+// about that entry works exactly the same either way.
+//
+// Pinning to a commit rather than a branch is the whole point. A reviewed
+// module that later turns malicious in a new push can't reach anyone who
+// already installed it — the registry entry still points at the old,
+// reviewed commit until its own PR bumps it.
+//
+// INSTALLING
+//
+// A tarball from GitHub is downloaded, extracted into an isolated staging
+// folder, checked for the one file that makes it a real module or theme,
+// and only THEN moved into modules/ or themes/. Nothing is written to
+// either of those folders until every check has passed — a bad download
+// leaves nothing behind to clean up.
+
+const fs = require("https");
+const zlib = require("zlib");
+const fsSync = require("fs");
+const fsp = require("fs/promises");
+const os = require("os");
+const path = require("path");
+const tar = require("tar");
+
+const { readSettings } = require("./settings-store");
+
+const modulesDir = path.join(__dirname, "..", "modules");
+const themesDir = path.join(__dirname, "..", "themes");
+
+// The project's own registry, used whenever the admin hasn't pointed
+// OmniCore somewhere else
+const DEFAULT_REGISTRY_URL =
+	"https://raw.githubusercontent.com/tanzim2000/Omnia-Registry/main/registry.json";
+
+// A plain fetch, following one redirect if GitHub sends one — raw.
+// githubusercontent.com doesn't normally, but codeload.github.com
+// sometimes does, and failing on a redirect would be a confusing way for
+// an install to break.
+//
+// HTTPS only, deliberately. This fetches a list of code to install and
+// then the code itself; over plain HTTP anyone between here and the
+// server could swap either one for something else. The check is explicit
+// so a mistyped setting says so plainly instead of throwing Node's raw
+// protocol error.
+function fetchUrl(url, redirectsLeft) {
+	const left = redirectsLeft === undefined ? 3 : redirectsLeft;
+
+	if (!/^https:\/\//i.test(String(url || ""))) {
+		return Promise.reject(
+			new Error(`Registry URLs must start with https:// — got: ${url}`)
+		);
+	}
+
+	return new Promise((resolve, reject) => {
+		fs.get(
+			url,
+			{ headers: { "User-Agent": "OmniCore" } },
+			(response) => {
+				if (
+					response.statusCode >= 300 &&
+					response.statusCode < 400 &&
+					response.headers.location &&
+					left > 0
+				) {
+					response.resume(); // drain, or the socket never closes
+					fetchUrl(response.headers.location, left - 1).then(resolve, reject);
+					return;
+				}
+
+				if (response.statusCode !== 200) {
+					response.resume();
+					reject(
+						new Error(
+							`${url} responded ${response.statusCode}`
+						)
+					);
+					return;
+				}
+
+				const chunks = [];
+				response.on("data", (chunk) => chunks.push(chunk));
+				response.on("end", () => resolve(Buffer.concat(chunks)));
+				response.on("error", reject);
+			}
+		).on("error", reject);
+	});
+}
+
+// Every module and theme currently reviewed into the registry
+async function fetchRegistry() {
+	const settings = readSettings();
+	const url = settings.registryUrl || DEFAULT_REGISTRY_URL;
+
+	const body = await fetchUrl(url);
+	const parsed = JSON.parse(body.toString("utf-8"));
+
+	return {
+		modules: Array.isArray(parsed.modules) ? parsed.modules : [],
+		themes: Array.isArray(parsed.themes) ? parsed.themes : []
+	};
+}
+
+// Split a GitHub URL into the two parts a tarball download needs.
+// Accepts the usual shapes: with or without a trailing slash, with or
+// without a trailing ".git".
+function parseRepoUrl(repoUrl) {
+	const match = String(repoUrl || "").match(
+		/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/
+	);
+
+	if (!match) {
+		throw new Error(`Not a github.com repo URL: ${repoUrl}`);
+	}
+
+	return { owner: match[1], repo: match[2] };
+}
+
+// GitHub's own archive endpoint. Chosen over the REST API's equivalent
+// specifically because it isn't subject to the API's 60-requests-an-hour
+// limit for anonymous callers — installing a module is a codeload request,
+// nothing else.
+function tarballUrl(owner, repo, ref) {
+	return `https://codeload.github.com/${owner}/${repo}/tar.gz/${ref}`;
+}
+
+// A destination folder name must be safe to use as a literal path segment.
+// The registry is reviewed, but this check costs nothing and means a typo
+// or a compromised registry entry can't turn an id into a path.
+function assertSafeId(id) {
+	if (!/^[a-z0-9][a-z0-9-]*$/.test(String(id || ""))) {
+		throw new Error(`Not a valid id: ${id}`);
+	}
+}
+
+// Defense in depth alongside whatever the tar library already refuses.
+// Every extracted entry's resolved path must land inside the staging
+// folder — never beside it, never above it.
+function withinStagingArea(stagingDir, entryPath) {
+	const resolved = path.resolve(stagingDir, entryPath);
+	return resolved === stagingDir || resolved.startsWith(stagingDir + path.sep);
+}
+
+// A module or theme is plain files and folders — text, in every case this
+// project ships. Nothing legitimate needs a symlink or a hardlink, and a
+// symlink is exactly how a hostile archive escapes a sandboxed extraction
+// without ever writing an unsafe PATH: the entry's own name can be
+// perfectly safe ("icon.png") while what it POINTS to is
+// "/etc/passwd" or a file elsewhere on this machine. Checking the path
+// alone, as withinStagingArea does, cannot catch this — it has to be
+// rejected by entry type instead.
+function isPlainEntry(entry) {
+	return entry.type === "File" || entry.type === "Directory";
+}
+
+// Unpack a tarball buffer into an isolated temp folder. Split out from
+// stageEntry so the extraction mechanics — the part that actually touches
+// disk — can be exercised directly against a buffer built by hand, not
+// only against whatever a real download happens to contain.
+async function extractTarball(tarball) {
+	const stagingDir = await fsp.mkdtemp(
+		path.join(os.tmpdir(), "omnicore-install-")
+	);
+
+	await new Promise((resolve, reject) => {
+		const gunzip = zlib.createGunzip();
+		const extractor = tar.extract({
+			cwd: stagingDir,
+			// GitHub wraps everything in one folder named "<repo>-<ref>/".
+			// Stripping it means the module's own files land directly in
+			// the staging folder rather than one level down.
+			strip: 1,
+			// Belt and braces on top of tar's own path-escape protection —
+			// see withinStagingArea. A path can be entirely safe while what
+			// it points to isn't, so entry TYPE is checked too — see
+			// isPlainEntry. Anything that fails either is simply left out
+			// of the extracted result.
+			filter: (entryPath, entry) =>
+				withinStagingArea(stagingDir, entryPath) && isPlainEntry(entry)
+		});
+
+		extractor.on("error", reject);
+		extractor.on("finish", resolve);
+
+		gunzip.on("error", reject);
+		gunzip.pipe(extractor);
+		gunzip.end(tarball);
+	});
+
+	return stagingDir;
+}
+
+// Download one registry entry's exact pinned commit and unpack it into an
+// isolated temp folder. Nothing under modules/ or themes/ is touched here —
+// see installEntry for the part that actually places it.
+async function stageEntry(entry) {
+	const { owner, repo } = parseRepoUrl(entry.repo);
+	const tarball = await fetchUrl(tarballUrl(owner, repo, entry.ref));
+
+	return extractTarball(tarball);
+}
+
+// Does a staged folder actually look like the kind of thing it claims to
+// be? Checking a file exists, never running it — that stays entirely
+// module-loader's and theme-loader's job, at ordinary require() time,
+// exactly as it already works for every built-in module and theme.
+async function assertLooksReal(stagingDir, kind) {
+	const marker = kind === "theme" ? "index.html" : "index.js";
+	const markerPath = path.join(stagingDir, marker);
+
+	try {
+		await fsp.access(markerPath);
+	} catch (error) {
+		throw new Error(
+			`Downloaded ${kind} has no ${marker} — doesn't look right`
+		);
+	}
+}
+
+// Where in a staged download the actual module or theme lives.
+//
+// Most entries are the whole repo — one repo, one thing. But a studio
+// might publish ten themes from a single repo, in which case an entry
+// names a `path` inside it: "themes/metro", say. Empty or missing means
+// "the repo root", which is every entry until this is used.
+//
+// A `path` is still something a registry entry supplies, so it gets the
+// same treatment as a path inside a tarball: it must resolve to somewhere
+// genuinely inside the staged download, never escape it via "../" — an
+// entry can only ever point at part of its own extracted repo, never
+// anywhere else on this machine.
+function resolveSourceDir(stagingDir, subPath) {
+	const clean = String(subPath || "").trim();
+
+	if (!clean) {
+		return stagingDir;
+	}
+
+	if (!withinStagingArea(stagingDir, clean)) {
+		throw new Error(`Registry entry's path escapes its own repo: ${subPath}`);
+	}
+
+	const resolved = path.resolve(stagingDir, clean);
+
+	if (!fsSync.existsSync(resolved)) {
+		throw new Error(`Registry entry's path doesn't exist in its repo: ${subPath}`);
+	}
+
+	return resolved;
+}
+
+// Move a directory into place — tolerating source and destination being on
+// different filesystems.
+//
+// fs.rename() is instant, because it only ever repoints a directory entry.
+// That only works when both paths sit on the same filesystem, and here
+// they often don't: the staging area lives under the OS's temp directory,
+// which on plenty of real setups — Codespaces among them — is its own
+// separate mount from wherever OmniCore itself lives. Crossing that
+// boundary fails with EXDEV, and there is no way to know in advance
+// whether it will. So: try the fast path first, and only fall back to an
+// actual copy if the OS says no.
+async function moveDir(src, dest) {
+	try {
+		await fsp.rename(src, dest);
+	} catch (error) {
+		if (error.code !== "EXDEV") {
+			throw error;
+		}
+
+		await fsp.cp(src, dest, { recursive: true });
+		await fsp.rm(src, { recursive: true, force: true });
+	}
+}
+async function installFromEntry(kind, entry, update) {
+	assertSafeId(entry.id);
+
+	const destDir = path.join(
+		kind === "theme" ? themesDir : modulesDir,
+		entry.id
+	);
+
+	if (fsSync.existsSync(destDir) && !update) {
+		throw new Error(
+			`${entry.id} is already installed — pass update to replace it`
+		);
+	}
+
+	const stagingDir = await stageEntry(entry);
+
+	try {
+		const sourceDir = resolveSourceDir(stagingDir, entry.path);
+		await assertLooksReal(sourceDir, kind);
+
+		// Only now does anything under modules/ or themes/ change. rm
+		// first so an update fully replaces rather than merges with
+		// whatever was there before.
+		await fsp.rm(destDir, { recursive: true, force: true });
+		await moveDir(sourceDir, destDir);
+	} finally {
+		// Whatever's left of the staged download — all of it if this
+		// entry named no path, or the rest of a studio's other themes if
+		// it did — never belongs on disk once installation is decided one
+		// way or the other. force:true means this is a no-op on the
+		// common case where sourceDir WAS stagingDir and already moved.
+		await fsp.rm(stagingDir, { recursive: true, force: true });
+	}
+
+	return {
+		id: entry.id,
+		kind,
+		ref: entry.ref,
+		installedAt: new Date().toISOString()
+	};
+}
+
+// Look one entry up in the registry and install it.
+//
+//   kind    "module" or "theme"
+//   id      which entry, matched against entry.id in the registry
+//   update  false (default) refuses if the destination already exists,
+//           so a fresh install can never silently clobber something —
+//           whether that's a previous install or local edits. Pass true
+//           to intentionally replace an existing install.
+async function installEntry(kind, id, update) {
+	assertSafeId(id);
+
+	const registry = await fetchRegistry();
+	const list = kind === "theme" ? registry.themes : registry.modules;
+	const entry = list.find((item) => item.id === id);
+
+	if (!entry) {
+		throw new Error(`${id} is not in the registry`);
+	}
+
+	return installFromEntry(kind, entry, update);
+}
+
+// The registry, with each entry marked according to what's already on
+// disk. This is what the admin face's marketplace page renders.
+//
+// `installed` is decided by the folder existing, which is the same thing
+// module-loader and theme-loader go by — so this can never disagree with
+// what OmniCore will actually load.
+async function listAvailable() {
+	const registry = await fetchRegistry();
+
+	const mark = (entries, dir) =>
+		entries.map((entry) => ({
+			...entry,
+			installed: fsSync.existsSync(path.join(dir, String(entry.id || "")))
+		}));
+
+	return {
+		modules: mark(registry.modules, modulesDir),
+		themes: mark(registry.themes, themesDir)
+	};
+}
+
+module.exports = {
+	DEFAULT_REGISTRY_URL,
+	fetchRegistry,
+	listAvailable,
+	parseRepoUrl,
+	tarballUrl,
+	installEntry,
+	installFromEntry,
+	extractTarball,
+	withinStagingArea,
+	isPlainEntry,
+	resolveSourceDir
+};

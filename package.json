@@ -2,14 +2,16 @@
   "name": "omnia-omnicore",
   "version": "1.0.0",
   "description": "Modular, config-driven backend for the Omnia home dashboard ecosystem.",
-  "main": "index.js",
+  "main": "start.OmniCore",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node start.OmniCore"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "tar": "^7.5.22"
   }
 }

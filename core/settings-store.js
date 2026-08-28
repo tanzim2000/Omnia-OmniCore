@@ -24,7 +24,13 @@ const DEFAULTS = {
 
 	latitude: null,
 	longitude: null,
-	locationLabel: ""
+	locationLabel: "",
+
+	// Where to look for modules and themes that can be installed. A
+	// setting rather than a constant so an install can be pointed at a
+	// fork, a private list, or a local file during development —
+	// blank means use the project's own registry.
+	registryUrl: ""
 };
 
 function readSettings() {
