@@ -1,6 +1,0 @@
-{
-	"name": "Bing Wallpaper",
-	"description": "Bing's picture of the day",
-	"provides": ["background", "image"],
-	"tile": false
-}

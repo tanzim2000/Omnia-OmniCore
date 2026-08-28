@@ -1,5 +1,22 @@
-
 # Runtime data — per-install, never shared
 data/admin.json
 data/faces.json
 data/module-config/
+
+# Node dependencies
+node_modules/
+
+# Installed modules and themes.
+#
+# OmniCore ships bare: everything in these folders arrives from the
+# marketplace, which downloads a reviewed, pinned version into place. They
+# are per-install, exactly like data/ — what one person has installed says
+# nothing about what anyone else should.
+#
+# The .gitkeep files below are tracked so the folders themselves exist on a
+# fresh clone. module-loader and theme-loader both cope with an empty or
+# missing folder, but a folder that exists is one less surprise.
+modules/*
+themes/*
+!modules/.gitkeep
+!themes/.gitkeep
