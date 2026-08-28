@@ -15,8 +15,14 @@ and install it the way you'd install any other program.
 
 **2. Download OmniCore.**
 
-On this page, click the green **Code** button near the top, then
-**Download ZIP**. Unzip it somewhere you'll remember, like your Desktop.
+Go to the
+[v1.0.0 release page](https://github.com/tanzim2000/Omnia-OmniCore/releases/tag/v1.0.0)
+and download **Source code (zip)** near the bottom. Unzip it somewhere
+you'll remember, like your Desktop.
+
+(Not the green **Code** button near the top of this page — that always
+gives you whatever's newest, which may not match these instructions.
+The release page is the version this guide was written for.)
 
 **3. Open a command window inside that folder.**
 
