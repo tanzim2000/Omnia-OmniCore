@@ -39,7 +39,7 @@ const os = require("os");
 const path = require("path");
 const tar = require("tar");
 
-const { readSettings } = require("./settings-store");
+const { readSettings, writeSettings } = require("./settings-store");
 
 const modulesDir = path.join(__dirname, "..", "modules");
 const themesDir = path.join(__dirname, "..", "themes");
@@ -103,11 +103,9 @@ function fetchUrl(url, redirectsLeft) {
 	});
 }
 
-// Every module and theme currently reviewed into the registry
-async function fetchRegistry() {
-	const settings = readSettings();
-	const url = settings.registryUrl || DEFAULT_REGISTRY_URL;
-
+// Fetch and parse one registry URL. Shared by the built-in fetch and every
+// additional source, so both are held to the same shape.
+async function fetchOneRegistry(url) {
 	const body = await fetchUrl(url);
 	const parsed = JSON.parse(body.toString("utf-8"));
 
@@ -115,6 +113,44 @@ async function fetchRegistry() {
 		modules: Array.isArray(parsed.modules) ? parsed.modules : [],
 		themes: Array.isArray(parsed.themes) ? parsed.themes : []
 	};
+}
+
+// Every module and theme currently reviewed into the registry — the
+// built-in one, plus whatever additional sources the admin has chosen to
+// trust.
+//
+// The built-in registry failing is a real error: it's supposed to always
+// be there, so if it isn't, something's actually wrong and the Marketplace
+// page should say so plainly rather than quietly showing an empty list.
+//
+// An ADDITIONAL source failing is different. The admin added it
+// voluntarily, after being warned, and one broken or slow third party
+// shouldn't be able to take the whole Marketplace down for everyone —
+// so a failed extra source is skipped, not fatal. `sourceFailures` on the
+// result says which ones, so the page can still be honest about it.
+async function fetchRegistry() {
+	const settings = readSettings();
+	const extraUrls = Array.isArray(settings.registrySources)
+		? settings.registrySources
+		: [];
+
+	const builtIn = await fetchOneRegistry(DEFAULT_REGISTRY_URL);
+
+	const modules = [...builtIn.modules];
+	const themes = [...builtIn.themes];
+	const sourceFailures = [];
+
+	for (const url of extraUrls) {
+		try {
+			const extra = await fetchOneRegistry(url);
+			modules.push(...extra.modules);
+			themes.push(...extra.themes);
+		} catch (error) {
+			sourceFailures.push({ url, message: error.message });
+		}
+	}
+
+	return { modules, themes, sourceFailures };
 }
 
 // Split a GitHub URL into the two parts a tarball download needs.
@@ -369,8 +405,132 @@ async function listAvailable() {
 
 	return {
 		modules: mark(registry.modules, modulesDir),
-		themes: mark(registry.themes, themesDir)
+		themes: mark(registry.themes, themesDir),
+		sourceFailures: registry.sourceFailures
 	};
+}
+
+// Add a third-party registry as a trusted source. Refuses a plain-HTTP
+// URL for the same reason fetchUrl does, refuses the built-in registry's
+// own URL (it's already included, always), and refuses one already added.
+function addSource(url) {
+	const clean = String(url || "").trim();
+
+	if (!/^https:\/\//i.test(clean)) {
+		throw new Error("A source must be an https:// URL");
+	}
+
+	if (clean === DEFAULT_REGISTRY_URL) {
+		throw new Error("That's the built-in registry — it's already included");
+	}
+
+	const settings = readSettings();
+	const sources = Array.isArray(settings.registrySources)
+		? settings.registrySources
+		: [];
+
+	if (sources.includes(clean)) {
+		throw new Error("That source is already added");
+	}
+
+	return writeSettings({ registrySources: [...sources, clean] });
+}
+
+// Remove a third-party source. The built-in registry is never in this
+// list, so there is nothing here that can remove it.
+function removeSource(url) {
+	const settings = readSettings();
+	const sources = Array.isArray(settings.registrySources)
+		? settings.registrySources
+		: [];
+
+	return writeSettings({
+		registrySources: sources.filter((s) => s !== url)
+	});
+}
+
+// Cached fetches of module.json/theme.json's extra detail-page fields —
+// url -> { data, at }. A detail page shouldn't refetch on every view, and
+// a personal registry's traffic is small enough that memory is fine.
+const detailCache = new Map();
+const DETAIL_CACHE_MS = 10 * 60 * 1000;
+
+// A theme id, the same shape assertSafeId already enforces for install
+// destinations — reused here so a screenshot's `theme` field can only
+// ever be a bare id, never a URL or anything else an unreviewed author
+// might try to slip in.
+function isSafeThemeId(value) {
+	return /^[a-z0-9][a-z0-9-]*$/.test(String(value || ""));
+}
+
+// The two fields a detail page shows beyond what registry.json already
+// reviewed: a longer description, and screenshots. Fetched from the
+// module's OWN module.json (or theme's theme.json) — but at the exact
+// commit registry.json pinned, never the branch, so this is exactly as
+// tamper-proof as the installer's own download. Nothing else from that
+// file is read: name, description, author and so on stay authoritative
+// in registry.json, which is what was actually reviewed.
+//
+// Every string returned here is attacker-influenced (in the sense that
+// whoever's repo this is wrote it, and it was never reviewed the way the
+// registry.json entry pointing at it was). The caller MUST escape all of
+// it before it touches HTML — this function does no escaping itself,
+// since that's a rendering concern, not a fetching one.
+async function fetchDetailExtras(kind, entry) {
+	if (!entry || !entry.repo || !entry.ref) {
+		return { completeDescription: "", screenshots: [] };
+	}
+
+	let owner, repo;
+
+	try {
+		({ owner, repo } = parseRepoUrl(entry.repo));
+	} catch (error) {
+		return { completeDescription: "", screenshots: [] };
+	}
+
+	const manifestName = kind === "theme" ? "theme.json" : "module.json";
+	const subPath = entry.path ? entry.path.replace(/\/+$/, "") + "/" : "";
+	const url =
+		`https://raw.githubusercontent.com/${owner}/${repo}/${entry.ref}/` +
+		`${subPath}${manifestName}`;
+
+	const cached = detailCache.get(url);
+	if (cached && Date.now() - cached.at < DETAIL_CACHE_MS) {
+		return cached.data;
+	}
+
+	let result = { completeDescription: "", screenshots: [] };
+
+	try {
+		const body = await fetchUrl(url);
+		const parsed = JSON.parse(body.toString("utf-8"));
+
+		result.completeDescription =
+			typeof parsed["complete-description"] === "string"
+				? parsed["complete-description"]
+				: "";
+
+		if (Array.isArray(parsed.screenshots)) {
+			result.screenshots = parsed.screenshots
+				.filter((s) => s && typeof s.image === "string")
+				.slice(0, 10) // a manifest claiming 500 screenshots isn't real
+				.map((s) => ({
+					image: s.image,
+					description:
+						typeof s.description === "string" ? s.description : "",
+					// A bare theme id only — never trust a URL or markup an
+					// unreviewed author's own file might put here
+					theme: isSafeThemeId(s.theme) ? s.theme : ""
+				}));
+		}
+	} catch (error) {
+		// No module.json, no complete-description, a network hiccup —
+		// all the same to the caller: show what registry.json already had
+	}
+
+	detailCache.set(url, { data: result, at: Date.now() });
+	return result;
 }
 
 module.exports = {
@@ -381,6 +541,12 @@ module.exports = {
 	tarballUrl,
 	installEntry,
 	installFromEntry,
+	addSource,
+	removeSource,
+	fetchDetailExtras,
+	// Exposed for testing the extraction and path-safety mechanics in
+	// isolation from a real network fetch. Not part of the public surface
+	// other files should call.
 	extractTarball,
 	withinStagingArea,
 	isPlainEntry,

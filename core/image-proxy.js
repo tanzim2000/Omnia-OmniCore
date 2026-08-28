@@ -7,9 +7,14 @@
 // server.
 //
 // Only URLs a module actually returned can be fetched — the caller looks
-// them up by instance and block index rather than passing a URL in. That's
-// deliberate: accepting a URL would turn this into an open relay that
-// anyone on the network could point at anything.
+// them up by a key rather than passing a URL in. That's deliberate:
+// accepting a URL directly would turn this into an open relay anyone could
+// point at anything, including addresses on your own network. `remember`
+// and `lookup` don't care what a key looks like — a dashboard instance
+// uses "instanceId:index"; the marketplace's screenshot proxy (see
+// admin-face.js) uses its own scheme. Both share this one cache and this
+// one fetch, so there is exactly one place that validates a URL is
+// actually an image before anything gets relayed.
 
 const { Readable } = require("stream");
 
@@ -30,9 +35,7 @@ const TIMEOUT_MS = 15000;
 // deleted would otherwise leave their entries behind forever.
 const MAX_KNOWN = 500;
 
-function remember(instanceId, index, url) {
-	const key = instanceId + ":" + index;
-
+function remember(key, url) {
 	// Re-inserting moves the key to the end, so the eviction below drops
 	// whatever genuinely hasn't been seen in the longest time
 	known.delete(key);
@@ -43,8 +46,8 @@ function remember(instanceId, index, url) {
 	}
 }
 
-function lookup(instanceId, index) {
-	return known.get(instanceId + ":" + index) || null;
+function lookup(key) {
+	return known.get(key) || null;
 }
 
 // Drop anything past its age, so the map doesn't grow forever
@@ -102,7 +105,7 @@ async function fetchImage(url) {
 // Attach the image route to a face
 function attachImageRoute(app) {
 	app.get("/api/:instanceId/image/:index", async (req, res) => {
-		const url = lookup(req.params.instanceId, Number(req.params.index));
+		const url = lookup(req.params.instanceId + ":" + req.params.index);
 
 		if (!url) {
 			// Either the instance has no such image, or its data hasn't been
@@ -126,4 +129,4 @@ function attachImageRoute(app) {
 	});
 }
 
-module.exports = { remember, attachImageRoute };
+module.exports = { remember, lookup, fetchImage, attachImageRoute };

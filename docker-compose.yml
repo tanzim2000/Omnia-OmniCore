@@ -1,0 +1,35 @@
+services:
+  omnicore:
+    build: .
+    container_name: omnicore
+    restart: unless-stopped
+    ports:
+      # Admin — create your account, install things, change settings
+      - "3000:3000"
+      # Setup wizard — build a new dashboard
+      - "4000:4000"
+      # Each dashboard you create gets the next number after 4000. Ten
+      # reserved here is plenty for a home — if you ever need an
+      # eleventh, add "4011:4011" as another line below.
+      - "4001:4001"
+      - "4002:4002"
+      - "4003:4003"
+      - "4004:4004"
+      - "4005:4005"
+      - "4006:4006"
+      - "4007:4007"
+      - "4008:4008"
+      - "4009:4009"
+      - "4010:4010"
+    volumes:
+      # Everything that makes this YOUR OmniCore rather than a blank one —
+      # your account, your dashboards, whatever you've installed. Without
+      # this, restarting the container would wipe all of it.
+      - omnicore-data:/app/data
+      - omnicore-modules:/app/modules
+      - omnicore-themes:/app/themes
+
+volumes:
+  omnicore-data:
+  omnicore-modules:
+  omnicore-themes:

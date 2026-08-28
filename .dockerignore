@@ -1,0 +1,10 @@
+node_modules
+data
+modules
+themes
+.git
+.gitignore
+*.md
+docs/
+BACKLOG.md
+CHANGELOG.md

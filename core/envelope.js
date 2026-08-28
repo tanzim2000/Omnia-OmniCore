@@ -109,7 +109,7 @@ function proxyImages(blocks, instanceId, remember) {
 			return block;
 		}
 
-		remember(instanceId, index, block.url);
+		remember(instanceId + ":" + index, block.url);
 
 		return {
 			...block,

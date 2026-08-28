@@ -26,11 +26,12 @@ const DEFAULTS = {
 	longitude: null,
 	locationLabel: "",
 
-	// Where to look for modules and themes that can be installed. A
-	// setting rather than a constant so an install can be pointed at a
-	// fork, a private list, or a local file during development —
-	// blank means use the project's own registry.
-	registryUrl: ""
+	// Registries to check for installable modules and themes, beyond the
+	// project's own built-in one — which is never in this list, and is
+	// never removable. Adding a source means trusting whoever runs it to
+	// review what gets listed there the way the built-in one is reviewed;
+	// see the warning shown before one is ever added.
+	registrySources: []
 };
 
 function readSettings() {

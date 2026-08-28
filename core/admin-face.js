@@ -33,6 +33,7 @@ const {
 const themeLoader = require("./theme-loader");
 const priority = require("./priority");
 const marketplace = require("./marketplace");
+const imageProxy = require("./image-proxy");
 const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
@@ -234,6 +235,187 @@ const styles = `
 	.status.bad { color: #ff8a8a; }
 
 	.footer { opacity: 0.4; font-size: 13px; }
+
+	/* Marketplace — wider than a settings panel, since it needs room for
+	   a grid rather than one stacked column. Same tokens as everywhere
+	   else in this file: same border, same radius, same opacity scale
+	   for secondary text. Tidier, not a different design language. */
+	.market-wide { width: 100%; max-width: 900px; }
+
+	.market-search {
+		width: 100%;
+		padding: 12px 16px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 10px;
+		background: transparent;
+		color: #fff;
+		font-size: 14px;
+		font-family: inherit;
+		box-sizing: border-box;
+	}
+
+	.market-search::placeholder { color: rgba(255, 255, 255, 0.35); }
+	.market-search:focus { outline: none; border-color: rgba(255, 255, 255, 0.3); }
+
+	.market-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+		gap: 14px;
+		margin-top: 16px;
+	}
+
+	.market-card {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 16px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 12px;
+	}
+
+	.market-card h3 { margin: 0; font-size: 16px; font-weight: 500; }
+	.market-card .desc { opacity: 0.6; font-size: 13px; flex: 1; line-height: 1.4; }
+	.market-card .author { opacity: 0.45; font-size: 12px; }
+	.market-card .installed { opacity: 0.5; font-size: 13px; }
+
+	/* Hidden by search filtering, not removed — keeps the grid's DOM
+	   order stable so nothing reflows unexpectedly as you type */
+	.market-card[hidden] { display: none; }
+
+	.market-empty { opacity: 0.45; font-size: 14px; padding: 8px 0 20px; }
+
+	/* The one button style in this file. Everything else here is either
+	   unstyled (system default) or its own narrow-purpose class like
+	   .priority-move — this is deliberately the first general one,
+	   scoped so it doesn't change anything that already exists. */
+	.btn {
+		padding: 9px 16px;
+		border: 1px solid rgba(255, 255, 255, 0.16);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.06);
+		color: #fff;
+		font-size: 13px;
+		font-family: inherit;
+		cursor: pointer;
+	}
+
+	.btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+	.btn:disabled { opacity: 0.5; cursor: default; }
+
+	/* A real focus ring, scoped tightly to the button itself — never the
+	   browser's default, which on some renders looks like it's glowing
+	   out around whatever contains the button (a card, here) rather than
+	   the button. Still genuinely visible, which keyboard use needs. */
+	.btn:focus { outline: none; }
+	.btn:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
+	}
+
+	/* Header row: title on the left, a way to reach settings on the
+	   right, without disturbing every other page's centred single
+	   column. */
+	.market-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	/* Modules / Themes. A search box above them stays visible across
+	   both — only which cards it can see changes. */
+	.market-tabs { display: flex; gap: 6px; margin: 24px 0 4px; }
+
+	.tab-btn {
+		padding: 8px 16px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 8px;
+		background: transparent;
+		color: rgba(255, 255, 255, 0.55);
+		font-size: 14px;
+		font-family: inherit;
+		cursor: pointer;
+	}
+
+	.tab-btn:hover:not(.active) { background: rgba(255, 255, 255, 0.05); }
+
+	.tab-btn.active {
+		background: rgba(255, 255, 255, 0.1);
+		color: #fff;
+		border-color: rgba(255, 255, 255, 0.25);
+	}
+
+	/* A card is a link to its detail page, EXCEPT the Install button,
+	   which needs its own click. The link is stretched to the card's
+	   full size via inset:0; the button sits above it on the stacking
+	   order, so a click there hits the button, not the link beneath. */
+	.market-card { position: relative; }
+
+	.market-card .card-link {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+	}
+
+	.market-card .btn, .market-card .installed {
+		position: relative;
+		z-index: 2;
+		align-self: flex-start;
+	}
+
+	/* The one place this file deliberately breaks from flat, minimal
+	   buttons — a source you're about to trust with full server access
+	   is exactly the moment a slicker, more consequential-feeling
+	   control earns its keep. */
+	.btn-glossy {
+		padding: 11px 22px;
+		border-radius: 8px;
+		font-size: 14px;
+		font-family: inherit;
+		font-weight: 500;
+		cursor: pointer;
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0, 0, 0, 0.35);
+	}
+
+	.btn-glossy-green {
+		color: #eafff2;
+		background: linear-gradient(to bottom, #3ed67a, #1f9a53);
+		border-color: #2ab264;
+	}
+
+	.btn-glossy-green:hover { background: linear-gradient(to bottom, #48e386, #22a85b); }
+
+	.btn-glossy-neutral {
+		color: #fff;
+		background: linear-gradient(to bottom, #4a4a4a, #2c2c2c);
+	}
+
+	.btn-glossy-neutral:hover { background: linear-gradient(to bottom, #545454, #333); }
+
+	/* Shown once, right before a third-party source is actually added.
+	   Deliberately not styled like anything else on this page — this is
+	   the one moment worth standing out. */
+	.market-warning {
+		background: linear-gradient(165deg, rgba(70, 8, 8, 0.9), rgba(18, 4, 4, 0.95));
+		border: 1px solid rgba(255, 70, 70, 0.4);
+		border-radius: 12px;
+		padding: 22px;
+	}
+
+	.market-warning h3 { color: #ff6b6b; margin: 0 0 12px 0; font-size: 17px; }
+	.market-warning p { color: #ffd6d6; font-size: 14px; line-height: 1.6; margin: 0 0 12px 0; }
+	.market-warning p:last-of-type { margin-bottom: 0; }
+
+	.provides-tag {
+		display: inline-block;
+		padding: 4px 10px;
+		border: 1px solid rgba(255, 255, 255, 0.15);
+		border-radius: 999px;
+		font-size: 12px;
+		opacity: 0.75;
+		margin: 0 6px 6px 0;
+	}
 	.danger { color: #ff8a8a; font-size: 14px; cursor: pointer; }
 
 	/* Glass-style button with a soft light reflection */
@@ -1106,33 +1288,49 @@ function startAdminFace() {
 	// Installed code starts running the same way built-in code does, when
 	// module-loader or theme-loader require() it.
 
-	function marketplaceRows(entries, kind) {
+	// One card per entry, all in a single grid the search box filters
+	// client-side. `data-search` holds the text a match is judged against —
+	// built once here rather than recomputed by the filter on every
+	// keystroke. The whole card links to its detail page except the
+	// Install button, which needs its own click — see .card-link in the
+	// stylesheet for how that's kept from conflicting.
+	function marketplaceCards(entries, kind) {
 		if (!entries.length) {
-			return '<div class="row"><span>Nothing listed yet</span></div>';
+			return '<p class="market-empty">Nothing listed yet.</p>';
 		}
 
-		return entries
+		const cards = entries
 			.map((entry) => {
 				const id = escapeHtml(entry.id);
+				const name = entry.name || entry.id;
+				const author = entry.author || "";
+				const description = entry.description || "";
+				const detailUrl = `/marketplace/${kind}s/${encodeURIComponent(entry.id)}`;
+
+				const searchText = escapeHtml(
+					[name, description, author].join(" ").toLowerCase()
+				);
+
 				const action = entry.installed
-					? '<span>Installed</span>'
-					: `<button type="button" data-install="${id}" ` +
+					? '<span class="installed">Installed</span>'
+					: `<button type="button" class="btn" data-install="${id}" ` +
 					  `data-kind="${kind}">Install</button>`;
 
 				return `
-					<div class="row">
-						<div>
-							<strong>${escapeHtml(entry.name || entry.id)}</strong>
-							<div class="help">${escapeHtml(entry.description || "")}</div>
-						</div>
+					<div class="market-card" data-search="${searchText}">
+						<a class="card-link" href="${escapeHtml(detailUrl)}" aria-label="${escapeHtml(name)}"></a>
+						<h3>${escapeHtml(name)}</h3>
+						${description ? `<div class="desc">${escapeHtml(description)}</div>` : ""}
+						${author ? `<div class="author">${escapeHtml(author)}</div>` : ""}
 						${action}
 					</div>`;
 			})
 			.join("");
+
+		return `<div class="market-grid">${cards}</div>`;
 	}
 
 	app.get("/marketplace", async (req, res) => {
-		const settings = readSettings();
 		let available = null;
 		let failure = "";
 
@@ -1145,13 +1343,25 @@ function startAdminFace() {
 			failure = error.message;
 		}
 
+		const failedSources = available && available.sourceFailures.length
+			? `<p class="help">
+				Couldn't reach ${available.sourceFailures.length === 1 ? "an additional source" : "some additional sources"}:
+				${available.sourceFailures.map((f) => escapeHtml(f.url)).join(", ")}.
+				The built-in registry above is unaffected.
+			</p>`
+			: "";
+
 		const body = `
-			<div class="panel">
-				<h1>Marketplace</h1>
-				<p class="help">
-					Modules and themes reviewed into the registry. Installing
-					downloads the exact reviewed version.
-				</p>
+			<div class="market-wide market-header">
+				<div>
+					<h1>Marketplace</h1>
+					<p class="help">
+						Modules and themes reviewed into the registry. Installing
+						downloads the exact reviewed version.
+					</p>
+					${failedSources}
+				</div>
+				<a class="btn" href="/marketplace/sources">Sources</a>
 			</div>
 
 			${failure ? `
@@ -1163,26 +1373,22 @@ function startAdminFace() {
 					</div>
 				</div>
 			</div>` : `
-			<div class="panel">
-				<h2>Modules</h2>
-				${marketplaceRows(available.modules, "module")}
-			</div>
+			<div class="market-wide">
+				<input type="text" class="market-search" data-market-search
+					placeholder="Search by name, author, or description">
 
-			<div class="panel">
-				<h2>Themes</h2>
-				${marketplaceRows(available.themes, "theme")}
-			</div>`}
-
-			<div class="panel">
-				<label for="registryUrl">Registry</label>
-				<input type="url" id="registryUrl"
-					value="${escapeHtml(settings.registryUrl || "")}"
-					placeholder="${escapeHtml(marketplace.DEFAULT_REGISTRY_URL)}">
-				<div class="help">
-					Leave blank to use the project's own registry.
+				<div class="market-tabs">
+					<button type="button" class="tab-btn active" data-tab-btn="module">Modules</button>
+					<button type="button" class="tab-btn" data-tab-btn="theme">Themes</button>
 				</div>
-				<button type="button" data-save-registry>Save</button>
-			</div>
+
+				<div data-tab-panel="module">
+					${marketplaceCards(available.modules, "module")}
+				</div>
+				<div data-tab-panel="theme" hidden>
+					${marketplaceCards(available.themes, "theme")}
+				</div>
+			</div>`}
 
 			<div class="panel footer">
 				<a href="/">Back</a>
@@ -1237,20 +1443,49 @@ function startAdminFace() {
 				});
 			}
 
-			const saveRegistry = document.querySelector("[data-save-registry]");
+			// Modules / Themes. Switching resets the search — starting
+			// fresh in the new tab is less surprising than carrying a
+			// filter across to content it was never typed against.
+			const tabButtons = Array.from(document.querySelectorAll("[data-tab-btn]"));
+			const tabPanels = Array.from(document.querySelectorAll("[data-tab-panel]"));
 
-			if (saveRegistry) {
-				saveRegistry.addEventListener("click", async function () {
-					const ok = await post(
-						"/marketplace/registry",
-						{ registryUrl: document.getElementById("registryUrl").value },
-						saveRegistry,
-						"Saving...",
-						"Saved"
-					);
+			for (const button of tabButtons) {
+				button.addEventListener("click", function () {
+					for (const b of tabButtons) {
+						b.classList.toggle("active", b === button);
+					}
 
-					if (ok) {
-						setTimeout(function () { location.reload(); }, 600);
+					for (const panel of tabPanels) {
+						panel.hidden = panel.dataset.tabPanel !== button.dataset.tabBtn;
+					}
+
+					if (search) {
+						search.value = "";
+						for (const card of document.querySelectorAll(".market-card")) {
+							card.hidden = false;
+						}
+					}
+				});
+			}
+
+			// Filters client-side rather than round-tripping to the server —
+			// a personal registry is small enough that there's nothing to
+			// gain from a network request on every keystroke. Scoped to
+			// whichever tab is currently showing, not every card on the
+			// page — searching Modules shouldn't surface a Theme.
+			var search = document.querySelector("[data-market-search]");
+
+			if (search) {
+				search.addEventListener("input", function () {
+					const query = search.value.trim().toLowerCase();
+					const activePanel = document.querySelector("[data-tab-panel]:not([hidden])");
+					const cards = activePanel
+						? activePanel.querySelectorAll(".market-card")
+						: [];
+
+					for (const card of cards) {
+						const matches = card.dataset.search.indexOf(query) !== -1;
+						card.hidden = query !== "" && !matches;
 					}
 				});
 			}
@@ -1259,9 +1494,426 @@ function startAdminFace() {
 		res.send(page("Marketplace", body, script));
 	});
 
-	app.post("/marketplace/registry", (req, res) => {
-		writeSettings({ registryUrl: String((req.body || {}).registryUrl || "").trim() });
+	app.get("/marketplace/sources", (req, res) => {
+		const settings = readSettings();
+		const sources = Array.isArray(settings.registrySources)
+			? settings.registrySources
+			: [];
+
+		const extraRows = sources
+			.map(
+				(url) => `
+				<div class="row">
+					<div><strong>${escapeHtml(url)}</strong></div>
+					<button type="button" class="btn" data-remove-source="${escapeHtml(url)}">Remove</button>
+				</div>`
+			)
+			.join("");
+
+		const body = `
+			<div class="market-wide">
+				<h1>Registry sources</h1>
+				<p class="help">Where OmniCore looks for modules and themes to install.</p>
+			</div>
+
+			<div class="market-wide">
+				<div class="row">
+					<div>
+						<strong>Omnia-Registry</strong>
+						<div class="help">Built-in. Reviewed, and always included.</div>
+					</div>
+					<span class="installed">Built-in</span>
+				</div>
+				${extraRows}
+			</div>
+
+			<div class="panel">
+				<label for="newSource">Add a source</label>
+				<input type="url" id="newSource" data-new-source placeholder="https://example.com/registry.json">
+				<button type="button" class="btn" data-reveal-warning style="margin-top: 10px;">Add source</button>
+			</div>
+
+			<div class="market-wide market-warning" data-warning hidden>
+				<h3>This adds a source OmniCore hasn't reviewed</h3>
+				<p>
+					Everything in the built-in registry is reviewed before anyone
+					can install it — someone actually read the code before it was
+					listed. A third-party source has no such review. Anything
+					listed there could be anything.
+				</p>
+				<p>
+					A module is a full, unrestricted Node program. It can read
+					every file this server can read — including your admin
+					credentials — and reach the network however it likes. None
+					of that is sandboxed, checked, or undone automatically once
+					something is installed from it.
+				</p>
+				<p>
+					<strong>If you don't personally, actually trust whoever runs
+					this source — not "it looked fine" — don't add it.</strong>
+				</p>
+				<div style="display: flex; gap: 10px; margin-top: 18px;">
+					<button type="button" class="btn-glossy btn-glossy-green" data-warning-cancel>Go back</button>
+					<button type="button" class="btn-glossy btn-glossy-neutral" data-warning-confirm>I understand</button>
+				</div>
+			</div>
+
+			<div class="panel footer">
+				<a href="/marketplace">Back</a>
+			</div>`;
+
+		const script = `
+			async function post(url, payload, button, working, done) {
+				const was = button.textContent;
+				button.disabled = true;
+				button.textContent = working;
+
+				try {
+					const response = await fetch(url, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(payload)
+					});
+
+					const result = await response.json();
+
+					if (!response.ok) {
+						throw new Error(result.error || "Failed");
+					}
+
+					button.textContent = done;
+					return true;
+				} catch (error) {
+					button.disabled = false;
+					button.textContent = error.message.slice(0, 60);
+					setTimeout(function () { button.textContent = was; }, 4000);
+					return false;
+				}
+			}
+
+			const newSource = document.querySelector("[data-new-source]");
+			const warning = document.querySelector("[data-warning]");
+			const reveal = document.querySelector("[data-reveal-warning]");
+
+			if (reveal) {
+				reveal.addEventListener("click", function () {
+					if (!newSource.value.trim()) {
+						newSource.focus();
+						return;
+					}
+					warning.hidden = false;
+					warning.scrollIntoView({ behavior: "smooth", block: "center" });
+				});
+			}
+
+			const cancel = document.querySelector("[data-warning-cancel]");
+			if (cancel) {
+				cancel.addEventListener("click", function () { warning.hidden = true; });
+			}
+
+			const confirmAdd = document.querySelector("[data-warning-confirm]");
+			if (confirmAdd) {
+				confirmAdd.addEventListener("click", async function () {
+					const ok = await post(
+						"/marketplace/sources/add",
+						{ url: newSource.value.trim() },
+						confirmAdd,
+						"Adding...",
+						"Added"
+					);
+					if (ok) {
+						setTimeout(function () { location.reload(); }, 600);
+					}
+				});
+			}
+
+			for (const button of document.querySelectorAll("[data-remove-source]")) {
+				button.addEventListener("click", async function () {
+					const ok = await post(
+						"/marketplace/sources/remove",
+						{ url: button.dataset.removeSource },
+						button,
+						"Removing...",
+						"Removed"
+					);
+					if (ok) {
+						setTimeout(function () { location.reload(); }, 400);
+					}
+				});
+			}
+		`;
+
+		res.send(page("Registry sources", body, script));
+	});
+
+	app.post("/marketplace/sources/add", (req, res) => {
+		try {
+			marketplace.addSource((req.body || {}).url);
+			res.json({ ok: true });
+		} catch (error) {
+			res.status(400).json({ error: error.message });
+		}
+	});
+
+	app.post("/marketplace/sources/remove", (req, res) => {
+		marketplace.removeSource((req.body || {}).url);
 		res.json({ ok: true });
+	});
+
+	// A module's or theme's own page — everything the browse cards don't
+	// have room for. Shared by both kinds since the layout only differs
+	// by a couple of conditional pieces (provides, only meaningful for a
+	// module; a theme has nothing analogous to show there).
+	async function renderDetailPage(kind, id, res) {
+		let available = null;
+
+		try {
+			available = await marketplace.listAvailable();
+		} catch (error) {
+			res.status(502).send(page("Marketplace", `
+				<div class="panel">
+					<div class="row">
+						<div>
+							<strong>Can't reach the registry</strong>
+							<div class="help">${escapeHtml(error.message)}</div>
+						</div>
+					</div>
+				</div>
+				<div class="panel footer"><a href="/marketplace">Back</a></div>
+			`));
+			return;
+		}
+
+		const list = kind === "theme" ? available.themes : available.modules;
+		const entry = list.find((item) => item.id === id);
+
+		if (!entry) {
+			res.status(404).send(page("Not found", `
+				<div class="panel">
+					<h1>Not found</h1>
+					<p class="help">Nothing with that id is listed.</p>
+				</div>
+				<div class="panel footer"><a href="/marketplace">Back</a></div>
+			`));
+			return;
+		}
+
+		const name = entry.name || entry.id;
+		const author = entry.author || "";
+		const emits = Array.isArray(entry.emits) ? entry.emits : [];
+
+		// module.json/theme.json, fetched at the pinned commit — see
+		// fetchDetailExtras for exactly what this does and does not trust.
+		// Nothing here can override registry.json's own fields; it only
+		// supplies the two things registry.json never had a place for.
+		const extras = await marketplace.fetchDetailExtras(kind, entry);
+
+		const emitsSection = kind === "module" && emits.length
+			? `
+				<h2>Emits</h2>
+				<div>${emits.map((e) => `<span class="provides-tag">${escapeHtml(e)}</span>`).join("")}</div>`
+			: "";
+
+		// Every screenshot's actual URL is remembered server-side and handed
+		// a short opaque key — the browser never sees or requests the real
+		// URL directly. Same reason the dashboard's own image blocks work
+		// this way: a display (here, the admin's browser) should only ever
+		// talk to OmniCore's own server, never a third party the author of
+		// an unreviewed module.json chose.
+		const screenshotsSection = extras.screenshots.length
+			? `
+				<h2>Screenshots</h2>
+				<div class="market-grid">
+					${extras.screenshots
+						.map((shot, index) => {
+							const key = `${kind}:${entry.id}:${index}`;
+							imageProxy.remember(key, shot.image);
+
+							const themeLink = shot.theme
+								? `<div class="help">Shown in <a href="/marketplace/themes/${escapeHtml(shot.theme)}">${escapeHtml(shot.theme)}</a></div>`
+								: "";
+
+							return `
+								<div class="market-card">
+									<img src="/marketplace/screenshot/${encodeURIComponent(key)}"
+										alt="${escapeHtml(shot.description || name)}"
+										style="width: 100%; border-radius: 8px; display: block;">
+									${shot.description ? `<div class="desc">${escapeHtml(shot.description)}</div>` : ""}
+									${themeLink}
+								</div>`;
+						})
+						.join("")}
+				</div>`
+			: "";
+
+		const action = entry.installed
+			? '<span class="installed">Installed</span>'
+			: `<button type="button" class="btn" data-install="${escapeHtml(entry.id)}" ` +
+			  `data-kind="${kind}">Install</button>`;
+
+		const body = `
+			<div class="market-wide">
+				<a href="/marketplace" class="help">&larr; Marketplace</a>
+				<h1 style="margin-top: 10px;">${escapeHtml(name)}</h1>
+				<p class="help">
+					${kind === "theme" ? "Theme" : "Module"}
+					${author ? ` by <a href="/marketplace/authors/${encodeURIComponent(author)}">${escapeHtml(author)}</a>` : ""}
+				</p>
+
+				${entry.description ? `<p>${escapeHtml(entry.description)}</p>` : ""}
+				${extras.completeDescription
+					? extras.completeDescription
+						.split(/\n{2,}/)
+						.map((para) => para.trim())
+						.filter(Boolean)
+						.map((para) => `<p>${escapeHtml(para)}</p>`)
+						.join("")
+					: ""}
+
+				${emitsSection}
+				${screenshotsSection}
+
+				${entry.repo ? `
+				<h2>Source</h2>
+				<p class="help">
+					<a href="${escapeHtml(entry.repo)}">${escapeHtml(entry.repo)}</a>
+					${entry.ref ? ` — pinned at <code>${escapeHtml(String(entry.ref).slice(0, 10))}</code>` : ""}
+				</p>` : ""}
+
+				<div style="margin-top: 20px;">${action}</div>
+			</div>
+
+			<div class="panel footer">
+				<a href="/marketplace">Back</a>
+			</div>`;
+
+		const script = `
+			async function post(url, payload, button, working, done) {
+				const was = button.textContent;
+				button.disabled = true;
+				button.textContent = working;
+
+				try {
+					const response = await fetch(url, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(payload)
+					});
+
+					const result = await response.json();
+
+					if (!response.ok) {
+						throw new Error(result.error || "Failed");
+					}
+
+					button.textContent = done;
+					return true;
+				} catch (error) {
+					button.disabled = false;
+					button.textContent = error.message.slice(0, 60);
+					setTimeout(function () { button.textContent = was; }, 4000);
+					return false;
+				}
+			}
+
+			for (const button of document.querySelectorAll("[data-install]")) {
+				button.addEventListener("click", async function () {
+					const ok = await post(
+						"/marketplace/install",
+						{ id: button.dataset.install, kind: button.dataset.kind },
+						button,
+						"Installing...",
+						"Installed"
+					);
+					if (ok) {
+						setTimeout(function () { location.reload(); }, 800);
+					}
+				});
+			}
+		`;
+
+		res.send(page(name, body, script));
+	}
+
+	// A screenshot's real URL is never sent to the browser — only this
+	// key, remembered server-side in renderDetailPage right before the
+	// page that references it is sent. A key nobody remembered (an old
+	// page, a guess) simply isn't there to look up.
+	app.get("/marketplace/screenshot/:key", async (req, res) => {
+		const url = imageProxy.lookup(req.params.key);
+
+		if (!url) {
+			res.status(404).end();
+			return;
+		}
+
+		const image = await imageProxy.fetchImage(url);
+
+		if (!image) {
+			res.status(502).end();
+			return;
+		}
+
+		res.setHeader("Content-Type", image.type);
+		res.setHeader("Cache-Control", "private, max-age=300");
+		res.end(image.body);
+	});
+
+	app.get("/marketplace/modules/:id", (req, res) => {
+		renderDetailPage("module", req.params.id, res);
+	});
+
+	app.get("/marketplace/themes/:id", (req, res) => {
+		renderDetailPage("theme", req.params.id, res);
+	});
+
+	// Everything one author has published, across every source. Purely
+	// derived from the `author` field already on each entry — no new data
+	// collected, no separate profile to maintain. A fuller author page
+	// (bio, avatar, a claimed identity) is a real future feature; this is
+	// the honest version of what's actually known today.
+	app.get("/marketplace/authors/:name", async (req, res) => {
+		const authorName = req.params.name;
+		let available = null;
+
+		try {
+			available = await marketplace.listAvailable();
+		} catch (error) {
+			res.status(502).send(page("Marketplace", `
+				<div class="panel">
+					<div class="row">
+						<div>
+							<strong>Can't reach the registry</strong>
+							<div class="help">${escapeHtml(error.message)}</div>
+						</div>
+					</div>
+				</div>
+				<div class="panel footer"><a href="/marketplace">Back</a></div>
+			`));
+			return;
+		}
+
+		const modules = available.modules.filter((e) => e.author === authorName);
+		const themes = available.themes.filter((e) => e.author === authorName);
+
+		const body = `
+			<div class="market-wide">
+				<a href="/marketplace" class="help">&larr; Marketplace</a>
+				<h1 style="margin-top: 10px;">${escapeHtml(authorName)}</h1>
+				<p class="help">${modules.length + themes.length} listed</p>
+
+				<h2 style="margin-top: 24px;">Modules</h2>
+				${marketplaceCards(modules, "module")}
+
+				<h2 style="margin-top: 32px;">Themes</h2>
+				${marketplaceCards(themes, "theme")}
+			</div>
+
+			<div class="panel footer">
+				<a href="/marketplace">Back</a>
+			</div>`;
+
+		res.send(page(authorName, body));
 	});
 
 	app.post("/marketplace/install", async (req, res) => {

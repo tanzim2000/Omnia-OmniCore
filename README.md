@@ -1,91 +1,131 @@
 # Omnia-OmniCore
 
-The engine behind **Omnia**, a privacy-first smart home dashboard that runs
-entirely on hardware you own.
+A privacy-first smart home dashboard you run yourself, on your own
+hardware. Nothing about it talks to the internet except the things you
+choose to install.
 
-OmniCore serves one or more dashboards, each on its own port, and assembles
-the data they display. Nothing leaves your network except the calls you
-explicitly configure.
+## Setting it up (no coding needed)
 
-> **Status: early development.** The architecture is settled but nothing is
-> stable yet. Data formats have changed without migration paths and may do
-> so again.
+**1. Install Docker Desktop.**
 
-## What it does
+This is a free program that runs OmniCore for you in its own safe little
+box, so you don't have to install anything else on your computer.
+Download it from [docker.com](https://www.docker.com/products/docker-desktop/)
+and install it the way you'd install any other program.
+
+**2. Download OmniCore.**
+
+On this page, click the green **Code** button near the top, then
+**Download ZIP**. Unzip it somewhere you'll remember, like your Desktop.
+
+**3. Open a command window inside that folder.**
+
+- **Windows:** open the unzipped folder, hold **Shift**, right-click
+  inside it, and choose **Open PowerShell window here**.
+- **Mac:** open the unzipped folder in Finder, right-click it, and choose
+  **New Terminal at Folder**. (If you don't see that option, open the
+  Terminal app and type `cd ` followed by dragging the folder in, then
+  press Enter.)
+
+**4. Type this one line and press Enter:**
+
+```
+docker compose up -d
+```
+
+The first time, this takes a few minutes — it's downloading and setting
+everything up. You'll see a lot of text scroll by; that's normal.
+
+**5. Open your web browser and go to:**
+
+```
+http://localhost:3000
+```
+
+Create your account, then click **Marketplace** to install a theme and
+some modules — weather, a calendar, whatever you want on your dashboard.
+
+**6. Go to:**
+
+```
+http://localhost:4000
+```
+
+This is where you build your actual dashboard: give it a name, pick the
+theme and modules you just installed, and finish. That's it — your
+dashboard is live.
+
+### Turning it off, or starting it again
+
+From that same command window (or open a new one the same way and
+navigate back to the folder):
+
+```
+docker compose down
+```
+
+turns it off. To start it again later:
+
+```
+docker compose up -d
+```
+
+Everything you've set up is saved — your account, your dashboards,
+whatever you installed — even when it's off.
+
+### A limit worth knowing
+
+Ten dashboards can run at once out of the box. If you ever need an
+eleventh, that needs one small edit to a file by someone comfortable
+opening `docker-compose.yml` in a text editor — not something you'll run
+into unless you're building something unusually large.
+
+---
+
+## What it actually does
 
 OmniCore keeps three things apart so none of them has to know about the
 others:
 
-- **Modules** fetch data. They have no opinion about how it looks.
+- **Modules** fetch data — weather, a calendar, whatever. They have no
+  opinion about how it looks.
 - **Themes** decide how it looks. They never run on your server.
-- **Faces** are the dashboards themselves — a port, a theme, and the
-  modules on it.
+- **Faces** are the dashboards themselves.
 
-Because they're genuinely separate, any theme can display any module
-without knowing what that module does. Both are installed by dropping a
-folder in place; OmniCore finds them on its own.
+Because they're genuinely separate, any theme can display any module.
+Everything beyond the basics — new modules, new themes — comes from the
+**Marketplace**, built into the account page you created in step 5. Each
+one is reviewed before it's listed, so you're not installing random code
+off the internet.
 
-Modules and themes are distributed separately from this repository, and how
-to write one is covered in its own document. This repository is OmniCore.
+## For anyone comfortable with code
 
-## Faces
-
-A face is a dashboard served on its own port. That port _is_ its ID. Each
-face has four attributes: its `id`, a `name`, the `theme` rendering it, and
-the module `instances` on it.
-
-An instance is one use of a module. The same module can appear several
-times with different settings — two weather tiles for two cities — so
-settings belong to the instance rather than the module.
-
-Port numbers carry meaning:
-
-| Range   | Purpose                                                               |
-| ------- | --------------------------------------------------------------------- |
-| `3xxx`  | Admin faces. OmniCore's own interface. No third-party code runs here. |
-| `4000`  | The control face. Where faces are created and discovered.             |
-| `4001+` | Dashboard faces, assigned automatically.                              |
-
-Faces update live. Changing a face's name, theme, or modules takes effect
-without restarting anything, and any display showing that face reloads
-itself — so a screen with nobody in front of it stays current.
-
-## Running it
-
-Requires Node 20 or newer.
+If you'd rather run this from source instead of Docker — to modify it, to
+build your own modules or themes, or just because you prefer it —
+`docs/Architecture.md` is the real reference, and `docs/Building
+modules.md` / `docs/Building theme.md` cover writing your own.
 
 ```bash
-git clone https://github.com/tanzim2000/Omnia-OmniCore
+git clone <this repo>
 cd Omnia-OmniCore
 npm install
 node start.OmniCore
 ```
 
-Then:
+Requires Node 20 or newer. Same two pages afterward: port 3000 for the
+account and Marketplace, port 4000 for the setup wizard.
 
-1. Open **port 4000** and follow the setup wizard to create your first
-   face — name it, pick a theme, add modules, configure each one, finish.
-2. Open **port 3000** to create your admin account. From there you can edit
-   faces and their modules directly.
+## Known limitations
 
-The wizard is for setting a face up. The admin face is for changing one
-thing afterwards.
+- Ten dashboards at once via the Docker setup above; unlimited from source
+- No password reset — delete your account data to start over
+- Runs on plain HTTP; if you ever expose this beyond your own network, put
+  it behind a VPN or reverse proxy first
+- Modules are reviewed before listing but not sandboxed — see
+  `docs/Architecture.md` §9
 
-A container image is planned as the primary way to run this, with a
-dedicated OS image later on.
-
-## Layout
-
-```
-core/             OmniCore itself — faces, routing, admin, settings
-modules/          installed modules
-themes/           installed themes
-data/             your faces, settings and admin account
-start.OmniCore    entry point
-```
-
-Everything under `data/` is specific to your install and is deliberately
-not tracked by git.
+See `BACKLOG.md` for the fuller picture, including what a proper
+double-click installer would take beyond this.
 
 ## The wider project
 
@@ -94,17 +134,6 @@ OmniCore is one of three parts:
 - **OmniCore** — this repository. Serves faces and their data.
 - **OmniView** — the display client, for putting a face on a screen.
 - **OmniSync** — planned.
-
-OmniView uses the control face on port 4000 to discover which faces exist
-and choose between them.
-
-## Not yet built
-
-- Tiles don't remember their size between reloads
-- No password reset — delete `data/admin.json` to start over
-- Everything is HTTP; run it behind a VPN or reverse proxy, not on an
-  untrusted network
-- No container image yet
 
 ## Licence
 
