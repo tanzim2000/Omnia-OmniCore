@@ -97,9 +97,13 @@ with different settings — two weather tiles for two cities.
 
 ### Module
 
-A folder in `modules/` whose `index.js` exports **one function**. It is given
-settings and how much room there is, and returns data. It does not register
+A folder whose `index.js` exports **one function**. It is given settings,
+how much room there is, and a small object of things it's allowed to use —
+never `require()` into `core/` directly (see §5a). It does not register
 routes, does not touch Express, and renders nothing.
+
+A module usually arrives from the marketplace rather than being bundled —
+see §5b.
 
 ### Theme
 
@@ -107,17 +111,23 @@ A folder in `themes/` of **static files**. OmniCore serves it and never
 executes it, so a theme downloaded from anywhere can only render data the
 face already exposes.
 
+A theme usually arrives from the marketplace too — see §5b.
+
 ---
 
 ## 4. Repository layout
 
 ```
-core/           OmniCore itself
-modules/        installed modules
-themes/         installed themes
-data/           per-install data (gitignored)
-index.js        entry point
+core/            OmniCore itself
+modules/         installed modules (gitignored — see §5b)
+themes/          installed themes (gitignored — see §5b)
+data/            per-install data (gitignored)
+start.OmniCore   entry point
 ```
+
+OmniCore ships bare. A fresh clone has no modules and no themes — both
+folders exist (kept alive by a tracked `.gitkeep`) but are otherwise empty
+until the Marketplace puts something in them.
 
 ### `core/` file by file
 
@@ -133,6 +143,9 @@ index.js        entry point
 | `module-loader.js`    | Finds modules, loads their function. **The module contract is documented here.**                                              |
 | `module-config.js`    | Reads a module's `module.json` and `settings.json`. Applies defaults, cleans submitted values.                                |
 | `module-fetch.js`     | Shared HTTP helper for modules: caching, timeouts, stale fallback, in-flight deduplication.                                   |
+| `module-api.js`       | Builds the object a module actually receives — `fetch`/`visible`/`share`. The one seam a module reaches OmniCore through.     |
+| `marketplace.js`      | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                |
+| `priority.js`         | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                 |
 | `theme-loader.js`     | Finds themes, reads their manifest and both settings schemas.                                                                 |
 | `envelope.js`         | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                  |
 | `image-proxy.js`      | Fetches images on the display's behalf so a display only ever talks to your server.                                           |
@@ -151,13 +164,13 @@ index.js        entry point
 
 ## 5. The module agreement
 
-**Every module must follow this. It is the contract the marketplace will
-hold modules to.**
+**Every module must follow this. It is the contract the marketplace holds
+modules to.**
 
 ### The function
 
 ```js
-module.exports = async function (config, richness) {
+module.exports = async function (config, richness, omni) {
   return {
     title: "Weather",
     content: [
@@ -172,6 +185,7 @@ module.exports = async function (config, richness) {
   defaults declared in `settings.json`. Location fields arrive as real
   coordinates.
 - `richness` — a number **1–100**. See below. **Mandatory to honour.**
+- `omni` — the only way to reach OmniCore. See §5a; never `require("../../core/...")`.
 - Returns an envelope. `title` may be overridden by the instance's label.
 
 ### Richness
@@ -265,13 +279,11 @@ breaking the face — but relying on that is worse than handling it.
 
 ### Using the network
 
-Modules that call an outside service **should** go through the shared
-helper:
+Modules that call an outside service **must** go through `omni.fetch`,
+never a bare `fetch()`:
 
 ```js
-const { fetchCached } = require("../../core/module-fetch");
-
-const { data, stale } = await fetchCached(url, {
+const { data, stale } = await omni.fetch(url, {
   cacheSeconds: 600,
   timeoutSeconds: 10,
   as: "json", // or "text"
@@ -287,6 +299,86 @@ When `stale` is true, **say so** — append "(last known)" or similar rather
 than presenting old data as current.
 
 ---
+
+### 5a. What `omni` actually is
+
+A module never reaches into `core/`. Everything it may use arrives as one
+object, built fresh per call in `core/module-api.js`:
+
+| Member                     | What it does                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------ |
+| `version`                  | Which shape of this object a module was written against.                                   |
+| `fetch(url, options)`      | The shared HTTP helper — caching, timeouts, stale fallback. See "Using the network" above. |
+| `visible(order, richness)` | Which of a `priority`-ordered list to show.                                                |
+| `share(count, richness)`   | How many of a list of like rows to show.                                                   |
+
+This is deliberately not `require("../../core/module-fetch")`. Three
+things follow from handing capabilities to a module instead of letting it
+reach for them:
+
+- **A module doesn't care where it's installed.** A relative `require`
+  only resolves if the module sits exactly where OmniCore's own layout
+  expects — a fact about OmniCore leaking into someone else's repo. This
+  object works the same regardless.
+- **The surface is one small, named thing**, not a set of file paths a
+  module could poke around beyond. What a module may use is exactly what
+  this table lists.
+- **It can be made smaller later.** A module that can `require` its way
+  into `core/module-fetch` can equally `require("fs")` and read
+  `data/admin.json` — nothing stops it. A restricted build can instead
+  hand a module a smaller `omni` — a `fetch` that refuses, say — without
+  changing a single well-behaved module. This is the seam any future
+  sandboxing hangs off; `require`-into-core would have made that much
+  harder to retrofit.
+
+---
+
+### 5b. The marketplace
+
+OmniCore ships bare. Every module and theme beyond nothing arrives
+through `core/marketplace.js`, which does exactly three things and
+nothing more: fetch a registry, download a pinned commit, verify it
+before it touches `modules/` or `themes/`.
+
+**The registry** is one JSON file — by default the project's own,
+overridable per-install with a `registryUrl` setting. Getting an entry
+listed there means a pull request against that repo was reviewed and
+merged; review has already happened before any of this code runs.
+
+```json
+{
+  "id": "weather",
+  "name": "Weather",
+  "repo": "https://github.com/someone/omnicore-weather",
+  "path": "modules/weather",
+  "ref": "a1b2c3d",
+  "author": "someone"
+}
+```
+
+`ref` is always a **commit**, never a branch. If it pointed at a branch,
+reviewed-safe code could turn malicious in a later push and every
+existing install would silently receive it. Pinning means changing what
+an entry serves needs its own pull request, reviewed the same way.
+
+`path` is optional and names a subfolder — the same repo can hold several
+modules or themes (a studio publishing ten themes from one repo), each
+getting its own registry entry. Empty means the repo root, which is every
+entry until this is used.
+
+**Installing never executes anything.** A tarball is downloaded,
+extracted into an isolated staging folder, checked for the one file that
+makes it a real module (`index.js`) or theme (`index.html`), and only
+then moved into place. A failed check leaves nothing behind under
+`modules/` or `themes/` — nothing is written there until every check has
+passed.
+
+**Extraction rejects anything that isn't a plain file or directory.**
+Path safety alone is not enough here: an archive entry can have a
+perfectly safe _name_ — `icon.png`, say — while being a symlink that
+_points_ somewhere else on the machine entirely. This was found by
+attacking the installer during development, not theorised in advance;
+see §13.
 
 ## 6. The theme agreement
 
@@ -528,9 +620,11 @@ than each module working it out, OmniCore establishes it once.
 
 **Honest scope of the guarantee:** themes are genuinely sandboxed — with no
 server side, a theme has no path to a location OmniCore doesn't expose.
-Modules are trusted backend code, like any Node program; a module _could_
-call a geolocation service itself. This service makes the right thing the
-easy path. It is not a sandbox and should not be described as one.
+Modules are trusted backend code — a module _could_ call a geolocation
+service itself. This service makes the right thing the easy path. Being
+reviewed into the registry (§5b) and receiving `omni` rather than raw
+`require` access (§5a) both narrow this over time; neither is a sandbox
+today, and shouldn't be described as one.
 
 ### Image proxying
 
@@ -561,13 +655,13 @@ restart, and nobody has to be standing in front of the screen.
 Worth being explicit, because several decisions only make sense in this
 light.
 
-| Surface                     | Trust                                                                                                                      |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                       |
-| **Modules**                 | Trusted. Arbitrary Node code — can read files, open sockets, anything. Same trust as any npm dependency.                   |
-| **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                     |
-| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                |
-| **Dashboard faces (4001+)** | Unauthenticated. Serves data and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen. |
+| Surface                     | Trust                                                                                                                                                     |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                      |
+| **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install — full Node access, narrowed only by what `omni` actually hands over (§5a). |
+| **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                                                    |
+| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                               |
+| **Dashboard faces (4001+)** | Unauthenticated. Serves data and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                |
 
 Passwords are salted scrypt hashes compared in constant time. Sessions are
 random tokens in an `HttpOnly`, `SameSite=Strict` cookie, held in memory so
@@ -584,7 +678,7 @@ Requires Node 20 or newer.
 
 ```bash
 npm install
-node index.js
+node start.OmniCore
 ```
 
 1. **Port 4000** — the setup wizard. Name and title, theme, module picker,
@@ -660,7 +754,13 @@ Faces, themes, modules, instances. The full settings system, including
 `priority` fields. Location service. Image proxying. Live push updates.
 Admin login. The setup wizard. The `windows8` theme with three animations.
 
-All eight bundled modules honour richness. Those with distinct fields
+The **marketplace**: browse, one-click install from a reviewed registry,
+and the module API split (`omni`) that made modules independent of
+OmniCore's own layout. OmniCore ships bare — nothing bundled — and the
+eight modules and one theme it launched with now live in their own
+repo, installed like anything else would be.
+
+All eight of those modules honour richness. Those with distinct fields
 (`weather`, `disk-space`, `system-stats`) let the user order them with a
 `priority` setting; those that emit a list of like rows (`calendar`,
 `docker-status`, `ntfy-bridge`) scale the number of rows instead, since
@@ -669,10 +769,6 @@ use their own fixed steps.
 
 ### Not built yet
 
-- **Resource separation** — themes and modules moving to their own repos,
-  with OmniCore shipping bare.
-- **First-run setup** — downloading the user's chosen themes and modules.
-- **Marketplace** — distribution and discovery.
 - **Auto start/shutdown.**
 - **OmniView** — the display client.
 - **Container image** — the intended primary distribution.
@@ -706,4 +802,16 @@ Things that cost real debugging time in this project:
 - **Syntax-checking the server file is not enough.** The JavaScript written
   _into_ a page is a separate program; extract and check it too.
 - **Two ways to do one thing is one too many.** A "hide this tile"
+- **A safe-looking path can still hide an unsafe target.** A downloaded
+  archive's extraction filter checked that every entry's own path stayed
+  inside the destination — and missed that a symlink's own path can be
+  entirely safe while what it _points to_ is anywhere on the machine.
+  Found by deliberately attacking the installer before anyone else could;
+  fixed by rejecting anything that isn't a plain file or directory.
+- **`fs.rename()` assumes one filesystem.** Moving a download from the
+  OS temp directory into place worked everywhere it was tested, then
+  failed with `EXDEV` the first time source and destination happened to
+  be different mounts — true on Codespaces, not true in the sandbox this
+  was built in. A same-filesystem move is not guaranteed; fall back to
+  copy-then-delete when the OS says no.
   checkbox alongside a "Hidden" size was redundant and confusing.

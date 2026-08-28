@@ -519,3 +519,20 @@ Everything in §4 and §5 is additive on top of this.
 - [ ] Handles zero instances without breaking
 - [ ] Doesn't attempt to write anything, and doesn't try to reimplement the
       reload behaviour §6 already gives it for free
+
+---
+
+## 11. Getting it in front of anyone
+
+A theme on your own machine only helps you. Getting it into the
+Marketplace means:
+
+1. Push it to a public repo — its own, or a subfolder of one with several
+   themes or modules in it.
+2. Open a pull request against the registry repo, adding one entry that
+   names your repo, the commit to pin, and a `path` if it's not at the
+   repo's root.
+
+Full details — the entry's exact shape, why it pins a commit rather than a
+branch, how one repo can hold several themes — are in
+`docs/ARCHITECTURE.md` §5b, and in the registry repo's own README.

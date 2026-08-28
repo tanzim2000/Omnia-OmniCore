@@ -23,7 +23,7 @@ modules/my-module/
 `index.js` exports exactly one function:
 
 ```js
-module.exports = async function (config, richness) {
+module.exports = async function (config, richness, omni) {
   return {
     title: "My Module",
     content: [
@@ -47,6 +47,13 @@ settings, this is `{}`.
 much room there is to fill. This is the part most guides for tile-based
 systems skip, and it's the part that matters most here — §2 is entirely
 about it.
+
+**`omni`** is the only way to reach anything OmniCore provides — network
+fetching, the richness helpers, whatever gets added later. Never
+`require("../../core/...")`; a module that reaches for core files by
+relative path breaks the moment it's installed anywhere other than
+exactly where OmniCore's own layout expects, which after installation
+is never guaranteed. See §6 for the one you'll actually use.
 
 You return a `title` (shown as the tile's heading unless the instance has
 its own label, which wins), a `content` array of blocks, and an `updated`
@@ -275,9 +282,7 @@ order yourself.
 Pair it with the shared helper:
 
 ```js
-const { visible } = require("../../core/priority");
-
-const showing = visible(config.fieldOrder, richness);
+const showing = omni.visible(config.fieldOrder, richness);
 ```
 
 `visible` spreads the 1-100 scale across however many items there are and
@@ -290,11 +295,9 @@ meaningful to reorder, and a priority setting would be a second way to do a
 job richness already does. Use `share` instead:
 
 ```js
-const { share } = require("../../core/priority");
-
 // How many rows this tile has earned. minimum: 0 because a tile with room
 // only for the summary should show only the summary.
-const room = share(rows.length, richness, { minimum: 0 });
+const room = omni.share(rows.length, richness, { minimum: 0 });
 ```
 
 `modules/calendar`, `modules/docker-status` and `modules/ntfy-bridge` all do
@@ -356,12 +359,10 @@ Optional, but worth having:
 
 ## 6. Calling the network
 
-**Use `core/module-fetch.js` instead of calling `fetch()` yourself.**
+**Use `omni.fetch` instead of calling `fetch()` yourself.**
 
 ```js
-const { fetchCached } = require("../../core/module-fetch");
-
-const { data, stale } = await fetchCached(url, {
+const { data, stale } = await omni.fetch(url, {
   cacheSeconds: 300, // default 300 — how long a cached answer stays fresh
   timeoutSeconds: 10, // default 10 — give up after this long
   as: "json", // default "json"; use "text" for non-JSON responses
@@ -381,7 +382,7 @@ yourself, and every module gets them for free:
   gives up after `timeoutSeconds` so a dead API doesn't leave a tile
   hanging indefinitely.
 - **Stale-beats-nothing.** If the service is briefly unreachable,
-  `fetchCached` hands back the last good answer instead of nothing, and
+  `omni.fetch` hands back the last good answer instead of nothing, and
   sets `stale: true` so you know. On a wall display, a twenty-minute-old
   temperature reads better than a blank tile — use `stale` to append
   something like "(last known)" if you want to be transparent about it.
@@ -444,7 +445,7 @@ detail at higher richness, with a configurable target date:
 ```js
 // modules/countdown/index.js
 
-module.exports = async function countdown(config, richness) {
+module.exports = async function countdown(config, richness, omni) {
   if (!config.targetDate) {
     return {
       title: "Countdown",
@@ -540,14 +541,16 @@ the pattern applied.
 
 ## 10. Checklist before you call it done
 
-- [ ] Function signature is `(config, richness)`
+- [ ] Function signature is `(config, richness, omni)`
+- [ ] Nothing in the file does `require("../../core/...")` — everything
+      comes through `omni`
 - [ ] `richness` actually changes what you return, at more than one point
 - [ ] If your module has distinct fields, you considered a `priority`
       setting so the user can order them; if it emits like rows, you scaled
       the row count instead
 - [ ] Every path returns a valid envelope, including failure cases —
       nothing relies on throwing
-- [ ] Outbound HTTP goes through `fetchCached`, with a `cacheSeconds` that
+- [ ] Outbound HTTP goes through `omni.fetch`, with a `cacheSeconds` that
       matches how often your data actually changes
 - [ ] No HTML, no styling, no layout decisions anywhere in your output
 - [ ] No label folded into a value string — anything with a name and a
@@ -556,3 +559,20 @@ the pattern applied.
       `image` or `background`
 - [ ] Settings are declared in `settings.json`, not asked for any other way
 - [ ] A `location` field's `null` case is handled, if you use one
+
+---
+
+## 11. Getting it in front of anyone
+
+A module on your own machine only helps you. Getting it into the
+Marketplace means:
+
+1. Push it to a public repo — its own, or a subfolder of one with several
+   modules or themes in it.
+2. Open a pull request against the registry repo, adding one entry that
+   names your repo, the commit to pin, and a `path` if it's not at the
+   repo's root.
+
+Full details — the entry's exact shape, why it pins a commit rather than a
+branch, how one repo can hold several modules — are in
+`docs/ARCHITECTURE.md` §5b, and in the registry repo's own README.
