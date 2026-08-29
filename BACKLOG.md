@@ -112,8 +112,19 @@ it matters.
 - `OmniView` (the display client) and `OmniSync` are both still just
   named, not built
 
+## Decided for next release
+
+**Publish a pre-built image to ghcr.io.** Right now `docker compose up`
+builds from source on whoever runs it — works, but slower, and one more
+thing that can fail on someone else's machine. Publishing means it just
+pulls a ready image instead. Once this exists, the repo's **Packages**
+section (currently hidden, deliberately — see the About panel) should be
+turned back on.
+
 ## If you only do one thing next
 
 Probably the Update UI — it's the smallest gap between "the mechanism
 exists" and "a person can actually use it," and it's the one most likely
 to bite you personally the next time one of your own modules changes.
+The ghcr.io publishing above is the one already decided for the release
+after that.
