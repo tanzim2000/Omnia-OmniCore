@@ -38,8 +38,11 @@ const fsp = require("fs/promises");
 const os = require("os");
 const path = require("path");
 const tar = require("tar");
+const semver = require("semver");
 
 const { readSettings, writeSettings } = require("./settings-store");
+const omnicoreVersion = require("./version");
+const installStore = require("./install-store");
 
 const modulesDir = path.join(__dirname, "..", "modules");
 const themesDir = path.join(__dirname, "..", "themes");
@@ -183,6 +186,59 @@ function assertSafeId(id) {
 	if (!/^[a-z0-9][a-z0-9-]*$/.test(String(id || ""))) {
 		throw new Error(`Not a valid id: ${id}`);
 	}
+}
+
+// Does this entry's `minOmniCore` allow it to run on the OmniCore that's
+// actually running right now?
+//
+// Interpreted as a caret range: same major version, at least that
+// minor/patch. Never an open-ended "any future version" — a resource
+// declaring it needs 1.1.0 is a claim about the 1.x line, not a promise
+// that it'll still work after some future breaking v2. That upper bound
+// is what makes a bare minimum meaningful without ever being asked to
+// name a maximum.
+//
+// Missing `minOmniCore` is not a failure — it means either a registry
+// entry from before this field existed, or a third-party registry that
+// hasn't adopted it. Nothing to check against, so nothing blocks it; this
+// can only get stricter as entries adopt the field, never reject
+// something retroactively that installed fine yesterday.
+function checkCompatibility(entry) {
+	const required = entry && entry.minOmniCore;
+
+	if (!required) {
+		return { compatible: true, reason: null };
+	}
+
+	const coercedRequired = semver.coerce(required);
+
+	if (!coercedRequired) {
+		return {
+			compatible: false,
+			reason: `${entry.id} declares an invalid minOmniCore: ${required}`
+		};
+	}
+
+	// A dev build (docker-compose.dev.yml, or "npm start" from a bare
+	// clone) has no real release version to compare against. Refusing
+	// every install because of that would make local development
+	// impossible, so a dev build is trusted rather than blocked here —
+	// same as it already is for the module/theme code itself, which a
+	// dev build can run unreviewed and unpinned by design.
+	const running = omnicoreVersion.comparableVersion();
+	if (!running) {
+		return { compatible: true, reason: null };
+	}
+
+	const ok = semver.satisfies(running, `^${coercedRequired.version}`);
+
+	return {
+		compatible: ok,
+		reason: ok
+			? null
+			: `${entry.id} needs OmniCore ${required} or later (same major` +
+			  ` version) — this install is running ${running}`
+	};
 }
 
 // Defense in depth alongside whatever the tar library already refuses.
@@ -338,6 +394,13 @@ async function installFromEntry(kind, entry, update) {
 		);
 	}
 
+	// Checked before anything is downloaded — no point spending a network
+	// round trip on code that's about to be refused anyway.
+	const compatibility = checkCompatibility(entry);
+	if (!compatibility.compatible) {
+		throw new Error(compatibility.reason);
+	}
+
 	const stagingDir = await stageEntry(entry);
 
 	try {
@@ -358,11 +421,20 @@ async function installFromEntry(kind, entry, update) {
 		await fsp.rm(stagingDir, { recursive: true, force: true });
 	}
 
+	// Only recorded once the folder swap above actually succeeded — a
+	// failed download or a failed move should never leave behind a record
+	// of an install that isn't really sitting on disk.
+	const recorded = installStore.record(kind, entry.id, {
+		ref: entry.ref,
+		minOmniCore: entry.minOmniCore || null
+	});
+
 	return {
 		id: entry.id,
 		kind,
 		ref: entry.ref,
-		installedAt: new Date().toISOString()
+		installedAt: recorded.installedAt,
+		updatedAt: recorded.updatedAt
 	};
 }
 
@@ -388,6 +460,95 @@ async function installEntry(kind, id, update) {
 	return installFromEntry(kind, entry, update);
 }
 
+// Compares every installed module and theme against the registry's
+// current entry for it, and reports anything whose pinned commit has
+// moved on — that's the whole definition of "an update exists" now that
+// resources don't carry a version number of their own: the registry
+// entry's `ref` changing IS the update.
+//
+// Something installed by hand (or before install-store existed) has no
+// record here, so it's silently excluded rather than reported as
+// unavailable — there is nothing wrong with it, there's just nothing to
+// compare it against yet.
+async function checkForUpdates() {
+	const registry = await fetchRegistry();
+
+	return installStore
+		.listAll()
+		.map((installed) => {
+			const list =
+				installed.kind === "theme" ? registry.themes : registry.modules;
+			const entry = list.find((item) => item.id === installed.id);
+
+			// No longer listed at all — nothing to compare against, and not
+			// this function's place to decide what that means.
+			if (!entry) {
+				return null;
+			}
+
+			if (entry.ref === installed.ref) {
+				return null;
+			}
+
+			const compatibility = checkCompatibility(entry);
+
+			return {
+				id: installed.id,
+				kind: installed.kind,
+				currentRef: installed.ref,
+				availableRef: entry.ref,
+				compatible: compatibility.compatible,
+				reason: compatibility.reason,
+				entry
+			};
+		})
+		.filter(Boolean);
+}
+
+// The background half of "auto-install silently": installs every
+// compatible update found by checkForUpdates, and leaves incompatible
+// ones alone rather than guessing. An incompatible update sitting
+// unapplied isn't a bug to fix here — it's exactly the signal that this
+// OmniCore itself needs updating before that resource can move forward,
+// which is the self-update feature's job, not this one's.
+async function applyAvailableUpdates() {
+	const candidates = await checkForUpdates();
+
+	const applied = [];
+	const skipped = [];
+
+	for (const candidate of candidates) {
+		if (!candidate.compatible) {
+			skipped.push({
+				id: candidate.id,
+				kind: candidate.kind,
+				reason: candidate.reason
+			});
+			continue;
+		}
+
+		try {
+			await installFromEntry(candidate.kind, candidate.entry, true);
+			applied.push({
+				id: candidate.id,
+				kind: candidate.kind,
+				ref: candidate.availableRef
+			});
+		} catch (error) {
+			// One resource failing to update — a flaky download, a registry
+			// hiccup — shouldn't stop the rest of the batch from being
+			// checked.
+			skipped.push({
+				id: candidate.id,
+				kind: candidate.kind,
+				reason: error.message
+			});
+		}
+	}
+
+	return { applied, skipped };
+}
+
 // The registry, with each entry marked according to what's already on
 // disk. This is what the admin face's marketplace page renders.
 //
@@ -397,15 +558,35 @@ async function installEntry(kind, id, update) {
 async function listAvailable() {
 	const registry = await fetchRegistry();
 
-	const mark = (entries, dir) =>
-		entries.map((entry) => ({
-			...entry,
-			installed: fsSync.existsSync(path.join(dir, String(entry.id || "")))
-		}));
+	const mark = (kind, entries, dir) =>
+		entries.map((entry) => {
+			const installed = fsSync.existsSync(
+				path.join(dir, String(entry.id || ""))
+			);
+
+			// The install-store record is what's actually authoritative for
+			// "which commit is this" — the folder existing only ever proved
+			// SOMETHING is there. No record (an install predating this
+			// file, or dropped in by hand) just means no update can be
+			// offered for it yet, not that it's broken.
+			const recorded = installed ? installStore.get(kind, entry.id) : null;
+			const updateAvailable = Boolean(
+				recorded && recorded.ref !== entry.ref
+			);
+
+			return {
+				...entry,
+				installed,
+				updateAvailable,
+				updateCompatible: updateAvailable
+					? checkCompatibility(entry).compatible
+					: null
+			};
+		});
 
 	return {
-		modules: mark(registry.modules, modulesDir),
-		themes: mark(registry.themes, themesDir),
+		modules: mark("module", registry.modules, modulesDir),
+		themes: mark("theme", registry.themes, themesDir),
 		sourceFailures: registry.sourceFailures
 	};
 }
@@ -541,6 +722,9 @@ module.exports = {
 	tarballUrl,
 	installEntry,
 	installFromEntry,
+	checkCompatibility,
+	checkForUpdates,
+	applyAvailableUpdates,
 	addSource,
 	removeSource,
 	fetchDetailExtras,

@@ -1,5 +1,37 @@
 # Changelog
 
+## v1.2.0
+
+Installed modules and themes can now update themselves.
+
+### Added
+
+- **`minOmniCore`.** A registry entry can now declare the oldest
+  OmniCore it actually works on. Nothing gets a version number of its
+  own — the commit already pinned in `ref` is the version, and pointing
+  `ref` at a new commit is how an update ships. `minOmniCore` only
+  answers the narrower question of what a given commit needs to run.
+  Declaring too low a floor is the one way this can go wrong: it means
+  an update that assumes a newer OmniCore reaches an install that
+  can't actually support it.
+- **OmniCore remembers what it installed.** Until now, whether
+  something was "installed" was decided purely by a folder existing —
+  there was no record of which commit was actually inside it. A new
+  local record fixes that, which is what makes "has the registry moved
+  past what I have?" answerable for the first time.
+- **Silent updates.** Every six hours (and once, thirty seconds after
+  startup), OmniCore compares what's installed against the registry
+  and quietly installs anything newer that its `minOmniCore` allows.
+  Anything the running OmniCore doesn't meet the floor for is left
+  alone rather than forced on — that's what `minOmniCore` is actually
+  for.
+
+### Changed
+
+- Installing or updating a module or theme now checks `minOmniCore`
+  first and refuses outright if this OmniCore is too old, rather than
+  installing something that might not work.
+
 ## v1.1.0
 
 Installing OmniCore no longer means building it yourself.
