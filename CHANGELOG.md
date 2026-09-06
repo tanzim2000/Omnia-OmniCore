@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.3.0
+
+OmniCore can now update itself.
+
+### Added
+
+- **Self-update.** Every six hours, OmniCore checks whether a newer
+  release exists on the same major version line and, if the Docker
+  socket is available, pulls and applies it automatically — recreating
+  its own container with the new image, same ports, same data, same
+  restart policy.
+- **A one-command rollback.** The container being replaced isn't
+  deleted — it's stopped and kept under a different name. If an update
+  ever turns out bad, `docker start omnicore-previous` (then removing
+  the broken one) undoes it without reaching for a backup.
+- **Checking for an update never requires the socket, applying one
+  does.** Someone who removed the `docker.sock` line from
+  `docker-compose.yml` still gets told a new version exists in the
+  logs — OmniCore just can't act on it for them, exactly as promised
+  when that line was introduced.
+
+### Security
+
+- Applying an update launches a short-lived helper container (the
+  official `docker:cli` image) with its own socket access, because a
+  container cannot safely stop and replace itself from the inside —
+  it would be killed partway through its own first step. The helper
+  exists only to run three commands and removes itself immediately
+  after.
+
 ## v1.2.0
 
 Installed modules and themes can now update themselves.
