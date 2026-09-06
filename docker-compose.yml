@@ -1,8 +1,24 @@
+# The normal way to run OmniCore: docker compose up -d
+#
+# This pulls a ready-built image from GitHub's registry — nothing is compiled
+# on your machine. If you are working ON OmniCore rather than running it, use
+# docker-compose.dev.yml instead, which builds from the source in this folder.
+
 services:
   omnicore:
-    build: .
+    # ":1" means "the newest OmniCore that is still version 1.x".
+    #
+    # Bug fixes and new features arrive on their own. A version 2 — which by
+    # definition may break things — never arrives silently; upgrading to it
+    # is a deliberate edit of this line. That is the whole point of the
+    # split: automatic where it is safe, manual where it isn't.
+    #
+    # Prefer to never move at all? Pin an exact version, e.g. ":1.0.0".
+    image: ghcr.io/tanzim2000/omnia-omnicore:1
+
     container_name: omnicore
     restart: unless-stopped
+
     ports:
       # Admin — create your account, install things, change settings
       - "3000:3000"
@@ -21,6 +37,7 @@ services:
       - "4008:4008"
       - "4009:4009"
       - "4010:4010"
+
     volumes:
       # Everything that makes this YOUR OmniCore rather than a blank one —
       # your account, your dashboards, whatever you've installed. Without
@@ -28,6 +45,23 @@ services:
       - omnicore-data:/app/data
       - omnicore-modules:/app/modules
       - omnicore-themes:/app/themes
+
+      # ---------------------------------------------------------------
+      # Self-update access.
+      #
+      # A container cannot replace its own image from the inside. This line
+      # hands OmniCore the Docker control socket so it can pull a newer
+      # image and recreate itself — the same mechanism Watchtower uses.
+      #
+      # Understand what you are granting: this is effectively root on the
+      # host. Anything OmniCore can do, it can do to every container on
+      # this machine, and to the machine itself.
+      #
+      # Delete this one line and OmniCore still runs perfectly — it will
+      # tell you when an update exists instead of applying it, and you
+      # update by hand with: docker compose pull && docker compose up -d
+      # ---------------------------------------------------------------
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   omnicore-data:

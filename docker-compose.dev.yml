@@ -1,0 +1,46 @@
+# Identical to docker-compose.yml except it builds the image from the source
+# in this folder instead of pulling a published one, so your local changes
+# are what actually runs.
+#
+# The version reports as "dev", which is deliberate: a local build isn't a
+# release, and OmniCore should never mistake it for one or try to "update"
+# a work-in-progress out from under you.
+
+services:
+  omnicore:
+    build:
+      context: .
+      args:
+        OMNICORE_VERSION: dev
+
+    container_name: omnicore-dev
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+      - "4000:4000"
+      - "4001:4001"
+      - "4002:4002"
+      - "4003:4003"
+      - "4004:4004"
+      - "4005:4005"
+      - "4006:4006"
+      - "4007:4007"
+      - "4008:4008"
+      - "4009:4009"
+      - "4010:4010"
+
+    volumes:
+      # Separate volumes from the real install, so experimenting here can't
+      # damage a working setup on the same machine.
+      - omnicore-dev-data:/app/data
+      - omnicore-dev-modules:/app/modules
+      - omnicore-dev-themes:/app/themes
+
+      # No docker.sock here on purpose. A dev build has nothing to update
+      # itself to, so there is no reason to hand it control of the host.
+
+volumes:
+  omnicore-dev-data:
+  omnicore-dev-modules:
+  omnicore-dev-themes:

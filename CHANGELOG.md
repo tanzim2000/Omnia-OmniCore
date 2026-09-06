@@ -1,5 +1,56 @@
 # Changelog
 
+## v1.1.0
+
+Installing OmniCore no longer means building it yourself.
+
+> **Still no auto-update.** This release lays the groundwork for it —
+> published images, a version each install can actually report — but
+> OmniCore does not yet update itself or check whether it is out of
+> date. That lands next. What changes today is that a future update
+> will have somewhere to arrive from.
+
+### Added
+
+- **Published images.** Every tagged release is now built and pushed to
+  GitHub's container registry automatically, for both 64-bit PCs and
+  ARM boards like the Raspberry Pi. Installing is now a download rather
+  than a build, which takes the slowest and most failure-prone step out
+  of a first-time setup entirely.
+- **A version each install knows about itself.** The release tag is
+  baked into the image at build time and readable at runtime. Until
+  now a running OmniCore had no idea which version it was — it could
+  only read what the source _claimed_, which says nothing about what
+  was actually built. Answering "am I out of date?" is impossible
+  without this, so it comes first.
+- **A separate development setup.** `docker-compose.dev.yml` builds
+  from local source with its own storage, so working on OmniCore can't
+  disturb a real install running on the same machine. Local builds
+  report their version as `dev` rather than impersonating a release.
+
+### Changed
+
+- **The default install pulls instead of builds.** `docker-compose.yml`
+  now fetches a published image, pinned to the major version line: bug
+  fixes and new features arrive on their own, but a version 2 — which
+  by definition may break existing dashboards — never arrives without
+  someone deciding it should. Pin an exact version instead if you would
+  rather nothing move at all.
+- **The default install can update itself.** The compose file grants
+  OmniCore access to Docker's control socket, which is what allows a
+  container to replace its own image. Removing that single line leaves
+  OmniCore fully working; it simply reports available updates instead
+  of applying them, and you update by hand.
+
+### Security
+
+- Granting Docker socket access is effectively granting root on the
+  host machine. That is a real cost, taken deliberately: OmniCore is
+  heading toward shipping as its own system image, where this level of
+  control is the norm rather than an exception. Anyone uncomfortable
+  with that tradeoff can delete one line and lose nothing but the
+  automatic part of updating.
+
 ## v1.0.0
 
 First release meant for actual use, not just active development.

@@ -2,6 +2,23 @@
 # beyond one docker compose command.
 FROM node:20-alpine
 
+# Which version this image is. The publish workflow passes the git tag in
+# (e.g. "v1.1.0"); a plain local "docker build" gets "dev" instead, which is
+# honest — a local build genuinely isn't a published release.
+#
+# OmniCore reads this at runtime to answer "am I out of date?" without
+# guessing from package.json, which only says what the source claims.
+ARG OMNICORE_VERSION=dev
+ENV OMNICORE_VERSION=$OMNICORE_VERSION
+
+# Standard OCI labels. These are what GitHub reads to link the published
+# package back to this repo, and what tools like Watchtower read to
+# identify an image.
+LABEL org.opencontainers.image.title="Omnia OmniCore"
+LABEL org.opencontainers.image.description="Modular, config-driven backend for the Omnia home dashboard ecosystem."
+LABEL org.opencontainers.image.source="https://github.com/tanzim2000/Omnia-OmniCore"
+LABEL org.opencontainers.image.version=$OMNICORE_VERSION
+
 WORKDIR /app
 
 # Dependencies first, so a rebuild after only changing core/ doesn't

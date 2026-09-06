@@ -1,0 +1,99 @@
+# Builds OmniCore into a container image and publishes it to GHCR
+# (GitHub's own container registry, ghcr.io).
+#
+# Why this exists: until now OmniCore could only be built locally by whoever
+# cloned the repo. A container cannot update itself if there is nothing to
+# pull — so before auto-update can work at all, every release has to end up
+# as a real, tagged image sitting in a registry.
+#
+# When it runs:
+#   - automatically, whenever a version tag like v1.1.0 is pushed
+#   - manually, from the Actions tab (publishes a throwaway ":dev" image)
+
+name: Publish OmniCore image
+
+on:
+  push:
+    tags:
+      # Only version tags. Pushing "v1.1.0" publishes a release image;
+      # pushing ordinary commits to main does not publish anything.
+      - "v*"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  # Resolves to "tanzim2000/Omnia-OmniCore". GHCR requires lowercase names,
+  # but the metadata step below lowercases this automatically.
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Read the repo code...
+      contents: read
+      # ...and write packages, which is what lets us push to GHCR using the
+      # automatic GITHUB_TOKEN instead of a personal access token.
+      packages: write
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        # QEMU emulates other CPU architectures, which is what makes it
+        # possible to build an ARM image on GitHub's x86 runners. Needed
+        # for the linux/arm64 build below (Raspberry Pi, ARM mini PCs).
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        # Buildx is the modern Docker builder. Plain "docker build" cannot
+        # produce one image that covers several architectures; Buildx can.
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # Provided by GitHub automatically — no secret to create by hand.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Work out the image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            # Pushing tag v1.2.3 produces all three of these, so an install
+            # can choose how adventurous it wants to be:
+            #   :1.2.3  exact version, never moves
+            #   :1.2    newest patch of that minor line
+            #   :1      newest release that is still major version 1
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            # ":latest" tracks the newest stable release. Skipped for
+            # pre-releases like v1.2.0-beta1 (any tag containing a hyphen).
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-') }}
+            # Manual runs publish ":dev" only — never touches release tags.
+            type=raw,value=dev,enable=${{ github.event_name == 'workflow_dispatch' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          # amd64 covers normal PCs and mini PCs; arm64 covers Raspberry Pi
+          # 4/5 and similar boards, which is a realistic dashboard host.
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            # Baked into the image so a running OmniCore can report which
+            # version it actually is — the basis for "am I out of date?".
+            OMNICORE_VERSION=${{ github.ref_name }}
+          # Reuses layers between runs so repeat builds are much faster.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
