@@ -39,6 +39,7 @@
 const { fetchCached } = require("./module-fetch");
 const priority = require("./priority");
 const moduleStorage = require("./module-storage");
+const { readSystemTime } = require("./time-service");
 
 // Bumped when the shape below changes in a way modules would notice, so a
 // module can say what it was written against. Additions don't count —
@@ -92,7 +93,16 @@ function makeModuleApi(faceId, instanceId) {
 			read: () => moduleStorage.readInstanceData(faceId, instanceId),
 			write: (data) =>
 				moduleStorage.writeInstanceData(faceId, instanceId, data)
-		}
+		},
+
+		// What time OmniCore thinks it is, right now: the machine's own
+		// clock and its own resolved IANA zone — not a location's zone,
+		// which a module resolves itself if it needs a different one (see
+		// World Clock). One snapshot per call; nothing here ticks on its
+		// own, same as everything else a module can reach.
+		//
+		//   time() -> { timestamp, timezone }
+		time: readSystemTime
 	};
 }
 

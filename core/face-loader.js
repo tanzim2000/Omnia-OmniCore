@@ -14,6 +14,7 @@ const { loadModule } = require("./module-loader");
 const { makeModuleApi } = require("./module-api");
 const { applyDefaults } = require("./module-config");
 const { resolveLocations } = require("./location-service");
+const { readSystemTime } = require("./time-service");
 const themeLoader = require("./theme-loader");
 const faceStore = require("./face-store");
 const renderFallbackPage = require("./fallback-page");
@@ -85,6 +86,16 @@ function startFace(face) {
 					};
 				})
 			});
+		});
+
+		// What time OmniCore thinks it is — reachable directly, with no
+		// module in between, for a theme's own ambient chrome (a
+		// taskbar-style corner clock baked into the theme itself, say).
+		// Same snapshot `omni.time()` hands a module; a theme just
+		// reaches it over HTTP instead of through `omni`, since a theme
+		// has no server side to receive that object at all.
+		app.get("/time", (req, res) => {
+			res.json(readSystemTime());
 		});
 
 		// One route for every module instance on this face. OmniCore owns

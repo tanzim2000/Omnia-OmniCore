@@ -39,7 +39,7 @@ particular module does.
 
 ---
 
-## 2. The two calls that give you everything
+## 2. The three calls that give you everything
 
 ### `GET /identity`
 
@@ -104,6 +104,22 @@ already the resolved one (the instance's label if it has one, otherwise
 whatever the module called itself) — you don't need to reconcile it with
 anything from `/identity`.
 
+### `GET /time`
+
+Not tied to any instance — call it whenever your theme wants to show the
+current time itself, with no module involved at all (a corner clock baked
+into your own layout, say):
+
+```json
+{ "timestamp": "2026-09-06T18:30:00.000Z", "timezone": "America/Regina" }
+```
+
+This is the same snapshot a Clock-style module receives through
+`omni.time()` on the server side — you're just reaching it directly,
+since it's read-only data with nothing to configure and nothing for a
+module to usefully sit in front of. See §3's note on `time` blocks for
+how to actually tick this forward between calls.
+
 ---
 
 ## 3. Rendering blocks
@@ -121,6 +137,8 @@ The block types you'll see:
 { type: "image",      url, alt, fit: "cover" | "contain" }
 { type: "background", url }
 { type: "progress",   value: 0..1, label }
+{ type: "time",       kind: "clock", timestamp, timezone }
+{ type: "graphdata",  points: [ { x, y } ], unit }
 ```
 
 **You are not required to render every type differently.** A minimal theme
@@ -160,6 +178,43 @@ in your `instance` setting (§5), not decided by you or by the module. A
 before you ever see them — `block.url` points back at OmniCore itself, not
 wherever the module actually got the picture from. Just put it in an `<img
 src>` or a CSS `background-image`; there's nothing else to do.
+
+**`time` blocks are the one type you're expected to keep ticking
+yourself.** Nothing on the server keeps a clock running between your
+polls — a module (or `GET /time`) only runs when asked, so the browser
+tab you're rendering in is the only thing actually alive continuously.
+The pattern:
+
+```js
+// On each poll, anchor rather than render directly
+let anchor = {
+  timestamp: block.timestamp,
+  timezone: block.timezone,
+  at: Date.now(),
+};
+
+setInterval(() => {
+  const elapsedMs = Date.now() - anchor.at;
+  const now = new Date(new Date(anchor.timestamp).getTime() + elapsedMs);
+  render(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: anchor.timezone,
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(now),
+  );
+}, 1000);
+```
+
+Re-anchor quietly on every subsequent poll rather than jumping the
+displayed time — that's what keeps small clock drift invisible instead
+of visibly correcting itself once a minute. Polling every second instead
+of ticking locally still works, it's just wasteful — nothing enforces
+this the way nothing enforces honouring richness.
+
+**`graphdata` hands you raw points; how they become a chart is entirely
+your call** — bars, a line, dots, whatever fits your theme. There's no
+`kind` to branch on the way `time` has one.
 
 ---
 

@@ -349,7 +349,23 @@ if (!config.location) {
 
 ---
 
-## 5. Storage and input faces
+## 5. System time, storage, and input faces
+
+### System time
+
+Need the current time? Call `omni.time()` rather than `new Date()` or
+`Intl` directly:
+
+```js
+const { timestamp, timezone } = omni.time();
+```
+
+`timestamp` is an ISO instant; `timezone` is this machine's own resolved
+IANA zone (not a location's — resolve that yourself if you need a
+different one, the way World Clock does for its "a location" mode).
+Going through here rather than calling `Date` yourself is what keeps
+"what time is it" answerable from one place, the same reasoning
+`omni.fetch` already gives you for the network.
 
 Every module up to this point is stateless — fetch or compute, format,
 respond, forget. If yours needs to remember something across calls
