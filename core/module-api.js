@@ -38,6 +38,7 @@
 
 const { fetchCached } = require("./module-fetch");
 const priority = require("./priority");
+const moduleStorage = require("./module-storage");
 
 // Bumped when the shape below changes in a way modules would notice, so a
 // module can say what it was written against. Additions don't count —
@@ -50,7 +51,12 @@ const API_VERSION = 1;
 // build can hand different modules different objects — a module allowed
 // to reach the network and one that isn't need not receive the same
 // `fetch`.
-function makeModuleApi() {
+//
+// faceId and instanceId identify which instance this call is for — the
+// only reason they're needed at all is `storage` below, which has to be
+// pointed at that exact instance's own file and no other. Everything
+// else this object hands out is already instance-agnostic.
+function makeModuleApi(faceId, instanceId) {
 	return {
 		version: API_VERSION,
 
@@ -73,7 +79,20 @@ function makeModuleApi() {
 		// How many of a list a given richness is worth. For a module whose
 		// content is a list of like rows, where there is nothing to
 		// reorder and only the count changes.
-		share: priority.share
+		share: priority.share,
+
+		// This instance's own persisted data — the first capability a
+		// module can WRITE through, not just read. Every module using this
+		// gets exactly its own file; there is no way to reach another
+		// instance's data through this object, on purpose.
+		//
+		//   storage.read()      -> whatever this instance last saved, or {}
+		//   storage.write(data) -> overwrite it, whole file, no partial merge
+		storage: {
+			read: () => moduleStorage.readInstanceData(faceId, instanceId),
+			write: (data) =>
+				moduleStorage.writeInstanceData(faceId, instanceId, data)
+		}
 	};
 }
 

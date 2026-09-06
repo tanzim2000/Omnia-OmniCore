@@ -75,6 +75,7 @@ administrative label; `title` is decoration on the screen itself.
 | `3xxx`  | Admin faces. OmniCore's own UI. No third-party code ever runs here.   |
 | `4000`  | The control face. Face creation, and the registry OmniView will read. |
 | `4001+` | Dashboard faces, assigned automatically in order.                     |
+| `5001+` | Input faces — one per module instance that declares one. See §5c.     |
 
 ### Instance
 
@@ -131,34 +132,38 @@ until the Marketplace puts something in them.
 
 ### `core/` file by file
 
-| File                  | Responsibility                                                                                                                |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `face-store.js`       | Reads/writes `data/faces.json`. Creating faces, instances, port assignment. The only thing that touches face data on disk.    |
-| `face-loader.js`      | Starts a face as an Express server on its port. Owns `/identity`, `/api/:instanceId`, theme serving, client-script injection. |
-| `face-events.js`      | Server-Sent Events. Pushes `face-changed` to displays. Holds the client script that gets injected into theme pages.           |
-| `fallback-page.js`    | The built-in "pick a theme" screen shown when a face has no usable theme. Not part of any theme.                              |
-| `control-face.js`     | Port 4000. Face registry API, and the face setup wizard.                                                                      |
-| `admin-face.js`       | Port 3000. All settings UI. Renders every settings form from declared schemas.                                                |
-| `admin-auth.js`       | Admin account and sessions. scrypt hashing, constant-time comparison, in-memory sessions.                                     |
-| `module-loader.js`    | Finds modules, loads their function. **The module contract is documented here.**                                              |
-| `module-config.js`    | Reads a module's `module.json` and `settings.json`. Applies defaults, cleans submitted values.                                |
-| `module-fetch.js`     | Shared HTTP helper for modules: caching, timeouts, stale fallback, in-flight deduplication.                                   |
-| `module-api.js`       | Builds the object a module actually receives — `fetch`/`visible`/`share`. The one seam a module reaches OmniCore through.     |
-| `marketplace.js`      | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                |
-| `priority.js`         | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                 |
-| `theme-loader.js`     | Finds themes, reads their manifest and both settings schemas.                                                                 |
-| `envelope.js`         | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                  |
-| `image-proxy.js`      | Fetches images on the display's behalf so a display only ever talks to your server.                                           |
-| `location-service.js` | One place that knows where OmniCore is. Resolves `location` settings before a module sees them. City search.                  |
-| `settings-store.js`   | OmniCore's own install-wide settings (`data/settings.json`).                                                                  |
+| File                   | Responsibility                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `face-store.js`        | Reads/writes `data/faces.json`. Creating faces, instances, port assignment. The only thing that touches face data on disk.          |
+| `face-loader.js`       | Starts a face as an Express server on its port. Owns `/identity`, `/api/:instanceId`, theme serving, client-script injection.       |
+| `face-events.js`       | Server-Sent Events. Pushes `face-changed` to displays. Holds the client script that gets injected into theme pages.                 |
+| `fallback-page.js`     | The built-in "pick a theme" screen shown when a face has no usable theme. Not part of any theme.                                    |
+| `control-face.js`      | Port 4000. Face registry API, and the face setup wizard.                                                                            |
+| `admin-face.js`        | Port 3000. All settings UI. Renders every settings form from declared schemas.                                                      |
+| `admin-auth.js`        | Admin account and sessions. scrypt hashing, constant-time comparison, in-memory sessions.                                           |
+| `module-loader.js`     | Finds modules, loads their function. **The module contract is documented here.**                                                    |
+| `module-config.js`     | Reads a module's `module.json` and `settings.json`. Applies defaults, cleans submitted values.                                      |
+| `module-fetch.js`      | Shared HTTP helper for modules: caching, timeouts, stale fallback, in-flight deduplication.                                         |
+| `module-api.js`        | Builds the object a module actually receives — `fetch`/`visible`/`share`/`storage`. The one seam a module reaches OmniCore through. |
+| `module-storage.js`    | Read/write for one module instance's own persisted data. See §5c.                                                                   |
+| `input-face-loader.js` | Starts/stops one server per instance that declares an `input.json` — one instance, one port, unlike `face-loader.js`. See §5c.      |
+| `input-face-page.js`   | Renders an input face's default page. Not a theme, and not meant to be one — OmniCore's own UI, same as `fallback-page.js`.         |
+| `marketplace.js`       | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                      |
+| `priority.js`          | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                       |
+| `theme-loader.js`      | Finds themes, reads their manifest and both settings schemas.                                                                       |
+| `envelope.js`          | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                        |
+| `image-proxy.js`       | Fetches images on the display's behalf so a display only ever talks to your server.                                                 |
+| `location-service.js`  | One place that knows where OmniCore is. Resolves `location` settings before a module sees them. City search.                        |
+| `settings-store.js`    | OmniCore's own install-wide settings (`data/settings.json`).                                                                        |
 
 ### `data/` — never committed
 
-| File            | Contents                                           |
-| --------------- | -------------------------------------------------- |
-| `faces.json`    | Every face, its instances, and all their settings. |
-| `admin.json`    | Admin username, salt, password hash.               |
-| `settings.json` | OmniCore's own settings (location service).        |
+| File                               | Contents                                                                                                                             |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `faces.json`                       | Every face, its instances, and all their settings.                                                                                   |
+| `admin.json`                       | Admin username, salt, password hash.                                                                                                 |
+| `settings.json`                    | OmniCore's own settings (location service).                                                                                          |
+| `faces/<faceId>/<instanceId>.json` | One instance's own persisted data — see §5c. Absent entirely for the overwhelming majority of instances, which never write anything. |
 
 ---
 
@@ -221,6 +226,8 @@ A module describes **what it has**, never how it should look:
 | `image`      | `{ type, url, alt, fit: "cover"｜"contain" }` — content for a tile |
 | `background` | `{ type, url }` — a surface to go behind everything                |
 | `progress`   | `{ type, value: 0..1, label }`                                     |
+| `time`       | `{ type, kind, timestamp, ... }` — see below                       |
+| `graphdata`  | `{ type, points: [{ x, y }], unit? }`                              |
 
 **A `pair` keeps the name and the value apart, and a module must never
 join them.** Writing `value: "Humidity 62%"` is a module deciding how it
@@ -233,6 +240,47 @@ decision, including whether the label is drawn at all.
 **`image` and `background` both carry a picture but mean different things.**
 An image is content; a background is the surface behind everything. The
 module says which; the theme decides whether to honour it.
+
+**`time` carries one instant, and `kind` says what else there is to say
+about it:**
+
+```
+{ type: "time", kind: "clock",     timestamp, timezone }
+{ type: "time", kind: "countdown", timestamp, target,   running }
+{ type: "time", kind: "stopwatch", timestamp, position, running }
+{ type: "time", kind: "position",  timestamp, position, duration, running }
+```
+
+`timestamp` is always a raw ISO instant — the moment the module actually
+checked, and the anchor a theme ticks forward from — **never** a
+decomposed `{ hour, minute, ... }`. Two concrete reasons, not just
+preference: a decomposed local wall-clock time is genuinely ambiguous
+once a year during a DST "fall back" (it happens twice, and decomposed
+fields can't say which), and a theme still needs a real `Date` to do any
+tick arithmetic anyway — a raw ISO string parses into one natively,
+decomposed fields would just have to be reassembled first, for nothing.
+
+**Nothing server-side keeps ticking a `time` block between polls.** A
+module (or core) only runs when asked — the theme is the only thing
+actually alive continuously, so it's the only place that can tick. A
+theme receives `{ timestamp, ... }`, anchors it, runs its own
+`setInterval`, and quietly re-anchors on each subsequent poll. A theme
+that instead polls every second to avoid this is wasteful, not broken —
+nothing enforces "tick locally," the same way nothing enforces honouring
+richness.
+
+`clock` is the only kind any module emits today. `countdown`, `stopwatch`,
+and `position` are reserved shape for future modules — no change to this
+type will be needed to add them.
+
+**`graphdata` carries a series, and the theme decides how it's drawn.**
+`points` is an array of `{ x, y }` pairs — `x` a timestamp or label, `y`
+the value at that point. `unit` is an optional label for what's being
+counted (`"cigarettes"`, say). There's deliberately no `kind` split the
+way `time` has one: whether the result looks like a bar chart, a line, or
+a row of dots is purely a rendering choice over the exact same points, so
+one shape covers all of them. The module emits data, never the graph
+itself.
 
 **Every block may carry a `text` string** — its plain-text rendering. A
 theme that has never heard of a block type falls back to that and still
@@ -379,6 +427,79 @@ perfectly safe _name_ — `icon.png`, say — while being a symlink that
 _points_ somewhere else on the machine entirely. This was found by
 attacking the installer during development, not theorised in advance;
 see §13.
+
+---
+
+### 5c. Storage and input faces
+
+Every module before this was stateless — fetch or compute, format,
+respond, forget. `config` persists, but only in one direction: an admin
+fills a form once and the module reads the same unchanged value back on
+every call. Nothing let a module write a new fact into existence itself,
+at runtime, from inside its own code — until a module needed to remember
+that someone tapped a button.
+
+**Storage — `omni.storage`**
+
+```js
+const data = omni.storage.read(); // -> {} if nothing's ever been saved
+omni.storage.write({ ...data, taps: [...data.taps, Date.now()] });
+```
+
+One JSON file per instance, at `data/faces/<faceId>/<instanceId>.json` —
+whole-file-in, whole-file-out, exactly the same discipline `faces.json`
+itself is held to. `faceId` and `instanceId` are never something a
+module supplies or sees; `omni.storage` arrives already pointed at the
+right file, the same way `config` arrives already resolved. There is no
+way to reach another instance's data through this object.
+
+Deleting an instance deletes its storage file with it — nothing a module
+saved outlives the instance that saved it.
+
+**Input faces**
+
+A module that needs a physical action — a button someone actually taps —
+declares one in `modules/<id>/input.json`, the same pattern
+`settings.json` already uses for its own schema:
+
+```json
+{
+  "controls": [{ "key": "count", "type": "button", "label": "Count" }]
+}
+```
+
+`button` is the only control type today, with room to add others later
+without changing this shape. A module with no `input.json` simply has no
+input face — nothing else about it changes.
+
+Declaring one gets the instance its own port, `5001+` (see the port-range
+table in §3), auto-assigned the same way a dashboard face's own port is.
+**OmniCore renders the page itself — a plain black page with one glass
+button per control, no theme involved at all.** A module says what
+controls exist; it never says how a tap looks or feels, the same
+separation that governs every other block type. This may open up to
+themes later; it doesn't today.
+
+A tap reaches the module through a second export, alongside the display
+function every module already has:
+
+```js
+module.exports = async function (config, richness, omni) { ... }; // existing
+module.exports.onInput = async function (payload, omni) { ... }; // new
+```
+
+`payload` is `{ key }` — which control was activated. `onInput` is where
+a module actually calls `omni.storage.write(...)`; the display function
+reads that same file back to build whatever it shows. Both arrive
+through the same `omni`, scoped to the same instance, which is the whole
+mechanism connecting "someone tapped the button" to "the tile shows one
+more point."
+
+**Trust.** Unauthenticated, same model as a dashboard face today — anyone
+on the network can reach the port and tap the button. Not solved
+per-feature: a dedicated auth service is planned to cover input faces
+and the control face (port 4000) together, rather than bolting something
+on for just this one.
 
 ## 6. The theme agreement
 
@@ -655,13 +776,14 @@ restart, and nobody has to be standing in front of the screen.
 Worth being explicit, because several decisions only make sense in this
 light.
 
-| Surface                     | Trust                                                                                                                                                     |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                      |
-| **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install — full Node access, narrowed only by what `omni` actually hands over (§5a). |
-| **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                                                    |
-| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                               |
-| **Dashboard faces (4001+)** | Unauthenticated. Serves data and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                |
+| Surface                     | Trust                                                                                                                                                                       |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                                        |
+| **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install — full Node access, narrowed only by what `omni` actually hands over (§5a).                   |
+| **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                                                                      |
+| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                                                 |
+| **Dashboard faces (4001+)** | Unauthenticated. Serves data and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                                  |
+| **Input faces (5001+)**     | Unauthenticated. One write: `POST /input`, reaching a module's `onInput`. Not yet solved — see §5c; planned to be covered by the same future auth work as the control face. |
 
 Passwords are salted scrypt hashes compared in constant time. Sessions are
 random tokens in an `HttpOnly`, `SameSite=Strict` cookie, held in memory so

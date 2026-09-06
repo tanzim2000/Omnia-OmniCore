@@ -1,12 +1,13 @@
-// index.js
 // OmniCore entry point.
 // Port layout:
 //   3000  = the built-in admin face — OmniCore's own settings UI
 //   4000  = the control face, where OmniVision picks a face to display
 //   4001+ = dashboard faces, auto-assigned by OmniCore
+//   5001+ = input faces, one per instance that declares one
 
 const { readFaces } = require("./core/face-store");
 const { startFace } = require("./core/face-loader");
+const { startInputFace } = require("./core/input-face-loader");
 const startControlFace = require("./core/control-face");
 const startAdminFace = require("./core/admin-face");
 const resourceScheduler = require("./core/resource-scheduler");
@@ -16,6 +17,13 @@ const coreUpdateScheduler = require("./core/core-update-scheduler");
 const faces = readFaces();
 for (const face of faces) {
 	startFace(face);
+
+	// Any instance on it that declared an input.json gets its own tiny
+	// server too — a face coming back up brings every button on it back
+	// up as well, not just the dashboard itself.
+	for (const instance of face.instances) {
+		startInputFace(face.id, instance);
+	}
 }
 
 // The control face is always running

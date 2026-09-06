@@ -13,6 +13,8 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { readInputSchema } = require("./module-config");
+const moduleStorage = require("./module-storage");
 
 const dataPath = path.join(__dirname, "..", "data", "faces.json");
 
@@ -20,7 +22,10 @@ const dataPath = path.join(__dirname, "..", "data", "faces.json");
 // 3xxx = admin faces (built in, never user-modifiable)
 // 4000 = the OmniVision control face
 // 4001+ = dashboard faces (auto-assigned by OmniCore)
+// 5001+ = input faces (auto-assigned, one per instance that wants one)
 const DASHBOARD_PORT_START = 4001;
+const INPUT_PORT_START = 5001;
+const INPUT_PORT_END = 5050;
 
 function readFaces() {
 	// A fresh install has no data folder yet — that's not an error,
@@ -53,6 +58,39 @@ function nextDashboardPort() {
 	return port;
 }
 
+// Find the next free input-face port (5001, 5002...), or null once the
+// reserved block (5001-5050 — see docker-compose.yml) is exhausted. An
+// instance simply not getting an input face is the graceful outcome of
+// that, not something that should stop it being created — the same way a
+// module with no settings just gets an empty config, not an error.
+//
+// `alsoUsed` covers ports already handed out THIS call but not yet
+// written to disk — createFace can build several instances in one batch
+// before any of them are persisted, so checking readFaces() alone would
+// let two of them see the same "next free" port and collide.
+function nextInputPort(alsoUsed) {
+	const usedPorts = readFaces()
+		.flatMap((face) => face.instances)
+		.map((instance) => instance.inputPort)
+		.filter(Boolean)
+		.concat(alsoUsed || []);
+
+	let port = INPUT_PORT_START;
+	while (usedPorts.includes(port)) {
+		port++;
+	}
+	return port > INPUT_PORT_END ? null : port;
+}
+
+// An input port for this module, if it declares an input.json — null for
+// every other module, which is exactly what "no input face" means
+// downstream (see input-face-loader.js).
+function inputPortFor(moduleId, alsoUsed) {
+	return readInputSchema(moduleId).length > 0
+		? nextInputPort(alsoUsed)
+		: null;
+}
+
 // Create a new dashboard face and persist it.
 //
 // Instances can be supplied up front — the setup wizard builds the whole
@@ -78,13 +116,7 @@ function createFace(name, title, theme, instances) {
 		// anything else it decides. Kept apart from themeConfigs, which the
 		// admin owns and OmniCore validates against a schema.
 		themeStates: {},
-		instances: (instances || []).map((instance) => ({
-			id: newInstanceId(instance.module),
-			module: instance.module,
-			label: instance.label || "",
-			config: instance.config || {},
-			themeConfigs: instance.themeConfigs || {}
-		}))
+		instances: buildInstances(instances)
 	};
 
 	faces.push(face);
@@ -119,6 +151,32 @@ function newInstanceId(moduleId) {
 	return moduleId + "-" + crypto.randomBytes(4).toString("hex");
 }
 
+// Builds a batch of instances for a brand-new face, before any of them
+// are written to disk. Assigns input ports imperatively — accumulating
+// as it goes — rather than mapping each independently, which is exactly
+// what avoids two instances in the same batch computing the same "next
+// free" port (see nextInputPort's `alsoUsed`).
+function buildInstances(rawInstances) {
+	const assignedPorts = [];
+
+	return (rawInstances || []).map((instance) => {
+		const inputPort = inputPortFor(instance.module, assignedPorts);
+
+		if (inputPort) {
+			assignedPorts.push(inputPort);
+		}
+
+		return {
+			id: newInstanceId(instance.module),
+			module: instance.module,
+			label: instance.label || "",
+			config: instance.config || {},
+			themeConfigs: instance.themeConfigs || {},
+			inputPort
+		};
+	});
+}
+
 // Add a module to an existing face. Returns the new instance.
 function addInstance(faceId, moduleId, label, config, themeConfigs) {
 	const faces = readFaces();
@@ -135,7 +193,8 @@ function addInstance(faceId, moduleId, label, config, themeConfigs) {
 		config: config || {},
 		// Per-theme settings, keyed by theme id. Whether this instance shows
 		// at all is one of these — every theme spells "hidden" its own way.
-		themeConfigs: themeConfigs || {}
+		themeConfigs: themeConfigs || {},
+		inputPort: inputPortFor(moduleId)
 	};
 
 	face.instances.push(instance);
@@ -184,17 +243,28 @@ function removeInstance(faceId, instanceId) {
 		return null;
 	}
 
-	const before = face.instances.length;
+	const removed = face.instances.find(
+		(instance) => instance.id === instanceId
+	);
+
+	if (!removed) {
+		return null;
+	}
+
 	face.instances = face.instances.filter(
 		(instance) => instance.id !== instanceId
 	);
 
-	if (face.instances.length === before) {
-		return null; // nothing removed
-	}
-
 	writeFaces(faces);
-	return face;
+
+	// Nothing an instance saved should outlive it — same reasoning as
+	// deleting a face's own record, just at the per-instance file level.
+	moduleStorage.deleteInstanceData(faceId, instanceId);
+
+	// Handed back so the caller (admin-face.js) can stop a running input
+	// face server — face-store.js only owns the data, never a running
+	// server, so it can't stop one itself.
+	return removed;
 }
 
 // Save a face's settings for one particular theme

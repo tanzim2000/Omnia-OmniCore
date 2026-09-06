@@ -131,11 +131,13 @@ function startFace(face) {
 					: 50;
 
 				// Everything the module is allowed to use, handed to it
-				// rather than reached for. See core/module-api.js.
+				// rather than reached for. See core/module-api.js. Scoped to
+				// this exact instance so its `storage` can only ever reach
+				// this instance's own file, never another one's.
 				const envelope = await moduleFn(
 					config,
 					richness,
-					makeModuleApi()
+					makeModuleApi(face.id, instance.id)
 				);
 
 				// Themes only ever see blocks, whichever shape the module

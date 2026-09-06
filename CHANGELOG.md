@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.4.0
+
+Modules can now remember things and take physical input — the two
+capabilities Counter needs, built in core ahead of the module itself.
+
+### Added
+
+- **`omni.storage`.** A module instance can now write, not just read —
+  one JSON file per instance, whole-file-in, whole-file-out, isolated so
+  an instance can never reach another's data. Nothing before this let a
+  module remember anything across calls at runtime.
+- **Input faces.** A module declares a physical control (a button, for
+  now) in a new `input.json`, and gets its own port (`5001+`) rendered
+  entirely by OmniCore itself — a plain page, no theme involved, ever.
+  A tap reaches the module through a new `onInput` export, the same way
+  a display call reaches its existing one.
+- **The `time` and `graphdata` block types.** `time` carries one instant
+  plus a `kind` (`clock` ships now; `countdown`, `stopwatch`, `position`
+  are reserved shape for later). `graphdata` carries a plain series of
+  points — no `kind` split, since bar/line/dot is purely a theme's
+  rendering choice over the same data.
+
+### Fixed
+
+- Two instances of the same module created in the same batch (the setup
+  wizard bundling several at once) could be handed the same input-face
+  port. Port assignment within one batch now accounts for ports already
+  claimed earlier in that same batch, not just what's already on disk.
+
 ## v1.3.0
 
 OmniCore can now update itself.

@@ -34,6 +34,24 @@
 // blocks when it needs something the flat shape can't express, and themes
 // only ever deal with blocks.
 
+// Formats a count of seconds as "M:SS", or "H:MM:SS" once it's over an
+// hour — shared by every `time` kind that has to show elapsed or
+// remaining seconds as a fallback.
+function formatDuration(totalSeconds) {
+	const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
+	const hours = Math.floor(seconds / 3600);
+	const minutes = Math.floor((seconds % 3600) / 60);
+	const secs = seconds % 60;
+
+	const paddedSecs = String(secs).padStart(2, "0");
+
+	if (hours > 0) {
+		return `${hours}:${String(minutes).padStart(2, "0")}:${paddedSecs}`;
+	}
+
+	return `${minutes}:${paddedSecs}`;
+}
+
 // Give a block a plain-text form if it doesn't already have one
 function withFallbackText(block) {
 	if (block.text) {
@@ -50,6 +68,57 @@ function withFallbackText(block) {
 		text = block.alt || "";
 	} else if (block.type === "progress") {
 		text = Math.round(Number(block.value) * 100) + "%";
+	} else if (block.type === "time") {
+		// A raw instant, in whichever IANA zone the module resolved —
+		// see docs/Architecture.md. Every `kind` shares one `timestamp`;
+		// what else there is to say depends on which kind it is.
+		const instant = new Date(block.timestamp);
+
+		if (block.kind === "clock") {
+			try {
+				text = new Intl.DateTimeFormat("en-US", {
+					timeZone: block.timezone,
+					hour: "numeric",
+					minute: "2-digit"
+				}).format(instant);
+			} catch (error) {
+				// An invalid or missing IANA zone name shouldn't take the
+				// whole tile down — fall back to the system's own zone.
+				text = instant.toLocaleTimeString("en-US", {
+					hour: "numeric",
+					minute: "2-digit"
+				});
+			}
+		} else if (block.kind === "countdown") {
+			const remainingMs = new Date(block.target) - instant;
+
+			if (remainingMs <= 0) {
+				text = "Now";
+			} else {
+				const days = Math.floor(remainingMs / 86400000);
+				text =
+					days >= 1
+						? `${days}d ${Math.floor((remainingMs % 86400000) / 3600000)}h`
+						: formatDuration(remainingMs / 1000);
+			}
+		} else if (block.kind === "stopwatch") {
+			text = formatDuration(block.position);
+		} else if (block.kind === "position") {
+			text = `${formatDuration(block.position)} / ${formatDuration(
+				block.duration
+			)}`;
+		}
+	} else if (block.type === "graphdata") {
+		// The fallback for a theme with no chart support is the most
+		// recent value, not the shape of the whole series — a theme that
+		// can't draw a graph still shouldn't show nothing.
+		const points = Array.isArray(block.points) ? block.points : [];
+		const latest = points[points.length - 1];
+
+		text =
+			latest === undefined
+				? "No data"
+				: String(latest.y) + (block.unit ? " " + block.unit : "");
 	}
 
 	return { ...block, text: text };

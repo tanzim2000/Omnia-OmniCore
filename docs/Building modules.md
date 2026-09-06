@@ -53,7 +53,7 @@ fetching, the richness helpers, whatever gets added later. Never
 `require("../../core/...")`; a module that reaches for core files by
 relative path breaks the moment it's installed anywhere other than
 exactly where OmniCore's own layout expects, which after installation
-is never guaranteed. See §6 for the one you'll actually use.
+is never guaranteed. See §7 for the one you'll actually use.
 
 You return a `title` (shown as the tile's heading unless the instance has
 its own label, which wins), a `content` array of blocks, and an `updated`
@@ -164,6 +164,8 @@ The current block types:
 { type: "image",      url, alt, fit: "cover" | "contain" }
 { type: "background", url }
 { type: "progress",   value: 0..1, label }
+{ type: "time",       kind: "clock", timestamp, timezone }
+{ type: "graphdata",  points: [ { x, y } ], unit }
 ```
 
 **Never fold a label into a value.** `{ type: "pair", label: "Humidity",
@@ -188,6 +190,18 @@ and a candidate for the page background.
 so the display never talks to wherever your image actually came from. You
 don't do anything differently; this happens automatically to every `image`
 and `background` block.
+
+**`time` is one instant plus a `kind`.** `timestamp` is always a raw ISO
+string — never decompose it into `{ hour, minute }` yourself, since a
+theme needs the real instant to tick from and a decomposed local time is
+genuinely ambiguous during a DST transition. `clock` (+ `timezone`) is the
+only kind a module emits today; `countdown`, `stopwatch`, and `position`
+are reserved for later and need no changes here to start using.
+
+**`graphdata` is a series, nothing about how to draw it.** `points` is
+just `{ x, y }` pairs in order; whether a theme turns that into a bar
+chart, a line, or dots is entirely its call, which is why there's no
+`kind` the way `time` has one — one shape covers every rendering.
 
 **A block's `text` field is optional and you can usually skip it.**
 OmniCore derives a plain-text fallback for any block that doesn't supply
@@ -335,7 +349,64 @@ if (!config.location) {
 
 ---
 
-## 5. `module.json`
+## 5. Storage and input faces
+
+Every module up to this point is stateless — fetch or compute, format,
+respond, forget. If yours needs to remember something across calls
+(a running total, a log of events someone triggers), you need both of
+the pieces below.
+
+### Storage
+
+```js
+const data = omni.storage.read(); // {} if you've never saved anything
+omni.storage.write({ ...data, count: (data.count || 0) + 1 });
+```
+
+One JSON file, whole-file-in, whole-file-out — read the current value,
+change it in memory, write the whole thing back. You never see a path or
+an ID; `omni.storage` already knows which instance it belongs to, and
+there's no way to reach any other instance's data through it. Deleting
+the instance deletes this with it.
+
+### Input faces
+
+If your module needs a physical action — someone actually tapping a
+button — rather than just settings someone fills in once, declare it in
+`modules/my-module/input.json`:
+
+```json
+{
+  "controls": [{ "key": "count", "type": "button", "label": "Count" }]
+}
+```
+
+`button` is the only control type today. Declaring this gets your
+instance its own port, rendered as **OmniCore's own plain page — a black
+background, one glass button per control, no theme involved.** You say
+what the button is; you don't get a say in how it looks, same as
+everywhere else in OmniCore.
+
+A tap reaches you through a second export, alongside the one you already
+have:
+
+```js
+module.exports = async function (config, richness, omni) { ... }; // display
+module.exports.onInput = async function (payload, omni) { ... }; // NEW
+```
+
+`payload` is `{ key }` — which control fired. This is where you actually
+call `omni.storage.write(...)`; your display function reads the same
+storage back to decide what to show. A module with no `input.json` has
+no input face at all — nothing else about it is any different.
+
+Throwing from `onInput` costs you one failed tap, the same way throwing
+from your display function costs you one dead tile — prefer returning
+normally and let a caller retry, but it won't take anything else down.
+
+---
+
+## 6. `module.json`
 
 Optional, but worth having:
 
@@ -357,7 +428,7 @@ Optional, but worth having:
 
 ---
 
-## 6. Calling the network
+## 7. Calling the network
 
 **Use `omni.fetch` instead of calling `fetch()` yourself.**
 
@@ -404,7 +475,7 @@ if (!data) {
 
 ---
 
-## 7. Failure is a return value, not an exception
+## 8. Failure is a return value, not an exception
 
 If your function throws, OmniCore catches it, and the user sees one dead
 tile rather than the whole face breaking — but that's a safety net, not a
@@ -421,7 +492,7 @@ Things worth explicitly handling rather than letting throw:
 
 ---
 
-## 8. Two ground rules
+## 9. Two ground rules
 
 **Never render.** No HTML, no inline styles, no assumptions about color or
 layout. The moment a module bakes in appearance, no theme can restyle it,
@@ -437,7 +508,7 @@ distributed from.
 
 ---
 
-## 9. A complete example
+## 10. A complete example
 
 A module reporting a countdown to some event, showing progressively more
 detail at higher richness, with a configurable target date:
@@ -539,7 +610,7 @@ the pattern applied.
 
 ---
 
-## 10. Checklist before you call it done
+## 11. Checklist before you call it done
 
 - [ ] Function signature is `(config, richness, omni)`
 - [ ] Nothing in the file does `require("../../core/...")` — everything
@@ -562,7 +633,7 @@ the pattern applied.
 
 ---
 
-## 11. Getting it in front of anyone
+## 12. Getting it in front of anyone
 
 A module on your own machine only helps you. Getting it into the
 Marketplace means:

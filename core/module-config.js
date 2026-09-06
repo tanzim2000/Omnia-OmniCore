@@ -68,6 +68,25 @@ function readSchema(moduleId) {
 	}
 }
 
+// What input controls a module wants — a button to tap, for now — from
+// its input.json. Empty means the module has no input face at all, same
+// "missing file means none of this" pattern as settings.json.
+function readInputSchema(moduleId) {
+	const schemaPath = path.join(modulesDir, moduleId, "input.json");
+
+	if (!fs.existsSync(schemaPath)) {
+		return [];
+	}
+
+	try {
+		const parsed = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
+		return Array.isArray(parsed.controls) ? parsed.controls : [];
+	} catch (error) {
+		console.log(`  Unreadable input.json in module: ${moduleId}`);
+		return [];
+	}
+}
+
 // An instance's stored settings, with the schema's defaults filling any gap.
 // A setting the user never touched still arrives with a sensible value.
 function applyDefaults(moduleId, stored) {
@@ -148,4 +167,4 @@ function cleanConfig(moduleId, values) {
 	return clean;
 }
 
-module.exports = { readManifest, readSchema, applyDefaults, cleanConfig };
+module.exports = { readManifest, readSchema, readInputSchema, applyDefaults, cleanConfig };

@@ -38,6 +38,7 @@ const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
 const { refresh } = require("./face-loader");
+const { startInputFace, stopInputFace } = require("./input-face-loader");
 const auth = require("./admin-auth");
 
 const ADMIN_PORT = 3000;
@@ -2336,7 +2337,7 @@ function startAdminFace() {
 		res.send(page("Add a module", body, script));
 	});
 
-	app.post("/faces/:id/modules", (req, res) => {
+	app.post("/faces/:id/modules", async (req, res) => {
 		const id = Number(req.params.id);
 		const moduleId = req.body.module;
 
@@ -2372,6 +2373,11 @@ function startAdminFace() {
 			res.status(404).json({ error: "No such face" });
 			return;
 		}
+
+		// Only runs if the module actually declared an input.json —
+		// startInputFace itself is a no-op otherwise (see
+		// input-face-loader.js).
+		await startInputFace(id, instance);
 
 		refresh(id);
 		res.json(instance);
@@ -2556,11 +2562,16 @@ function startAdminFace() {
 
 	app.delete("/faces/:id/modules/:instanceId", (req, res) => {
 		const id = Number(req.params.id);
+		const removed = faceStore.removeInstance(id, req.params.instanceId);
 
-		if (!faceStore.removeInstance(id, req.params.instanceId)) {
+		if (!removed) {
 			res.status(404).json({ error: "No such module on this face" });
 			return;
 		}
+
+		// A deleted instance's button shouldn't keep answering taps for a
+		// module that's no longer even on the face.
+		stopInputFace(removed.inputPort);
 
 		refresh(id);
 		res.json({ ok: true });

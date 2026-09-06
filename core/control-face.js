@@ -14,6 +14,7 @@
 const express = require("express");
 const faceStore = require("./face-store");
 const { startFace } = require("./face-loader");
+const { startInputFace } = require("./input-face-loader");
 const themeLoader = require("./theme-loader");
 const { listModules } = require("./module-loader");
 const { readManifest, readSchema, applyDefaults } = require("./module-config");
@@ -435,6 +436,13 @@ function startControlFace() {
 		// Wait until the face's server is genuinely accepting connections
 		// before responding, so the browser never redirects too early
 		await startFace(face);
+
+		// The wizard can bundle instances straight in at creation — any
+		// of them with an input.json gets its own tiny server too, same
+		// as one added later through the admin face.
+		for (const instance of face.instances) {
+			await startInputFace(face.id, instance);
+		}
 
 		res.json(face);
 	});
