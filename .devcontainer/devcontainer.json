@@ -17,9 +17,16 @@
 				"editor.insertSpaces": false,
 				"editor.formatOnSave": true
 			}
+		},
+		"codespaces": {
+			"repositories": {
+				"tanzim2000/Omnia-Essentials": {
+					"permissions": "write-all"
+				}
+			}
 		}
 	},
 	"forwardPorts": [3000, 4000],
-	"postCreateCommand": "npm init -y && npm install express",
+	"postCreateCommand": "npm install",
 	"remoteUser": "node"
 }
