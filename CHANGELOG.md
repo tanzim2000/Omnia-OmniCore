@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.6.0
+
+Input faces can now take a number! Not just a tap,
+
+### Added
+
+- **The `number` control type.** A module's `input.json` can now declare a number field alongside (or instead of) a button. Each number control gets its own submit rather than one shared across the page: two number controls mean two independent facts, and pairing each with its own button keeps which-value-goes-where obvious. `onInput` receives `{ key, value }` for these, still just `{ key }` for a button. An empty or non-numeric field submits nothing at all, since that's a slip rather than an event worth recording.
+
+### Fixed
+
+- A symlinked module (the normal setup for developing one locally against a separate repo, like Omnia-Essentials) never showed up in the "add a module" list. Node's own Dirent type reports a symlink as neither a directory nor a file, and the module list only checked for a directory. Fixed: a symlink now gets resolved and included if it actually points at a real folder, and correctly excluded if it's broken or points at a plain file instead.
+
 ## v1.5.0
 
 OmniCore now knows what time it is, on its own! The missing piece before any Clock module can be built against it rather than reaching for `Date` directly.

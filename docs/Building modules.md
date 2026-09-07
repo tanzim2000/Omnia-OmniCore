@@ -393,15 +393,25 @@ button — rather than just settings someone fills in once, declare it in
 
 ```json
 {
-  "controls": [{ "key": "count", "type": "button", "label": "Count" }]
+  "controls": [
+    { "key": "count", "type": "button", "label": "Count" },
+    {
+      "key": "amount",
+      "type": "number",
+      "label": "Amount",
+      "submitLabel": "Add"
+    }
+  ]
 }
 ```
 
-`button` is the only control type today. Declaring this gets your
-instance its own port, rendered as **OmniCore's own plain page — a black
-background, one glass button per control, no theme involved.** You say
-what the button is; you don't get a say in how it looks, same as
-everywhere else in OmniCore.
+Two types are available: `button` (one tappable button) and `number` (a
+number field with its own submit). A `number` control also accepts
+`placeholder` and `submitLabel`, both optional. Declaring either gets
+your instance its own port, rendered as **OmniCore's own plain page — a
+black background, glass controls, no theme involved.** You say what the
+controls are; you don't get a say in how they look, same as everywhere
+else in OmniCore.
 
 A tap reaches you through a second export, alongside the one you already
 have:
@@ -411,10 +421,11 @@ module.exports = async function (config, richness, omni) { ... }; // display
 module.exports.onInput = async function (payload, omni) { ... }; // NEW
 ```
 
-`payload` is `{ key }` — which control fired. This is where you actually
-call `omni.storage.write(...)`; your display function reads the same
-storage back to decide what to show. A module with no `input.json` has
-no input face at all — nothing else about it is any different.
+`payload` is `{ key }` for a button, or `{ key, value }` for a number.
+This is where you actually call `omni.storage.write(...)`; your display
+function reads the same storage back to decide what to show. A module
+with no `input.json` has no input face at all — nothing else about it is
+any different.
 
 Throwing from `onInput` costs you one failed tap, the same way throwing
 from your display function costs you one dead tile — prefer returning

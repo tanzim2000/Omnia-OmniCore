@@ -492,13 +492,34 @@ declares one in `modules/<id>/input.json`, the same pattern
 
 ```json
 {
-  "controls": [{ "key": "count", "type": "button", "label": "Count" }]
+  "controls": [
+    { "key": "count", "type": "button", "label": "Count" },
+    {
+      "key": "amount",
+      "type": "number",
+      "label": "Amount",
+      "submitLabel": "Add"
+    }
+  ]
 }
 ```
 
-`button` is the only control type today, with room to add others later
-without changing this shape. A module with no `input.json` simply has no
-input face — nothing else about it changes.
+Two control types today:
+
+| Type     | Renders as                         | `onInput` receives |
+| -------- | ---------------------------------- | ------------------ |
+| `button` | One tappable button                | `{ key }`          |
+| `number` | A number field plus its own submit | `{ key, value }`   |
+
+A `number` control accepts `placeholder` and `submitLabel` alongside
+`label`, all optional. Each gets its own submit rather than one shared
+across the page: two number controls mean two independent facts, and
+pairing each with its own button keeps which-value-goes-where obvious.
+An empty or non-numeric field submits nothing at all rather than sending
+a null through, since that's a slip rather than an event worth recording.
+
+A module with no `input.json` simply has no input face — nothing else
+about it changes.
 
 Declaring one gets the instance its own port, `5001+` (see the port-range
 table in §3), auto-assigned the same way a dashboard face's own port is.
@@ -516,12 +537,13 @@ module.exports = async function (config, richness, omni) { ... }; // existing
 module.exports.onInput = async function (payload, omni) { ... }; // new
 ```
 
-`payload` is `{ key }` — which control was activated. `onInput` is where
-a module actually calls `omni.storage.write(...)`; the display function
-reads that same file back to build whatever it shows. Both arrive
-through the same `omni`, scoped to the same instance, which is the whole
-mechanism connecting "someone tapped the button" to "the tile shows one
-more point."
+`payload` is `{ key }` for a button, or `{ key, value }` for a number —
+which control was activated, and what was typed into it. `onInput` is
+where a module actually calls `omni.storage.write(...)`; the display
+function reads that same file back to build whatever it shows. Both
+arrive through the same `omni`, scoped to the same instance, which is
+the whole mechanism connecting "someone tapped the button" to "the tile
+shows one more point."
 
 **Trust.** Unauthenticated, same model as a dashboard face today — anyone
 on the network can reach the port and tap the button. Not solved

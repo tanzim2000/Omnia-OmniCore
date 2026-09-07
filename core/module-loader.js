@@ -38,6 +38,13 @@ const path = require("path");
 const modulesDir = path.join(__dirname, "..", "modules");
 
 // Every module installed on this OmniCore
+//
+// A symlinked module folder — the common local-development setup, where
+// a module lives in its own repo and is linked into modules/ rather than
+// copied — needs special handling here. Node's own Dirent type reports
+// a symlink as neither a directory nor a file; it deliberately doesn't
+// follow the link just to answer that question. Left unhandled, that
+// makes a perfectly real, working module silently invisible.
 function listModules() {
 	if (!fs.existsSync(modulesDir)) {
 		return [];
@@ -45,7 +52,27 @@ function listModules() {
 
 	return fs
 		.readdirSync(modulesDir, { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
+		.filter((entry) => {
+			if (entry.isDirectory()) {
+				return true;
+			}
+
+			if (!entry.isSymbolicLink()) {
+				return false;
+			}
+
+			// Resolve it ourselves. A dangling symlink (whatever it once
+			// pointed at is gone) or one pointing at a plain file rather
+			// than a folder is correctly excluded here, same as either
+			// case already would be without a symlink involved at all.
+			try {
+				return fs
+					.statSync(path.join(modulesDir, entry.name))
+					.isDirectory();
+			} catch (error) {
+				return false;
+			}
+		})
 		.map((entry) => entry.name);
 }
 
