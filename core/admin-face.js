@@ -38,20 +38,18 @@ const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
 const { refresh } = require("./face-loader");
+const { uiStyles, backButton } = require("./ui-theme");
 const { startInputFace, stopInputFace } = require("./input-face-loader");
 const auth = require("./admin-auth");
 
 const ADMIN_PORT = 3000;
 
 const styles = `
+	/* Layout only — background, colour, and font all come from the
+	   shared Default UI stylesheet prepended in page() below. */
 	body {
-		background: #000;
-		color: #fff;
-		font-family: system-ui, sans-serif;
 		min-height: 100vh;
-		margin: 0;
 		padding: 48px 24px;
-		box-sizing: border-box;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -68,14 +66,14 @@ const styles = `
 	h1 { font-weight: 300; font-size: 28px; margin: 0; }
 	.lede { opacity: 0.55; font-size: 14px; margin: 10px 0 0 0; }
 
-	a { color: #fff; text-decoration: none; }
+	a { color: var(--fg); text-decoration: none; }
 
 	.row {
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
 		padding: 14px 20px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		border: 1px solid var(--border);
 		border-radius: 12px;
 		margin-bottom: 10px;
 	}
@@ -87,12 +85,12 @@ const styles = `
 	a.row {
 		position: relative;
 		overflow: hidden;
-		background: rgba(255, 255, 255, 0.06);
-		border-color: rgba(255, 255, 255, 0.15);
+		background: var(--glass-bg);
+		border-color: var(--glass-border);
 		backdrop-filter: blur(12px);
 	}
 
-	a.row:hover { background: rgba(255, 255, 255, 0.12); }
+	a.row:hover { background: var(--border); }
 
 	a.row::before {
 		content: "";
@@ -100,7 +98,7 @@ const styles = `
 		top: 0; left: 0; right: 0;
 		height: 50%;
 		background: linear-gradient(
-			to bottom, rgba(255, 255, 255, 0.14), transparent
+			to bottom, var(--glass-sheen), transparent
 		);
 		pointer-events: none;
 	}
@@ -112,14 +110,14 @@ const styles = `
 		align-items: center;
 		gap: 10px;
 		padding: 10px 16px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		border: 1px solid var(--border);
 		border-radius: 10px;
 		margin-bottom: 8px;
 		cursor: pointer;
 		font-size: 15px;
 	}
 
-	.option:hover { background: rgba(255, 255, 255, 0.05); }
+	.option:hover { background: var(--hover-subtle); }
 	.option input { width: 17px; height: 17px; }
 
 	/* A reorderable priority list. Deliberately looks like .option rows,
@@ -129,7 +127,7 @@ const styles = `
 		align-items: center;
 		gap: 10px;
 		padding: 10px 12px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		border: 1px solid var(--border);
 		border-radius: 10px;
 		margin-bottom: 8px;
 		font-size: 15px;
@@ -155,12 +153,12 @@ const styles = `
 		cursor: pointer;
 		color: inherit;
 		border-radius: 8px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
-		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid var(--border);
+		background: var(--glass-bg);
 	}
 
 	.priority-move:hover:not(:disabled) {
-		background: rgba(255, 255, 255, 0.12);
+		background: var(--border);
 	}
 
 	.priority-move:disabled { opacity: 0.2; cursor: default; }
@@ -181,10 +179,10 @@ const styles = `
 	select {
 		width: 100%;
 		box-sizing: border-box;
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.15);
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
 		border-radius: 10px;
-		color: #fff;
+		color: var(--fg);
 		font-size: 16px;
 		padding: 12px 16px;
 	}
@@ -194,8 +192,8 @@ const styles = `
 	input[type="color"] {
 		width: 100%;
 		height: 46px;
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.15);
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
 		border-radius: 10px;
 		padding: 4px;
 		cursor: pointer;
@@ -204,8 +202,8 @@ const styles = `
 	/* Dropdown options fall back to the browser's own popup colours unless
 	   we say otherwise, which means white on white in a dark interface */
 	option {
-		background: #1a1a1a;
-		color: #fff;
+		background: var(--bg);
+		color: var(--fg);
 	}
 
 
@@ -219,10 +217,10 @@ const styles = `
 		display: block;
 		width: 100%;
 		text-align: left;
-		background: rgba(255, 255, 255, 0.04);
-		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: var(--input-bg);
+		border: 1px solid var(--card-border);
 		border-radius: 8px;
-		color: #fff;
+		color: var(--fg);
 		font-size: 14px;
 		font-family: inherit;
 		padding: 10px 14px;
@@ -230,10 +228,10 @@ const styles = `
 		cursor: pointer;
 	}
 
-	.result:hover { background: rgba(255, 255, 255, 0.1); }
+	.result:hover { background: var(--card-border); }
 	.status { font-size: 14px; min-height: 20px; margin-top: 14px; }
-	.status.good { color: #6bd968; }
-	.status.bad { color: #ff8a8a; }
+	.status.good { color: var(--success); }
+	.status.bad { color: var(--danger); }
 
 	.footer { opacity: 0.4; font-size: 13px; }
 
@@ -246,17 +244,17 @@ const styles = `
 	.market-search {
 		width: 100%;
 		padding: 12px 16px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		border: 1px solid var(--border);
 		border-radius: 10px;
 		background: transparent;
-		color: #fff;
+		color: var(--fg);
 		font-size: 14px;
 		font-family: inherit;
 		box-sizing: border-box;
 	}
 
-	.market-search::placeholder { color: rgba(255, 255, 255, 0.35); }
-	.market-search:focus { outline: none; border-color: rgba(255, 255, 255, 0.3); }
+	.market-search::placeholder { color: var(--fg-muted); }
+	.market-search:focus { outline: none; border-color: var(--glass-border); }
 
 	.market-grid {
 		display: grid;
@@ -270,7 +268,7 @@ const styles = `
 		flex-direction: column;
 		gap: 10px;
 		padding: 16px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		border: 1px solid var(--border);
 		border-radius: 12px;
 	}
 
@@ -291,16 +289,16 @@ const styles = `
 	   scoped so it doesn't change anything that already exists. */
 	.btn {
 		padding: 9px 16px;
-		border: 1px solid rgba(255, 255, 255, 0.16);
+		border: 1px solid var(--glass-border);
 		border-radius: 8px;
-		background: rgba(255, 255, 255, 0.06);
-		color: #fff;
+		background: var(--glass-bg);
+		color: var(--fg);
 		font-size: 13px;
 		font-family: inherit;
 		cursor: pointer;
 	}
 
-	.btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+	.btn:hover:not(:disabled) { background: var(--border); }
 	.btn:disabled { opacity: 0.5; cursor: default; }
 
 	/* A real focus ring, scoped tightly to the button itself — never the
@@ -310,7 +308,7 @@ const styles = `
 	.btn:focus { outline: none; }
 	.btn:focus-visible {
 		outline: none;
-		box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.4);
+		box-shadow: 0 0 0 2px var(--fg-muted);
 	}
 
 	/* Header row: title on the left, a way to reach settings on the
@@ -329,21 +327,21 @@ const styles = `
 
 	.tab-btn {
 		padding: 8px 16px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		border: 1px solid var(--border);
 		border-radius: 8px;
 		background: transparent;
-		color: rgba(255, 255, 255, 0.55);
+		color: var(--fg-muted);
 		font-size: 14px;
 		font-family: inherit;
 		cursor: pointer;
 	}
 
-	.tab-btn:hover:not(.active) { background: rgba(255, 255, 255, 0.05); }
+	.tab-btn:hover:not(.active) { background: var(--hover-subtle); }
 
 	.tab-btn.active {
-		background: rgba(255, 255, 255, 0.1);
-		color: #fff;
-		border-color: rgba(255, 255, 255, 0.25);
+		background: var(--card-border);
+		color: var(--fg);
+		border-color: var(--glass-sheen);
 	}
 
 	/* A card is a link to its detail page, EXCEPT the Install button,
@@ -375,66 +373,66 @@ const styles = `
 		font-family: inherit;
 		font-weight: 500;
 		cursor: pointer;
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 6px rgba(0, 0, 0, 0.35);
+		border: 1px solid var(--glass-border);
+		box-shadow: inset 0 1px 0 var(--glass-sheen), 0 2px 6px rgba(0, 0, 0, 0.35);
 	}
 
 	.btn-glossy-green {
-		color: #eafff2;
-		background: linear-gradient(to bottom, #3ed67a, #1f9a53);
-		border-color: #2ab264;
+		color: var(--success-text);
+		background: linear-gradient(to bottom, var(--success), var(--success-hover));
+		border-color: var(--success-hover);
 	}
 
-	.btn-glossy-green:hover { background: linear-gradient(to bottom, #48e386, #22a85b); }
+	.btn-glossy-green:hover { background: linear-gradient(to bottom, var(--success), var(--success-hover)); }
 
 	.btn-glossy-neutral {
-		color: #fff;
-		background: linear-gradient(to bottom, #4a4a4a, #2c2c2c);
+		color: var(--fg);
+		background: linear-gradient(to bottom, var(--disabled-text), var(--disabled));
 	}
 
-	.btn-glossy-neutral:hover { background: linear-gradient(to bottom, #545454, #333); }
+	.btn-glossy-neutral:hover { background: linear-gradient(to bottom, var(--disabled-text), var(--border)); }
 
 	/* Shown once, right before a third-party source is actually added.
 	   Deliberately not styled like anything else on this page — this is
 	   the one moment worth standing out. */
 	.market-warning {
-		background: linear-gradient(165deg, rgba(70, 8, 8, 0.9), rgba(18, 4, 4, 0.95));
-		border: 1px solid rgba(255, 70, 70, 0.4);
+		background: linear-gradient(165deg, var(--danger-bg), var(--danger-bg));
+		border: 1px solid var(--danger-border);
 		border-radius: 12px;
 		padding: 22px;
 	}
 
-	.market-warning h3 { color: #ff6b6b; margin: 0 0 12px 0; font-size: 17px; }
-	.market-warning p { color: #ffd6d6; font-size: 14px; line-height: 1.6; margin: 0 0 12px 0; }
+	.market-warning h3 { color: var(--danger); margin: 0 0 12px 0; font-size: 17px; }
+	.market-warning p { color: var(--danger-text); font-size: 14px; line-height: 1.6; margin: 0 0 12px 0; }
 	.market-warning p:last-of-type { margin-bottom: 0; }
 
 	.provides-tag {
 		display: inline-block;
 		padding: 4px 10px;
-		border: 1px solid rgba(255, 255, 255, 0.15);
+		border: 1px solid var(--glass-border);
 		border-radius: 999px;
 		font-size: 12px;
 		opacity: 0.75;
 		margin: 0 6px 6px 0;
 	}
-	.danger { color: #ff8a8a; font-size: 14px; cursor: pointer; }
+	.danger { color: var(--danger); font-size: 14px; cursor: pointer; }
 
 	/* Glass-style button with a soft light reflection */
 	.glass {
 		position: relative;
 		overflow: hidden;
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.15);
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
 		border-radius: 12px;
 		backdrop-filter: blur(12px);
-		color: #fff;
+		color: var(--fg);
 		font-size: 16px;
 		padding: 14px 28px;
 		cursor: pointer;
 		width: 100%;
 	}
 
-	.glass:hover { background: rgba(255, 255, 255, 0.12); }
+	.glass:hover { background: var(--border); }
 	.glass:disabled { opacity: 0.35; cursor: not-allowed; }
 
 	.glass::before {
@@ -443,7 +441,7 @@ const styles = `
 		top: 0; left: 0; right: 0;
 		height: 50%;
 		background: linear-gradient(
-			to bottom, rgba(255, 255, 255, 0.14), transparent
+			to bottom, var(--glass-sheen), transparent
 		);
 		pointer-events: none;
 	}
@@ -460,17 +458,26 @@ function escapeHtml(text) {
 	});
 }
 
-function page(title, body, script, bodyClass) {
+// Every admin screen goes through here, so this is the one place the
+// shared Default UI gets attached — uiStyles() first, then this face's
+// own layout rules on top, so a page-specific rule can always override
+// a shared one rather than fighting source order.
+//
+// `back` is a URL for the floating back button, or nothing at all for a
+// screen that is genuinely a root (sign-in, the settings home) where
+// there's nowhere above to go.
+function page(title, body, script, bodyClass, back) {
 	return `<!DOCTYPE html>
 <html>
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(title)} — OmniCore</title>
-	<style>${styles}</style>
+	<style>${uiStyles()}${styles}</style>
 </head>
 <body class="${bodyClass || ""}">
 	${body}
+	${backButton(back)}
 	<script>${script || ""}</script>
 </body>
 </html>`;
@@ -1259,7 +1266,7 @@ function startAdminFace() {
 			});
 		`;
 
-		res.send(page("Location service", body, script));
+		res.send(page("Location service", body, script, "", "/"));
 	});
 
 	app.post("/location", (req, res) => {
@@ -1492,7 +1499,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page("Marketplace", body, script));
+		res.send(page("Marketplace", body, script, "", "/"));
 	});
 
 	app.get("/marketplace/sources", (req, res) => {
@@ -1644,7 +1651,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page("Registry sources", body, script));
+		res.send(page("Registry sources", body, script, "", "/marketplace"));
 	});
 
 	app.post("/marketplace/sources/add", (req, res) => {
@@ -1833,7 +1840,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page(name, body, script));
+		res.send(page(name, body, script, "", "/marketplace"));
 	}
 
 	// A screenshot's real URL is never sent to the browser — only this
@@ -1914,7 +1921,7 @@ function startAdminFace() {
 				<a href="/marketplace">Back</a>
 			</div>`;
 
-		res.send(page(authorName, body));
+		res.send(page(authorName, body, "", "", "/marketplace"));
 	});
 
 	app.post("/marketplace/install", async (req, res) => {
@@ -1958,7 +1965,7 @@ function startAdminFace() {
 				${faces || '<div class="empty">No faces yet. Create one on port 4000.</div>'}
 			</div>`;
 
-		res.send(page("Faces", body));
+		res.send(page("Faces", body, "", "", "/"));
 	});
 
 	// One face: its name, its theme, and a way into its modules
@@ -2045,7 +2052,7 @@ function startAdminFace() {
 			});
 		`;
 
-		res.send(page(face.name, body, script));
+		res.send(page(face.name, body, script, "", "/faces"));
 	});
 
 	app.post("/faces/:id", (req, res) => {
@@ -2232,7 +2239,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page("Change theme", body, script));
+		res.send(page("Change theme", body, script, "", `/faces/${req.params.id}`));
 	});
 
 	// The module instances on a face. The same module may appear more than
@@ -2272,7 +2279,7 @@ function startAdminFace() {
 				</a>
 			</div>`;
 
-		res.send(page("Modules", body));
+		res.send(page("Modules", body, "", "", `/faces/${req.params.id}`));
 	});
 
 	// Pick a module to add. Every installed module is listed, including ones
@@ -2334,7 +2341,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page("Add a module", body, script));
+		res.send(page("Add a module", body, script, "", `/faces/${req.params.id}/modules`));
 	});
 
 	app.post("/faces/:id/modules", async (req, res) => {
@@ -2522,7 +2529,7 @@ function startAdminFace() {
 			});
 		`;
 
-		res.send(page(instance.label || manifest.name, body, script));
+		res.send(page(instance.label || manifest.name, body, script, "", `/faces/${req.params.id}/modules`));
 	});
 
 	app.post("/faces/:id/modules/:instanceId", (req, res) => {

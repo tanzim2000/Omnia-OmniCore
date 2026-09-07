@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.6.2
+
+Second stage of the Default UI refactor. Still no visible change for anyone using OmniCore today, on purpose.
+
+### Changed
+
+- **The admin face now draws from the shared stylesheet.** Its own 405 line stylesheet had every colour hardcoded; all of them are now CSS variables, so light mode reaches the admin UI rather than stopping at the two small pages converted last time. Semantic colours (the reds for warnings, greens for success, greys for disabled buttons) became real variables too, with genuinely different values per mode: the same red that reads clearly on black is far too pale to read on a near white page.
+- **A floating back button on every admin screen that has somewhere to go.** Eleven screens got one, each pointing at its actual parent rather than relying on browser history. The settings home and the sign in screen deliberately have none, since there is nothing above them. Its corner follows the `backButtonCorner` setting.
+
 ## v1.6.1
 
 First stage of the Default UI refactor (docs/planning/default-ui-architecture.md, not in this repo). No visible change yet, on purpose, see below.

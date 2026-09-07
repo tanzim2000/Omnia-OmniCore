@@ -41,7 +41,26 @@ const PALETTES = {
 		cardBg: "rgba(255, 255, 255, 0.04)",
 		cardBorder: "rgba(255, 255, 255, 0.1)",
 		flash: "rgba(255, 255, 255, 0.35)",
-		scrollThumb: "rgba(255, 255, 255, 0.2)"
+		scrollThumb: "rgba(255, 255, 255, 0.2)",
+
+		// A quieter border than the glass one, for things that group
+		// content rather than invite a click
+		border: "rgba(255, 255, 255, 0.12)",
+		hoverSubtle: "rgba(255, 255, 255, 0.05)",
+		inputBg: "rgba(255, 255, 255, 0.04)",
+
+		// Semantic colours. Without these as variables, every warning
+		// and success message would stay dark-mode-coloured on a light
+		// page, which is exactly the drift this refactor exists to stop.
+		danger: "#ff6b6b",
+		dangerText: "#ffd6d6",
+		dangerBg: "rgba(70, 8, 8, 0.9)",
+		dangerBorder: "rgba(255, 70, 70, 0.4)",
+		success: "#3ed67a",
+		successHover: "#2ab264",
+		successText: "#eafff2",
+		disabled: "#2c2c2c",
+		disabledText: "#545454"
 	},
 	light: {
 		bg: "#f2f2f4",
@@ -54,7 +73,24 @@ const PALETTES = {
 		cardBg: "rgba(255, 255, 255, 0.7)",
 		cardBorder: "rgba(0, 0, 0, 0.08)",
 		flash: "rgba(0, 0, 0, 0.15)",
-		scrollThumb: "rgba(0, 0, 0, 0.25)"
+		scrollThumb: "rgba(0, 0, 0, 0.25)",
+
+		border: "rgba(0, 0, 0, 0.12)",
+		hoverSubtle: "rgba(0, 0, 0, 0.04)",
+		inputBg: "rgba(255, 255, 255, 0.9)",
+
+		// Darker than their dark-mode counterparts on purpose: the same
+		// red that reads clearly against black is far too pale to read
+		// against a near-white page.
+		danger: "#c0392b",
+		dangerText: "#7a1c12",
+		dangerBg: "rgba(255, 235, 233, 0.95)",
+		dangerBorder: "rgba(192, 57, 43, 0.35)",
+		success: "#1f9a53",
+		successHover: "#177a41",
+		successText: "#0c3d22",
+		disabled: "#d6d6d8",
+		disabledText: "#9a9a9e"
 	}
 };
 
@@ -118,6 +154,20 @@ function uiStyles(options) {
 
 		--flash: ${active.flash};
 		--scroll-thumb: ${active.scrollThumb};
+
+		--border: ${active.border};
+		--hover-subtle: ${active.hoverSubtle};
+		--input-bg: ${active.inputBg};
+
+		--danger: ${active.danger};
+		--danger-text: ${active.dangerText};
+		--danger-bg: ${active.dangerBg};
+		--danger-border: ${active.dangerBorder};
+		--success: ${active.success};
+		--success-hover: ${active.successHover};
+		--success-text: ${active.successText};
+		--disabled: ${active.disabled};
+		--disabled-text: ${active.disabledText};
 
 		--font: ${fontStack(settings)};
 		--font-size: ${Number(settings.uiFontSize) || 16}px;
