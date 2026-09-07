@@ -22,7 +22,9 @@ services:
     ports:
       # Admin — create your account, install things, change settings
       - "3000:3000"
-      # Setup wizard — build a new dashboard
+      # Setup wizard — build a new dashboard face
+      - "3999:3999"
+      # Welcome face — pick which dashboard to display
       - "4000:4000"
       # Each dashboard you create gets the next number after 4000. Ten
       # reserved here is plenty for a home — if you ever need an

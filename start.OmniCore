@@ -1,7 +1,8 @@
 // OmniCore entry point.
 // Port layout:
 //   3000  = the built-in admin face — OmniCore's own settings UI
-//   4000  = the control face, where OmniVision picks a face to display
+//   3999  = the setup wizard, where a new face gets built
+//   4000  = the welcome face, where OmniVision picks a face to display
 //   4001+ = dashboard faces, auto-assigned by OmniCore
 //   5001+ = input faces, one per instance that declares one
 
@@ -9,6 +10,7 @@ const { readFaces } = require("./core/face-store");
 const { startFace } = require("./core/face-loader");
 const { startInputFace } = require("./core/input-face-loader");
 const startControlFace = require("./core/control-face");
+const startWizardFace = require("./core/wizard-face");
 const startAdminFace = require("./core/admin-face");
 const resourceScheduler = require("./core/resource-scheduler");
 const coreUpdateScheduler = require("./core/core-update-scheduler");
@@ -26,8 +28,13 @@ for (const face of faces) {
 	}
 }
 
-// The control face is always running
+// The welcome face is always running
 startControlFace();
+
+// So is the setup wizard, on its own face. It used to live on 4000
+// alongside the picker; splitting it out is what lets 4000 be safe to
+// leave open on a display, since nothing there can change anything.
+startWizardFace();
 
 // So is the admin face — it's built in, not something the user creates
 startAdminFace();

@@ -39,6 +39,7 @@ const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
 const { refresh } = require("./face-loader");
 const { uiStyles, backButton } = require("./ui-theme");
+const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const { startInputFace, stopInputFace } = require("./input-face-loader");
 const auth = require("./admin-auth");
 
@@ -1962,10 +1963,27 @@ function startAdminFace() {
 				<h1 style="margin-top:12px">Faces</h1>
 			</div>
 			<div class="panel">
-				${faces || '<div class="empty">No faces yet. Create one on port 4000.</div>'}
+				${faces || '<div class="empty">No faces yet.</div>'}
+			</div>
+			<div class="panel">
+				<button class="glass" onclick="goToWizard()">
+					Create a new face
+				</button>
 			</div>`;
 
-		res.send(page("Faces", body, "", "", "/"));
+		// The wizard lives on its own face now (3999), so this has to be
+		// built in the browser — only it knows what host OmniCore was
+		// actually reached at, which matters on Codespaces and any
+		// reverse proxy.
+		const script =
+			portLinkScript +
+			`
+			function goToWizard() {
+				location.href = faceUrl(${WIZARD_PORT}) + "/faces/new";
+			}
+		`;
+
+		res.send(page("Faces", body, script, "", "/"));
 	});
 
 	// One face: its name, its theme, and a way into its modules

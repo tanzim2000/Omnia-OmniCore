@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.7.0
+
+The setup wizard moved to its own face, and the welcome face became a pure picker.
+
+### Added
+
+- **Face:3999, the setup wizard.** It used to share port 4000 with the face picker. Splitting it out is what lets 4000 be safe to leave open on a wall display or hand to OmniVision: nothing on 4000 can create, change, or delete anything any more. Reached from Settings > Faces > Create a new face. Looks exactly as it did before; this split is about routing, not appearance.
+- **Auto-advance on the welcome face.** Visiting 4000 now does one of three things. With no faces at all it goes straight to the wizard rather than showing an empty picker. With exactly one face it shows the picker and starts a 30 second timer to that face, since there was never a real choice to make. With several it shows the list and no timer, because there is nothing safe to guess at.
+- **The timer is a small amber lamp under a domed glass lens**, fixed bottom left, draining like a pie chart losing its slice so the redirect is never a surprise. Any interaction at all cancels it, since someone who touched the screen is deciding for themselves. The floating back button deliberately never offers bottom left, so the two can never collide.
+
+### Changed
+
+- Port 3999 is now exposed in both compose files.
+- The admin face's Faces page links to the wizard, and no longer tells anyone to go to port 4000 to create a face, which stopped being true in this release.
+
 ## v1.6.2
 
 Second stage of the Default UI refactor. Still no visible change for anyone using OmniCore today, on purpose.
