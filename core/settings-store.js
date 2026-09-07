@@ -31,7 +31,31 @@ const DEFAULTS = {
 	// never removable. Adding a source means trusting whoever runs it to
 	// review what gets listed there the way the built-in one is reviewed;
 	// see the warning shown before one is ever added.
-	registrySources: []
+	registrySources: [],
+
+	// --- The Default UI ---------------------------------------------
+	// How OmniCore's own built-in pages look: admin faces (3xxx), the
+	// welcome face (4000), the setup wizard (3999), and input faces
+	// (5xxx). Dashboard faces (4001-4999) are NOT covered by any of
+	// this — their appearance belongs entirely to whichever theme
+	// they're running. See docs/planning/default-ui-architecture.md.
+
+	// "dark" | "light". One universal toggle for every face above.
+	uiMode: "dark",
+
+	// Font family for those same pages. Empty means the system's own
+	// font, which is what a fresh install uses — nothing is downloaded
+	// until someone actually picks something.
+	uiFontFamily: "",
+
+	// Base font size in pixels. Everything else scales in `em` from
+	// this, so one number changes the whole UI's density.
+	uiFontSize: 16,
+
+	// Which corner the floating back button sits in: "bottom-right" or
+	// "top-left". Deliberately NOT bottom-left, which is reserved for
+	// the welcome face's auto-advance timer.
+	backButtonCorner: "bottom-right"
 };
 
 function readSettings() {

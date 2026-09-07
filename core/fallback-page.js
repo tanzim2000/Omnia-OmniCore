@@ -1,7 +1,18 @@
 // core/fallback-page.js
-// Built-in screen shown when a face has no theme assigned, or its assigned
-// theme is missing. This is NOT part of any theme — it's OmniCore's own
-// bare fallback: pure black background, white text, glass-style buttons.
+// Built-in screen shown when a face has no theme assigned, or its
+// assigned theme is missing.
+//
+// This is NOT part of any theme — it's OmniCore's own, and it now draws
+// from the shared Default UI (core/ui-theme.js) rather than carrying its
+// own copy of the same black-background/glass-button CSS.
+//
+// Its days are numbered by design: once the Default UI can render
+// dashboard faces properly, "no theme" stops being a state a face can
+// be in at all, and this screen goes away rather than becoming a
+// picker with Default on it. See
+// docs/planning/default-ui-architecture.md.
+
+const { uiStyles } = require("./ui-theme");
 
 function renderFallbackPage(themes) {
 	const hasThemes = themes.length > 0;
@@ -27,64 +38,30 @@ function renderFallbackPage(themes) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>OmniCore</title>
 	<style>
+${uiStyles()}
+
 		body {
-			background: #000;
-			color: #fff;
-			font-family: system-ui, sans-serif;
 			height: 100vh;
-			margin: 0;
 			display: flex;
 			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			gap: 32px;
+			gap: 2em;
+			padding: 1.5em;
 		}
 
 		h1 {
 			font-weight: 300;
-			font-size: 28px;
+			font-size: 1.75em;
+			text-align: center;
+			margin: 0;
 		}
 
 		.buttons {
 			display: flex;
 			flex-wrap: wrap;
-			gap: 16px;
+			gap: 1em;
 			justify-content: center;
-		}
-
-		/* Glass-style button with a soft light reflection */
-		.glass {
-			position: relative;
-			overflow: hidden;
-			background: rgba(255, 255, 255, 0.06);
-			border: 1px solid rgba(255, 255, 255, 0.15);
-			border-radius: 12px;
-			backdrop-filter: blur(12px);
-			color: #fff;
-			font-size: 16px;
-			padding: 16px 32px;
-			cursor: pointer;
-			transition: background 0.2s;
-		}
-
-		.glass:hover {
-			background: rgba(255, 255, 255, 0.12);
-		}
-
-		/* The reflection: a light sheen across the upper half */
-		.glass::before {
-			content: "";
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			height: 50%;
-			background: linear-gradient(
-				to bottom,
-				rgba(255, 255, 255, 0.14),
-				transparent
-			);
-			pointer-events: none;
 		}
 	</style>
 </head>

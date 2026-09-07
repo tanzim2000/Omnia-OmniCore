@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.6.1
+
+First stage of the Default UI refactor (docs/planning/default-ui-architecture.md, not in this repo). No visible change yet, on purpose, see below.
+
+### Added
+
+- **`core/ui-theme.js`.** One shared stylesheet for every page OmniCore renders itself, replacing four separate hand-written copies of the same black background and glass button look that had already drifted apart from each other. Dark and light palettes, both fully driven by CSS custom properties. A downloaded font gets served locally at `/ui-font.woff2` rather than fetched from Google's CDN on every page load, so the admin UI stays usable without live internet.
+- **Four new settings**, defaults only for now: `uiMode`, `uiFontFamily`, `uiFontSize`, `backButtonCorner`. No settings UI exists yet to change them; that's a later stage.
+
+### Changed
+
+- `fallback-page.js` and `input-face-page.js` now draw from `ui-theme.js` instead of carrying their own CSS. Verified end to end afterward, not just that they still compile: dark mode glows on card hover, light mode zooms instead, and a real tap plus a real number submission on an input face both still reach storage correctly.
+
 ## v1.6.0
 
 Input faces can now take a number! Not just a tap,

@@ -1,9 +1,18 @@
 // core/input-face-page.js
 // The page shown on an input face's own port. This is NOT a theme and
-// never will be for now — the module declares WHAT controls exist
-// (input.json), OmniCore alone decides how they look. Same black
-// background, glass visual language as fallback-page.js, since both are
-// OmniCore's own built-in UI rather than anything installable.
+// isn't one yet by design — the module declares WHAT controls exist
+// (input.json), OmniCore alone decides how they look, drawing on the
+// shared Default UI in core/ui-theme.js.
+//
+// Input faces will gain the ability to swap themes later, at which
+// point the `forceMode` seam in ui-theme.js is what a theme would use
+// to override the global light/dark setting. Not today.
+//
+// No floating back button here: an input face is one flat page with
+// controls on it, no sub-navigation at all, so there is genuinely
+// nowhere for "back" to lead.
+
+const { uiStyles } = require("./ui-theme");
 
 function escapeHtml(text) {
 	return String(text).replace(/[&<>"]/g, function (character) {
@@ -24,15 +33,15 @@ function escapeJs(text) {
 	return String(text).replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
-// One control -> one glass element. Unrecognised types are skipped
-// rather than guessed at, so a module declaring something OmniCore
-// doesn't understand yet just gets fewer controls, never a broken page.
+// One control -> one element. Unrecognised types are skipped rather
+// than guessed at, so a module declaring something OmniCore doesn't
+// understand yet just gets fewer controls, never a broken page.
 function renderControl(control) {
 	const key = escapeJs(control.key);
 
 	if (control.type === "button") {
 		return `
-		<button class="glass tappable" onclick="press('${key}', this)">
+		<button class="glass big" onclick="press('${key}', this)">
 			${escapeHtml(control.label || control.key)}
 		</button>`;
 	}
@@ -47,7 +56,7 @@ function renderControl(control) {
 			: "";
 
 		return `
-		<div class="field glass">
+		<div class="field card">
 			${label}
 			<input
 				id="field-${key}"
@@ -55,7 +64,7 @@ function renderControl(control) {
 				inputmode="decimal"
 				step="any"
 				placeholder="${escapeHtml(control.placeholder || "")}">
-			<button class="tappable" onclick="submitNumber('${key}', this)">
+			<button class="glass" onclick="submitNumber('${key}', this)">
 				${escapeHtml(control.submitLabel || "Save")}
 			</button>
 		</div>`;
@@ -74,112 +83,72 @@ function renderInputFacePage(label, controls) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(label)} — OmniCore</title>
 	<style>
+${uiStyles()}
+
 		body {
-			background: #000;
-			color: #fff;
-			font-family: system-ui, sans-serif;
 			min-height: 100vh;
-			margin: 0;
 			display: flex;
 			flex-direction: column;
 			align-items: center;
 			justify-content: center;
-			gap: 32px;
-			padding: 24px;
-			box-sizing: border-box;
+			gap: 2em;
+			padding: 1.5em;
 		}
 
 		h1 {
 			font-weight: 300;
-			font-size: 22px;
+			font-size: 1.4em;
 			opacity: 0.85;
 			text-align: center;
+			margin: 0;
 		}
 
 		.controls {
 			display: flex;
 			flex-wrap: wrap;
-			gap: 16px;
+			gap: 1em;
 			justify-content: center;
 		}
 
-		.glass {
-			position: relative;
-			overflow: hidden;
-			background: rgba(255, 255, 255, 0.06);
-			border: 1px solid rgba(255, 255, 255, 0.15);
-			border-radius: 12px;
-			backdrop-filter: blur(12px);
-			color: #fff;
-		}
+		/* A tap target meant to be hit from a phone at arm's length,
+		   not clicked with a mouse */
+		.glass.big { padding: 1.5em 2.5em; font-size: 1.15em; }
 
-		.glass::before {
-			content: "";
-			position: absolute;
-			top: 0; left: 0; right: 0;
-			height: 50%;
-			background: linear-gradient(
-				to bottom, rgba(255, 255, 255, 0.14), transparent
-			);
-			pointer-events: none;
-		}
-
-		button.glass {
-			font-size: 18px;
-			padding: 24px 40px;
-			cursor: pointer;
-			transition: background 0.2s, transform 0.1s;
-		}
-
-		button.glass:hover { background: rgba(255, 255, 255, 0.12); }
-		.tappable:active { transform: scale(0.96); }
-
-		/* Momentary feedback after a tap, so someone on a phone knows it
-		   actually registered before the control resets itself */
-		.done { background: rgba(120, 255, 160, 0.18) !important; }
-
+		/* A card here isn't a clickable showcase card — it's a
+		   container for a control, so the hover behaviour and pointer
+		   don't apply. */
 		.field {
 			display: flex;
 			flex-direction: column;
-			gap: 12px;
-			padding: 20px;
-			min-width: 200px;
+			gap: 0.75em;
+			min-width: 12em;
+			cursor: default;
 		}
 
-		.field label {
-			font-size: 14px;
-			opacity: 0.7;
-		}
+		.field:hover { transform: none; box-shadow: none; }
+
+		.field label { font-size: 0.85em; opacity: 0.7; }
 
 		.field input {
-			background: rgba(0, 0, 0, 0.3);
-			border: 1px solid rgba(255, 255, 255, 0.2);
+			background: var(--bg);
+			border: 1px solid var(--glass-border);
 			border-radius: 8px;
-			color: #fff;
-			font-size: 24px;
-			padding: 12px;
+			color: var(--fg);
+			font-family: inherit;
+			font-size: 1.5em;
+			padding: 0.5em;
 			width: 100%;
-			box-sizing: border-box;
 			text-align: center;
 		}
 
 		.field input:focus {
 			outline: none;
-			border-color: rgba(255, 255, 255, 0.45);
+			border-color: var(--fg-muted);
 		}
 
-		.field button {
-			background: rgba(255, 255, 255, 0.1);
-			border: 1px solid rgba(255, 255, 255, 0.15);
-			border-radius: 8px;
-			color: #fff;
-			font-size: 16px;
-			padding: 12px;
-			cursor: pointer;
-			transition: background 0.2s, transform 0.1s;
-		}
-
-		.field button:hover { background: rgba(255, 255, 255, 0.16); }
+		/* Momentary feedback after a tap, so someone on a phone knows
+		   it actually registered before the control resets itself */
+		.done { background: rgba(120, 255, 160, 0.25) !important; }
 	</style>
 </head>
 <body>
