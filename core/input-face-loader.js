@@ -15,6 +15,7 @@ const { loadModule } = require("./module-loader");
 const { readManifest, readInputSchema } = require("./module-config");
 const { makeModuleApi } = require("./module-api");
 const renderInputFacePage = require("./input-face-page");
+const { attachFontRoute } = require("./font-service");
 
 // Running input faces, keyed by port: { server }
 const runningInputFaces = new Map();
@@ -41,6 +42,9 @@ function startInputFace(faceId, instance) {
 
 		const app = express();
 		app.use(express.json());
+
+		// Serves the chosen UI font from this face's own origin
+		attachFontRoute(app);
 
 		app.get("/", (req, res) => {
 			res.send(renderInputFacePage(label, controls));

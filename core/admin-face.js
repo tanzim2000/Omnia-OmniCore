@@ -40,6 +40,7 @@ const faceStore = require("./face-store");
 const { refresh } = require("./face-loader");
 const { uiStyles, backButton } = require("./ui-theme");
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
+const fontService = require("./font-service");
 const { startInputFace, stopInputFace } = require("./input-face-loader");
 const auth = require("./admin-auth");
 
@@ -963,6 +964,11 @@ function startAdminFace() {
 	const app = express();
 	app.use(express.json());
 
+	// Serves the chosen UI font. Mounted before the auth gate below:
+	// the sign-in screen itself renders in the chosen font, and it is
+	// by definition reached while signed out.
+	fontService.attachFontRoute(app);
+
 	// Gate everything except the setup and login endpoints
 	app.use((req, res, next) => {
 		const open = ["/setup", "/login"];
@@ -1069,6 +1075,37 @@ function startAdminFace() {
 
 	// OmniCore's own settings — things that apply to the whole install
 	// rather than to one face.
+	// --- Fonts -------------------------------------------------------
+	// The picker's own endpoints. The UI that calls these lands in the
+	// next stage; the capability is here so it can be tested on its own.
+
+	app.get("/fonts/search", async (req, res) => {
+		try {
+			res.json(await fontService.searchFonts(req.query.q, 25));
+		} catch (error) {
+			// Google unreachable, most likely. Say so plainly rather
+			// than showing an empty list, which would read as "no font
+			// matches that" and send someone hunting for a typo.
+			res.status(502).json({ error: error.message });
+		}
+	});
+
+	app.post("/fonts", async (req, res) => {
+		try {
+			const family = await fontService.installFont((req.body || {}).family);
+			writeSettings({ uiFontFamily: family });
+			res.json({ ok: true, family });
+		} catch (error) {
+			res.status(400).json({ error: error.message });
+		}
+	});
+
+	app.delete("/fonts", async (req, res) => {
+		await fontService.removeFont();
+		writeSettings({ uiFontFamily: "" });
+		res.json({ ok: true });
+	});
+
 	app.get("/location", async (req, res) => {
 		const settings = readSettings();
 

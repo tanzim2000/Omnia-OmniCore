@@ -17,6 +17,7 @@
 const express = require("express");
 const faceStore = require("./face-store");
 const { uiStyles } = require("./ui-theme");
+const { attachFontRoute } = require("./font-service");
 const {
 	portLinkScript,
 	escapeHtml,
@@ -128,6 +129,9 @@ function page(title, body, script) {
 function startControlFace() {
 	const app = express();
 	app.use(express.json());
+
+	// Serves the chosen UI font from this face's own origin
+	attachFontRoute(app);
 
 	// Machine-readable face registry — this is what OmniVision calls
 	app.get("/faces", (req, res) => {

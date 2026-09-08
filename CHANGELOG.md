@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.7.1
+
+Font support for OmniCore's own UI. No picker yet, that lands next; this is the machinery under it.
+
+### Added
+
+- **Google Fonts, downloaded rather than linked.** Picking a font fetches it once and stores it in `data/`, and every page serves it from its own origin at `/ui-font.woff2`. Nothing is ever requested from Google's CDN when a page renders. Two reasons: the admin UI has to work with no internet, since the screen you use to fix a broken network should not itself need the network; and a CDN link would tell Google who is looking and from where on every single page load, which is the same reason the image proxy already exists.
+- **No API key.** Both endpoints used are the keyless ones Google's own font picker calls from a browser, consistent with how `weather` uses Open-Meteo.
+- **`GET /fonts/search`, `POST /fonts`, `DELETE /fonts`** on the admin face. A search that cannot reach Google returns an error rather than an empty list, since an empty list reads as "no font matches that" and sends someone hunting for a typo that is not there.
+
+### Notes
+
+- Only the regular weight is downloaded. The UI uses one weight throughout, and pulling every weight of a large family would mean megabytes of glyphs nothing renders.
+- Google serves woff2 only to callers it believes can handle it, decided from the User-Agent, so the request identifies as a current browser. Asking as anything older returns TTF, several times the size for the same glyphs.
+
 ## v1.7.0
 
 The setup wizard moved to its own face, and the welcome face became a pure picker.
