@@ -235,6 +235,15 @@ const styles = `
 	.status.good { color: var(--success); }
 	.status.bad { color: var(--danger); }
 
+	/* Explanatory text under a control — quieter than the label it
+	   belongs to, for the "why" rather than the "what" */
+	.hint {
+		display: block;
+		color: var(--fg-muted);
+		font-size: 13px;
+		margin: 4px 0 8px 0;
+	}
+
 	.footer { opacity: 0.4; font-size: 13px; }
 
 	/* Marketplace — wider than a settings panel, since it needs room for
@@ -486,6 +495,23 @@ function page(title, body, script, bodyClass, back) {
 }
 
 // One line describing how location is set up, for the settings list
+// A one-line summary of how the UI is currently set, for the settings
+// list. Says the things someone actually changed rather than reciting
+// every value: a fresh install just reads "Dark".
+function describeAppearance(settings) {
+	const parts = [settings.uiMode === "light" ? "Light" : "Dark"];
+
+	if (settings.uiFontFamily) {
+		parts.push(settings.uiFontFamily);
+	}
+
+	if (Number(settings.uiFontSize) !== 16) {
+		parts.push(`${settings.uiFontSize}px`);
+	}
+
+	return parts.join(" · ");
+}
+
 function describeLocationSetting(settings) {
 	if (!settings.locationEnabled) {
 		return "Off";
@@ -1061,6 +1087,10 @@ function startAdminFace() {
 					<strong>Faces</strong>
 					<span>${count ? count + (count === 1 ? " face" : " faces") : "No faces yet"}</span>
 				</a>
+				<a class="row" href="/appearance">
+					<strong>Appearance</strong>
+					<span>${escapeHtml(describeAppearance(settings))}</span>
+				</a>
 				<a class="row" href="/marketplace">
 					<strong>Marketplace</strong>
 					<span>Add modules and themes</span>
@@ -1075,6 +1105,257 @@ function startAdminFace() {
 
 	// OmniCore's own settings — things that apply to the whole install
 	// rather than to one face.
+	// Appearance — how OmniCore's own pages look. Applies to the admin
+	// faces, the welcome face, and input faces. NOT to dashboard faces,
+	// which belong entirely to whichever theme they run.
+	app.get("/appearance", (req, res) => {
+		const settings = readSettings();
+		const installed = fontService.installedFont();
+
+		const body = `
+			<div class="panel">
+				<a class="back" href="/">&#8592; Settings</a>
+				<h1 style="margin-top:12px">Appearance</h1>
+				<p class="lede">
+					How OmniCore's own screens look. Dashboard faces are
+					unaffected, since their appearance belongs to whichever
+					theme they run.
+				</p>
+			</div>
+
+			<div class="panel">
+				<div class="field">
+					<strong>Mode</strong>
+					<label class="option">
+						<input type="radio" name="mode" value="dark"
+							${settings.uiMode !== "light" ? "checked" : ""}>
+						Dark
+					</label>
+					<label class="option">
+						<input type="radio" name="mode" value="light"
+							${settings.uiMode === "light" ? "checked" : ""}>
+						Light
+					</label>
+				</div>
+
+				<div class="field">
+					<strong>Back button corner</strong>
+					<label class="option">
+						<input type="radio" name="corner" value="bottom-right"
+							${settings.backButtonCorner !== "top-left" ? "checked" : ""}>
+						Bottom right
+					</label>
+					<label class="option">
+						<input type="radio" name="corner" value="top-left"
+							${settings.backButtonCorner === "top-left" ? "checked" : ""}>
+						Top left
+					</label>
+					<span class="hint">
+						Bottom left is reserved for the welcome face's
+						countdown, so the two can never overlap.
+					</span>
+				</div>
+
+				<div class="field">
+					<strong>Text size</strong>
+					<label class="option">
+						<input type="range" id="size" min="12" max="24" step="1"
+							value="${Number(settings.uiFontSize) || 16}">
+						<span id="size-label">${Number(settings.uiFontSize) || 16}px</span>
+					</label>
+				</div>
+			</div>
+
+			<div class="panel">
+				<div class="field">
+					<strong>Font</strong>
+					<span class="hint">
+						Downloaded once and served by OmniCore itself, so it
+						keeps working with no internet.
+					</span>
+					<p id="current">
+						${
+							installed
+								? `Using <strong>${escapeHtml(installed.family)}</strong>`
+								: "Using the system font"
+						}
+					</p>
+					<input class="market-search" id="font-q"
+						placeholder="Search Google Fonts...">
+					<div class="list" id="font-results"></div>
+					${
+						installed
+							? `<button class="glass" id="clear-font">
+									Back to the system font
+								</button>`
+							: ""
+					}
+				</div>
+			</div>
+
+			<p class="status" id="status"></p>`;
+
+		const script = `
+			var status = document.getElementById("status");
+
+			function say(text) { status.textContent = text; }
+
+			// Every change saves immediately and reloads, because the
+			// page you are looking at IS the thing being changed --
+			// showing the new setting is the confirmation.
+			async function save(patch, reload) {
+				const res = await fetch("/appearance", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(patch)
+				});
+
+				if (!res.ok) {
+					say("Could not save that.");
+					return;
+				}
+
+				if (reload !== false) { location.reload(); }
+			}
+
+			document.querySelectorAll('input[name="mode"]').forEach(function (el) {
+				el.addEventListener("change", function () {
+					save({ uiMode: el.value });
+				});
+			});
+
+			document.querySelectorAll('input[name="corner"]').forEach(function (el) {
+				el.addEventListener("change", function () {
+					save({ backButtonCorner: el.value });
+				});
+			});
+
+			var size = document.getElementById("size");
+			var sizeLabel = document.getElementById("size-label");
+
+			// Label tracks the slider live, but only save when the drag
+			// ends -- otherwise every pixel of movement is a write.
+			size.addEventListener("input", function () {
+				sizeLabel.textContent = size.value + "px";
+			});
+			size.addEventListener("change", function () {
+				save({ uiFontSize: Number(size.value) });
+			});
+
+			var results = document.getElementById("font-results");
+			var query = document.getElementById("font-q");
+			var searchTimer = null;
+
+			function renderFonts(fonts) {
+				if (!fonts.length) {
+					results.innerHTML = '<p class="hint">No matches.</p>';
+					return;
+				}
+
+				results.innerHTML = fonts.map(function (font) {
+					return '<div class="card" onclick="pickFont(' +
+						JSON.stringify(font.family).replace(/"/g, "&quot;") +
+						')"><strong>' + font.family + '</strong>' +
+						'<span class="hint"> ' + font.category + '</span></div>';
+				}).join("");
+			}
+
+			// Debounced: a search per keystroke would hammer the
+			// catalogue for results nobody has finished asking for yet.
+			query.addEventListener("input", function () {
+				clearTimeout(searchTimer);
+				searchTimer = setTimeout(async function () {
+					if (!query.value.trim()) { results.innerHTML = ""; return; }
+
+					say("Searching...");
+					try {
+						const res = await fetch("/fonts/search?q=" +
+							encodeURIComponent(query.value));
+						const data = await res.json();
+
+						if (!res.ok) {
+							say(data.error || "Could not reach Google Fonts.");
+							results.innerHTML = "";
+							return;
+						}
+
+						say("");
+						renderFonts(data);
+					} catch (error) {
+						say("Could not reach Google Fonts.");
+					}
+				}, 300);
+			});
+
+			window.pickFont = async function (family) {
+				say("Downloading " + family + "...");
+
+				const res = await fetch("/fonts", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ family: family })
+				});
+
+				const data = await res.json();
+
+				if (!res.ok) {
+					say(data.error || "Could not install that font.");
+					return;
+				}
+
+				location.reload();
+			};
+
+			var clear = document.getElementById("clear-font");
+			if (clear) {
+				clear.addEventListener("click", async function () {
+					await fetch("/fonts", { method: "DELETE" });
+					location.reload();
+				});
+			}
+		`;
+
+		res.send(page("Appearance", body, script, "", "/"));
+	});
+
+	// Saves one or more appearance settings. Deliberately a patch rather
+	// than a whole-object write: the page sends only what changed, so two
+	// settings changed in quick succession cannot clobber each other.
+	app.post("/appearance", (req, res) => {
+		const body = req.body || {};
+		const patch = {};
+
+		if (body.uiMode === "dark" || body.uiMode === "light") {
+			patch.uiMode = body.uiMode;
+		}
+
+		if (
+			body.backButtonCorner === "bottom-right" ||
+			body.backButtonCorner === "top-left"
+		) {
+			patch.backButtonCorner = body.backButtonCorner;
+		}
+
+		if (body.uiFontSize !== undefined) {
+			// Clamped rather than trusted: this value goes straight into
+			// a CSS declaration, and a hostile or fat-fingered number
+			// could make the admin UI unusable to fix itself with.
+			const size = Number(body.uiFontSize);
+
+			if (Number.isFinite(size)) {
+				patch.uiFontSize = Math.min(24, Math.max(12, Math.round(size)));
+			}
+		}
+
+		if (Object.keys(patch).length === 0) {
+			res.status(400).json({ error: "Nothing recognisable to save" });
+			return;
+		}
+
+		writeSettings(patch);
+		res.json({ ok: true, ...patch });
+	});
+
 	// --- Fonts -------------------------------------------------------
 	// The picker's own endpoints. The UI that calls these lands in the
 	// next stage; the capability is here so it can be tested on its own.

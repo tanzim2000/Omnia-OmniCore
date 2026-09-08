@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.8.0
+
+Settings > Appearance. Everything built over the last four releases is finally reachable.
+
+### Added
+
+- **An Appearance page** in Settings, controlling how OmniCore's own screens look: light or dark, text size, which corner the back button sits in, and which font to use. Dashboard faces are deliberately untouched by all of it, since their appearance belongs to whichever theme they run.
+- **A font picker.** Search Google Fonts, click one, and it downloads and applies. There is also a way back to the system font, which deletes the downloaded file rather than leaving it as dead weight.
+- Every change saves and applies immediately, because the page you are looking at is the thing being changed; seeing the new setting is the confirmation.
+
+### Notes
+
+- Text size is clamped between 12 and 24 pixels on the way in. The value goes straight into a CSS declaration, and an absurd number would make the admin UI unusable to fix itself with.
+- Settings are saved as a patch of only what changed, so two settings changed in quick succession cannot clobber each other.
+- Font search is debounced. A request per keystroke would hammer the catalogue for results nobody has finished asking for.
+
 ## v1.7.1
 
 Font support for OmniCore's own UI. No picker yet, that lands next; this is the machinery under it.
