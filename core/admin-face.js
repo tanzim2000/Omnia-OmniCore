@@ -272,6 +272,20 @@ const styles = `
 		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 		gap: 14px;
 		margin-top: 16px;
+		/* Same reasoning as .list, just as a grid instead of a stack:
+		   the results scroll, the page around them holds still */
+		max-height: 60vh;
+		overflow-y: auto;
+		padding-right: 4px;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.market-grid::-webkit-scrollbar { width: 8px; }
+	.market-grid::-webkit-scrollbar-track { background: transparent; }
+	.market-grid::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 4px;
 	}
 
 	.market-card {
@@ -495,47 +509,6 @@ function page(title, body, script, bodyClass, back) {
 }
 
 // One line describing how location is set up, for the settings list
-// A one-line summary of how the UI is currently set, for the settings
-// list. Says the things someone actually changed rather than reciting
-// every value: a fresh install just reads "Dark".
-function describeAppearance(settings) {
-	const parts = [settings.uiMode === "light" ? "Light" : "Dark"];
-
-	if (settings.uiFontFamily) {
-		parts.push(settings.uiFontFamily);
-	}
-
-	if (Number(settings.uiFontSize) !== 16) {
-		parts.push(`${settings.uiFontSize}px`);
-	}
-
-	return parts.join(" · ");
-}
-
-function describeLocationSetting(settings) {
-	if (!settings.locationEnabled) {
-		return "Off";
-	}
-
-	if (settings.locationMode !== "manual") {
-		return "Automatic (IP based)";
-	}
-
-	if (settings.locationLabel) {
-		return "Manual (" + settings.locationLabel + ")";
-	}
-
-	if (settings.latitude === null || settings.longitude === null) {
-		return "Manual (not set)";
-	}
-
-	return (
-		"Manual (" +
-		Number(settings.latitude).toFixed(2) + ", " +
-		Number(settings.longitude).toFixed(2) + ")"
-	);
-}
-
 // Shared by every page that renders a settings form: show or hide the
 // coordinate boxes as the radio changes, and read location fields back out
 const conditionalScript = `
@@ -1069,114 +1042,160 @@ function startAdminFace() {
 
 	// Settings — the sections of OmniCore you can change.
 	// OmniCore's own settings will join Faces here as they appear.
-	app.get("/", (req, res) => {
-		const count = faceStore.readFaces().length;
-
+	app.get("/", async (req, res) => {
 		const settings = readSettings();
+		const installedFont = fontService.installedFont();
+
+		// Location: show what OmniCore currently believes, so it's
+		// obvious whether automatic detection actually worked
+		const current = await getLocation();
+
+		const currentText = !settings.locationEnabled
+			? "Location services are off."
+			: current
+			? `Currently ${current.label || "unnamed"} — ` +
+			  `${current.latitude.toFixed(3)}, ${current.longitude.toFixed(3)}` +
+			  ` (${current.source === "auto" ? "detected" : "set by hand"})`
+			: "No location available. Detection may have failed.";
+
+		const manualLocation = settings.locationMode === "manual";
+		const lightMode = settings.uiMode === "light";
+		const bottomRight = settings.backButtonCorner !== "top-left";
 
 		const body = `
 			<div class="panel">
 				<h1>Settings</h1>
 			</div>
+
 			<div class="panel">
-				<a class="row" href="/location">
-					<strong>Location service</strong>
-					<span>${escapeHtml(describeLocationSetting(settings))}</span>
-				</a>
-				<a class="row" href="/faces">
-					<strong>Faces</strong>
-					<span>${count ? count + (count === 1 ? " face" : " faces") : "No faces yet"}</span>
-				</a>
-				<a class="row" href="/appearance">
-					<strong>Appearance</strong>
-					<span>${escapeHtml(describeAppearance(settings))}</span>
-				</a>
-				<a class="row" href="/marketplace">
-					<strong>Marketplace</strong>
-					<span>Add modules and themes</span>
-				</a>
+				<span class="muted" style="text-transform:uppercase;letter-spacing:0.05em;font-size:0.8em">
+					Core Setting
+				</span>
 			</div>
-			<div class="panel footer">
-				<a href="/logout">Sign out</a>
-			</div>`;
 
-		res.send(page("Settings", body));
-	});
-
-	// OmniCore's own settings — things that apply to the whole install
-	// rather than to one face.
-	// Appearance — how OmniCore's own pages look. Applies to the admin
-	// faces, the welcome face, and input faces. NOT to dashboard faces,
-	// which belong entirely to whichever theme they run.
-	app.get("/appearance", (req, res) => {
-		const settings = readSettings();
-		const installed = fontService.installedFont();
-
-		const body = `
 			<div class="panel">
-				<a class="back" href="/">&#8592; Settings</a>
-				<h1 style="margin-top:12px">Appearance</h1>
-				<p class="lede">
+				<h2 style="margin-bottom:14px">Location Service</h2>
+
+				<label class="option">
+					<input type="checkbox" id="enabled"
+						${settings.locationEnabled ? "checked" : ""}>
+					<span>Let OmniCore know where it is</span>
+				</label>
+
+				<div class="help" style="margin-bottom:18px">
+					Modules like weather and prayer times ask OmniCore for a
+					location rather than working it out themselves. Turn this
+					off and OmniCore never looks one up and never hands one
+					out — those modules will have nothing to go on unless you
+					give each of them coordinates directly.
+				</div>
+
+				<div id="detail" style="${settings.locationEnabled ? "" : "display:none"}">
+					<div class="tabs" id="location-mode-tabs" style="margin-bottom:8px">
+						<button type="button" class="tab-btn ${manualLocation ? "" : "active"}"
+							data-value="auto">Work it out automatically</button>
+						<button type="button" class="tab-btn ${manualLocation ? "active" : ""}"
+							data-value="manual">Set it myself</button>
+					</div>
+
+					<div class="help" style="margin:10px 0 18px 0">
+						Automatic uses the server's public IP address, which is
+						usually close enough — but not if you're behind a VPN,
+						in which case set it by hand.
+					</div>
+
+					<div id="coords" style="${manualLocation ? "" : "display:none"}">
+						<div class="field">
+							<label for="city">Search for a city</label>
+							<div class="search-row">
+								<input type="text" id="city" placeholder="Regina">
+								<button class="glass" style="width:auto;padding:12px 20px"
+									id="search">Search</button>
+							</div>
+							<div id="results"></div>
+						</div>
+						<div class="field">
+							<label for="label">Place name</label>
+							<input type="text" id="label"
+								value="${escapeHtml(settings.locationLabel || "")}"
+								placeholder="Home">
+						</div>
+						<div class="field" style="display:flex;gap:12px">
+							<div style="flex:1">
+								<label for="latitude">Latitude</label>
+								<input type="number" step="any" id="latitude"
+									value="${escapeHtml(
+										settings.latitude === null ? "" : settings.latitude
+									)}">
+							</div>
+							<div style="flex:1">
+								<label for="longitude">Longitude</label>
+								<input type="number" step="any" id="longitude"
+									value="${escapeHtml(
+										settings.longitude === null ? "" : settings.longitude
+									)}">
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<p class="lede" style="margin-bottom:18px">${escapeHtml(currentText)}</p>
+
+				<button class="glass" id="save-location">Save</button>
+				<p class="status" id="location-status"></p>
+			</div>
+
+			<div class="panel">
+				<h2 style="margin-bottom:14px">Appearance</h2>
+				<p class="lede" style="margin-bottom:18px">
 					How OmniCore's own screens look. Dashboard faces are
 					unaffected, since their appearance belongs to whichever
 					theme they run.
 				</p>
-			</div>
 
-			<div class="panel">
 				<div class="field">
 					<strong>Mode</strong>
-					<label class="option">
-						<input type="radio" name="mode" value="dark"
-							${settings.uiMode !== "light" ? "checked" : ""}>
-						Dark
-					</label>
-					<label class="option">
-						<input type="radio" name="mode" value="light"
-							${settings.uiMode === "light" ? "checked" : ""}>
-						Light
-					</label>
+					<div style="margin-top:6px">
+						<label class="switch">
+							<input type="checkbox" id="mode-switch" ${lightMode ? "checked" : ""}>
+							<span class="switch-track"><span class="switch-knob"></span></span>
+							<span id="mode-label">${lightMode ? "Light" : "Dark"}</span>
+						</label>
+					</div>
 				</div>
 
 				<div class="field">
-					<strong>Back button corner</strong>
-					<label class="option">
-						<input type="radio" name="corner" value="bottom-right"
-							${settings.backButtonCorner !== "top-left" ? "checked" : ""}>
-						Bottom right
-					</label>
-					<label class="option">
-						<input type="radio" name="corner" value="top-left"
-							${settings.backButtonCorner === "top-left" ? "checked" : ""}>
-						Top left
-					</label>
+					<strong>Position of back button</strong>
+					<div class="tabs" id="corner-tabs" style="margin-top:6px">
+						<button type="button" class="tab-btn ${bottomRight ? "active" : ""}"
+							data-value="bottom-right">Bottom right</button>
+						<button type="button" class="tab-btn ${bottomRight ? "" : "active"}"
+							data-value="top-left">Top left</button>
+					</div>
 					<span class="hint">
-						Bottom left is reserved for the welcome face's
-						countdown, so the two can never overlap.
+						Other corners are reserved for other components of
+						the system.
 					</span>
 				</div>
 
 				<div class="field">
 					<strong>Text size</strong>
-					<label class="option">
-						<input type="range" id="size" min="12" max="24" step="1"
+					<span class="hint">Not related to the font size of the dashboards.</span>
+					<div class="stepper">
+						<button type="button" class="glass" id="size-down" aria-label="Smaller">&#8722;</button>
+						<input type="number" id="size" min="12" max="24" step="1"
 							value="${Number(settings.uiFontSize) || 16}">
-						<span id="size-label">${Number(settings.uiFontSize) || 16}px</span>
-					</label>
+						<span class="muted">px</span>
+						<button type="button" class="glass" id="size-up" aria-label="Larger">&#43;</button>
+					</div>
 				</div>
-			</div>
 
-			<div class="panel">
 				<div class="field">
 					<strong>Font</strong>
-					<span class="hint">
-						Downloaded once and served by OmniCore itself, so it
-						keeps working with no internet.
-					</span>
 					<p id="current">
 						${
-							installed
-								? `Using <strong>${escapeHtml(installed.family)}</strong>`
+							installedFont
+								? `Using <strong>${escapeHtml(installedFont.family)}</strong>`
 								: "Using the system font"
 						}
 					</p>
@@ -1184,26 +1203,149 @@ function startAdminFace() {
 						placeholder="Search Google Fonts...">
 					<div class="list" id="font-results"></div>
 					${
-						installed
+						installedFont
 							? `<button class="glass" id="clear-font">
 									Back to the system font
 								</button>`
 							: ""
 					}
 				</div>
+
+				<p class="status" id="appearance-status"></p>
 			</div>
 
-			<p class="status" id="status"></p>`;
+			<div class="panel">
+				<a class="glass" href="/installed"
+					style="display:block;text-align:center;box-sizing:border-box;margin-bottom:10px">
+					Installed Resources
+				</a>
+				<a class="glass" href="/faces"
+					style="display:block;text-align:center;box-sizing:border-box">
+					Manage Faces (Dashboards)
+				</a>
+			</div>
+
+			<div class="panel footer">
+				<a href="/logout">Sign out</a>
+			</div>`;
 
 		const script = `
-			var status = document.getElementById("status");
+			// --- Location -------------------------------------------
+			const enabled = document.getElementById("enabled");
+			const detail = document.getElementById("detail");
+			const coords = document.getElementById("coords");
 
-			function say(text) { status.textContent = text; }
+			enabled.addEventListener("change", function () {
+				detail.style.display = this.checked ? "" : "none";
+			});
+
+			let locationMode = ${JSON.stringify(manualLocation ? "manual" : "auto")};
+
+			for (const tab of document.querySelectorAll("#location-mode-tabs .tab-btn")) {
+				tab.addEventListener("click", function () {
+					for (const sibling of tab.parentElement.children) {
+						sibling.classList.remove("active");
+					}
+					tab.classList.add("active");
+					locationMode = tab.dataset.value;
+					coords.style.display = locationMode === "manual" ? "" : "none";
+				});
+			}
+
+			// City lookup fills in the coordinates and the place name, so
+			// nobody has to go and find them by hand
+			let matches = [];
+
+			async function runSearch() {
+				const results = document.getElementById("results");
+				const query = document.getElementById("city").value;
+
+				results.innerHTML = '<div class="empty" style="margin-top:8px">Searching…</div>';
+
+				try {
+					matches = await (
+						await fetch("/geocode?q=" + encodeURIComponent(query))
+					).json();
+
+					if (!matches.length) {
+						results.innerHTML =
+							'<div class="empty" style="margin-top:8px">Nothing found.</div>';
+						return;
+					}
+
+					results.innerHTML = matches.map(function (place, index) {
+						const safe = place.label
+							.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+						return '<button class="result" data-pick="' + index + '">' +
+							safe + "</button>";
+					}).join("");
+
+					for (const button of results.querySelectorAll("[data-pick]")) {
+						button.addEventListener("click", function () {
+							const place = matches[Number(this.dataset.pick)];
+
+							document.getElementById("latitude").value = place.latitude;
+							document.getElementById("longitude").value = place.longitude;
+							document.getElementById("label").value = place.label;
+							results.innerHTML = "";
+						});
+					}
+				} catch (error) {
+					results.innerHTML =
+						'<div class="empty" style="margin-top:8px">Search failed.</div>';
+				}
+			}
+
+			document.getElementById("search").addEventListener("click", runSearch);
+
+			document.getElementById("city").addEventListener("keydown", function (event) {
+				if (event.key === "Enter") {
+					event.preventDefault();
+					runSearch();
+				}
+			});
+
+			document.getElementById("save-location").addEventListener("click", async function () {
+				const button = this;
+				const status = document.getElementById("location-status");
+
+				button.disabled = true;
+				status.textContent = "";
+				status.className = "status";
+
+				try {
+					const response = await fetch("/location", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							locationEnabled: enabled.checked,
+							locationMode: locationMode,
+							locationLabel: document.getElementById("label").value,
+							latitude: document.getElementById("latitude").value,
+							longitude: document.getElementById("longitude").value
+						})
+					});
+
+					if (!response.ok) throw new Error();
+
+					// Reload so the "currently" line reflects what was saved
+					location.reload();
+				} catch (error) {
+					status.textContent = "Couldn't save.";
+					status.className = "status bad";
+					button.disabled = false;
+				}
+			});
+
+			// --- Appearance -------------------------------------------
+			var appearanceStatus = document.getElementById("appearance-status");
+
+			function sayAppearance(text) { appearanceStatus.textContent = text; }
 
 			// Every change saves immediately and reloads, because the
 			// page you are looking at IS the thing being changed --
 			// showing the new setting is the confirmation.
-			async function save(patch, reload) {
+			async function saveAppearance(patch, reload) {
 				const res = await fetch("/appearance", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -1211,84 +1353,103 @@ function startAdminFace() {
 				});
 
 				if (!res.ok) {
-					say("Could not save that.");
+					sayAppearance("Could not save that.");
 					return;
 				}
 
 				if (reload !== false) { location.reload(); }
 			}
 
-			document.querySelectorAll('input[name="mode"]').forEach(function (el) {
-				el.addEventListener("change", function () {
-					save({ uiMode: el.value });
-				});
+			var modeSwitch = document.getElementById("mode-switch");
+			var modeLabel = document.getElementById("mode-label");
+
+			modeSwitch.addEventListener("change", function () {
+				modeLabel.textContent = modeSwitch.checked ? "Light" : "Dark";
+				saveAppearance({ uiMode: modeSwitch.checked ? "light" : "dark" });
 			});
 
-			document.querySelectorAll('input[name="corner"]').forEach(function (el) {
-				el.addEventListener("change", function () {
-					save({ backButtonCorner: el.value });
+			for (const tab of document.querySelectorAll("#corner-tabs .tab-btn")) {
+				tab.addEventListener("click", function () {
+					for (const sibling of tab.parentElement.children) {
+						sibling.classList.remove("active");
+					}
+					tab.classList.add("active");
+					saveAppearance({ backButtonCorner: tab.dataset.value });
 				});
-			});
+			}
 
 			var size = document.getElementById("size");
-			var sizeLabel = document.getElementById("size-label");
+			var sizeDown = document.getElementById("size-down");
+			var sizeUp = document.getElementById("size-up");
 
-			// Label tracks the slider live, but only save when the drag
-			// ends -- otherwise every pixel of movement is a write.
-			size.addEventListener("input", function () {
-				sizeLabel.textContent = size.value + "px";
-			});
+			// Typing a value in directly and tabbing away saves it, same
+			// as any other field
 			size.addEventListener("change", function () {
-				save({ uiFontSize: Number(size.value) });
+				var clamped = Math.min(24, Math.max(12, Number(size.value) || 16));
+				size.value = clamped;
+				saveAppearance({ uiFontSize: clamped });
 			});
 
-			var results = document.getElementById("font-results");
-			var query = document.getElementById("font-q");
-			var searchTimer = null;
+			function stepSize(delta) {
+				var next = Math.min(24, Math.max(12, Number(size.value) + delta));
+				size.value = next;
+				saveAppearance({ uiFontSize: next });
+			}
+
+			sizeDown.addEventListener("click", function () { stepSize(-1); });
+			sizeUp.addEventListener("click", function () { stepSize(1); });
+
+			var fontResults = document.getElementById("font-results");
+			var fontQuery = document.getElementById("font-q");
+			var fontSearchTimer = null;
 
 			function renderFonts(fonts) {
 				if (!fonts.length) {
-					results.innerHTML = '<p class="hint">No matches.</p>';
+					fontResults.innerHTML = '<p class="hint">No matches.</p>';
 					return;
 				}
 
-				results.innerHTML = fonts.map(function (font) {
-					return '<div class="card" onclick="pickFont(' +
+				// One line per font: name on the left, category on
+				// the right, same row -- not stacked, so a long list
+				// of results reads at a glance rather than taking two
+				// lines each
+				fontResults.innerHTML = fonts.map(function (font) {
+					return '<div class="card font-row" onclick="pickFont(' +
 						JSON.stringify(font.family).replace(/"/g, "&quot;") +
 						')"><strong>' + font.family + '</strong>' +
-						'<span class="hint"> ' + font.category + '</span></div>';
+						'<span class="hint">' + font.category + '</span></div>';
 				}).join("");
 			}
 
 			// Debounced: a search per keystroke would hammer the
 			// catalogue for results nobody has finished asking for yet.
-			query.addEventListener("input", function () {
-				clearTimeout(searchTimer);
-				searchTimer = setTimeout(async function () {
-					if (!query.value.trim()) { results.innerHTML = ""; return; }
+			fontQuery.addEventListener("input", function () {
+				clearTimeout(fontSearchTimer);
+				fontSearchTimer = setTimeout(async function () {
+					if (!fontQuery.value.trim()) { fontResults.innerHTML = ""; return; }
 
-					say("Searching...");
+					sayAppearance("Searching...");
 					try {
 						const res = await fetch("/fonts/search?q=" +
-							encodeURIComponent(query.value));
+							encodeURIComponent(fontQuery.value));
 						const data = await res.json();
 
 						if (!res.ok) {
-							say(data.error || "Could not reach Google Fonts.");
-							results.innerHTML = "";
+							sayAppearance(data.error || "Could not reach Google Fonts.");
+							fontResults.innerHTML = "";
 							return;
 						}
 
-						say("");
+						sayAppearance("");
 						renderFonts(data);
 					} catch (error) {
-						say("Could not reach Google Fonts.");
+						sayAppearance("Could not reach Google Fonts.");
 					}
 				}, 300);
 			});
 
 			window.pickFont = async function (family) {
-				say("Downloading " + family + "...");
+				sayAppearance("Downloading " + family + "...");
 
 				const res = await fetch("/fonts", {
 					method: "POST",
@@ -1299,28 +1460,25 @@ function startAdminFace() {
 				const data = await res.json();
 
 				if (!res.ok) {
-					say(data.error || "Could not install that font.");
+					sayAppearance(data.error || "Could not install that font.");
 					return;
 				}
 
 				location.reload();
 			};
 
-			var clear = document.getElementById("clear-font");
-			if (clear) {
-				clear.addEventListener("click", async function () {
+			var clearFont = document.getElementById("clear-font");
+			if (clearFont) {
+				clearFont.addEventListener("click", async function () {
 					await fetch("/fonts", { method: "DELETE" });
 					location.reload();
 				});
 			}
 		`;
 
-		res.send(page("Appearance", body, script, "", "/"));
+		res.send(page("Settings", body, script));
 	});
 
-	// Saves one or more appearance settings. Deliberately a patch rather
-	// than a whole-object write: the page sends only what changed, so two
-	// settings changed in quick succession cannot clobber each other.
 	app.post("/appearance", (req, res) => {
 		const body = req.body || {};
 		const patch = {};
@@ -1385,207 +1543,6 @@ function startAdminFace() {
 		await fontService.removeFont();
 		writeSettings({ uiFontFamily: "" });
 		res.json({ ok: true });
-	});
-
-	app.get("/location", async (req, res) => {
-		const settings = readSettings();
-
-		// Show what OmniCore currently believes, so it's obvious whether
-		// automatic detection actually worked
-		const current = await getLocation();
-
-		const currentText = !settings.locationEnabled
-			? "Location services are off."
-			: current
-			? `Currently ${current.label || "unnamed"} — ` +
-			  `${current.latitude.toFixed(3)}, ${current.longitude.toFixed(3)}` +
-			  ` (${current.source === "auto" ? "detected" : "set by hand"})`
-			: "No location available. Detection may have failed.";
-
-		const manual = settings.locationMode === "manual";
-
-		const body = `
-			<div class="panel">
-				<a class="back" href="/">← Settings</a>
-				<h1 style="margin-top:12px">Location service</h1>
-			</div>
-			<div class="panel">
-				<h2 style="margin-bottom:14px">Location services</h2>
-
-				<label class="option">
-					<input type="checkbox" id="enabled"
-						${settings.locationEnabled ? "checked" : ""}>
-					<span>Let OmniCore know where it is</span>
-				</label>
-
-				<div class="help" style="margin-bottom:18px">
-					Modules like weather and prayer times ask OmniCore for a
-					location rather than working it out themselves. Turn this
-					off and OmniCore never looks one up and never hands one
-					out — those modules will have nothing to go on unless you
-					give each of them coordinates directly.
-				</div>
-
-				<div id="detail" style="${settings.locationEnabled ? "" : "display:none"}">
-					<label class="option">
-						<input type="radio" name="mode" value="auto"
-							${manual ? "" : "checked"}>
-						<span>Work it out automatically</span>
-					</label>
-					<label class="option">
-						<input type="radio" name="mode" value="manual"
-							${manual ? "checked" : ""}>
-						<span>Set it myself</span>
-					</label>
-
-					<div class="help" style="margin:10px 0 18px 0">
-						Automatic uses the server's public IP address, which is
-						usually close enough — but not if you're behind a VPN,
-						in which case set it by hand.
-					</div>
-
-					<div id="coords" style="${manual ? "" : "display:none"}">
-						<div class="field">
-							<label for="city">Search for a city</label>
-							<div class="search-row">
-								<input type="text" id="city" placeholder="Regina">
-								<button class="glass" style="width:auto;padding:12px 20px"
-									id="search">Search</button>
-							</div>
-							<div id="results"></div>
-						</div>
-						<div class="field">
-							<label for="label">Place name</label>
-							<input type="text" id="label"
-								value="${escapeHtml(settings.locationLabel || "")}"
-								placeholder="Home">
-						</div>
-						<div class="field">
-							<label for="latitude">Latitude</label>
-							<input type="number" step="any" id="latitude"
-								value="${escapeHtml(
-									settings.latitude === null ? "" : settings.latitude
-								)}">
-						</div>
-						<div class="field">
-							<label for="longitude">Longitude</label>
-							<input type="number" step="any" id="longitude"
-								value="${escapeHtml(
-									settings.longitude === null ? "" : settings.longitude
-								)}">
-						</div>
-					</div>
-				</div>
-
-				<p class="lede" style="margin-bottom:18px">${escapeHtml(currentText)}</p>
-
-				<button class="glass" id="save">Save</button>
-				<p class="status" id="status"></p>
-			</div>`;
-
-		const script = `
-			const enabled = document.getElementById("enabled");
-			const detail = document.getElementById("detail");
-			const coords = document.getElementById("coords");
-
-			enabled.addEventListener("change", function () {
-				detail.style.display = this.checked ? "" : "none";
-			});
-
-			for (const radio of document.querySelectorAll('input[name="mode"]')) {
-				radio.addEventListener("change", function () {
-					coords.style.display = this.value === "manual" ? "" : "none";
-				});
-			}
-
-			// City lookup fills in the coordinates and the place name, so
-			// nobody has to go and find them by hand
-			let matches = [];
-
-			async function runSearch() {
-				const results = document.getElementById("results");
-				const query = document.getElementById("city").value;
-
-				results.innerHTML = '<div class="empty" style="margin-top:8px">Searching…</div>';
-
-				try {
-					matches = await (
-						await fetch("/geocode?q=" + encodeURIComponent(query))
-					).json();
-
-					if (!matches.length) {
-						results.innerHTML =
-							'<div class="empty" style="margin-top:8px">Nothing found.</div>';
-						return;
-					}
-
-					results.innerHTML = matches.map(function (place, index) {
-						const safe = place.label
-							.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-						return '<button class="result" data-pick="' + index + '">' +
-							safe + "</button>";
-					}).join("");
-
-					for (const button of results.querySelectorAll("[data-pick]")) {
-						button.addEventListener("click", function () {
-							const place = matches[Number(this.dataset.pick)];
-
-							document.getElementById("latitude").value = place.latitude;
-							document.getElementById("longitude").value = place.longitude;
-							document.getElementById("label").value = place.label;
-							results.innerHTML = "";
-						});
-					}
-				} catch (error) {
-					results.innerHTML =
-						'<div class="empty" style="margin-top:8px">Search failed.</div>';
-				}
-			}
-
-			document.getElementById("search").addEventListener("click", runSearch);
-
-			document.getElementById("city").addEventListener("keydown", function (event) {
-				if (event.key === "Enter") {
-					event.preventDefault();
-					runSearch();
-				}
-			});
-
-			document.getElementById("save").addEventListener("click", async function () {
-				const button = this;
-				const status = document.getElementById("status");
-				const mode = document.querySelector('input[name="mode"]:checked');
-
-				button.disabled = true;
-				status.textContent = "";
-				status.className = "status";
-
-				try {
-					const response = await fetch("/location", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							locationEnabled: enabled.checked,
-							locationMode: mode ? mode.value : "auto",
-							locationLabel: document.getElementById("label").value,
-							latitude: document.getElementById("latitude").value,
-							longitude: document.getElementById("longitude").value
-						})
-					});
-
-					if (!response.ok) throw new Error();
-
-					// Reload so the "currently" line reflects what was saved
-					location.reload();
-				} catch (error) {
-					status.textContent = "Couldn't save.";
-					status.className = "status bad";
-					button.disabled = false;
-				}
-			});
-		`;
-
-		res.send(page("Location service", body, script, "", "/"));
 	});
 
 	app.post("/location", (req, res) => {
@@ -2259,6 +2216,60 @@ function startAdminFace() {
 		}
 	});
 
+	// A catalogue of everything actually installed, across the whole
+	// OmniCore -- not scoped to one face, since something can be
+	// installed without being placed on any face yet.
+	//
+	// A plain disk scan (listModules/listThemes), the same source the
+	// "Add a module" picker already uses -- deliberately NOT
+	// marketplace.listAvailable(), which only lists something if it's
+	// BOTH in the registry AND on disk. A module dropped in locally
+	// during development (the normal workflow for building one against
+	// a separate repo) has no registry entry at all, and would be
+	// silently invisible on a page meant to show what's actually here.
+	//
+	// Deliberately plain for now -- the same simple list-of-cards
+	// pattern used everywhere else. A better-purposed layout for a
+	// catalogue specifically is a real, separate piece of design work,
+	// not something to improvise here.
+	app.get("/installed", (req, res) => {
+		const moduleCards = listModules().map((id) => {
+			const manifest = readManifest(id);
+			return { name: manifest.name || id, description: manifest.description };
+		});
+
+		const themeCards = themeLoader.listThemes().map((id) => {
+			const manifest = themeLoader.readManifest(id);
+			return { name: manifest.name || id, description: manifest.description };
+		});
+
+		const list = [...moduleCards, ...themeCards]
+			.map(
+				(entry) => `
+			<div class="card">
+				<strong>${escapeHtml(entry.name)}</strong>
+				<span class="hint">${escapeHtml(entry.description || "")}</span>
+			</div>`
+			)
+			.join("");
+
+		const body = `
+			<div class="panel">
+				<h1 style="margin-top:12px">Installed Resources</h1>
+			</div>
+			<div class="panel list">
+				${list || '<div class="empty">Nothing installed yet.</div>'}
+			</div>
+			<div class="panel">
+				<a class="glass" href="/marketplace"
+					style="display:block;text-align:center;box-sizing:border-box">
+					Go to Marketplace
+				</a>
+			</div>`;
+
+		res.send(page("Installed Resources", body, "", "", "/"));
+	});
+
 	app.get("/faces", (req, res) => {
 		const faces = faceStore
 			.readFaces()
@@ -2277,10 +2288,9 @@ function startAdminFace() {
 
 		const body = `
 			<div class="panel">
-				<a class="back" href="/">← Settings</a>
 				<h1 style="margin-top:12px">Faces</h1>
 			</div>
-			<div class="panel">
+			<div class="panel list">
 				${faces || '<div class="empty">No faces yet.</div>'}
 			</div>
 			<div class="panel">
@@ -2318,7 +2328,6 @@ function startAdminFace() {
 
 		const body = `
 			<div class="panel">
-				<a class="back" href="/faces">← Faces</a>
 				<h1 style="margin-top:12px">${escapeHtml(face.name)}</h1>
 				<p class="lede">Running on port ${face.id}</p>
 			</div>
@@ -2428,7 +2437,6 @@ function startAdminFace() {
 
 		const body = `
 			<div class="panel">
-				<a class="back" href="/faces/${face.id}">← ${escapeHtml(face.name)}</a>
 				<h1 style="margin-top:12px">${escapeHtml(manifest.name)}</h1>
 				<p class="lede">${escapeHtml(
 					manifest.description || "The theme this face is using"
@@ -2539,7 +2547,6 @@ function startAdminFace() {
 
 		const body = `
 			<div class="panel">
-				<a class="back" href="/faces/${face.id}/theme">← Theme</a>
 				<h1 style="margin-top:12px">Change theme</h1>
 				<p class="lede">
 					Settings you've already made are kept per theme, so
@@ -2602,10 +2609,9 @@ function startAdminFace() {
 
 		const body = `
 			<div class="panel">
-				<a class="back" href="/faces/${face.id}">← ${escapeHtml(face.name)}</a>
 				<h1 style="margin-top:12px">Modules</h1>
 			</div>
-			<div class="panel">
+			<div class="panel list">
 				${instances || '<div class="empty">No modules on this face yet.</div>'}
 			</div>
 			<div class="panel">
@@ -2642,11 +2648,10 @@ function startAdminFace() {
 
 		const body = `
 			<div class="panel">
-				<a class="back" href="/faces/${face.id}/modules">← Modules</a>
 				<h1 style="margin-top:12px">Add a module</h1>
 				<p class="lede">You can add the same module more than once.</p>
 			</div>
-			<div class="panel">
+			<div class="panel list">
 				${modules || '<div class="empty">No modules installed.</div>'}
 			</div>
 			<p class="status" id="status"></p>`;
@@ -2762,7 +2767,6 @@ function startAdminFace() {
 
 		const body = `
 			<div class="panel">
-				<a class="back" href="/faces/${face.id}/modules">← Modules</a>
 				<h1 style="margin-top:12px">${escapeHtml(instance.label || manifest.name)}</h1>
 				<p class="lede">${escapeHtml(manifest.description || manifest.name)}</p>
 			</div>

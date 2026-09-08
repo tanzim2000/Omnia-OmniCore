@@ -39,6 +39,11 @@ const PALETTES = {
 		glassBorder: "rgba(255, 255, 255, 0.15)",
 		glassSheen: "rgba(255, 255, 255, 0.14)",
 		glassSheenStrong: "rgba(255, 255, 255, 0.28)",
+		// A real halo, not an elevation shadow -- research into working
+		// examples showed rest-state glows commonly sit around 0.4-0.5
+		// alpha, roughly double what a first guess tends to land on.
+		glow: "rgba(255, 255, 255, 0.3)",
+		glowStrong: "rgba(255, 255, 255, 0.55)",
 		ambientA: "rgba(255, 255, 255, 0.05)",
 		ambientB: "rgba(120, 160, 255, 0.05)",
 		cardBg: "rgba(255, 255, 255, 0.04)",
@@ -74,6 +79,12 @@ const PALETTES = {
 		glassBorder: "rgba(0, 0, 0, 0.12)",
 		glassSheen: "rgba(255, 255, 255, 0.9)",
 		glassSheenStrong: "rgba(255, 255, 255, 1)",
+		// A plain white glow disappears against a pale page the same
+		// way it did on cards before that got fixed -- tinted dark/blue
+		// instead, so it reads the same way a glow should: visible
+		// against whatever's behind it.
+		glow: "rgba(50, 60, 100, 0.22)",
+		glowStrong: "rgba(50, 60, 100, 0.4)",
 		ambientA: "rgba(120, 140, 255, 0.06)",
 		ambientB: "rgba(255, 190, 120, 0.06)",
 		cardBg: "rgba(255, 255, 255, 0.7)",
@@ -155,6 +166,8 @@ function uiStyles(options) {
 		--glass-border: ${active.glassBorder};
 		--glass-sheen: ${active.glassSheen};
 		--glass-sheen-strong: ${active.glassSheenStrong};
+		--glow: ${active.glow};
+		--glow-strong: ${active.glowStrong};
 
 		--card-bg: ${active.cardBg};
 		--card-border: ${active.cardBorder};
@@ -222,10 +235,15 @@ function uiStyles(options) {
 		border-radius: var(--radius);
 		backdrop-filter: blur(12px);
 		-webkit-backdrop-filter: blur(12px);
+		/* Two layers at rest: the insets are the bevel that makes it
+		   read as glass regardless of what's behind it -- that's
+		   surface material, not glow, and stays visible always. The
+		   actual glow (a colored halo) is added only on :hover /
+		   :focus-visible below -- a glow that's always on reads as
+		   noise, not as feedback for anything. */
 		box-shadow:
 			inset 0 1px 0 var(--glass-sheen),
-			inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-			0 2px 8px rgba(0, 0, 0, 0.25);
+			inset 0 -1px 0 rgba(0, 0, 0, 0.2);
 		color: var(--fg);
 		font-family: inherit;
 		font-size: 1em;
@@ -235,12 +253,16 @@ function uiStyles(options) {
 			box-shadow 0.2s ease;
 	}
 
-	.glass:hover {
+	/* :focus-visible alongside :hover, not instead of it -- a glow
+	   that only ever fires on mouse hover leaves keyboard navigation
+	   with no feedback at all */
+	.glass:hover,
+	.glass:focus-visible {
 		background: var(--glass-bg-hover);
 		box-shadow:
 			inset 0 1px 0 var(--glass-sheen),
 			inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-			0 4px 14px rgba(0, 0, 0, 0.3);
+			0 0 30px var(--glow-strong);
 	}
 
 	.glass:active { transform: scale(0.97); }
@@ -279,16 +301,21 @@ function uiStyles(options) {
 		lightMode
 			? `/* Light mode: a card lifts slightly rather than glowing —
 	   a glow reads as nothing against a pale background. */
-	.card:hover {
+	.card:hover,
+	.card:focus-visible {
 		transform: scale(1.02);
 		background: var(--glass-bg-hover);
 	}`
 			: `/* Dark mode: a card glows rather than moving — motion is
-	   unnecessary when light alone reads clearly against black. */
-	.card:hover {
-		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4),
-			0 0 28px rgba(255, 255, 255, 0.25),
-			0 0 60px rgba(255, 255, 255, 0.1);
+	   unnecessary when light alone reads clearly against black.
+	   Values taken from working reference examples rather than a
+	   first guess: a visible glow sits close to 0.5 alpha at its
+	   core, not 0.1-0.25. */
+	.card:hover,
+	.card:focus-visible {
+		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55),
+			0 0 32px rgba(255, 255, 255, 0.45),
+			0 0 70px rgba(255, 255, 255, 0.2);
 		background: var(--glass-bg-hover);
 	}`
 	}
@@ -304,7 +331,10 @@ function uiStyles(options) {
 		gap: 0.6em;
 		overflow-y: auto;
 		max-height: 60vh;
-		padding-right: 0.4em;
+		border: 1px solid var(--card-border);
+		border-radius: var(--radius);
+		padding: 1em 2em;
+		box-sizing: border-box;
 		scrollbar-width: thin;
 		scrollbar-color: var(--scroll-thumb) transparent;
 	}
@@ -315,6 +345,21 @@ function uiStyles(options) {
 		background: var(--scroll-thumb);
 		border-radius: 4px;
 	}
+
+	/* A .card used as a single-line row inside a .list -- name on
+	   the left, a secondary label pinned to the right on the same
+	   line, rather than stacked underneath. Used for the font
+	   picker's results, and anything else where a long list reads
+	   better at a glance than at two lines per entry. */
+	.font-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1em;
+		white-space: nowrap;
+	}
+
+	.font-row .hint { margin: 0; flex-shrink: 0; }
 
 	/* ---------------------------------------------------------------
 	   Floating button — flat, NOT glossy, deliberately distinct from
@@ -354,6 +399,135 @@ function uiStyles(options) {
 	.floating.top-left { top: 1.5em; left: 1.5em; }
 
 	.muted { color: var(--fg-muted); }
+
+	/* ---------------------------------------------------------------
+	   Toggle switch — a real sliding knob, for a plain on/off
+	   preference that has nothing else attached to it (light/dark
+	   mode is the model case). Different from tabs below on purpose:
+	   a switch is for a binary preference alone; tabs are for a
+	   choice that reveals different follow-up content underneath it.
+	   --------------------------------------------------------------- */
+	.switch {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.7em;
+		cursor: pointer;
+	}
+
+	.switch input { position: absolute; opacity: 0; pointer-events: none; }
+
+	.switch-track {
+		position: relative;
+		width: 2.6em;
+		height: 1.5em;
+		border-radius: 999px;
+		background: var(--card-border);
+		border: 1px solid var(--glass-border);
+		transition: background 0.2s ease;
+		flex-shrink: 0;
+	}
+
+	.switch-knob {
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 1.1em;
+		height: 1.1em;
+		border-radius: 50%;
+		background: var(--fg);
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+		transition: transform 0.2s ease;
+	}
+
+	.switch input:checked + .switch-track { background: var(--success); }
+	.switch input:checked + .switch-track .switch-knob {
+		transform: translateX(1.1em);
+	}
+
+	.switch input:focus-visible + .switch-track {
+		box-shadow: 0 0 0 2px var(--glow-strong);
+	}
+
+	/* ---------------------------------------------------------------
+	   Tabs — a segmented choice between a small, fixed set of named
+	   options. Used both where each option reveals different content
+	   below it (Automatic vs Set it myself), and where the options are
+	   just named positions rather than a true binary (back button
+	   corner) -- in both cases what makes it tabs rather than a switch
+	   is that the options are labelled things, not an on/off state.
+	   --------------------------------------------------------------- */
+	.tabs {
+		display: inline-flex;
+		background: var(--card-bg);
+		border: 1px solid var(--card-border);
+		border-radius: var(--radius);
+		padding: 3px;
+		gap: 3px;
+	}
+
+	.tab-btn {
+		appearance: none;
+		-webkit-appearance: none;
+		background: transparent;
+		border: none;
+		border-radius: calc(var(--radius) - 3px);
+		color: var(--fg-muted);
+		font-family: inherit;
+		font-size: 0.95em;
+		padding: 0.6em 1.2em;
+		cursor: pointer;
+		transition: background 0.15s ease, color 0.15s ease;
+	}
+
+	.tab-btn.active {
+		background: var(--glass-bg-hover);
+		color: var(--fg);
+		box-shadow: inset 0 1px 0 var(--glass-sheen);
+	}
+
+	.tab-btn:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px var(--glow-strong);
+	}
+
+	/* A number stepper: down button, the value, up button. Used
+	   wherever a small bounded number is set (text size, and anything
+	   later that needs the same shape) rather than a slider — a slider
+	   is for a continuous range you drag through; this is a small set
+	   of discrete steps someone taps through one at a time. */
+	.stepper {
+		display: flex;
+		align-items: center;
+		gap: 0.6em;
+	}
+
+	.stepper .glass {
+		padding: 0.5em 0.9em;
+		font-size: 1.1em;
+		line-height: 1;
+	}
+
+	.stepper input[type="number"] {
+		width: 4em;
+		text-align: center;
+		background: var(--input-bg);
+		border: 1px solid var(--glass-border);
+		border-radius: 8px;
+		color: var(--fg);
+		font-family: inherit;
+		font-size: 1em;
+		padding: 0.5em;
+	}
+
+	/* Hide the browser's own up/down spinner -- the glass buttons ARE
+	   the up/down control, a second native one next to them would be
+	   pure clutter */
+	.stepper input[type="number"]::-webkit-outer-spin-button,
+	.stepper input[type="number"]::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+	.stepper input[type="number"] { -moz-appearance: textfield; }
 `;
 }
 

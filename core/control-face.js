@@ -47,6 +47,44 @@ const styles = `
 	.actions { display: flex; gap: 0.75em; justify-content: center; }
 
 	/* ---------------------------------------------------------------
+	   The face picker: a fixed-height framed region, not a box that
+	   grows to fit its content -- one face or twenty, the frame is
+	   the same size, with a visible border so its edge is obvious.
+	   Content sits centered within it; only becomes actually
+	   scrollable once it genuinely overflows.
+
+	   Generously padded on the sides on purpose: a card's hover glow
+	   paints outside the card's own box, and this container clips
+	   anything crossing its edge the moment overflow-y is set at
+	   all -- not enough horizontal room here and the glow gets cut
+	   off exactly where it should be brightest.
+	   --------------------------------------------------------------- */
+	.face-list {
+		width: 100%;
+		max-width: 640px;
+		height: min(620px, 62vh);
+		border: 1px solid var(--card-border);
+		border-radius: var(--radius);
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.75em;
+		padding: 2em 3em;
+		box-sizing: border-box;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.face-list::-webkit-scrollbar { width: 8px; }
+	.face-list::-webkit-scrollbar-track { background: transparent; }
+	.face-list::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 4px;
+	}
+
+	/* ---------------------------------------------------------------
 	   The auto-advance timer: a small round lamp under a domed glass
 	   lens, echoing the glossy buttons rather than introducing a new
 	   visual idiom. The amber wedge drains as the seconds run out, so
@@ -104,7 +142,10 @@ const styles = `
 		display: flex;
 		flex-direction: column;
 		gap: 0.25em;
-		margin-bottom: 0.6em;
+		/* Spacing between cards comes from .face-list's own gap now,
+		   not a margin on each card -- otherwise the last card would
+		   carry unwanted space below it too */
+		width: 100%;
 	}
 
 	.face span { color: var(--fg-muted); font-size: 0.8em; }
@@ -179,8 +220,11 @@ function startControlFace() {
 		const single = faces.length === 1;
 
 		const body = `
-			<div class="panel"><h1>Faces</h1></div>
-			<div class="panel list">${list}</div>
+			<div class="panel">
+				<h1>Welcome!</h1>
+				<p class="lede">Choose your dashboard.</p>
+			</div>
+			<div class="face-list">${list}</div>
 			<div class="actions">
 				<button class="glass" onclick="goToWizard()">
 					Create a new face
