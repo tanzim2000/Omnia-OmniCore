@@ -488,10 +488,11 @@ function escapeHtml(text) {
 // own layout rules on top, so a page-specific rule can always override
 // a shared one rather than fighting source order.
 //
-// `back` is a URL for the floating back button, or nothing at all for a
-// screen that is genuinely a root (sign-in, the settings home) where
-// there's nowhere above to go.
-function page(title, body, script, bodyClass, back) {
+// `back` is a URL for the floating button, or nothing at all for a
+// screen that is genuinely a root. `backLabel`, when given, replaces
+// the default arrow with text and switches to the pill shape — see
+// ui-theme.js's backButton().
+function page(title, body, script, bodyClass, back, backLabel) {
 	return `<!DOCTYPE html>
 <html>
 <head>
@@ -502,7 +503,7 @@ function page(title, body, script, bodyClass, back) {
 </head>
 <body class="${bodyClass || ""}">
 	${body}
-	${backButton(back)}
+	${backButton(back, backLabel)}
 	<script>${script || ""}</script>
 </body>
 </html>`;
@@ -1068,12 +1069,6 @@ function startAdminFace() {
 			</div>
 
 			<div class="panel">
-				<span class="muted" style="text-transform:uppercase;letter-spacing:0.05em;font-size:0.8em">
-					Core Setting
-				</span>
-			</div>
-
-			<div class="panel">
 				<h2 style="margin-bottom:14px">Location Service</h2>
 
 				<label class="option">
@@ -1220,13 +1215,13 @@ function startAdminFace() {
 					Installed Resources
 				</a>
 				<a class="glass" href="/faces"
-					style="display:block;text-align:center;box-sizing:border-box">
+					style="display:block;text-align:center;box-sizing:border-box;margin-bottom:10px">
 					Manage Faces (Dashboards)
 				</a>
-			</div>
-
-			<div class="panel footer">
-				<a href="/logout">Sign out</a>
+				<button class="glass" disabled
+					style="display:block;width:100%;text-align:center;box-sizing:border-box">
+					About
+				</button>
 			</div>`;
 
 		const script = `
@@ -1476,7 +1471,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page("Settings", body, script));
+		res.send(page("Settings", body, script, "", "/logout", "Sign Out"));
 	});
 
 	app.post("/appearance", (req, res) => {
@@ -2233,15 +2228,19 @@ function startAdminFace() {
 	// catalogue specifically is a real, separate piece of design work,
 	// not something to improvise here.
 	app.get("/installed", (req, res) => {
+		// listModules() returns ids, so each needs its manifest read.
+		// listThemes() already returns manifests -- reading them again
+		// would pass an object where an id string belongs, which is
+		// exactly the crash this page had.
 		const moduleCards = listModules().map((id) => {
 			const manifest = readManifest(id);
 			return { name: manifest.name || id, description: manifest.description };
 		});
 
-		const themeCards = themeLoader.listThemes().map((id) => {
-			const manifest = themeLoader.readManifest(id);
-			return { name: manifest.name || id, description: manifest.description };
-		});
+		const themeCards = themeLoader.listThemes().map((manifest) => ({
+			name: manifest.name || manifest.id,
+			description: manifest.description
+		}));
 
 		const list = [...moduleCards, ...themeCards]
 			.map(
