@@ -38,6 +38,9 @@ const PALETTES = {
 		glassBgHover: "rgba(255, 255, 255, 0.12)",
 		glassBorder: "rgba(255, 255, 255, 0.15)",
 		glassSheen: "rgba(255, 255, 255, 0.14)",
+		glassSheenStrong: "rgba(255, 255, 255, 0.28)",
+		ambientA: "rgba(255, 255, 255, 0.05)",
+		ambientB: "rgba(120, 160, 255, 0.05)",
 		cardBg: "rgba(255, 255, 255, 0.04)",
 		cardBorder: "rgba(255, 255, 255, 0.1)",
 		flash: "rgba(255, 255, 255, 0.35)",
@@ -70,6 +73,9 @@ const PALETTES = {
 		glassBgHover: "rgba(255, 255, 255, 0.95)",
 		glassBorder: "rgba(0, 0, 0, 0.12)",
 		glassSheen: "rgba(255, 255, 255, 0.9)",
+		glassSheenStrong: "rgba(255, 255, 255, 1)",
+		ambientA: "rgba(120, 140, 255, 0.06)",
+		ambientB: "rgba(255, 190, 120, 0.06)",
 		cardBg: "rgba(255, 255, 255, 0.7)",
 		cardBorder: "rgba(0, 0, 0, 0.08)",
 		flash: "rgba(0, 0, 0, 0.15)",
@@ -148,6 +154,7 @@ function uiStyles(options) {
 		--glass-bg-hover: ${active.glassBgHover};
 		--glass-border: ${active.glassBorder};
 		--glass-sheen: ${active.glassSheen};
+		--glass-sheen-strong: ${active.glassSheenStrong};
 
 		--card-bg: ${active.cardBg};
 		--card-border: ${active.cardBorder};
@@ -179,6 +186,16 @@ function uiStyles(options) {
 
 	body {
 		background: var(--bg);
+		/* Soft, mostly-invisible blobs behind the content -- not
+		   decoration for its own sake, but what backdrop-filter needs
+		   to actually have something to blur. Without this, blurring a
+		   flat solid colour returns the same flat solid colour, so the
+		   whole "frosted glass" effect below contributes nothing at all
+		   -- exactly what was happening before this existed. */
+		background-image:
+			radial-gradient(circle at 15% 20%, ${active.ambientA}, transparent 42%),
+			radial-gradient(circle at 85% 75%, ${active.ambientB}, transparent 46%);
+		background-attachment: fixed;
 		color: var(--fg);
 		font-family: var(--font);
 		font-size: var(--font-size);
@@ -189,35 +206,57 @@ function uiStyles(options) {
 	   Glossy button — the primary clickable thing throughout.
 	   Deliberately glossy so it reads as clickable from across a room,
 	   not just up close at a desk.
+
+	   The glossiness has to hold up on its own, not lean entirely on
+	   backdrop-filter -- a beveled edge (the inset highlight/shadow
+	   below) reads as a lit, raised surface regardless of what's behind
+	   it; the blur is a bonus on top of that, not the whole effect.
 	   --------------------------------------------------------------- */
 	.glass {
+		appearance: none;
+		-webkit-appearance: none;
 		position: relative;
 		overflow: hidden;
 		background: var(--glass-bg);
 		border: 1px solid var(--glass-border);
 		border-radius: var(--radius);
 		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		box-shadow:
+			inset 0 1px 0 var(--glass-sheen),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+			0 2px 8px rgba(0, 0, 0, 0.25);
 		color: var(--fg);
 		font-family: inherit;
 		font-size: 1em;
 		padding: 0.9em 1.9em;
 		cursor: pointer;
-		transition: background 0.2s ease, transform 0.1s ease;
+		transition: background 0.2s ease, transform 0.1s ease,
+			box-shadow 0.2s ease;
 	}
 
-	.glass:hover { background: var(--glass-bg-hover); }
+	.glass:hover {
+		background: var(--glass-bg-hover);
+		box-shadow:
+			inset 0 1px 0 var(--glass-sheen),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+			0 4px 14px rgba(0, 0, 0, 0.3);
+	}
+
 	.glass:active { transform: scale(0.97); }
 
-	/* The reflection: a light sheen across the upper half */
+	/* The reflection: a light sheen across the upper half, stronger
+	   than a hairline so it reads clearly even with nothing behind the
+	   element for the blur to catch */
 	.glass::before {
 		content: "";
 		position: absolute;
 		top: 0;
 		left: 0;
 		right: 0;
-		height: 50%;
+		height: 55%;
 		background: linear-gradient(
-			to bottom, var(--glass-sheen), transparent
+			to bottom, var(--glass-sheen-strong), transparent
 		);
 		pointer-events: none;
 	}
@@ -247,9 +286,10 @@ function uiStyles(options) {
 			: `/* Dark mode: a card glows rather than moving — motion is
 	   unnecessary when light alone reads clearly against black. */
 	.card:hover {
-		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25),
-			0 0 24px rgba(255, 255, 255, 0.12);
-		background: var(--glass-bg);
+		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4),
+			0 0 28px rgba(255, 255, 255, 0.25),
+			0 0 60px rgba(255, 255, 255, 0.1);
+		background: var(--glass-bg-hover);
 	}`
 	}
 
@@ -282,6 +322,8 @@ function uiStyles(options) {
 	   lifting.
 	   --------------------------------------------------------------- */
 	.floating {
+		appearance: none;
+		-webkit-appearance: none;
 		position: fixed;
 		z-index: 50;
 		display: flex;
@@ -297,6 +339,8 @@ function uiStyles(options) {
 		font-size: 1em;
 		cursor: pointer;
 		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 		transition: background 0.15s ease;
 	}
 

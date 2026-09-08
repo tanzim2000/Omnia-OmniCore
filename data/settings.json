@@ -1,0 +1,12 @@
+{
+	"locationEnabled": true,
+	"locationMode": "auto",
+	"latitude": null,
+	"longitude": null,
+	"locationLabel": "",
+	"registrySources": [],
+	"uiMode": "dark",
+	"uiFontFamily": "",
+	"uiFontSize": 16,
+	"backButtonCorner": "bottom-right"
+}
