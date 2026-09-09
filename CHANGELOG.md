@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.10.0
+
+### Added
+
+- **An About face, on port 1303.** Deliberately its own face rather than a route on the admin face: it holds no state and needs no configuration, and requiring a login to read what OmniCore even is would be a strange requirement for exactly the page meant to answer that for someone who hasn't set an account up yet. Unauthenticated, same trust model as the welcome face. Shows the running version, links to the real repo, and links back to Settings using the same cross-port trick the setup wizard already relies on, since it lives on a completely different port.
+- The Settings page's About button is enabled now instead of disabled.
+
 ## v1.9.1
 
 Small addition, mostly to make the next self-update test actually visible: OmniCore now shows its own version at the bottom of Settings. Nothing anywhere previously surfaced which version was actually running short of checking Docker directly.

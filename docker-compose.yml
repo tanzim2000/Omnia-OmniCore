@@ -22,6 +22,8 @@ services:
     ports:
       # Admin — create your account, install things, change settings
       - "3000:3000"
+      # About — a small static info page, no login needed to read it
+      - "1303:1303"
       # Setup wizard — build a new dashboard face
       - "3999:3999"
       # Welcome face — pick which dashboard to display

@@ -1218,7 +1218,7 @@ function startAdminFace() {
 					style="display:block;text-align:center;box-sizing:border-box;margin-bottom:10px">
 					Manage Faces (Dashboards)
 				</a>
-				<button class="glass" disabled
+				<button class="glass" onclick="goToAbout()"
 					style="display:block;width:100%;text-align:center;box-sizing:border-box">
 					About
 				</button>
@@ -1230,7 +1230,11 @@ function startAdminFace() {
 				</span>
 			</div>`;
 
-		const script = `
+		const script =
+			portLinkScript +
+			`
+			function goToAbout() { location.href = faceUrl(1303); }
+
 			// --- Location -------------------------------------------
 			const enabled = document.getElementById("enabled");
 			const detail = document.getElementById("detail");

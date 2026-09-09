@@ -214,6 +214,26 @@ test("welcome face: reports unhealthy when the store is unreadable", async () =>
 	}
 });
 
+test("about face: boots and serves without needing to log in", async () => {
+	process.env.OMNICORE_VERSION = "v1.10.0-test";
+	require("../core/about-face")();
+	await waitForPort(1303);
+
+	const response = await fetch("http://127.0.0.1:1303/");
+	const html = await response.text();
+
+	assert.equal(response.status, 200);
+	assert.ok(html.includes("v1.10.0-test"), "should show the running version");
+	assert.ok(
+		html.includes("github.com/tanzim2000/Omnia-OmniCore"),
+		"should link to the real repo"
+	);
+	assert.ok(
+		html.includes("faceUrl(3000)"),
+		"the back link needs the cross-port helper, since this is a different port entirely"
+	);
+});
+
 test("input face: a tap reaches the module and persists", async () => {
 	const fs = require("fs");
 	const path = require("path");
