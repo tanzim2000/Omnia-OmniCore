@@ -1222,6 +1222,12 @@ function startAdminFace() {
 					style="display:block;width:100%;text-align:center;box-sizing:border-box">
 					About
 				</button>
+			</div>
+
+			<div class="panel" style="text-align:center">
+				<span class="muted" style="font-size:0.85em">
+					OmniCore ${escapeHtml(process.env.OMNICORE_VERSION || "dev")}
+				</span>
 			</div>`;
 
 		const script = `

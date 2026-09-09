@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.9.1
+
+Small addition, mostly to make the next self-update test actually visible: OmniCore now shows its own version at the bottom of Settings. Nothing anywhere previously surfaced which version was actually running short of checking Docker directly.
+
 ## v1.9.0
 
 Groundwork for actually leaving OmniCore running unattended.
