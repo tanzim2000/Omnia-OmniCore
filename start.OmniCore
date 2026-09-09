@@ -38,6 +38,9 @@ startControlFace();
 // leave open on a display, since nothing there can change anything.
 startWizardFace();
 
+// And the About page, on its own deliberately-chosen port
+startAboutFace();
+
 // So is the admin face — it's built in, not something the user creates
 startAdminFace();
 
