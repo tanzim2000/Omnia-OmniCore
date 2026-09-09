@@ -27,7 +27,36 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Nothing gets published unless this passes. The whole point of the
+  # gate is that a broken release cannot reach GHCR, since every install
+  # with auto-update on would pull it down within six hours with nobody
+  # watching.
+  #
+  # These tests hit the real registry over the network, which is a
+  # deliberate tradeoff: it means a GitHub or registry outage can block
+  # a good release. Accepted because a local fixture would only prove
+  # the fixture works, not the actual install path.
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the smoke suite
+        run: npm test
+
   publish:
+    # Refuses to even start until the suite is green
+    needs: test
     runs-on: ubuntu-latest
 
     permissions:

@@ -34,6 +34,23 @@ COPY start.OmniCore ./
 # write into them, so they're created here rather than left to chance
 RUN mkdir -p modules themes data
 
-EXPOSE 3000 4000
+# 3000 admin, 3999 setup wizard, 4000 welcome face. Dashboard faces
+# (4001+) and input faces (5001+) are published by docker-compose.yml,
+# since how many exist depends on what's been configured.
+EXPOSE 3000 3999 4000
+
+# Docker's restart policy only fires when a process genuinely dies -- a
+# hung-but-alive one never triggers it. This asks OmniCore whether it
+# can still do its job, not just whether it's running.
+#
+# start-period is generous because a cold start brings up every
+# configured face before this can pass, and a machine rebooting with a
+# dozen faces is slower than a laptop with one.
+#
+# It's also the signal self-update watches to decide whether a new
+# version came up correctly or needs rolling back -- see
+# core/core-updater.js.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+	CMD node -e "fetch('http://127.0.0.1:4000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
 
 CMD ["node", "start.OmniCore"]

@@ -174,6 +174,36 @@ function startControlFace() {
 	// Serves the chosen UI font from this face's own origin
 	attachFontRoute(app);
 
+	// Liveness. Deliberately a real capability check, not just "this
+	// process answered" -- reading the faces store proves OmniCore can
+	// still do its actual job, which is what Docker's restart policy
+	// can't tell on its own. `restart: unless-stopped` only fires when
+	// a process genuinely dies; a hung-but-alive one never triggers it.
+	//
+	// Lives on the welcome face because it's the one face guaranteed to
+	// exist regardless of configuration, and it's already
+	// unauthenticated by design, so a health probe needs no special
+	// exemption to reach it.
+	//
+	// Also the signal self-update's rollback watches: see
+	// core/core-updater.js. If a newly swapped-in container can't reach
+	// healthy, that's what triggers reverting to the previous one.
+	app.get("/health", (req, res) => {
+		try {
+			const faces = faceStore.readFaces();
+
+			res.json({
+				status: "ok",
+				faces: faces.length,
+				version: process.env.OMNICORE_VERSION || "dev"
+			});
+		} catch (error) {
+			// Store unreadable means OmniCore is running but can't
+			// function -- exactly the case a plain process check misses.
+			res.status(503).json({ status: "unhealthy", error: error.message });
+		}
+	});
+
 	// Machine-readable face registry — this is what OmniVision calls
 	app.get("/faces", (req, res) => {
 		res.json(faceStore.readFaces());

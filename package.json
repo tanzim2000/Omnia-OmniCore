@@ -1,10 +1,10 @@
 {
   "name": "omnia-omnicore",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "description": "Modular, config-driven backend for the Omnia home dashboard ecosystem.",
   "main": "start.OmniCore",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test --test-force-exit test/marketplace.test.js && node --test --test-force-exit test/admin-face.test.js && node --test --test-force-exit test/faces.test.js",
     "start": "node start.OmniCore"
   },
   "keywords": [],

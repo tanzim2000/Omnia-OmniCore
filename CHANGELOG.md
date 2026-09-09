@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.9.0
+
+Groundwork for actually leaving OmniCore running unattended.
+
+### Added
+
+- **A smoke test suite that gates publishing.** Nothing reaches GHCR unless 23 tests pass first, which matters because every install with auto-update on would pull a broken release down within six hours with nobody watching. Real HTTP against real running servers rather than checks that each file merely loads: the Installed Resources crash that prompted this only threw once the route actually ran. Reintroducing that exact bug was used to confirm the gate genuinely fails rather than being decorative. No new dependencies; Node 22's built-in test runner.
+- **The registry install path is now tested end to end** for the first time. Every module and theme in the registry is downloaded and installed, then one is actually run. Every previous development session used the local symlink workflow, so marketplace.js's real download-extract-install code had never been exercised.
+- **`GET /health` on the welcome face, and a real Docker HEALTHCHECK.** Deliberately a capability check, not just "the process answered": it reads the faces store, so a running-but-broken OmniCore reports unhealthy. This closes a real gap, since `restart: unless-stopped` only fires when a process genuinely dies and never notices one that is hung but alive.
+- **Self-update now rolls itself back.** After swapping in a new version, the helper container watches Docker's own health status for 90 seconds. If the new version never reports healthy, it puts the previous one back automatically and parks the failed container under a `-failed` name for investigation. Previously a swap that half-worked could leave OmniCore down with nothing bringing it back, and rollback was a manual command someone had to know to run.
+
+### Notes
+
+- An image with no healthcheck at all is accepted rather than rolled back. An older OmniCore predating this release is not a broken one, and rolling back every such update would be worse than the problem it solves.
+- Helper containers are no longer auto-removed. When an update goes wrong their logs are the only record of what happened, and they would otherwise vanish exactly when they are most needed. They are cleaned up on the following update instead.
+- The test suite reaches the real registry over the network. A GitHub or registry outage can therefore block a good release, which is an accepted tradeoff: a local fixture would only prove the fixture works, not the actual install path.
+
 ## v1.8.0
 
 Settings > Appearance. Everything built over the last four releases is finally reachable.

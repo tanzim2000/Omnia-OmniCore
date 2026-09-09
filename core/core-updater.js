@@ -22,6 +22,14 @@ const omnicoreVersion = require("./version");
 const REPO_OWNER = "tanzim2000";
 const REPO_NAME = "Omnia-OmniCore";
 
+// How long a newly swapped-in version gets to report healthy before it's
+// treated as broken and rolled back. Generous on purpose: a cold start
+// brings up every configured face first, and a machine with a dozen
+// faces is slower than a laptop with one. Short enough that a genuinely
+// broken update doesn't sit there unreachable for long.
+const ROLLBACK_WINDOW_SECONDS = 90;
+const ROLLBACK_POLL_SECONDS = 5;
+
 function fetchJson(url) {
 	return new Promise((resolve, reject) => {
 		https.get(
@@ -207,16 +215,37 @@ async function applyUpdate() {
 
 	const previousName = `${originalName}-previous`;
 	const incomingName = `${originalName}-incoming`;
+	// Where a version that failed its health check gets parked. Kept
+	// rather than deleted, so a bad update can actually be investigated
+	// afterward instead of vanishing along with the evidence.
+	const failedName = `${originalName}-failed`;
 
 	// Only one rollback generation is kept — a backup from the update
 	// before last would otherwise collide with this one's name and block
 	// the swap.
-	for (const staleName of [previousName, incomingName]) {
+	for (const staleName of [previousName, incomingName, failedName]) {
 		try {
 			await docker.getContainer(staleName).remove({ force: true });
 		} catch (error) {
 			// Nothing by that name yet — the normal case, not a problem.
 		}
+	}
+
+	// Helper containers from previous updates are no longer
+	// auto-removed (their logs are the only record of what happened
+	// during a swap), so they're cleared here instead -- one update
+	// later, when nobody needs them any more.
+	try {
+		const stale = await docker.listContainers({
+			all: true,
+			filters: { name: [`${originalName}-updater-`] }
+		});
+
+		for (const container of stale) {
+			await docker.getContainer(container.Id).remove({ force: true });
+		}
+	} catch (error) {
+		// Cleanup failing is never a reason to block an update.
 	}
 
 	await docker.createContainer({
@@ -231,18 +260,66 @@ async function applyUpdate() {
 	// it isn't affected by this container being stopped, so it survives
 	// to finish the job.
 	//
+	// It also survives long enough to WATCH the result, which is what
+	// makes rollback automatic rather than something a person has to
+	// know to do. The new container carries the HEALTHCHECK baked into
+	// the image (see Dockerfile), so Docker itself decides whether it
+	// came up able to do its job -- the helper just reads that verdict
+	// rather than reimplementing its own HTTP polling.
+	//
+	// If it never reaches healthy inside the window, the helper puts
+	// everything back exactly as it was. The failure this closes: a
+	// swap that half-worked used to leave OmniCore down with nothing
+	// bringing it back.
+	//
 	// "docker:cli" — Docker's own official CLI-only image — rather than
 	// a pinned version. Unlike OmniCore's own image, where a floating tag
 	// is a deliberate compatibility promise, this is disposable
-	// infrastructure glue that runs three commands and exits; there is
+	// infrastructure glue that runs a few commands and exits; there is
 	// nothing here for a version to be incompatible with.
-	const helperScript = [
-		"set -e",
-		`docker stop ${originalName}`,
-		`docker rename ${originalName} ${previousName}`,
-		`docker rename ${incomingName} ${originalName}`,
-		`docker start ${originalName}`
-	].join(" && ");
+	const helperScript = `
+set -e
+
+docker stop ${originalName}
+docker rename ${originalName} ${previousName}
+docker rename ${incomingName} ${originalName}
+docker start ${originalName}
+
+# Wait for the new version to prove itself. Polling Docker's own health
+# status rather than curling the app directly: the HEALTHCHECK is baked
+# into the image, so this stays correct even if the endpoint moves.
+waited=0
+while [ $waited -lt ${ROLLBACK_WINDOW_SECONDS} ]; do
+	state=$(docker inspect --format '{{.State.Health.Status}}' ${originalName} 2>/dev/null || echo "missing")
+
+	if [ "$state" = "healthy" ]; then
+		echo "New version is healthy after $\{waited\}s"
+		exit 0
+	fi
+
+	# An image with no HEALTHCHECK at all reports no health state.
+	# Treated as success rather than rolled back: an older OmniCore
+	# predating the healthcheck is not a broken one, and rolling back
+	# every such update would be worse than the problem.
+	if [ "$state" = "missing" ]; then
+		if docker inspect --format '{{.State.Running}}' ${originalName} | grep -q true; then
+			echo "No healthcheck to read; container is running, accepting"
+			exit 0
+		fi
+	fi
+
+	sleep ${ROLLBACK_POLL_SECONDS}
+	waited=$((waited + ${ROLLBACK_POLL_SECONDS}))
+done
+
+# Never got there. Put back exactly what was working before.
+echo "New version never became healthy in ${ROLLBACK_WINDOW_SECONDS}s, rolling back"
+docker stop ${originalName} || true
+docker rename ${originalName} ${failedName}
+docker rename ${previousName} ${originalName}
+docker start ${originalName}
+echo "Rolled back. The failed version is kept as ${failedName}."
+`;
 
 	await pullImage(docker, "docker:cli");
 
@@ -253,7 +330,11 @@ async function applyUpdate() {
 		Cmd: [helperScript],
 		HostConfig: {
 			Binds: ["/var/run/docker.sock:/var/run/docker.sock"],
-			AutoRemove: true
+			// Kept rather than auto-removed: if an update went wrong,
+			// this container's logs are the only record of what
+			// happened, and they'd vanish exactly when they're most
+			// needed. Cleaned up on the next update instead.
+			AutoRemove: false
 		}
 	});
 
