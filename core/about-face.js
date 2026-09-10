@@ -101,7 +101,7 @@ function systemRow(icon, label, value) {
 // with real depth belongs behind the login that already exists there;
 // this face stays public and read-only.
 function versionStat(info) {
-	const update = updateStore.lastResult();
+	const update = updateStore.lastResult(info.version);
 	const dot = update.updateAvailable
 		? '<span class="update-dot" title="An update is available"></span>'
 		: "";

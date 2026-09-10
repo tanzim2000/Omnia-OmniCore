@@ -10,6 +10,8 @@
 // recent. A log of "found nothing" every six hours forever is a file
 // that grows without anyone ever reading it.
 
+const semver = require("semver");
+
 const fs = require("fs");
 const path = require("path");
 
@@ -55,15 +57,34 @@ function recordCheck({ latestVersion, updateAvailable, error }) {
 // What the last check concluded, without going near the network. The
 // About face's indicator dot reads this rather than triggering its own
 // check -- rendering a page should never cost an HTTP call to GitHub.
-function lastResult() {
+// What the last check concluded, without going near the network. The
+// About face's indicator dot reads this rather than triggering its own
+// check — rendering a page should never cost an HTTP call to GitHub.
+//
+// `updateAvailable` is recomputed fresh here against whatever's
+// actually running right now, rather than trusting the flag stored at
+// check time. This file lives in the same volume a self-update swap
+// carries forward, so a record written just before a successful swap
+// would otherwise keep saying "an update is available" even after this
+// container has already become that update — comparing against a
+// memory of a version that no longer exists.
+function lastResult(runningVersion) {
 	const data = read();
+	const latestVersion = data.latestVersion || null;
+	const running = runningVersion
+		? semver.valid(semver.coerce(runningVersion))
+		: null;
+
+	const updateAvailable = Boolean(
+		latestVersion && running && semver.gt(latestVersion, running)
+	);
 
 	return {
 		lastCheckedAt: data.lastCheckedAt || null,
 		lastCheckSucceeded: data.lastCheckSucceeded !== false,
 		lastCheckError: data.lastCheckError || null,
-		latestVersion: data.latestVersion || null,
-		updateAvailable: Boolean(data.updateAvailable)
+		latestVersion,
+		updateAvailable
 	};
 }
 

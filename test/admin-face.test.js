@@ -149,17 +149,26 @@ test("updates: a failed check is reported, not hidden", async () => {
 
 test("updates: an available version is announced with its notes", async () => {
 	const updateStore = require("../core/update-store");
+	const originalVersion = process.env.OMNICORE_VERSION;
+
+	// A dev build never claims an update is available, by design — this
+	// scenario needs a real running version to be realistic at all.
+	process.env.OMNICORE_VERSION = "v1.0.0";
 	updateStore.recordCheck({ latestVersion: "99.0.0", updateAvailable: true });
 
-	const html = await (
-		await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
-	).text();
+	try {
+		const html = await (
+			await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
+		).text();
 
-	assert.ok(html.includes("Version 99.0.0 is available"));
-	assert.ok(
-		html.includes("What's new in 99.0.0"),
-		"should offer the upcoming version's notes section"
-	);
+		assert.ok(html.includes("Version 99.0.0 is available"));
+		assert.ok(
+			html.includes("What's new in 99.0.0"),
+			"should offer the upcoming version's notes section"
+		);
+	} finally {
+		process.env.OMNICORE_VERSION = originalVersion;
+	}
 });
 
 test("updates: changelog rendering neutralises hostile markup", async () => {

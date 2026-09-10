@@ -2304,7 +2304,7 @@ function startAdminFace() {
 	// public and read-only; anything with depth is behind this.
 	app.get("/updates", async (req, res) => {
 		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
-		const last = updateStore.lastResult();
+		const last = updateStore.lastResult(running);
 
 		// Read, never checked live: opening a page should not cost a
 		// call to GitHub. The button below is how a check happens on
