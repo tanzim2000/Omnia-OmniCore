@@ -40,6 +40,8 @@ const faceStore = require("./face-store");
 const { refresh } = require("./face-loader");
 const { uiStyles, backButton } = require("./ui-theme");
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
+const coreUpdater = require("./core-updater");
+const updateStore = require("./update-store");
 const fontService = require("./font-service");
 const { startInputFace, stopInputFace } = require("./input-face-loader");
 const auth = require("./admin-auth");
@@ -237,6 +239,12 @@ const styles = `
 
 	/* Explanatory text under a control — quieter than the label it
 	   belongs to, for the "why" rather than the "what" */
+	.changelog h3 { font-size: 14px; margin: 16px 0 6px 0; opacity: 0.75; }
+	.changelog ul { margin: 0; padding-left: 20px; }
+	.changelog li { font-size: 14px; line-height: 1.65; margin-bottom: 8px; }
+	.changelog p { font-size: 14px; line-height: 1.65; }
+	.changelog strong { font-weight: 600; }
+
 	.hint {
 		display: block;
 		color: var(--fg-muted);
@@ -492,6 +500,56 @@ function escapeHtml(text) {
 // screen that is genuinely a root. `backLabel`, when given, replaces
 // the default arrow with text and switches to the pill shape — see
 // ui-theme.js's backButton().
+// Turns a changelog entry into safe HTML.
+//
+// Deliberately not a Markdown library: this handles exactly the three
+// things our own changelog uses (### headings, - bullets, **bold**)
+// and escapes everything first, so text fetched over the network can
+// never inject markup. A general parser would be more capable and a
+// much larger thing to trust with remote input.
+function renderNotes(markdown) {
+	const lines = escapeHtml(markdown).split("\n");
+	const html = [];
+	let inList = false;
+
+	const closeList = () => {
+		if (inList) {
+			html.push("</ul>");
+			inList = false;
+		}
+	};
+
+	for (const line of lines) {
+		const bolded = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+		if (/^### /.test(line)) {
+			closeList();
+			html.push(`<h3>${bolded.replace(/^### /, "")}</h3>`);
+			continue;
+		}
+
+		if (/^- /.test(line)) {
+			if (!inList) {
+				html.push("<ul>");
+				inList = true;
+			}
+			html.push(`<li>${bolded.replace(/^- /, "")}</li>`);
+			continue;
+		}
+
+		if (line.trim() === "") {
+			closeList();
+			continue;
+		}
+
+		closeList();
+		html.push(`<p>${bolded}</p>`);
+	}
+
+	closeList();
+	return html.join("\n");
+}
+
 function page(title, body, script, bodyClass, back, backLabel) {
 	return `<!DOCTYPE html>
 <html>
@@ -2237,6 +2295,158 @@ function startAdminFace() {
 	// pattern used everywhere else. A better-purposed layout for a
 	// catalogue specifically is a real, separate piece of design work,
 	// not something to improvise here.
+	// Updates. Reached by clicking the version tile on the About face,
+	// not from the settings list — deliberately a path you find rather
+	// than one you're shown.
+	//
+	// It lives here rather than on the About face because everything on
+	// it needs the login that already exists on this face. About stays
+	// public and read-only; anything with depth is behind this.
+	app.get("/updates", async (req, res) => {
+		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
+		const last = updateStore.lastResult();
+
+		// Read, never checked live: opening a page should not cost a
+		// call to GitHub. The button below is how a check happens on
+		// purpose.
+		const [currentNotes, upcomingNotes, since] = await Promise.all([
+			coreUpdater.fetchChangelogEntry(`v${running}`),
+			last.updateAvailable && last.latestVersion
+				? coreUpdater.fetchChangelogEntry(`v${last.latestVersion}`)
+				: Promise.resolve(null),
+			coreUpdater.runningSince()
+		]);
+
+		const when = (iso) => {
+			if (!iso) {
+				return "Unknown";
+			}
+
+			return new Date(iso).toLocaleString();
+		};
+
+		const status = !last.lastCheckedAt
+			? `<p class="lede">No check has run yet.</p>`
+			: !last.lastCheckSucceeded
+			? `<p class="lede">Last check failed: ${escapeHtml(
+					last.lastCheckError || "unknown error"
+			  )}</p>`
+			: last.updateAvailable
+			? `<p class="lede"><strong>Version ${escapeHtml(
+					last.latestVersion
+			  )} is available.</strong> It installs on its own, usually within six hours.</p>`
+			: `<p class="lede">This is the newest version.</p>`;
+
+		const notesSection = (heading, notes, fallback) => `
+			<div class="panel">
+				<h2 style="margin-bottom:10px">${escapeHtml(heading)}</h2>
+				${
+					notes
+						? `<div class="changelog">${renderNotes(notes)}</div>`
+						: `<p class="lede">${escapeHtml(fallback)}</p>`
+				}
+			</div>`;
+
+		const body = `
+			<div class="panel">
+				<h1 style="margin-top:12px">Updates</h1>
+			</div>
+
+			<div class="panel">
+				<div class="field">
+					<strong>Running</strong>
+					<div class="stat-value" style="font-size:1.4em;margin-top:4px">
+						OmniCore ${escapeHtml(running)}
+					</div>
+				</div>
+				${status}
+				<div class="field">
+					<span class="hint">Last checked: ${escapeHtml(when(last.lastCheckedAt))}</span>
+					<span class="hint">Running since: ${escapeHtml(when(since))}</span>
+				</div>
+				<button class="glass" id="check">Check now</button>
+				<p class="status" id="check-status"></p>
+			</div>
+
+			${
+				last.updateAvailable && last.latestVersion
+					? notesSection(
+							`What's new in ${last.latestVersion}`,
+							upcomingNotes,
+							"Release notes for that version couldn't be fetched."
+					  )
+					: ""
+			}
+
+			${notesSection(
+				`What's in ${running}`,
+				currentNotes,
+				"Release notes for this version couldn't be fetched. A development build has none to fetch."
+			)}`;
+
+		const script = `
+			var button = document.getElementById("check");
+			var status = document.getElementById("check-status");
+
+			button.addEventListener("click", async function () {
+				button.disabled = true;
+				status.className = "status";
+				status.textContent = "Checking...";
+
+				try {
+					const response = await fetch("/updates/check", { method: "POST" });
+					const data = await response.json();
+
+					if (!response.ok) {
+						status.className = "status bad";
+						status.textContent = data.error || "Couldn't reach GitHub.";
+						button.disabled = false;
+						return;
+					}
+
+					// Reload rather than patching the page: a check can
+					// change the status line, both changelog sections and
+					// the timestamps at once, and re-rendering is simpler
+					// than keeping four things in sync by hand.
+					location.reload();
+				} catch (error) {
+					status.className = "status bad";
+					status.textContent = "Couldn't reach GitHub.";
+					button.disabled = false;
+				}
+			});
+		`;
+
+		res.send(page("Updates", body, script, "", "/"));
+	});
+
+	// Runs a check on demand and records it, exactly as the scheduled
+	// one does. Never applies anything: applying stays the scheduler's
+	// job, so there's no button anywhere that can swap a container out
+	// from under someone mid-click.
+	app.post("/updates/check", async (req, res) => {
+		try {
+			const status = await coreUpdater.checkForUpdate();
+
+			if (!status) {
+				// A dev build has no release to compare against.
+				updateStore.recordCheck({ updateAvailable: false });
+				res.json({ ok: true, updateAvailable: false });
+				return;
+			}
+
+			updateStore.recordCheck({
+				latestVersion: status.latestVersion,
+				updateAvailable: status.updateAvailable
+			});
+
+			res.json({ ok: true, ...status });
+		} catch (error) {
+			updateStore.recordCheck({ error: error.message });
+			res.status(502).json({ error: error.message });
+		}
+	});
+
 	app.get("/installed", (req, res) => {
 		// listModules() returns ids, so each needs its manifest read.
 		// listThemes() already returns manifests -- reading them again

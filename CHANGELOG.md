@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.11.0
+
+The About face became what it should be: the centre of the ecosystem rather than a placeholder.
+
+### Added
+
+- **Real system facts on the About face.** Health, OmniCore version, how many resources are installed, how many dashboards exist, the host OS, and the container runtime (correctly reporting Podman when that is what is actually there, rather than assuming Docker). Every one of them fails soft: a fact OmniCore cannot read leaves its tile out entirely rather than showing a blank, since a blank says nothing useful and an empty tile is a lie.
+- **A stylesheet as a real file.** `core/about-face.css`, served at `/about.css`, so this page's look can be changed without touching any JavaScript. Landscape is the same elements given room once there is any, not a second design.
+- **The Omnia wordmark in Adamina**, fixed rather than following the UI font setting, because a wordmark that changes typeface is not a wordmark. Downloaded once and served locally like every other font here, so it works with no internet; falls back to a system serif until then, which still reads correctly.
+- A Donate button, present but inert for now.
+
+### Changed
+
+- The plain "Back to Settings" button is now the same floating back button used everywhere else, wired with the cross-port helper since this face lives on its own port.
+- The version reads as "1.11.0" rather than "v1.11.0" under an "OmniCore" label, since the label already says what the number belongs to.
+
+### Fixed
+
+- Comments across four files said OmniVision where they meant OmniView. OmniVision is the ecosystem's camera and sensor layer; OmniView is the display client that reads the face registry. Corrected everywhere, including the test suite.
+- `package.json` still said 1.10.0 after v1.10.1 was tagged; the patch bump never made it into the file.
+
 ## v1.10.0
 
 ### Added

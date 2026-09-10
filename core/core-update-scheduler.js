@@ -7,6 +7,7 @@
 // belongs to which.
 
 const coreUpdater = require("./core-updater");
+const updateStore = require("./update-store");
 const omnicoreVersion = require("./version");
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // same cadence as resource-scheduler
@@ -25,8 +26,19 @@ async function runOnce() {
 	try {
 		status = await coreUpdater.checkForUpdate();
 	} catch (error) {
+		// Recorded even in failure, so the updates page can say "we
+		// tried and couldn't reach GitHub" rather than looking
+		// identical to never having checked at all.
+		updateStore.recordCheck({ error: error.message });
 		console.log(`  Core update check failed: ${error.message}`);
 		return;
+	}
+
+	if (status) {
+		updateStore.recordCheck({
+			latestVersion: status.latestVersion,
+			updateAvailable: status.updateAvailable
+		});
 	}
 
 	if (!status || !status.updateAvailable) {

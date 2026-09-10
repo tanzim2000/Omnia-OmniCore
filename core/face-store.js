@@ -20,9 +20,9 @@ const dataPath = path.join(__dirname, "..", "data", "faces.json");
 
 // Port range rules:
 // 3xxx = admin faces (built in, never user-modifiable)
-// 4000 = the OmniVision control face
+// 4000 = the OmniView welcome face
 // 4001+ = dashboard faces (auto-assigned by OmniCore)
-// 5001+ = input faces (auto-assigned, one per instance that wants one)
+// 5001+ = Control faces (auto-assigned, one per instance that wants one)
 const DASHBOARD_PORT_START = 4001;
 const INPUT_PORT_START = 5001;
 const INPUT_PORT_END = 5050;

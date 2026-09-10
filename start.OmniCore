@@ -1,11 +1,11 @@
 // OmniCore entry point.
 // Port layout:
-//   3000  = the built-in admin face — OmniCore's own settings UI
-//   1303  = the About page
-//   3999  = the setup wizard, where a new face gets built
-//   4000  = the welcome face, where OmniVision picks a face to display
-//   4001+ = dashboard faces, auto-assigned by OmniCore
-//   5001+ = input faces, one per instance that declares one
+//   3000  = Admin face (OmniCore's own settings UI)
+//   1303  = About page.
+//   3999  = Setup wizard, where a new face gets built.
+//   4000  = Welcome face, where OmniView picks a face to display.
+//   4001+ = Dashboard Faces, auto-assigned by OmniCore.
+//   5001+ = Control faces, one per instance that declares one.
 
 const { readFaces } = require("./core/face-store");
 const { startFace } = require("./core/face-loader");

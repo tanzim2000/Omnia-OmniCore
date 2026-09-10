@@ -4,7 +4,7 @@
 // This used to live on 4000 alongside the face picker. It was split out
 // so that 4000 could become a pure picker with no ability to create or
 // change anything, which makes it safe to leave open on a wall display
-// or point OmniVision at. Anything that builds a face now lives here,
+// or point OmniView at. Anything that builds a face now lives here,
 // reached from the admin face's own settings.
 //
 // The wizard holds everything in the browser and only commits at

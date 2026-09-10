@@ -1,0 +1,226 @@
+/* core/about-face.css
+ *
+ * The About face's own stylesheet, served at /about.css.
+ *
+ * A real file rather than a template string inside about-face.js, so
+ * this page's look can be edited without touching any JavaScript. It
+ * layers on top of the shared Default UI (core/ui-theme.js) rather
+ * than replacing it -- the glass buttons, cards and colour variables
+ * all come from there, and everything below is only what's specific
+ * to this one page.
+ */
+
+/* The wordmark's typeface, served by OmniCore itself rather than
+ * fetched from Google's CDN at render time -- same rule the UI font
+ * follows, and for the same reason: this page has to work with no
+ * internet. If the file was never fetched, the fallback below still
+ * renders a serif wordmark rather than breaking anything. */
+@font-face {
+	font-family: "Adamina";
+	src: url("/omnia-title.woff2") format("woff2");
+	font-display: swap;
+}
+
+body {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 1.25rem;
+	padding: 3rem 1.5rem 5rem;
+	position: relative;
+}
+
+/* Ambient colour. Deliberately stronger here than the faint wash the
+   rest of OmniCore uses: this is the one page that's meant to feel
+   like the centre of the ecosystem rather than a utility screen. */
+body::before {
+	content: "";
+	position: fixed;
+	inset: 0;
+	background:
+		radial-gradient(ellipse at 20% 0%, rgba(60, 140, 220, 0.22), transparent 55%),
+		radial-gradient(ellipse at 90% 20%, rgba(80, 220, 180, 0.14), transparent 50%);
+	pointer-events: none;
+	z-index: 0;
+}
+
+/* Everything sits above the wash */
+body > * { position: relative; z-index: 1; }
+
+.omnia-title {
+	/* Adamina, deliberately fixed rather than following the UI font
+	   setting -- this is a wordmark, not body text, and a wordmark
+	   that changes typeface isn't a wordmark. Falls back to the
+	   system serif if the font file hasn't been fetched yet, which
+	   still reads as a wordmark rather than breaking the page. */
+	font-family: "Adamina", Georgia, "Times New Roman", serif;
+	font-size: 2.75rem;
+	font-weight: 400;
+	margin: 0;
+	letter-spacing: -0.01em;
+	line-height: 1;
+}
+
+/* Health pill -------------------------------------------------------- */
+
+.health {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	font-size: 0.85rem;
+	border-radius: 999px;
+	padding: 0.35em 1em 0.35em 0.55em;
+}
+
+.health.ok {
+	background: rgba(62, 214, 122, 0.12);
+	border: 1px solid rgba(62, 214, 122, 0.25);
+	color: #8ef0ae;
+}
+
+.health.bad {
+	background: var(--danger-bg);
+	border: 1px solid var(--danger-border);
+	color: var(--danger-text);
+}
+
+.health svg { flex-shrink: 0; }
+
+/* Stat row ----------------------------------------------------------- */
+
+.stats {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 10px;
+	width: 100%;
+	max-width: 460px;
+}
+
+.stat {
+	background: var(--card-bg);
+	border: 1px solid var(--card-border);
+	border-radius: var(--radius);
+	padding: 0.75em 0.65em;
+	text-align: center;
+	cursor: default;
+}
+
+/* A stat isn't clickable, so it shouldn't do the hover thing a real
+   card does */
+.stat:hover { transform: none; box-shadow: none; }
+
+.stat-label {
+	font-size: 0.7rem;
+	color: var(--fg-muted);
+}
+
+.stat-value {
+	font-size: 1.05rem;
+	font-weight: 600;
+	margin-top: 0.25em;
+}
+
+
+/* The version tile doubles as the way through to the updates page.
+   Deliberately identical to the tiles beside it -- someone who isn't
+   looking for it shouldn't notice it's different. */
+.stat-link {
+	display: block;
+	text-decoration: none;
+	color: inherit;
+	cursor: pointer;
+	transition: background 0.2s ease;
+}
+
+.stat-link:hover { background: var(--glass-bg); }
+
+/* The one tell: a small dot, only when an update is actually waiting.
+   No text, no colour change to the tile itself. */
+.update-dot {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: #3ed67a;
+	box-shadow: 0 0 6px rgba(62, 214, 122, 0.8);
+	margin-left: 0.4em;
+	vertical-align: middle;
+}
+
+/* System rows -------------------------------------------------------- */
+
+.system {
+	width: 100%;
+	max-width: 460px;
+	background: var(--card-bg);
+	border: 1px solid var(--card-border);
+	border-radius: var(--radius);
+	overflow: hidden;
+}
+
+.system-row {
+	display: flex;
+	align-items: center;
+	gap: 0.7em;
+	padding: 0.85em 1em;
+}
+
+.system-row + .system-row { border-top: 1px solid var(--card-border); }
+
+.system-label { font-size: 0.75rem; color: var(--fg-muted); }
+.system-value { font-size: 0.875rem; font-weight: 500; }
+
+/* Actions ------------------------------------------------------------ */
+
+.actions {
+	width: 100%;
+	max-width: 460px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.actions .glass {
+	display: block;
+	width: 100%;
+	text-align: center;
+	box-sizing: border-box;
+	text-decoration: none;
+}
+
+/* Credits ------------------------------------------------------------ */
+
+.credits {
+	font-size: 0.75rem;
+	color: var(--fg-muted);
+	text-align: center;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-wrap: wrap;
+	gap: 0.35em;
+	line-height: 1.6;
+}
+
+/* Slightly larger than the text it sits in, and vertically centred to
+   the line rather than sitting on the baseline */
+.credits svg {
+	width: 1.15em;
+	height: 1.15em;
+	vertical-align: middle;
+	flex-shrink: 0;
+}
+
+/* Landscape ---------------------------------------------------------- */
+
+/* Not a separate design -- the same elements, given room to spread out
+   once there is any. Below this width everything stacks, which is the
+   phone layout by default rather than as a special case. */
+@media (min-width: 720px) {
+	.stats { max-width: 640px; }
+	.system { max-width: 640px; }
+	.actions { max-width: 640px; flex-direction: row; }
+	.omnia-title { font-size: 3.25rem; }
+}

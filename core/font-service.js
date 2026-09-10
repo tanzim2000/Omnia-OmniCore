@@ -220,6 +220,49 @@ function installedFont() {
 	}
 }
 
+// The Omnia wordmark's typeface. Fixed at Adamina rather than
+// following the UI font setting -- a wordmark that changes typeface
+// isn't a wordmark. Fetched once and stored alongside everything else,
+// then served locally forever after; the About face falls back to a
+// system serif until this succeeds, which still reads correctly.
+//
+// Separate from installFont above on purpose: that one is the user's
+// choice and can be changed or removed, this one isn't and can't.
+const TITLE_FONT_FAMILY = "Adamina";
+const titleFontFile = path.join(dataDir, "omnia-title.woff2");
+
+async function ensureTitleFont() {
+	if (fs.existsSync(titleFontFile)) {
+		return true;
+	}
+
+	try {
+		const css = (
+			await get(
+				"https://fonts.googleapis.com/css2?family=" +
+					encodeURIComponent(TITLE_FONT_FAMILY) +
+					"&display=swap"
+			)
+		).toString("utf-8");
+
+		const url = firstWoff2Url(css);
+
+		if (!url) {
+			return false;
+		}
+
+		await fsp.mkdir(dataDir, { recursive: true });
+		await fsp.writeFile(titleFontFile, await get(url));
+
+		return true;
+	} catch (error) {
+		// No internet on first boot is a normal situation, not a
+		// failure worth logging loudly -- the fallback serif is fine,
+		// and the next start tries again.
+		return false;
+	}
+}
+
 // Mounts GET /ui-font.woff2 on a face's own Express app.
 //
 // Every face that renders the Default UI needs this, because a browser
@@ -256,6 +299,8 @@ module.exports = {
 	installedFontPath,
 	installedFont,
 	attachFontRoute,
+	ensureTitleFont,
+	TITLE_FONT_FAMILY,
 	// Exported for tests: parsing shouldn't only be reachable through a
 	// network call.
 	parseCatalogue,

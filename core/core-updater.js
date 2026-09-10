@@ -57,6 +57,32 @@ function fetchJson(url) {
 	});
 }
 
+// Same as fetchJson but for plain text. The changelog is a Markdown
+// file, not an API response, so it needs its own reader rather than
+// being parsed as JSON.
+function fetchText(url) {
+	return new Promise((resolve, reject) => {
+		https.get(
+			url,
+			{ headers: { "User-Agent": "OmniCore" } },
+			(response) => {
+				if (response.statusCode !== 200) {
+					response.resume();
+					reject(new Error(`${url} responded ${response.statusCode}`));
+					return;
+				}
+
+				const chunks = [];
+				response.on("data", (chunk) => chunks.push(chunk));
+				response.on("end", () =>
+					resolve(Buffer.concat(chunks).toString("utf-8"))
+				);
+				response.on("error", reject);
+			}
+		).on("error", reject);
+	});
+}
+
 // Every real release tag on the repo, e.g. "v1.2.0" — GitHub's tags API,
 // unauthenticated. Public, and checked once every few hours, so the
 // anonymous rate limit is nowhere close to a concern.
@@ -353,8 +379,60 @@ echo "Rolled back. The failed version is kept as ${failedName}."
 	};
 }
 
+// The changelog entry for one version, pulled from the repo rather
+// than from inside this image.
+//
+// It has to come over the network for the version being offered --
+// that release's notes cannot possibly exist inside a container built
+// before it. Reading the CURRENT version's notes the same way, rather
+// than from the local CHANGELOG.md, keeps one mechanism instead of two
+// that can disagree.
+async function fetchChangelogEntry(tag) {
+	const url =
+		`https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/` +
+		`${encodeURIComponent(tag)}/CHANGELOG.md`;
+
+	let raw;
+
+	try {
+		raw = await fetchText(url);
+	} catch (error) {
+		return null;
+	}
+
+	// Everything between this version's heading and the next one.
+	const bare = String(tag).replace(/^v/, "");
+	const pattern = new RegExp(
+		`^## v?${bare.replace(/\./g, "\\.")}\\s*$([\\s\\S]*?)(?=^## |\\Z)`,
+		"m"
+	);
+	const match = raw.match(pattern);
+
+	return match ? match[1].trim() : null;
+}
+
+// When the running container was created. This is "last updated"
+// without needing to record anything ourselves: a self-update replaces
+// the container, so its creation time IS the moment this version took
+// over.
+//
+// Null without a Docker socket, which is a legitimate setup rather
+// than a fault.
+async function runningSince() {
+	try {
+		const docker = connectToDocker();
+		const self = await getSelfContainer(docker);
+
+		return self.info.Created || null;
+	} catch (error) {
+		return null;
+	}
+}
+
 module.exports = {
 	checkForUpdate,
+	fetchChangelogEntry,
+	runningSince,
 	fetchLatestCompatibleTag,
 	applyUpdate,
 	REPO_OWNER,

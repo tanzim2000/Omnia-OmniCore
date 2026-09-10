@@ -1,11 +1,11 @@
 // core/control-face.js
-// The welcome face, on port 4000. OmniVision talks to this to discover
+// The welcome face, on port 4000. OmniView talks to this to discover
 // and pick which dashboard face to display.
 //
 // It used to host the setup wizard too. That moved to its own face on
 // 3999 (core/wizard-face.js) so this one could become a pure picker:
 // nothing here can create, change, or delete anything, which is what
-// makes it safe to leave open on a wall display or hand to OmniVision.
+// makes it safe to leave open on a wall display or hand to OmniView.
 //
 // STYLING: its own stylesheet rather than the shared Default UI, even
 // though it currently looks identical to it. That's deliberate -- this
@@ -204,7 +204,7 @@ function startControlFace() {
 		}
 	});
 
-	// Machine-readable face registry — this is what OmniVision calls
+	// Machine-readable face registry — this is what OmniView calls
 	app.get("/faces", (req, res) => {
 		res.json(faceStore.readFaces());
 	});

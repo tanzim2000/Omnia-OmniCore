@@ -168,7 +168,7 @@ test("welcome face: with several faces, there is no countdown", async () => {
 });
 
 test("welcome face: the machine-readable registry still answers", async () => {
-	// This is what OmniVision actually calls. It matters more than the
+	// This is what OmniView actually calls. It matters more than the
 	// HTML page does.
 	const faces = await (
 		await fetch(`http://127.0.0.1:${WELCOME_PORT}/faces`)
@@ -215,7 +215,7 @@ test("welcome face: reports unhealthy when the store is unreadable", async () =>
 });
 
 test("about face: boots and serves without needing to log in", async () => {
-	process.env.OMNICORE_VERSION = "v1.10.0-test";
+	process.env.OMNICORE_VERSION = "v1.10.2-test";
 	require("../core/about-face")();
 	await waitForPort(1303);
 
@@ -223,7 +223,9 @@ test("about face: boots and serves without needing to log in", async () => {
 	const html = await response.text();
 
 	assert.equal(response.status, 200);
-	assert.ok(html.includes("v1.10.0-test"), "should show the running version");
+	// Shown without the leading "v" -- the label next to it already
+	// says OmniCore, so the prefix adds nothing
+	assert.ok(html.includes(">1.10.2-test<"), "should show the running version");
 	assert.ok(
 		html.includes("github.com/tanzim2000/Omnia-OmniCore"),
 		"should link to the real repo"
@@ -231,6 +233,43 @@ test("about face: boots and serves without needing to log in", async () => {
 	assert.ok(
 		html.includes("faceUrl(3000)"),
 		"the back link needs the cross-port helper, since this is a different port entirely"
+	);
+	assert.ok(html.includes("Dashboards"), "should report the dashboard count");
+	assert.ok(
+		html.includes("Architected by Tanzim Ahmed"),
+		"credits should be present"
+	);
+});
+
+test("about face: serves its stylesheet as a real separate file", async () => {
+	const response = await fetch("http://127.0.0.1:1303/about.css");
+
+	assert.equal(response.status, 200);
+	assert.match(response.headers.get("content-type"), /text\/css/);
+
+	const css = await response.text();
+	assert.ok(css.includes(".omnia-title"), "the wordmark rule should be in here");
+	assert.ok(
+		css.includes("@font-face"),
+		"the wordmark font is declared in the stylesheet, not inline"
+	);
+});
+
+test("about face: reports real system facts", async () => {
+	const systemInfo = require("../core/system-info");
+	const info = await systemInfo.readAll();
+
+	// The OS is read from a real file rather than assumed, so this
+	// asserts it found something rather than a specific distribution
+	assert.ok(info.operatingSystem, "should detect the host OS");
+	assert.equal(typeof info.healthy, "boolean");
+	assert.equal(typeof info.dashboards, "number");
+
+	// No Docker socket in a test run is normal, and must be a null
+	// rather than a thrown error
+	assert.ok(
+		info.runtime === null || typeof info.runtime === "object",
+		"a missing container runtime should be null, not a crash"
 	);
 });
 

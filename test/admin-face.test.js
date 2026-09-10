@@ -115,3 +115,62 @@ test("admin face: an absurd text size is clamped, not stored", async () => {
 	const body = await response.json();
 	assert.equal(body.uiFontSize, 24, "expected clamping to the maximum");
 });
+test("updates: the page renders and reports never having checked", async () => {
+	const response = await fetch(`http://127.0.0.1:${PORT}/updates`, {
+		headers: { cookie }
+	});
+
+	assert.equal(response.status, 200);
+
+	const html = await response.text();
+	assert.ok(html.includes("Updates"), "missing heading");
+	assert.ok(html.includes("Last checked:"), "should say when it last checked");
+	assert.ok(html.includes('id="check"'), "should offer a manual check");
+});
+
+test("updates: a failed check is reported, not hidden", async () => {
+	const updateStore = require("../core/update-store");
+
+	// The dangerous failure here is a check that couldn't reach GitHub
+	// looking identical to one that found nothing -- that would read as
+	// "you're up to date" when nobody actually knows.
+	updateStore.recordCheck({ error: "simulated network failure" });
+
+	const html = await (
+		await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
+	).text();
+
+	assert.ok(html.includes("Last check failed"), "a failure must be visible");
+	assert.ok(
+		!html.includes("This is the newest version"),
+		"a failed check must never claim the install is up to date"
+	);
+});
+
+test("updates: an available version is announced with its notes", async () => {
+	const updateStore = require("../core/update-store");
+	updateStore.recordCheck({ latestVersion: "99.0.0", updateAvailable: true });
+
+	const html = await (
+		await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
+	).text();
+
+	assert.ok(html.includes("Version 99.0.0 is available"));
+	assert.ok(
+		html.includes("What's new in 99.0.0"),
+		"should offer the upcoming version's notes section"
+	);
+});
+
+test("updates: changelog rendering neutralises hostile markup", async () => {
+	// Release notes are fetched over the network, so this content is
+	// not ours and must never be trusted as markup.
+	const updateStore = require("../core/update-store");
+	updateStore.recordCheck({ updateAvailable: false });
+
+	const html = await (
+		await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
+	).text();
+
+	assert.ok(!html.includes("<script>alert"), "no injected script survived");
+});
