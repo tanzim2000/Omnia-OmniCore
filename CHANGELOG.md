@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.11.1
+
+Small fix for the About face. Neither the back button nor the version tile worked at all. The script wiring both up ran before the back button existed in the page, since it sat above the button in the HTML; the resulting error on its first line silently killed the rest of the script, including the version tile's own listener right below it. Fixed by putting the button before the script, with a defensive null check added as a second line of defence against the same class of mistake recurring.
+
 ## v1.11.0
 
 The About face became what it should be: the centre of the ecosystem rather than a placeholder.

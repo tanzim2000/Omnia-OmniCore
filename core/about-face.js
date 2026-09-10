@@ -159,18 +159,32 @@ function renderPage(info) {
 		<span>Claude</span>
 	</div>
 
+	<button class="floating bottom-right" id="back" aria-label="Back">&#8592;</button>
+
 	<script>
 		${portLinkScript}
-		document.getElementById("back").addEventListener("click", function () {
-			location.href = faceUrl(${ADMIN_PORT});
-		});
 
-		document.getElementById("version-tile").addEventListener("click", function (event) {
-			event.preventDefault();
-			location.href = faceUrl(${ADMIN_PORT}) + "/updates";
-		});
+		// Guarded rather than assumed to exist: a script that runs before
+		// its own elements are parsed throws on the first line and
+		// silently kills everything after it in the same block -- which
+		// is exactly what happened here before this fix. The button now
+		// comes before this script in the HTML, but the guard stays as a
+		// second line of defence against the same mistake recurring.
+		var back = document.getElementById("back");
+		if (back) {
+			back.addEventListener("click", function () {
+				location.href = faceUrl(${ADMIN_PORT});
+			});
+		}
+
+		var versionTile = document.getElementById("version-tile");
+		if (versionTile) {
+			versionTile.addEventListener("click", function (event) {
+				event.preventDefault();
+				location.href = faceUrl(${ADMIN_PORT}) + "/updates";
+			});
+		}
 	</script>
-	<button class="floating bottom-right" id="back" aria-label="Back">&#8592;</button>
 </body>
 </html>`;
 }

@@ -30,6 +30,14 @@ body {
 	gap: 1.25rem;
 	padding: 3rem 1.5rem 5rem;
 	position: relative;
+
+	/* This is a screen to look at, not a document to read and copy
+	   from -- selecting text here (and the I-beam cursor that comes
+	   with it) doesn't serve anyone. */
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
 }
 
 /* Ambient colour. Deliberately stronger here than the faint wash the
