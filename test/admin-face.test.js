@@ -40,14 +40,25 @@ test("admin face: creating the account signs you in", async () => {
 	assert.ok(cookie.startsWith("omnicore"), `unexpected cookie: ${cookie}`);
 });
 
-test("admin face: settings home renders with both sections", async () => {
+test("admin face: settings home renders every section", async () => {
 	const html = await (
 		await fetch(`http://127.0.0.1:${PORT}/`, { headers: { cookie } })
 	).text();
 
 	assert.ok(html.includes("Location Service"), "missing Location Service");
-	assert.ok(html.includes("Appearance"), "missing Appearance");
-	assert.ok(html.includes("Installed Resources"), "missing Installed Resources link");
+	assert.ok(html.includes("Appearance Mode"), "missing Appearance Mode");
+	assert.ok(html.includes("Back Button Position"), "missing Back Button Position");
+	assert.ok(html.includes("Text Size"), "missing Text Size");
+	assert.ok(html.includes("Manage Faces"), "missing Manage Faces link");
+
+	// Installed Resources deliberately moved to the About face -- the
+	// About link is how you reach it now, not a Settings row.
+	assert.ok(html.includes("About OmniCore"), "missing About link");
+
+	// Both modals ship with the page rather than being fetched when
+	// opened, so their absence would mean a dead button
+	assert.ok(html.includes('id="font-modal"'), "font picker modal missing");
+	assert.ok(html.includes('id="location-modal"'), "location modal missing");
 });
 
 // The regression this whole suite exists for. It rendered fine with

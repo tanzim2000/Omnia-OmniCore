@@ -65,6 +65,180 @@ const styles = `
 	   nothing gets cut off with no way to scroll to it. */
 	body.centered { justify-content: safe center; }
 
+	/* ---------------------------------------------------------------
+	   Settings bento.
+
+	   Everything on one screen with nothing hidden behind a tab or a
+	   scroll: the page has four sections and two links, which is small
+	   enough to just show. Tabs would add state to manage and a click
+	   before reaching anything, to solve a problem this page does not
+	   currently have. If Settings ever outgrows one screen, tabs layer
+	   on top of this without rebuilding it.
+
+	   Portrait is the same tiles in one column -- not a second design.
+	   --------------------------------------------------------------- */
+	.bento { width: 100%; max-width: 62em; display: flex; flex-direction: column; gap: 14px; }
+
+	.bento-row { display: grid; gap: 14px; grid-template-columns: 1fr; }
+
+	.tile {
+		background: var(--card-bg);
+		border: 1px solid var(--card-border);
+		border-radius: var(--radius);
+		padding: 20px;
+		cursor: default;
+	}
+
+	/* A tile is a container, not a clickable card */
+	.tile:hover { transform: none; box-shadow: none; }
+
+	.tile h2 { margin: 0 0 4px 0; font-size: 1.05em; font-weight: 600; }
+	.tile .lede { margin: 0 0 14px 0; }
+
+	.settings-head {
+		width: 100%;
+		max-width: 62em;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+	}
+
+	/* The version pill doubles as the way to the updates page */
+	.version-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 0.78em;
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		border-radius: 999px;
+		padding: 6px 14px;
+		cursor: pointer;
+		transition: background 0.2s ease;
+	}
+
+	.version-pill:hover { background: var(--glass-bg-hover); }
+
+	.version-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--success);
+		box-shadow: 0 0 5px rgba(62, 214, 122, 0.7);
+	}
+
+	/* Mode picker: two miniature screens rather than a switch, so the
+	   choice shows what it actually looks like instead of naming it */
+	.mode-previews { display: flex; gap: 10px; }
+
+	.mode-preview {
+		flex: 1;
+		cursor: pointer;
+		border-radius: 10px;
+		border: 1px solid var(--card-border);
+		padding: 8px;
+		text-align: center;
+		transition: border-color 0.2s ease;
+	}
+
+	.mode-preview.active { border: 2px solid var(--fg-muted); padding: 7px; }
+	.mode-preview-label { font-size: 0.78em; color: var(--fg-muted); margin-top: 8px; }
+	.mode-preview.active .mode-preview-label { color: var(--fg); font-weight: 600; }
+
+	.mode-screen { border-radius: 5px; height: 64px; padding: 8px; text-align: left; }
+	.mode-screen span { display: block; border-radius: 2px; margin-bottom: 5px; }
+
+	/* Corner map: the buttons sit where the thing they choose would
+	   actually sit, so the choice is spatial rather than a list of
+	   names to decode */
+	.corner-map {
+		position: relative;
+		background: rgba(0, 0, 0, 0.3);
+		border: 1px solid var(--card-border);
+		border-radius: 10px;
+		height: 118px;
+		padding: 8px;
+	}
+
+	.corner-map button {
+		position: absolute;
+		appearance: none;
+		-webkit-appearance: none;
+		background: transparent;
+		border: 1px solid var(--glass-border);
+		color: var(--fg-muted);
+		border-radius: 6px;
+		padding: 6px 10px;
+		font-family: inherit;
+		font-size: 0.7em;
+		cursor: pointer;
+	}
+
+	.corner-map button.active {
+		background: var(--glass-bg-hover);
+		color: var(--fg);
+		box-shadow: inset 0 1px 0 var(--glass-sheen);
+	}
+
+	.corner-map button:disabled {
+		color: var(--disabled-text);
+		border-color: var(--card-border);
+		cursor: not-allowed;
+	}
+
+	.corner-tl { top: 8px; left: 8px; }
+	.corner-tr { top: 8px; right: 8px; }
+	.corner-bl { bottom: 8px; left: 8px; }
+	.corner-br { bottom: 8px; right: 8px; }
+
+	/* An inset strip inside a tile: the detected location, the current
+	   font. Reads as "this is a value, not a control". */
+	.inset {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		background: var(--input-bg);
+		border: 1px solid var(--card-border);
+		border-radius: 10px;
+		padding: 11px 14px;
+	}
+
+	.inset-label { font-size: 0.7em; color: var(--fg-muted); }
+	.inset-value { font-size: 0.85em; margin-top: 2px; }
+
+	.link-tile { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+
+	.link-row {
+		display: block;
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		border-radius: 10px;
+		padding: 12px 14px;
+		text-decoration: none;
+		color: var(--fg);
+		transition: background 0.2s ease, box-shadow 0.2s ease;
+	}
+
+	.link-row:hover,
+	.link-row:focus-visible {
+		background: var(--glass-bg-hover);
+		box-shadow: 0 0 26px var(--glow-strong);
+	}
+
+	.link-row strong { display: block; font-size: 0.85em; }
+	.link-row span { font-size: 0.72em; color: var(--fg-muted); }
+
+	/* Landscape: width against height rather than a pixel threshold.
+	   A phone can report more CSS pixels than an old desktop monitor,
+	   so any fixed number would misjudge real devices in both
+	   directions. */
+	@media (orientation: landscape) {
+		.bento-row.two { grid-template-columns: 1.3fr 1fr; }
+		.bento-row.three { grid-template-columns: 1fr 1fr 1fr; }
+	}
+
 	.panel { width: 100%; max-width: 460px; }
 
 	h1 { font-weight: 300; font-size: 28px; margin: 0; }
@@ -1104,6 +1278,8 @@ function startAdminFace() {
 	app.get("/", async (req, res) => {
 		const settings = readSettings();
 		const installedFont = fontService.installedFont();
+		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
+		const update = updateStore.lastResult(process.env.OMNICORE_VERSION);
 
 		// Location: show what OmniCore currently believes, so it's
 		// obvious whether automatic detection actually worked
@@ -1112,9 +1288,8 @@ function startAdminFace() {
 		const currentText = !settings.locationEnabled
 			? "Location services are off."
 			: current
-			? `Currently ${current.label || "unnamed"} — ` +
-			  `${current.latitude.toFixed(3)}, ${current.longitude.toFixed(3)}` +
-			  ` (${current.source === "auto" ? "detected" : "set by hand"})`
+			? `${current.label || "Unnamed"} — ` +
+			  `${current.latitude.toFixed(3)}, ${current.longitude.toFixed(3)}`
 			: "No location available. Detection may have failed.";
 
 		const manualLocation = settings.locationMode === "manual";
@@ -1122,184 +1297,275 @@ function startAdminFace() {
 		const bottomRight = settings.backButtonCorner !== "top-left";
 
 		const body = `
-			<div class="panel">
+			<div class="settings-head">
 				<h1>Settings</h1>
+				<button class="version-pill" id="version-pill"
+					title="Updates">
+					<span class="version-dot"></span>
+					OmniCore ${escapeHtml(running)}${
+						update.updateAvailable ? " · update ready" : ""
+					}
+				</button>
 			</div>
 
-			<div class="panel">
-				<h2 style="margin-bottom:14px">Location Service</h2>
+			<div class="bento">
+				<div class="bento-row two">
+					<div class="tile">
+						<h2>Location Service</h2>
+						<p class="lede">
+							Used by weather and prayer-time modules to know where
+							you are. Turn it off and OmniCore never looks one up
+							and never hands one out.
+						</p>
 
-				<label class="option">
-					<input type="checkbox" id="enabled"
-						${settings.locationEnabled ? "checked" : ""}>
-					<span>Let OmniCore know where it is</span>
-				</label>
-
-				<div class="help" style="margin-bottom:18px">
-					Modules like weather and prayer times ask OmniCore for a
-					location rather than working it out themselves. Turn this
-					off and OmniCore never looks one up and never hands one
-					out — those modules will have nothing to go on unless you
-					give each of them coordinates directly.
-				</div>
-
-				<div id="detail" style="${settings.locationEnabled ? "" : "display:none"}">
-					<div class="tabs" id="location-mode-tabs" style="margin-bottom:8px">
-						<button type="button" class="tab-btn ${manualLocation ? "" : "active"}"
-							data-value="auto">Work it out automatically</button>
-						<button type="button" class="tab-btn ${manualLocation ? "active" : ""}"
-							data-value="manual">Set it myself</button>
-					</div>
-
-					<div class="help" style="margin:10px 0 18px 0">
-						Automatic uses the server's public IP address, which is
-						usually close enough — but not if you're behind a VPN,
-						in which case set it by hand.
-					</div>
-
-					<div id="coords" style="${manualLocation ? "" : "display:none"}">
-						<div class="field">
-							<label for="city">Search for a city</label>
-							<div class="search-row">
-								<input type="text" id="city" placeholder="Regina">
-								<button class="glass" style="width:auto;padding:12px 20px"
-									id="search">Search</button>
-							</div>
-							<div id="results"></div>
-						</div>
-						<div class="field">
-							<label for="label">Place name</label>
-							<input type="text" id="label"
-								value="${escapeHtml(settings.locationLabel || "")}"
-								placeholder="Home">
-						</div>
-						<div class="field" style="display:flex;gap:12px">
-							<div style="flex:1">
-								<label for="latitude">Latitude</label>
-								<input type="number" step="any" id="latitude"
-									value="${escapeHtml(
-										settings.latitude === null ? "" : settings.latitude
-									)}">
-							</div>
-							<div style="flex:1">
-								<label for="longitude">Longitude</label>
-								<input type="number" step="any" id="longitude"
-									value="${escapeHtml(
-										settings.longitude === null ? "" : settings.longitude
-									)}">
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<p class="lede" style="margin-bottom:18px">${escapeHtml(currentText)}</p>
-
-				<button class="glass" id="save-location">Save</button>
-				<p class="status" id="location-status"></p>
-			</div>
-
-			<div class="panel">
-				<h2 style="margin-bottom:14px">Appearance</h2>
-				<p class="lede" style="margin-bottom:18px">
-					How OmniCore's own screens look. Dashboard faces are
-					unaffected, since their appearance belongs to whichever
-					theme they run.
-				</p>
-
-				<div class="field">
-					<strong>Mode</strong>
-					<div style="margin-top:6px">
-						<label class="switch">
-							<input type="checkbox" id="mode-switch" ${lightMode ? "checked" : ""}>
-							<span class="switch-track"><span class="switch-knob"></span></span>
-							<span id="mode-label">${lightMode ? "Light" : "Dark"}</span>
+						<label class="option" style="margin-bottom:14px">
+							<input type="checkbox" id="enabled"
+								${settings.locationEnabled ? "checked" : ""}>
+							<span>Let OmniCore know where it is</span>
 						</label>
+
+						<div id="location-detail"
+							style="${settings.locationEnabled ? "" : "display:none"}">
+							<div class="tabs" id="location-mode-tabs"
+								style="margin-bottom:14px">
+								<button type="button" class="tab-btn ${
+									manualLocation ? "" : "active"
+								}" data-value="auto">Work it out automatically</button>
+								<button type="button" class="tab-btn ${
+									manualLocation ? "active" : ""
+								}" data-value="manual">Set it myself</button>
+							</div>
+
+							<div class="inset">
+								<div>
+									<div class="inset-label">CURRENTLY ${
+										manualLocation ? "SET" : "DETECTED"
+									}</div>
+									<div class="inset-value" id="location-value">${escapeHtml(
+										currentText
+									)}</div>
+								</div>
+								<button class="glass" id="location-action"
+									style="flex-shrink:0;padding:8px 14px;font-size:0.78em">
+									${manualLocation ? "Change" : "Refresh"}
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<div class="tile">
+						<h2>Appearance Mode</h2>
+						<p class="lede">
+							Dashboards are unaffected — how they look belongs to
+							whichever theme they run.
+						</p>
+						<div class="mode-previews">
+							<div class="mode-preview ${lightMode ? "" : "active"}"
+								data-mode="dark" role="button" tabindex="0">
+								<div class="mode-screen" style="background:#0c0d10">
+									<span style="width:40%;height:5px;background:rgba(255,255,255,0.8)"></span>
+									<span style="width:70%;height:4px;background:rgba(255,255,255,0.3)"></span>
+									<span style="width:55%;height:4px;background:rgba(255,255,255,0.3)"></span>
+								</div>
+								<div class="mode-preview-label">Dark${
+									lightMode ? "" : " (Active)"
+								}</div>
+							</div>
+							<div class="mode-preview ${lightMode ? "active" : ""}"
+								data-mode="light" role="button" tabindex="0">
+								<div class="mode-screen" style="background:#e5e7eb">
+									<span style="width:40%;height:5px;background:#4b5563"></span>
+									<span style="width:70%;height:4px;background:#9ca3af"></span>
+									<span style="width:55%;height:4px;background:#9ca3af"></span>
+								</div>
+								<div class="mode-preview-label">Light${
+									lightMode ? " (Active)" : ""
+								}</div>
+							</div>
+						</div>
 					</div>
 				</div>
 
-				<div class="field">
-					<strong>Position of back button</strong>
-					<div class="tabs" id="corner-tabs" style="margin-top:6px">
-						<button type="button" class="tab-btn ${bottomRight ? "active" : ""}"
-							data-value="bottom-right">Bottom right</button>
-						<button type="button" class="tab-btn ${bottomRight ? "" : "active"}"
-							data-value="top-left">Top left</button>
+				<div class="bento-row three">
+					<div class="tile">
+						<h2>Back Button Position</h2>
+						<div class="corner-map" id="corner-map">
+							<button type="button" class="corner-tl ${
+								bottomRight ? "" : "active"
+							}" data-value="top-left">&#8598; Top left</button>
+							<button type="button" class="corner-tr" disabled>Top right</button>
+							<button type="button" class="corner-bl" disabled>Bottom left</button>
+							<button type="button" class="corner-br ${
+								bottomRight ? "active" : ""
+							}" data-value="bottom-right">Bottom right &#8600;</button>
+						</div>
+						<p class="hint" style="margin-top:8px">
+							Bottom left is reserved for the welcome face's countdown.
+						</p>
 					</div>
-					<span class="hint">
-						Other corners are reserved for other components of
-						the system.
-					</span>
-				</div>
 
-				<div class="field">
-					<strong>Text size</strong>
-					<span class="hint">Not related to the font size of the dashboards.</span>
-					<div class="stepper">
-						<button type="button" class="glass" id="size-down" aria-label="Smaller">&#8722;</button>
-						<input type="number" id="size" min="12" max="24" step="1"
-							value="${Number(settings.uiFontSize) || 16}">
-						<span class="muted">px</span>
-						<button type="button" class="glass" id="size-up" aria-label="Larger">&#43;</button>
+					<div class="tile">
+						<h2>Text Size &amp; Typography</h2>
+						<div class="stepper" style="margin-bottom:10px">
+							<button type="button" class="glass" id="size-down"
+								aria-label="Smaller">&#8722;</button>
+							<input type="number" id="size" min="12" max="24" step="1"
+								value="${Number(settings.uiFontSize) || 16}">
+							<span class="muted">px</span>
+							<button type="button" class="glass" id="size-up"
+								aria-label="Larger">&#43;</button>
+						</div>
+						<p class="hint" style="margin-bottom:12px">
+							Applies immediately. Dashboards are unaffected.
+						</p>
+						<div class="inset">
+							<div>
+								<div class="inset-label">FONT</div>
+								<div class="inset-value">${
+									installedFont
+										? escapeHtml(installedFont.family)
+										: "System font"
+								}</div>
+							</div>
+							<button class="glass" id="change-font"
+								style="flex-shrink:0;padding:8px 14px;font-size:0.78em">
+								Change
+							</button>
+						</div>
+					</div>
+
+					<div class="tile link-tile">
+						<a class="link-row" href="/faces">
+							<strong>Manage Faces (Dashboards)</strong>
+							<span>Create, edit and remove dashboards</span>
+						</a>
+						<a class="link-row" id="about-link" href="#">
+							<strong>About OmniCore</strong>
+							<span>Installed resources &amp; system info</span>
+						</a>
 					</div>
 				</div>
+			</div>
 
-				<div class="field">
-					<strong>Font</strong>
-					<p id="current">
-						${
-							installedFont
-								? `Using <strong>${escapeHtml(installedFont.family)}</strong>`
-								: "Using the system font"
-						}
+			<div class="modal-backdrop" id="font-modal" hidden>
+				<div class="modal">
+					<div class="modal-head">
+						<h2>Choose a font</h2>
+						<button class="modal-close" data-close="font-modal"
+							aria-label="Close">&times;</button>
+					</div>
+					<p class="hint" style="margin:0">
+						Downloaded once and served by OmniCore itself, so it keeps
+						working with no internet.
 					</p>
 					<input class="market-search" id="font-q"
 						placeholder="Search Google Fonts...">
 					<div class="list" id="font-results"></div>
 					${
 						installedFont
-							? `<button class="glass" id="clear-font">
-									Back to the system font
-								</button>`
+							? `<button class="glass" id="clear-font">Back to the system font</button>`
 							: ""
 					}
+					<p class="status" id="font-status"></p>
 				</div>
-
-				<p class="status" id="appearance-status"></p>
 			</div>
 
-			<div class="panel">
-				<a class="glass" href="/installed"
-					style="display:block;text-align:center;box-sizing:border-box;margin-bottom:10px">
-					Installed Resources
-				</a>
-				<a class="glass" href="/faces"
-					style="display:block;text-align:center;box-sizing:border-box;margin-bottom:10px">
-					Manage Faces (Dashboards)
-				</a>
-				<button class="glass" onclick="goToAbout()"
-					style="display:block;width:100%;text-align:center;box-sizing:border-box">
-					About
-				</button>
-			</div>
-
-			<div class="panel" style="text-align:center">
-				<span class="muted" style="font-size:0.85em">
-					OmniCore ${escapeHtml(process.env.OMNICORE_VERSION || "dev")}
-				</span>
+			<div class="modal-backdrop" id="location-modal" hidden>
+				<div class="modal">
+					<div class="modal-head">
+						<h2>Set the location</h2>
+						<button class="modal-close" data-close="location-modal"
+							aria-label="Close">&times;</button>
+					</div>
+					<div class="field">
+						<label for="city">Search for a city</label>
+						<div class="search-row">
+							<input type="text" id="city" placeholder="Regina">
+							<button class="glass" style="width:auto;padding:12px 20px"
+								id="search">Search</button>
+						</div>
+						<div id="results"></div>
+					</div>
+					<div class="field">
+						<label for="label">Place name</label>
+						<input type="text" id="label"
+							value="${escapeHtml(settings.locationLabel || "")}"
+							placeholder="Home">
+					</div>
+					<div class="field" style="display:flex;gap:12px">
+						<div style="flex:1">
+							<label for="latitude">Latitude</label>
+							<input type="number" step="any" id="latitude"
+								value="${escapeHtml(
+									settings.latitude === null ? "" : settings.latitude
+								)}">
+						</div>
+						<div style="flex:1">
+							<label for="longitude">Longitude</label>
+							<input type="number" step="any" id="longitude"
+								value="${escapeHtml(
+									settings.longitude === null ? "" : settings.longitude
+								)}">
+						</div>
+					</div>
+					<button class="glass" id="save-location">Save</button>
+					<p class="status" id="location-status"></p>
+				</div>
 			</div>`;
 
 		const script =
 			portLinkScript +
 			`
-			function goToAbout() { location.href = faceUrl(1303); }
+			// --- Modals ---------------------------------------------
+			function openModal(id) {
+				document.getElementById(id).hidden = false;
+			}
+
+			function closeModal(id) {
+				document.getElementById(id).hidden = true;
+			}
+
+			for (const button of document.querySelectorAll("[data-close]")) {
+				button.addEventListener("click", function () {
+					closeModal(button.dataset.close);
+				});
+			}
+
+			// Clicking the dimmed area closes; clicking the panel itself
+			// must not, or every click inside would dismiss it
+			for (const backdrop of document.querySelectorAll(".modal-backdrop")) {
+				backdrop.addEventListener("click", function (event) {
+					if (event.target === backdrop) {
+						backdrop.hidden = true;
+					}
+				});
+			}
+
+			document.addEventListener("keydown", function (event) {
+				if (event.key === "Escape") {
+					for (const backdrop of document.querySelectorAll(".modal-backdrop")) {
+						backdrop.hidden = true;
+					}
+				}
+			});
+
+			// --- Navigation -----------------------------------------
+			document.getElementById("version-pill").addEventListener("click", function () {
+				location.href = "/updates";
+			});
+
+			document.getElementById("about-link").addEventListener("click", function (event) {
+				event.preventDefault();
+				location.href = faceUrl(1303);
+			});
 
 			// --- Location -------------------------------------------
 			const enabled = document.getElementById("enabled");
-			const detail = document.getElementById("detail");
-			const coords = document.getElementById("coords");
+			const detail = document.getElementById("location-detail");
 
 			enabled.addEventListener("change", function () {
 				detail.style.display = this.checked ? "" : "none";
+				saveLocation({ locationEnabled: this.checked });
 			});
 
 			let locationMode = ${JSON.stringify(manualLocation ? "manual" : "auto")};
@@ -1311,12 +1577,51 @@ function startAdminFace() {
 					}
 					tab.classList.add("active");
 					locationMode = tab.dataset.value;
-					coords.style.display = locationMode === "manual" ? "" : "none";
+
+					// Choosing "set it myself" is the moment someone needs
+					// the fields, so open them rather than making them
+					// hunt for a second thing to click
+					if (locationMode === "manual") {
+						openModal("location-modal");
+					} else {
+						saveLocation({ locationMode: "auto" });
+					}
 				});
 			}
 
-			// City lookup fills in the coordinates and the place name, so
-			// nobody has to go and find them by hand
+			document.getElementById("location-action").addEventListener("click", function () {
+				if (locationMode === "manual") {
+					openModal("location-modal");
+					return;
+				}
+
+				// Automatic mode: re-run detection rather than showing
+				// whatever was cached when the page loaded
+				this.disabled = true;
+				this.textContent = "...";
+				saveLocation({ locationMode: "auto" });
+			});
+
+			async function saveLocation(patch) {
+				const body = Object.assign({
+					locationEnabled: enabled.checked,
+					locationMode: locationMode,
+					locationLabel: document.getElementById("label").value,
+					latitude: document.getElementById("latitude").value,
+					longitude: document.getElementById("longitude").value
+				}, patch || {});
+
+				const response = await fetch("/location", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(body)
+				});
+
+				if (response.ok) {
+					location.reload();
+				}
+			}
+
 			let matches = [];
 
 			async function runSearch() {
@@ -1369,102 +1674,83 @@ function startAdminFace() {
 			});
 
 			document.getElementById("save-location").addEventListener("click", async function () {
-				const button = this;
 				const status = document.getElementById("location-status");
-
-				button.disabled = true;
+				this.disabled = true;
 				status.textContent = "";
-				status.className = "status";
 
 				try {
-					const response = await fetch("/location", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							locationEnabled: enabled.checked,
-							locationMode: locationMode,
-							locationLabel: document.getElementById("label").value,
-							latitude: document.getElementById("latitude").value,
-							longitude: document.getElementById("longitude").value
-						})
-					});
-
-					if (!response.ok) throw new Error();
-
-					// Reload so the "currently" line reflects what was saved
-					location.reload();
+					await saveLocation({ locationMode: "manual" });
 				} catch (error) {
 					status.textContent = "Couldn't save.";
 					status.className = "status bad";
-					button.disabled = false;
+					this.disabled = false;
 				}
 			});
 
 			// --- Appearance -------------------------------------------
-			var appearanceStatus = document.getElementById("appearance-status");
-
-			function sayAppearance(text) { appearanceStatus.textContent = text; }
-
-			// Every change saves immediately and reloads, because the
-			// page you are looking at IS the thing being changed --
-			// showing the new setting is the confirmation.
-			async function saveAppearance(patch, reload) {
-				const res = await fetch("/appearance", {
+			async function saveAppearance(patch) {
+				const response = await fetch("/appearance", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(patch)
 				});
 
-				if (!res.ok) {
-					sayAppearance("Could not save that.");
-					return;
+				if (response.ok) {
+					location.reload();
 				}
-
-				if (reload !== false) { location.reload(); }
 			}
 
-			var modeSwitch = document.getElementById("mode-switch");
-			var modeLabel = document.getElementById("mode-label");
+			for (const preview of document.querySelectorAll(".mode-preview")) {
+				const choose = function () {
+					saveAppearance({ uiMode: preview.dataset.mode });
+				};
 
-			modeSwitch.addEventListener("change", function () {
-				modeLabel.textContent = modeSwitch.checked ? "Light" : "Dark";
-				saveAppearance({ uiMode: modeSwitch.checked ? "light" : "dark" });
-			});
-
-			for (const tab of document.querySelectorAll("#corner-tabs .tab-btn")) {
-				tab.addEventListener("click", function () {
-					for (const sibling of tab.parentElement.children) {
-						sibling.classList.remove("active");
+				preview.addEventListener("click", choose);
+				preview.addEventListener("keydown", function (event) {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						choose();
 					}
-					tab.classList.add("active");
-					saveAppearance({ backButtonCorner: tab.dataset.value });
 				});
 			}
 
-			var size = document.getElementById("size");
-			var sizeDown = document.getElementById("size-down");
-			var sizeUp = document.getElementById("size-up");
+			for (const corner of document.querySelectorAll("#corner-map button[data-value]")) {
+				corner.addEventListener("click", function () {
+					saveAppearance({ backButtonCorner: corner.dataset.value });
+				});
+			}
 
-			// Typing a value in directly and tabbing away saves it, same
-			// as any other field
+			const size = document.getElementById("size");
+
 			size.addEventListener("change", function () {
-				var clamped = Math.min(24, Math.max(12, Number(size.value) || 16));
+				const clamped = Math.min(24, Math.max(12, Number(size.value) || 16));
 				size.value = clamped;
 				saveAppearance({ uiFontSize: clamped });
 			});
 
 			function stepSize(delta) {
-				var next = Math.min(24, Math.max(12, Number(size.value) + delta));
+				const next = Math.min(24, Math.max(12, Number(size.value) + delta));
 				size.value = next;
 				saveAppearance({ uiFontSize: next });
 			}
 
-			sizeDown.addEventListener("click", function () { stepSize(-1); });
-			sizeUp.addEventListener("click", function () { stepSize(1); });
+			document.getElementById("size-down").addEventListener("click", function () {
+				stepSize(-1);
+			});
+			document.getElementById("size-up").addEventListener("click", function () {
+				stepSize(1);
+			});
 
-			var fontResults = document.getElementById("font-results");
-			var fontQuery = document.getElementById("font-q");
-			var fontSearchTimer = null;
+			// --- Fonts -------------------------------------------------
+			document.getElementById("change-font").addEventListener("click", function () {
+				openModal("font-modal");
+				document.getElementById("font-q").focus();
+			});
+
+			const fontResults = document.getElementById("font-results");
+			const fontQuery = document.getElementById("font-q");
+			const fontStatus = document.getElementById("font-status");
+			let fontSearchTimer = null;
 
 			function renderFonts(fonts) {
 				if (!fonts.length) {
@@ -1472,10 +1758,6 @@ function startAdminFace() {
 					return;
 				}
 
-				// One line per font: name on the left, category on
-				// the right, same row -- not stacked, so a long list
-				// of results reads at a glance rather than taking two
-				// lines each
 				fontResults.innerHTML = fonts.map(function (font) {
 					return '<div class="card font-row" onclick="pickFont(' +
 						JSON.stringify(font.family).replace(/"/g, "&quot;") +
@@ -1489,48 +1771,53 @@ function startAdminFace() {
 			fontQuery.addEventListener("input", function () {
 				clearTimeout(fontSearchTimer);
 				fontSearchTimer = setTimeout(async function () {
-					if (!fontQuery.value.trim()) { fontResults.innerHTML = ""; return; }
+					if (!fontQuery.value.trim()) {
+						fontResults.innerHTML = "";
+						return;
+					}
 
-					sayAppearance("Searching...");
+					fontStatus.textContent = "Searching...";
+
 					try {
-						const res = await fetch("/fonts/search?q=" +
+						const response = await fetch("/fonts/search?q=" +
 							encodeURIComponent(fontQuery.value));
-						const data = await res.json();
+						const data = await response.json();
 
-						if (!res.ok) {
-							sayAppearance(data.error || "Could not reach Google Fonts.");
+						if (!response.ok) {
+							fontStatus.textContent =
+								data.error || "Could not reach Google Fonts.";
 							fontResults.innerHTML = "";
 							return;
 						}
 
-						sayAppearance("");
+						fontStatus.textContent = "";
 						renderFonts(data);
 					} catch (error) {
-						sayAppearance("Could not reach Google Fonts.");
+						fontStatus.textContent = "Could not reach Google Fonts.";
 					}
 				}, 300);
 			});
 
 			window.pickFont = async function (family) {
-				sayAppearance("Downloading " + family + "...");
+				fontStatus.textContent = "Downloading " + family + "...";
 
-				const res = await fetch("/fonts", {
+				const response = await fetch("/fonts", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({ family: family })
 				});
 
-				const data = await res.json();
+				const data = await response.json();
 
-				if (!res.ok) {
-					sayAppearance(data.error || "Could not install that font.");
+				if (!response.ok) {
+					fontStatus.textContent = data.error || "Could not install that font.";
 					return;
 				}
 
 				location.reload();
 			};
 
-			var clearFont = document.getElementById("clear-font");
+			const clearFont = document.getElementById("clear-font");
 			if (clearFont) {
 				clearFont.addEventListener("click", async function () {
 					await fetch("/fonts", { method: "DELETE" });
@@ -1541,6 +1828,7 @@ function startAdminFace() {
 
 		res.send(page("Settings", body, script, "", "/logout", "Sign Out"));
 	});
+
 
 	app.post("/appearance", (req, res) => {
 		const body = req.body || {};

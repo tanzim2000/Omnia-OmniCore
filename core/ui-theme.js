@@ -495,6 +495,72 @@ function uiStyles(options) {
 	   later that needs the same shape) rather than a slider — a slider
 	   is for a continuous range you drag through; this is a small set
 	   of discrete steps someone taps through one at a time. */
+	/* ---------------------------------------------------------------
+	   Modal — a floating panel over a dimmed backdrop.
+
+	   Used where a control needs more room than its tile can give it
+	   without the tile growing and shoving the rest of the layout
+	   around: the font picker's results list, the location search.
+	   Centred rather than anchored under whatever opened it, since a
+	   tile's position varies with the layout and an anchored panel
+	   would clip at the screen edge.
+	   --------------------------------------------------------------- */
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		backdrop-filter: blur(3px);
+		-webkit-backdrop-filter: blur(3px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1.5em;
+		z-index: 100;
+	}
+
+	.modal-backdrop[hidden] { display: none; }
+
+	.modal {
+		width: 100%;
+		max-width: 26em;
+		max-height: 80vh;
+		display: flex;
+		flex-direction: column;
+		gap: 0.9em;
+		background: var(--bg);
+		border: 1px solid var(--glass-border);
+		border-radius: var(--radius);
+		box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+		padding: 1.4em;
+	}
+
+	.modal h2 { margin: 0; font-size: 1.05em; font-weight: 600; }
+
+	.modal-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+	}
+
+	/* Deliberately not a .glass button: closing is the least important
+	   thing on the panel, and a glowing button would pull the eye
+	   before the thing someone actually opened it for. */
+	.modal-close {
+		appearance: none;
+		-webkit-appearance: none;
+		background: transparent;
+		border: none;
+		color: var(--fg-muted);
+		font-size: 1.3em;
+		line-height: 1;
+		padding: 0.2em 0.4em;
+		cursor: pointer;
+		border-radius: 6px;
+	}
+
+	.modal-close:hover { color: var(--fg); background: var(--glass-bg); }
+
 	.stepper {
 		display: flex;
 		align-items: center;

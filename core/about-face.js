@@ -97,9 +97,9 @@ function systemRow(icon, label, value) {
 // a page should never cost a call to GitHub, and the scheduler is
 // already checking every six hours anyway.
 //
-// The link goes to the admin face, not anywhere on this one. Anything
-// with real depth belongs behind the login that already exists there;
-// this face stays public and read-only.
+// Not a link. Managing updates lives in Settings, behind the login
+// that already exists there — this face stays public and read-only,
+// and a dot is as much as a public page should say about it.
 function versionStat(info) {
 	const update = updateStore.lastResult(info.version);
 	const dot = update.updateAvailable
@@ -107,10 +107,10 @@ function versionStat(info) {
 		: "";
 
 	return `
-		<a class="stat stat-link" id="version-tile" href="#">
+		<div class="stat">
 			<div class="stat-label">OmniCore${dot}</div>
 			<div class="stat-value">${escapeHtml(info.version.replace(/^v/, ""))}</div>
-		</a>`;
+		</div>`;
 }
 
 function renderPage(info) {
@@ -174,14 +174,6 @@ function renderPage(info) {
 		if (back) {
 			back.addEventListener("click", function () {
 				location.href = faceUrl(${ADMIN_PORT});
-			});
-		}
-
-		var versionTile = document.getElementById("version-tile");
-		if (versionTile) {
-			versionTile.addEventListener("click", function (event) {
-				event.preventDefault();
-				location.href = faceUrl(${ADMIN_PORT}) + "/updates";
 			});
 		}
 	</script>
