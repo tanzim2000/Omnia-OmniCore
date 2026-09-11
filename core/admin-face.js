@@ -205,6 +205,16 @@ const styles = `
 		padding: 11px 14px;
 	}
 
+	/* Without flex-basis a flex item won't shrink past its own content's
+	   natural width by default -- backwards here, since the long value
+	   is exactly the thing that should take the available space and
+	   wrap sensibly, not get squeezed into a few characters per line
+	   while the short button sits at whatever width is left over.
+	   min-width: 0 is what actually lets it shrink at all; flex-basis
+	   0 is what lets it grow to fill the row rather than sizing to its
+	   unwrapped content first. */
+	.inset-text { flex: 1 1 0; min-width: 0; }
+
 	.inset-label { font-size: 0.7em; color: var(--fg-muted); }
 	.inset-value { font-size: 0.85em; margin-top: 2px; }
 
@@ -1337,7 +1347,7 @@ function startAdminFace() {
 							</div>
 
 							<div class="inset">
-								<div>
+								<div class="inset-text">
 									<div class="inset-label">CURRENTLY ${
 										manualLocation ? "SET" : "DETECTED"
 									}</div>
@@ -1419,7 +1429,7 @@ function startAdminFace() {
 							Applies immediately. Dashboards are unaffected.
 						</p>
 						<div class="inset">
-							<div>
+							<div class="inset-text">
 								<div class="inset-label">FONT</div>
 								<div class="inset-value">${
 									installedFont
