@@ -1,6 +1,6 @@
 {
   "name": "omnia-omnicore",
-  "version": "1.11.1",
+  "version": "1.12.1",
   "description": "Modular, config-driven backend for the Omnia home dashboard ecosystem.",
   "main": "start.OmniCore",
   "scripts": {

@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.12.1
+
+The v1.12.0 tag went out with a stale package.json version and no changelog entry of its own, so this corrects both. See v1.12.0 below for what that release actually shipped -- nothing here beyond the correction itself.
+
+## v1.12.0
+
+Settings and the setup wizard both rebuilt, and brought onto one shared component library rather than two separate ones.
+
+### Added
+
+- **Settings is now a grid of tiles rather than one long column**, everything on one screen with nothing behind a tab or a scroll. Location Service, Appearance Mode, Back Button Position, Text Size and the font picker each get their own tile; landscape switches to a wider grid on screen orientation rather than a pixel threshold, since a phone can report more CSS pixels than an older desktop monitor.
+- **The font picker and manual location entry now open in floating panels** instead of expanding inside their tiles, so a long list of search results can't shove the rest of the layout around. Font search results render live in their own real typeface, fetched from Google for the results actually shown -- safe since the search itself is already an online-only action, and separate from the guarantee that the one font someone actually installs works with no internet afterward.
+- **The version tile links through to a real Updates page**, showing what's running, when it was last checked, when it started, and release notes for both the running and offered versions. A manual check only ever checks; applying an update stays the scheduler's job, so no button anywhere can swap a container mid-click. A failed check is reported as a failure, never as if everything were up to date.
+- **The resource update check shows real progress** instead of running silently for thirty seconds: a live countdown for the deliberate startup delay, a spinner during the registry fetch, and a genuine per-item bar when something is actually being installed.
+- **The setup wizard is rebuilt on the same shared components as Settings**, closing out something flagged as future work back when the wizard was first split onto its own port. Its own ~300-line stylesheet is gone. The module picker and per-module settings steps now split the screen in two and divide by orientation -- vertically in landscape, horizontally in portrait -- filling the space rather than sizing to content, since a wizard step is one task to focus on rather than a page to scan. Long lists inside them scroll within their own space instead of growing the whole page.
+- **A capsule navigation dock** for the wizard's Cancel/Back/Next/Finish, replacing separate buttons: one continuous pill, a fixed width so the page doesn't shift underfoot between steps, with Back hidden rather than shown disabled on the first step.
+
+### Fixed
+
+- A stale duplicate `.glass` rule in admin-face.js, left over from before the shared component library existed, was silently overriding the real one and forcing every button to full width.
+- The corner-position picker used a flat black background regardless of theme, which read fine in dark mode by accident and as a muddy, disabled-looking patch in light mode.
+- The version pill's text was inheriting the browser's native button colour rather than the theme's, readable in light mode only by coincidence.
+- The update-available indicator dot rendered unconditionally; only the text next to it was ever actually conditional on an update existing.
+- The test suite could silently write real faces and modules into local project folders instead of its own sandbox, which happened more than once during this work.
+
 ## v1.11.1
 
 Small fix for the About face. Neither the back button nor the version tile worked at all. The script wiring both up ran before the back button existed in the page, since it sat above the button in the HTML; the resulting error on its first line silently killed the rest of the script, including the version tile's own listener right below it. Fixed by putting the button before the script, with a defensive null check added as a second line of defence against the same class of mistake recurring.
