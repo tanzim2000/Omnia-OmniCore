@@ -260,8 +260,6 @@ const styles = `
 
 	.panel { width: 100%; max-width: 460px; }
 
-	h1 { font-weight: 300; font-size: 28px; margin: 0; }
-	.lede { opacity: 0.55; font-size: 14px; margin: 10px 0 0 0; }
 
 	a { color: var(--fg); text-decoration: none; }
 
@@ -300,22 +298,6 @@ const styles = `
 		pointer-events: none;
 	}
 
-	.field { margin-bottom: 20px; }
-
-	.option {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 10px 16px;
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		margin-bottom: 8px;
-		cursor: pointer;
-		font-size: 15px;
-	}
-
-	.option:hover { background: var(--hover-subtle); }
-	.option input { width: 17px; height: 17px; }
 
 	/* A reorderable priority list. Deliberately looks like .option rows,
 	   since it's the same kind of choice made a different way. */
@@ -360,75 +342,9 @@ const styles = `
 
 	.priority-move:disabled { opacity: 0.2; cursor: default; }
 
-	label {
-		display: block;
-		font-size: 14px;
-		opacity: 0.7;
-		margin-bottom: 8px;
-	}
-
-	.help { font-size: 12px; opacity: 0.45; margin-top: 6px; }
-
-	input[type="text"],
-	input[type="url"],
-	input[type="number"],
-	input[type="password"],
-	select {
-		width: 100%;
-		box-sizing: border-box;
-		background: var(--glass-bg);
-		border: 1px solid var(--glass-border);
-		border-radius: 10px;
-		color: var(--fg);
-		font-size: 16px;
-		padding: 12px 16px;
-	}
-
-	input[type="checkbox"] { width: 18px; height: 18px; }
-
-	input[type="color"] {
-		width: 100%;
-		height: 46px;
-		background: var(--glass-bg);
-		border: 1px solid var(--glass-border);
-		border-radius: 10px;
-		padding: 4px;
-		cursor: pointer;
-	}
-
-	/* Dropdown options fall back to the browser's own popup colours unless
-	   we say otherwise, which means white on white in a dark interface */
-	option {
-		background: var(--bg);
-		color: var(--fg);
-	}
 
 
 	.back { font-size: 14px; opacity: 0.6; }
-	.empty { opacity: 0.5; font-size: 14px; }
-
-	.search-row { display: flex; gap: 8px; }
-	.search-row input { flex: 1; }
-
-	.result {
-		display: block;
-		width: 100%;
-		text-align: left;
-		background: var(--input-bg);
-		border: 1px solid var(--card-border);
-		border-radius: 8px;
-		color: var(--fg);
-		font-size: 14px;
-		font-family: inherit;
-		padding: 10px 14px;
-		margin-top: 8px;
-		cursor: pointer;
-	}
-
-	.result:hover { background: var(--card-border); }
-	.status { font-size: 14px; min-height: 20px; margin-top: 14px; }
-	.status.good { color: var(--success); }
-	.status.bad { color: var(--danger); }
 
 	/* Explanatory text under a control — quieter than the label it
 	   belongs to, for the "why" rather than the "what" */

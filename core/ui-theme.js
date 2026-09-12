@@ -517,6 +517,262 @@ function uiStyles(options) {
 	   tile's position varies with the layout and an anchored panel
 	   would clip at the screen edge.
 	   --------------------------------------------------------------- */
+	/* ---------------------------------------------------------------
+	   Form primitives.
+
+	   These lived only in admin-face.js until the wizard was rebuilt on
+	   this library and turned out to need every one of them -- labels,
+	   inputs, .field, .help and the rest. Copying them into the wizard
+	   would have recreated exactly the duplicate-stylesheet problem
+	   that rebuild existed to remove, so they moved here instead, where
+	   both faces read one copy.
+	   --------------------------------------------------------------- */
+	h1 { font-weight: 300; font-size: 1.75em; margin: 0; }
+	.lede { color: var(--fg-muted); font-size: 0.875em; margin: 0.6em 0 0 0; }
+
+	label {
+		display: block;
+		font-size: 0.875em;
+		color: var(--fg-muted);
+		margin-bottom: 8px;
+	}
+
+	.field { margin-bottom: 20px; }
+	.help { font-size: 0.75em; color: var(--fg-muted); margin-top: 6px; }
+	.hint { font-size: 0.75em; color: var(--fg-muted); display: block; }
+	.empty { color: var(--fg-muted); font-size: 0.875em; }
+
+	input[type="text"],
+	input[type="url"],
+	input[type="number"],
+	input[type="password"],
+	select {
+		width: 100%;
+		box-sizing: border-box;
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		border-radius: 10px;
+		color: var(--fg);
+		font-family: inherit;
+		font-size: 1em;
+		padding: 12px 16px;
+	}
+
+	input[type="checkbox"] { width: 18px; height: 18px; }
+
+	input[type="color"] {
+		width: 100%;
+		height: 46px;
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		border-radius: 10px;
+		padding: 4px;
+		cursor: pointer;
+	}
+
+	/* A dropdown's own popup falls back to the browser's colours unless
+	   told otherwise, which means white on white in a dark interface */
+	option {
+		background: var(--bg);
+		color: var(--fg);
+	}
+
+	.option {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 16px;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		margin-bottom: 8px;
+		cursor: pointer;
+		font-size: 0.95em;
+	}
+
+	.option:hover { background: var(--hover-subtle); }
+	.option input { width: 17px; height: 17px; }
+
+	.search-row { display: flex; gap: 8px; }
+	.search-row input { flex: 1; }
+
+	.result {
+		display: block;
+		width: 100%;
+		text-align: left;
+		background: var(--input-bg);
+		border: 1px solid var(--card-border);
+		border-radius: 8px;
+		color: var(--fg);
+		font-size: 0.875em;
+		font-family: inherit;
+		padding: 10px 14px;
+		margin-top: 8px;
+		cursor: pointer;
+	}
+
+	.result:hover { background: var(--card-border); }
+
+	.status { font-size: 0.875em; min-height: 20px; margin-top: 14px; }
+	.status.good { color: var(--success); }
+	.status.bad { color: var(--danger); }
+
+	/* ---------------------------------------------------------------
+	   Step dock — the wizard's navigation, floating at the bottom.
+
+	   One continuous capsule rather than separate pill buttons sitting
+	   inside a larger pill: these are three distinct actions, not a
+	   "pick one and see it highlighted" choice, so nothing in here is
+	   ever filled in or marked active the way a tab would be. The only
+	   separation is a thin rule between labels.
+
+	   The capsule's width doesn't change with how many segments are in
+	   it -- two or three, the outer shape is identical and the
+	   segments inside redistribute. A control that resizes depending
+	   on which step you're on would make the whole page feel like it's
+	   shifting underfoot while moving through a wizard.
+	   --------------------------------------------------------------- */
+	/* Sits in the page's own flow rather than floating over it. Floating
+	   meant reserving bottom padding and trusting no content ever grew
+	   past it -- a bet that lost the moment a step's content was taller
+	   than expected and slid underneath. In flow, overlapping is not a
+	   thing that can happen. */
+	.dock {
+		flex-shrink: 0;
+		display: flex;
+		align-items: stretch;
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		border-radius: 999px;
+		box-shadow:
+			inset 0 1px 0 var(--glass-sheen),
+			0 4px 20px rgba(0, 0, 0, 0.4);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+
+		/* Deliberately NOT overflow: hidden. That would clip each
+		   segment neatly to the pill, but it clips the hover glow too,
+		   cutting off the very thing that makes these read as the same
+		   buttons used everywhere else. The end segments carry the
+		   radius themselves instead, below. */
+
+		/* Portrait: spans the screen with a comfortable margin either
+		   side. Landscape: a settled width rather than stretched across
+		   a wide monitor, where a navigation control the full width of
+		   the screen would be absurd. */
+		width: calc(100vw - 3em);
+		max-width: 26em;
+	}
+
+	@media (orientation: landscape) {
+		.dock { width: 30em; max-width: 30em; }
+	}
+
+	.dock button {
+		appearance: none;
+		-webkit-appearance: none;
+		position: relative;
+		flex: 1 1 0;
+		background: transparent;
+		border: none;
+		color: var(--fg);
+		font-family: inherit;
+		font-size: 0.95em;
+		padding: 1em 0.5em;
+		cursor: pointer;
+		transition: background 0.15s ease, box-shadow 0.2s ease;
+	}
+
+	/* The same light sheen across the top that .glass has. A segment
+	   can't use .glass itself -- that carries its own border, radius
+	   and background, which would draw a separate button inside the
+	   capsule rather than a section of it -- so the glass treatment is
+	   applied to the segment directly. */
+	.dock button::before {
+		content: "";
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 55%;
+		background: linear-gradient(
+			to bottom, var(--glass-sheen-strong), transparent
+		);
+		pointer-events: none;
+	}
+
+	/* The same three-layer treatment .glass uses, so a dock segment
+	   glows exactly like every other button in OmniCore rather than
+	   approximating it. The last layer is the halo -- outward, not
+	   inset: an inset shadow of the same size reads as a dark vignette,
+	   which is the opposite of a glow. */
+	.dock button:hover,
+	.dock button:focus-visible {
+		background: var(--glass-bg-hover);
+		box-shadow:
+			inset 0 1px 0 var(--glass-sheen),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+			0 0 30px var(--glow-strong);
+	}
+
+	/* The divider, drawn as a left border on every segment after the
+	   first -- so it only ever appears BETWEEN labels, and a capsule
+	   with two segments gets exactly one, with no extra work. */
+	.dock button + button { border-left: 1px solid var(--glass-border); }
+
+	/* What overflow: hidden used to do, without clipping the glow. The
+	   sheen (::before) needs the same radius as its button, not just
+	   the button itself -- the sheen is a sharp-cornered rectangle by
+	   default, and with nothing clipping it any more, a square corner
+	   sitting inside a now-rounded button pokes out past the edge. That
+	   stray corner, catching the light from the sheen gradient, is
+	   exactly the odd bright patch this was producing. */
+	.dock button:first-child,
+	.dock button:first-child::before {
+		border-top-left-radius: 999px;
+		border-bottom-left-radius: 999px;
+	}
+
+	.dock button:last-child,
+	.dock button:last-child::before {
+		border-top-right-radius: 999px;
+		border-bottom-right-radius: 999px;
+	}
+
+	.dock button:focus-visible { outline: none; }
+
+	/* ---------------------------------------------------------------
+	   A list that fills the height it's given rather than stopping at
+	   a fixed one.
+
+	   The plain .list above caps at 60vh, which is right when a list
+	   sits inside a tile that's only as tall as its own content. In a
+	   tile that's been stretched to fill the screen, that same cap
+	   would leave a short scrolling list marooned in a tall empty box.
+	   This one grows to whatever its parent gives it and only starts
+	   scrolling once it genuinely runs out.
+	   --------------------------------------------------------------- */
+	.list-fill {
+		flex: 1 1 0;
+		min-height: 0;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 0.6em;
+		border: 1px solid var(--card-border);
+		border-radius: var(--radius);
+		padding: 1em;
+		box-sizing: border-box;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.list-fill::-webkit-scrollbar { width: 8px; }
+	.list-fill::-webkit-scrollbar-track { background: transparent; }
+	.list-fill::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 4px;
+	}
+
 	.modal-backdrop {
 		position: fixed;
 		inset: 0;

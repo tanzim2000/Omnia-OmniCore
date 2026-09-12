@@ -32,153 +32,248 @@ const { listModules } = require("./module-loader");
 const { readManifest, readSchema, applyDefaults } = require("./module-config");
 const { searchCities } = require("./location-service");
 const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
+const { uiStyles } = require("./ui-theme");
 
+// Only what's specific to the wizard. Everything else — glass buttons,
+// cards, inputs, the colour variables, the dock, the lists — comes from
+// the shared Default UI in ui-theme.js, which this is layered on top of.
+//
+// This file used to carry its own complete stylesheet, a copy made back
+// when the wizard was split off port 4000. That was always meant to be
+// temporary: the comment at the top of this file called rebuilding it
+// on the shared components "its own task". This is that task. The
+// duplicate was also actively causing bugs — a stale .glass copy in
+// admin-face.js, the same kind of leftover, silently overrode the real
+// one and forced every button to full width.
 const styles = `
-	* { box-sizing: border-box; }
+	/* The page is exactly the height of the window and never scrolls
+	   itself -- scrolling happens inside whichever region actually has
+	   too much content. Set here unconditionally rather than added by
+	   JavaScript once a step renders: a height that only appears after
+	   the first paint means everything sized against it collapses to
+	   nothing until then, which is exactly what happened when this was
+	   applied by a class from draw(). */
+	html, body { height: 100%; }
 
 	body {
-		background: #000;
-		color: #fff;
-		font-family: system-ui, sans-serif;
-		min-height: 100vh;
 		margin: 0;
-		padding: 40px 24px;
+		padding: 2em 1.5em 1.5em;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 24px;
+		gap: 1.25em;
+		overflow: hidden;
+		box-sizing: border-box;
+
+		/* A wizard is a screen to move through, not a document to read
+		   and copy from */
+		-webkit-user-select: none;
+		-moz-user-select: none;
+		-ms-user-select: none;
+		user-select: none;
 	}
 
-	h1 { font-weight: 300; font-size: 28px; margin: 0; }
-	h2 { font-weight: 400; font-size: 15px; margin: 0 0 14px 0; opacity: 0.6; }
+	.wizard-head { text-align: center; flex-shrink: 0; }
+	.wizard-head h1 { margin: 0; }
 
-	.lede { opacity: 0.55; font-size: 14px; margin: 10px 0 0 0; }
-
-	a { color: #fff; text-decoration: none; }
-
-	.panel { width: 100%; max-width: 900px; }
-	.narrow { max-width: 460px; }
-
-	/* Steps with a single panel are centred; the two-column steps are not,
-	   since a centred pair of wide columns just looks lopsided */
-	body.single { align-items: center; }
-	body.single .panel { display: flex; flex-direction: column; align-items: center; }
-	body.single .actions { justify-content: center; }
-
-	/* The two rounded squares, side by side */
-	.columns {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 20px;
+	/* The step's content takes whatever height is left between the
+	   heading and the dock, and never more. Everything inside it that
+	   needs to scroll measures itself against this. */
+	/* Takes the space between the heading and the dock. Children are
+	   stretched to fill it, which is what gives the split steps' lists
+	   a real height to divide -- without it they have nothing to size
+	   against and collapse to a sliver.
+	   
+	   The two kinds of step want opposite things here, so they say so
+	   individually below rather than sharing one compromise: a split
+	   step is a workspace and should fill the screen, a single tile is
+	   a form and should be only as tall as it needs. */
+	#content {
+		flex: 1 1 auto;
+		min-height: 0;
 		width: 100%;
+		display: flex;
+		justify-content: center;
+		align-items: stretch;
 	}
 
-	.square {
-		border: 1px solid rgba(255, 255, 255, 0.12);
-		border-radius: 16px;
+	/* A split step needs #content to claim all the leftover space, since
+	   that's where its real height comes from. A single tile opting out
+	   of the stretch above wasn't enough on its own -- #content itself
+	   was still claiming that space regardless, just leaving the dead
+	   gap below the tile instead of inside it. This makes #content
+	   itself stop claiming space it has nothing to fill it with,
+	   whenever what's actually inside it is a single tile. */
+	#content:has(> .wizard-single) {
+		flex: 0 1 auto;
+	}
+
+	/* One tile, for the steps that only have one thing to show. It
+	   scrolls inside itself rather than growing the page, the same as
+	   the split steps do -- a long theme form or review list was
+	   previously the one thing that could still push the whole page
+	   taller and slide underneath the dock. */
+	.wizard-single {
+		width: 100%;
+		max-width: clamp(28em, 50vw, 40em);
+		/* Opts out of #content's stretch: a form should be as tall as
+		   its fields and no taller. Stretching it left a short step
+		   standing full height with its content at the top and a large
+		   dead gap above the dock. */
+		align-self: flex-start;
+		max-height: 100%;
+		overflow-y: auto;
+		box-sizing: border-box;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.wizard-single::-webkit-scrollbar { width: 8px; }
+	.wizard-single::-webkit-scrollbar-track { background: transparent; }
+	.wizard-single::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 4px;
+	}
+
+	/* ---------------------------------------------------------------
+	   The two-tile steps.
+
+	   Unlike the settings bento, where tiles size to their own content
+	   and the page scrolls past them, these fill the screen: a wizard
+	   step is one task to focus on now, not a page to scan. Each half
+	   takes an equal share of whatever space there is and stretches to
+	   fill it, so the lists inside them can do the same.
+
+	   Which way they divide follows the screen's own shape rather than
+	   a pixel threshold, for the same reason everywhere else does: a
+	   phone can report more CSS pixels than an older monitor, so any
+	   fixed number misjudges real devices in both directions.
+	   --------------------------------------------------------------- */
+	/* Stays stretched by #content, which is what gives the tiles and
+	   the lists inside them a real height to divide. */
+	.wizard-split {
+		width: 100%;
+		max-width: clamp(40em, 85vw, 72em);
+		min-height: 0;
+		display: flex;
+		gap: 14px;
+
+		/* Portrait: divided horizontally — stacked, each full width */
+		flex-direction: column;
+	}
+
+	@media (orientation: landscape) {
+		/* Landscape: divided vertically — side by side, each full height */
+		.wizard-split { flex-direction: row; }
+	}
+
+	.wizard-split > .tile {
+		flex: 1 1 0;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.tile {
+		background: var(--card-bg);
+		border: 1px solid var(--card-border);
+		border-radius: var(--radius);
 		padding: 20px;
-		min-height: 340px;
 	}
 
-	/* Flat buttons — the module picker. Deliberately plainer than the
-	   glass buttons, which are reserved for moving through the wizard. */
-	.flat {
-		display: block;
-		width: 100%;
-		text-align: left;
-		background: rgba(255, 255, 255, 0.04);
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 8px;
-		color: #fff;
-		font-size: 15px;
-		font-family: inherit;
-		padding: 12px 16px;
-		margin-bottom: 8px;
-		cursor: pointer;
+	.tile h2 {
+		margin: 0 0 14px 0;
+		font-weight: 400;
+		font-size: 0.95em;
+		color: var(--fg-muted);
 	}
 
-	.flat:hover { background: rgba(255, 255, 255, 0.1); }
-	.flat small { display: block; opacity: 0.45; font-size: 12px; margin-top: 3px; }
+	/* The settings form inside a split step scrolls on its own too,
+	   rather than growing its tile past the screen */
+	.tile-scroll {
+		flex: 1 1 0;
+		min-height: 0;
+		overflow-y: auto;
+		padding-right: 0.4em;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
 
-	/* An item in the bucket. Removable while picking, read-only afterwards. */
+	.tile-scroll::-webkit-scrollbar { width: 8px; }
+	.tile-scroll::-webkit-scrollbar-track { background: transparent; }
+	.tile-scroll::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 4px;
+	}
+
+	/* A module in the picker, and a module already added. Same shape on
+	   purpose — it's the same thing, on two sides of one decision. */
+	.flat,
 	.picked {
 		display: block;
 		width: 100%;
 		text-align: left;
-		background: rgba(255, 255, 255, 0.04);
-		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: var(--card-bg);
+		border: 1px solid var(--card-border);
 		border-radius: 8px;
-		color: #fff;
-		font-size: 15px;
+		color: var(--fg);
+		font-size: 0.95em;
 		font-family: inherit;
 		padding: 12px 16px;
-		margin-bottom: 8px;
+		flex-shrink: 0;
 	}
 
-	.picked.removable { cursor: pointer; }
+	.flat { cursor: pointer; transition: background 0.15s ease; }
+	.flat:hover { background: var(--glass-bg); }
+
+	.flat small,
+	.picked small {
+		display: block;
+		color: var(--fg-muted);
+		font-size: 0.8em;
+		margin-top: 3px;
+	}
+
+	/* Removing is destructive, so it says so on hover rather than
+	   looking like every other clickable row */
+	.picked.removable { cursor: pointer; transition: background 0.15s ease; }
 	.picked.removable:hover {
-		background: rgba(255, 120, 120, 0.12);
-		border-color: rgba(255, 120, 120, 0.3);
+		background: var(--danger-bg);
+		border-color: var(--danger-border);
 	}
-
-	.picked small { display: block; opacity: 0.45; font-size: 12px; margin-top: 3px; }
 
 	/* The instance being configured right now */
 	.picked.current {
-		background: rgba(255, 255, 255, 0.12);
-		border-color: rgba(255, 255, 255, 0.35);
+		background: var(--glass-bg-hover);
+		border-color: var(--glass-border);
 	}
 
-	.field { margin-bottom: 18px; }
-
-	label {
-		display: block;
-		font-size: 14px;
-		opacity: 0.7;
-		margin-bottom: 8px;
+	.review-row {
+		display: flex;
+		justify-content: space-between;
+		gap: 16px;
+		padding: 11px 0;
+		border-bottom: 1px solid var(--card-border);
+		font-size: 0.95em;
 	}
 
-	.help { font-size: 12px; opacity: 0.45; margin-top: 6px; }
+	.review-row span { color: var(--fg-muted); }
 
-	input[type="color"] {
-		width: 100%;
-		height: 46px;
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.15);
-		border-radius: 10px;
-		padding: 4px;
-		cursor: pointer;
-	}
-
-	input[type="text"],
-	input[type="url"],
-	input[type="number"],
-	select {
-		width: 100%;
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.15);
-		border-radius: 10px;
-		color: #fff;
-		font-size: 16px;
-		padding: 12px 16px;
-	}
-
-	/* A reorderable priority list. Matches .option rows on purpose — it's
-	   the same kind of choice, made a different way. */
+	/* A reorderable priority list */
 	.priority-row {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		padding: 10px 12px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
+		border: 1px solid var(--card-border);
 		border-radius: 10px;
 		margin-bottom: 8px;
-		font-size: 15px;
+		font-size: 0.95em;
 	}
 
 	.priority-rank {
-		opacity: 0.4;
-		font-size: 12px;
+		color: var(--fg-muted);
+		font-size: 0.8em;
 		min-width: 16px;
 		text-align: right;
 	}
@@ -186,152 +281,23 @@ const styles = `
 	.priority-name { flex: 1; }
 
 	.priority-move {
+		appearance: none;
+		-webkit-appearance: none;
 		width: 32px;
 		height: 32px;
 		padding: 0;
-		margin: 0;
 		flex: none;
-		font-size: 13px;
+		font-size: 0.85em;
 		line-height: 1;
 		cursor: pointer;
 		color: inherit;
 		border-radius: 8px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
-		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid var(--card-border);
+		background: var(--glass-bg);
 	}
 
-	.priority-move:hover:not(:disabled) {
-		background: rgba(255, 255, 255, 0.12);
-	}
-
+	.priority-move:hover:not(:disabled) { background: var(--glass-bg-hover); }
 	.priority-move:disabled { opacity: 0.2; cursor: default; }
-
-	.option {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 10px 16px;
-		border: 1px solid rgba(255, 255, 255, 0.12);
-		border-radius: 10px;
-		margin-bottom: 8px;
-		cursor: pointer;
-		font-size: 15px;
-	}
-
-	.option:hover { background: rgba(255, 255, 255, 0.05); }
-	.option input { width: 17px; height: 17px; }
-
-	/* Dropdown options fall back to the browser's own popup colours unless
-	   we say otherwise, which means white on white in a dark interface */
-	option {
-		background: #1a1a1a;
-		color: #fff;
-	}
-
-
-	.empty { opacity: 0.4; font-size: 14px; }
-
-	.search-row { display: flex; gap: 8px; }
-	.search-row input { flex: 1; }
-
-	.result {
-		display: block;
-		width: 100%;
-		text-align: left;
-		background: rgba(255, 255, 255, 0.04);
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 8px;
-		color: #fff;
-		font-size: 14px;
-		font-family: inherit;
-		padding: 10px 14px;
-		margin-top: 8px;
-		cursor: pointer;
-	}
-
-	.result:hover { background: rgba(255, 255, 255, 0.1); }
-	.status { font-size: 14px; min-height: 20px; color: #ff8a8a; }
-
-	.review-row {
-		display: flex;
-		justify-content: space-between;
-		gap: 16px;
-		padding: 11px 0;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-		font-size: 15px;
-	}
-
-	.review-row span { opacity: 0.55; }
-
-	/* Wizard navigation, bottom right */
-	.actions {
-		display: flex;
-		justify-content: flex-end;
-		align-items: center;
-		gap: 12px;
-		width: 100%;
-		max-width: 900px;
-	}
-
-	.actions.narrow { max-width: 460px; }
-
-	/* Glass-style button with a soft light reflection */
-	.glass {
-		position: relative;
-		overflow: hidden;
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.15);
-		border-radius: 12px;
-		backdrop-filter: blur(12px);
-		color: #fff;
-		font-size: 15px;
-		font-family: inherit;
-		padding: 13px 30px;
-		cursor: pointer;
-	}
-
-	.glass:hover { background: rgba(255, 255, 255, 0.12); }
-	.glass:disabled { opacity: 0.3; cursor: not-allowed; }
-
-	.glass::before {
-		content: "";
-		position: absolute;
-		top: 0; left: 0; right: 0;
-		height: 50%;
-		background: linear-gradient(
-			to bottom, rgba(255, 255, 255, 0.14), transparent
-		);
-		pointer-events: none;
-	}
-
-	.face {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		padding: 14px 20px;
-		border-radius: 12px;
-		margin-bottom: 10px;
-		position: relative;
-		overflow: hidden;
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid rgba(255, 255, 255, 0.15);
-		backdrop-filter: blur(12px);
-		cursor: pointer;
-	}
-
-	.face:hover { background: rgba(255, 255, 255, 0.12); }
-	.face span { opacity: 0.55; font-size: 13px; }
-
-	.face::before {
-		content: "";
-		position: absolute;
-		top: 0; left: 0; right: 0;
-		height: 50%;
-		background: linear-gradient(
-			to bottom, rgba(255, 255, 255, 0.14), transparent
-		);
-		pointer-events: none;
-	}
 `;
 
 
@@ -342,7 +308,7 @@ function page(title, body, script) {
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(title)} \u2014 OmniCore</title>
-	<style>${styles}</style>
+	<style>${uiStyles()}${styles}</style>
 </head>
 <body>
 	${body}
@@ -486,13 +452,19 @@ function startWizardFace() {
 
 function renderWizard(data) {
 	const body = `
-		<div class="panel" id="header"></div>
-		<div class="panel" id="content"></div>
-		<div class="actions">
-			<p class="status" id="status" style="margin-right:auto"></p>
-			<button class="glass" id="cancel">Cancel</button>
-			<button class="glass" id="back">Back</button>
-			<button class="glass" id="next">Next</button>
+		<div class="wizard-head" id="header"></div>
+		<div id="content"></div>
+		<p class="status" id="status"></p>
+
+		<!-- Back is rendered but hidden on the first step rather than
+		     shown disabled: a dead segment taking up room in a capsule
+		     that never resizes would leave a visible gap where a button
+		     should be. Hidden, the remaining two simply spread to fill
+		     the same shape. -->
+		<div class="dock">
+			<button id="cancel">Cancel</button>
+			<button id="back">Back</button>
+			<button id="next">Next</button>
 		</div>`;
 
 	const script = `
@@ -619,7 +591,7 @@ function renderWizard(data) {
 				"</label>";
 			}).join("");
 
-			return '<div class="square" style="min-height:0;width:100%;min-width:320px;max-width:460px">' +
+			return '<div class="tile wizard-single">' +
 				'<div class="field">' +
 					'<label for="name">Name</label>' +
 					'<input type="text" id="name" value="' + escapeHtml(face.name) +
@@ -668,14 +640,22 @@ function renderWizard(data) {
 				"</div>";
 			}).join("");
 
-			return '<div class="columns">' +
-				'<div class="square">' +
+			// Each list gets .list-fill so it grows into whatever height
+			// its tile was given and only scrolls once it genuinely runs
+			// out -- rather than the old .square, which had no bound at
+			// all and simply grew the page instead.
+			return '<div class="wizard-split">' +
+				'<div class="tile">' +
 					"<h2>Available modules</h2>" +
-					(available || '<div class="empty">No modules installed.</div>') +
+					'<div class="list-fill">' +
+						(available || '<div class="empty">No modules installed.</div>') +
+					"</div>" +
 				"</div>" +
-				'<div class="square">' +
+				'<div class="tile">' +
 					"<h2>On this face</h2>" +
-					(picked || '<div class="empty">Nothing added yet.</div>') +
+					'<div class="list-fill">' +
+						(picked || '<div class="empty">Nothing added yet.</div>') +
+					"</div>" +
 				"</div>" +
 			"</div>";
 		}
@@ -712,23 +692,29 @@ function renderWizard(data) {
 				);
 			}).join("");
 
-			return '<div class="columns">' +
-				'<div class="square">' +
-					"<h2>On this face</h2>" + bucket +
+			return '<div class="wizard-split">' +
+				'<div class="tile">' +
+					"<h2>On this face</h2>" +
+					'<div class="list-fill">' + bucket + "</div>" +
 				"</div>" +
-				'<div class="square">' +
+				'<div class="tile">' +
 					"<h2>" + escapeHtml(module.name) + "</h2>" +
-					'<div class="field">' +
-						'<label for="label">Label</label>' +
-						'<input type="text" id="label" value="' +
-							escapeHtml(instance.label) + '">' +
-						'<div class="help">Shown as the tile title.</div>' +
+					// The form scrolls inside its own tile rather than
+					// growing it past the bottom of the screen, the same
+					// way the list opposite does.
+					'<div class="tile-scroll">' +
+						'<div class="field">' +
+							'<label for="label">Label</label>' +
+							'<input type="text" id="label" value="' +
+								escapeHtml(instance.label) + '">' +
+							'<div class="help">Shown as the tile title.</div>' +
+						"</div>" +
+						(fields || '<div class="empty">Nothing to configure.</div>') +
+						(themeFields
+							? '<h2 style="margin-top:22px">In ' +
+								escapeHtml(theme.name) + "</h2>" + themeFields
+							: "") +
 					"</div>" +
-					(fields || '<div class="empty">Nothing to configure.</div>') +
-					(themeFields
-						? '<h2 style="margin-top:22px">In ' +
-							escapeHtml(theme.name) + "</h2>" + themeFields
-						: "") +
 				"</div>" +
 			"</div>";
 		}
@@ -1011,8 +997,7 @@ function renderWizard(data) {
 				return renderField(field, face.themeConfig[field.key]);
 			}).join("");
 
-			return '<div class="square" style="min-height:0;width:100%;' +
-				'min-width:320px;max-width:460px">' +
+			return '<div class="tile wizard-single">' +
 				"<h2>" + escapeHtml(theme.name) + "</h2>" +
 				fields +
 			"</div>";
@@ -1028,7 +1013,7 @@ function renderWizard(data) {
 
 			const theme = THEMES.find(function (t) { return t.id === face.theme; });
 
-			return '<div class="square" style="width:100%;min-width:320px;max-width:560px">' +
+			return '<div class="tile wizard-single">' +
 				'<div class="review-row"><strong>Name</strong><span>' +
 					escapeHtml(face.name || "Face " + NEXT_PORT) + "</span></div>" +
 				'<div class="review-row"><strong>Title</strong><span>' +
@@ -1068,13 +1053,9 @@ function renderWizard(data) {
 		function draw() {
 			const heading = headingFor();
 
-			// Name/theme and review are single panels, so they get centred.
-			// The picker and settings steps are two columns and are not.
-			const single =
-				step === 0 ||
-				step === lastStep() ||
-				(hasThemeStep() && step === themeStep());
-			document.body.className = single ? "single" : "";
+			// Every step gets its height from #content, which is sized
+			// by CSS from the first paint. Nothing here needs to set a
+			// class for layout any more.
 
 			document.getElementById("header").innerHTML =
 				"<h1>" + heading[0] + '</h1><p class="lede">' + heading[1] + "</p>";
@@ -1127,7 +1108,11 @@ function renderWizard(data) {
 				});
 			}
 
-			document.getElementById("back").disabled = step === 0;
+			// Hidden rather than disabled: the capsule is a fixed width,
+			// so a greyed-out segment would just be a dead gap. Removed
+			// from the layout, the other two spread to fill it.
+			document.getElementById("back").style.display =
+				step === 0 ? "none" : "";
 			document.getElementById("next").textContent =
 				step === lastStep() ? "Finish" : "Next";
 		}
