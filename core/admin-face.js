@@ -634,34 +634,20 @@ const styles = `
 	}
 	.danger { color: var(--danger); font-size: 14px; cursor: pointer; }
 
-	/* Glass-style button with a soft light reflection */
-	.glass {
-		position: relative;
-		overflow: hidden;
-		background: var(--glass-bg);
-		border: 1px solid var(--glass-border);
-		border-radius: 12px;
-		backdrop-filter: blur(12px);
-		color: var(--fg);
-		font-size: 16px;
-		padding: 14px 28px;
-		cursor: pointer;
-		width: 100%;
-	}
-
-	.glass:hover { background: var(--border); }
-	.glass:disabled { opacity: 0.35; cursor: not-allowed; }
-
-	.glass::before {
-		content: "";
-		position: absolute;
-		top: 0; left: 0; right: 0;
-		height: 50%;
-		background: linear-gradient(
-			to bottom, var(--glass-sheen), transparent
-		);
-		pointer-events: none;
-	}
+	/* .glass itself is defined once, in core/ui-theme.js. It used to be
+	   redefined here too, from before the shared component library
+	   existed, and because this stylesheet is emitted after that one the
+	   stale copy silently won -- overriding the appearance reset, the
+	   hover glow, :focus-visible and the disabled styling with an older
+	   and worse version of each.
+	   
+	   The real damage was a width of 100% in that copy. Harmless for a
+	   standalone button, but a small button sitting in a flex row next
+	   to text would try to occupy the entire row and render on top of
+	   it. Every full-width button below now says so explicitly with
+	   .glass-block instead of relying on a global default that also hit
+	   buttons which should never have been full width. */
+	.glass-block { display: block; width: 100%; box-sizing: border-box; }
 `;
 
 function escapeHtml(text) {
@@ -1148,7 +1134,7 @@ function credentialsPage(options) {
 				<input type="password" id="password"
 					autocomplete="${options.isSetup ? "new-password" : "current-password"}">
 			</div>
-			<button class="glass" id="submit">${escapeHtml(options.button)}</button>
+			<button class="glass glass-block" id="submit">${escapeHtml(options.button)}</button>
 			<p class="status" id="status"></p>
 		</div>`;
 
@@ -1473,7 +1459,7 @@ function startAdminFace() {
 					<div class="list" id="font-results"></div>
 					${
 						installedFont
-							? `<button class="glass" id="clear-font">Back to the system font</button>`
+							? `<button class="glass glass-block" id="clear-font">Back to the system font</button>`
 							: ""
 					}
 					<p class="status" id="font-status"></p>
@@ -1518,7 +1504,7 @@ function startAdminFace() {
 								)}">
 						</div>
 					</div>
-					<button class="glass" id="save-location">Save</button>
+					<button class="glass glass-block" id="save-location">Save</button>
 					<p class="status" id="location-status"></p>
 				</div>
 			</div>`;
@@ -2662,7 +2648,7 @@ function startAdminFace() {
 					<span class="hint">Last checked: ${escapeHtml(when(last.lastCheckedAt))}</span>
 					<span class="hint">Running since: ${escapeHtml(when(since))}</span>
 				</div>
-				<button class="glass" id="check">Check now</button>
+				<button class="glass glass-block" id="check">Check now</button>
 				<p class="status" id="check-status"></p>
 			</div>
 
@@ -2811,7 +2797,7 @@ function startAdminFace() {
 				${faces || '<div class="empty">No faces yet.</div>'}
 			</div>
 			<div class="panel">
-				<button class="glass" onclick="goToWizard()">
+				<button class="glass glass-block" onclick="goToWizard()">
 					Create a new face
 				</button>
 			</div>`;
@@ -2878,7 +2864,7 @@ function startAdminFace() {
 					</div>
 				</div>
 
-				<button class="glass" id="save">Save face</button>
+				<button class="glass glass-block" id="save">Save face</button>
 				<p class="status" id="status"></p>
 			</div>`;
 
@@ -2969,7 +2955,7 @@ function startAdminFace() {
 				${
 					schema.length
 						? renderFields(schema, config, { instances: face.instances }) +
-						  '<button class="glass" id="save">Save</button>' +
+						  '<button class="glass glass-block" id="save">Save</button>' +
 						  '<p class="status" id="status"></p>'
 						: '<div class="empty">This theme has nothing to configure.</div>'
 				}
@@ -3317,7 +3303,7 @@ function startAdminFace() {
 					: ""
 			}
 			<div class="panel">
-				<button class="glass" id="save">Save</button>
+				<button class="glass glass-block" id="save">Save</button>
 				<p class="status" id="status"></p>
 			</div>
 			<div class="panel footer">
