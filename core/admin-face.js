@@ -77,7 +77,12 @@ const styles = `
 
 	   Portrait is the same tiles in one column -- not a second design.
 	   --------------------------------------------------------------- */
-	.bento { width: 100%; max-width: 62em; display: flex; flex-direction: column; gap: 14px; }
+	/* Scales with the viewport rather than a single fixed number, so a
+	   wide window doesn't leave a large stripe of unused space either
+	   side -- but still capped, so a genuinely ultrawide monitor
+	   doesn't stretch a description line edge-to-edge or leave a stat
+	   tile looking like mostly empty space. */
+	.bento { width: 100%; max-width: clamp(62em, 70vw, 90em); display: flex; flex-direction: column; gap: 14px; }
 
 	.bento-row { display: grid; gap: 14px; grid-template-columns: 1fr; }
 
@@ -97,7 +102,7 @@ const styles = `
 
 	.settings-head {
 		width: 100%;
-		max-width: 62em;
+		max-width: clamp(62em, 70vw, 90em);
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -106,14 +111,18 @@ const styles = `
 
 	/* The version pill doubles as the way to the updates page */
 	.version-pill {
+		appearance: none;
+		-webkit-appearance: none;
 		display: inline-flex;
 		align-items: center;
 		gap: 7px;
+		font-family: inherit;
 		font-size: 0.78em;
 		background: var(--glass-bg);
 		border: 1px solid var(--glass-border);
 		border-radius: 999px;
 		padding: 6px 14px;
+		color: var(--fg);
 		cursor: pointer;
 		transition: background 0.2s ease;
 	}
@@ -154,7 +163,7 @@ const styles = `
 	   names to decode */
 	.corner-map {
 		position: relative;
-		background: rgba(0, 0, 0, 0.3);
+		background: var(--well-bg);
 		border: 1px solid var(--card-border);
 		border-radius: 10px;
 		height: 118px;
@@ -1297,7 +1306,7 @@ function startAdminFace() {
 				<h1>Settings</h1>
 				<button class="version-pill" id="version-pill"
 					title="Updates">
-					<span class="version-dot"></span>
+					${update.updateAvailable ? '<span class="version-dot"></span>' : ""}
 					OmniCore ${escapeHtml(running)}${
 						update.updateAvailable ? " · update ready" : ""
 					}
@@ -1396,7 +1405,7 @@ function startAdminFace() {
 							}" data-value="bottom-right">Bottom right &#8600;</button>
 						</div>
 						<p class="hint" style="margin-top:8px">
-							Bottom left is reserved for the welcome face's countdown.
+							Top right and bottom left aren't available.
 						</p>
 					</div>
 
@@ -1755,11 +1764,42 @@ function startAdminFace() {
 				}
 
 				fontResults.innerHTML = fonts.map(function (font) {
+					const safe = font.family.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 					return '<div class="card font-row" onclick="pickFont(' +
 						JSON.stringify(font.family).replace(/"/g, "&quot;") +
-						')"><strong>' + font.family + '</strong>' +
+						')"><strong style="font-family:' +
+						JSON.stringify(font.family).replace(/"/g, "&quot;") +
+						'">' + safe + '</strong>' +
 						'<span class="hint">' + font.category + '</span></div>';
 				}).join("");
+
+				// A live preview needs the real font, and there's no way
+				// around that -- but this search is already an
+				// online-only action, so fetching it here doesn't touch
+				// the offline guarantee that matters: the one font
+				// someone actually installs still gets downloaded once
+				// and served locally forever after.
+				//
+				// One request for every result shown, not one per font --
+				// the browser only actually downloads a given family's
+				// file once something on the page is set to use it,
+				// which is exactly the results currently rendered.
+				let previewLink = document.getElementById("font-preview-link");
+				if (!previewLink) {
+					previewLink = document.createElement("link");
+					previewLink.id = "font-preview-link";
+					previewLink.rel = "stylesheet";
+					document.head.appendChild(previewLink);
+				}
+
+				const families = fonts
+					.map(function (font) {
+						return "family=" + encodeURIComponent(font.family).replace(/%20/g, "+");
+					})
+					.join("&");
+
+				previewLink.href =
+					"https://fonts.googleapis.com/css2?" + families + "&display=swap";
 			}
 
 			// Debounced: a search per keystroke would hammer the

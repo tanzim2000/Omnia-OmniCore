@@ -56,6 +56,13 @@ const PALETTES = {
 		border: "rgba(255, 255, 255, 0.12)",
 		hoverSubtle: "rgba(255, 255, 255, 0.05)",
 		inputBg: "rgba(255, 255, 255, 0.04)",
+		// A recessed well (the corner map): lighter than the surface
+		// around it, since on a dark background that's what reads as
+		// sunken. A flat black value used everywhere regardless of
+		// theme looked fine here by accident, then read as a muddy,
+		// disabled-looking patch once the same value landed on a
+		// light background.
+		wellBg: "rgba(255, 255, 255, 0.05)",
 
 		// Semantic colours. Without these as variables, every warning
 		// and success message would stay dark-mode-coloured on a light
@@ -95,6 +102,10 @@ const PALETTES = {
 		border: "rgba(0, 0, 0, 0.12)",
 		hoverSubtle: "rgba(0, 0, 0, 0.04)",
 		inputBg: "rgba(255, 255, 255, 0.9)",
+		// Darker than the surface around it here, for the same reason
+		// the dark-mode value goes lighter: whichever direction reads
+		// as sunken against that particular background.
+		wellBg: "rgba(0, 0, 0, 0.06)",
 
 		// Darker than their dark-mode counterparts on purpose: the same
 		// red that reads clearly against black is far too pale to read
@@ -178,6 +189,7 @@ function uiStyles(options) {
 		--border: ${active.border};
 		--hover-subtle: ${active.hoverSubtle};
 		--input-bg: ${active.inputBg};
+		--well-bg: ${active.wellBg};
 
 		--danger: ${active.danger};
 		--danger-text: ${active.dangerText};
