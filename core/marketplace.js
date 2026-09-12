@@ -511,13 +511,27 @@ async function checkForUpdates() {
 // unapplied isn't a bug to fix here — it's exactly the signal that this
 // OmniCore itself needs updating before that resource can move forward,
 // which is the self-update feature's job, not this one's.
-async function applyAvailableUpdates() {
+//
+// onProgress is optional and only called for this loop specifically —
+// it's the one part of the whole check with real, countable steps
+// (install item 2 of 5). The registry fetch and comparison above have
+// no such steps to report; a caller that wants to show something during
+// those has to represent that honestly as indeterminate, not borrow
+// this callback to fake a percentage for work that isn't countable.
+async function applyAvailableUpdates(onProgress) {
 	const candidates = await checkForUpdates();
 
 	const applied = [];
 	const skipped = [];
+	let index = 0;
 
 	for (const candidate of candidates) {
+		index += 1;
+
+		if (onProgress) {
+			onProgress(index, candidates.length, candidate.id);
+		}
+
 		if (!candidate.compatible) {
 			skipped.push({
 				id: candidate.id,
