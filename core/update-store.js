@@ -14,16 +14,19 @@ const semver = require("semver");
 
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 
-const storePath = path.join(__dirname, "..", "data", "update-checks.json");
+function storePath() {
+	return path.join(paths.dataDir(), "update-checks.json");
+}
 
 function read() {
-	if (!fs.existsSync(storePath)) {
+	if (!fs.existsSync(storePath())) {
 		return {};
 	}
 
 	try {
-		return JSON.parse(fs.readFileSync(storePath, "utf-8"));
+		return JSON.parse(fs.readFileSync(storePath(), "utf-8"));
 	} catch (error) {
 		// A corrupt record just means "never checked" -- which is
 		// wrong but harmless, and self-corrects on the next check.
@@ -32,8 +35,8 @@ function read() {
 }
 
 function write(data) {
-	fs.mkdirSync(path.dirname(storePath), { recursive: true });
-	fs.writeFileSync(storePath, JSON.stringify(data, null, "\t"));
+	fs.mkdirSync(path.dirname(storePath()), { recursive: true });
+	fs.writeFileSync(storePath(), JSON.stringify(data, null, "\t"));
 	return data;
 }
 

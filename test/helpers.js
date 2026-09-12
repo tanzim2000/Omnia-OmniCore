@@ -7,20 +7,55 @@
 // would not have been caught by a test that only checked each file
 // require()s without throwing -- nothing threw until the route actually
 // ran. See docs/planning/resilience-architecture.md.
+//
+// Everything the suite creates -- faces, installed modules, accounts --
+// lives in its own throwaway directory, never in the real project's
+// data/modules/themes folders. Without this, running npm test locally
+// silently overwrote real local state more than once: a real face
+// ("Smoke Test Face") and a real module ("Failing Module") both leaked
+// into a genuine development environment, because the tests that
+// created them had nowhere else to write.
+//
+// This is the actual fix, not a workaround around it: every core file
+// now resolves its paths through core/paths.js, which checks the three
+// environment variables set below before falling back to the real
+// project folders. Setting them here, and only here, before anything
+// else runs, is what makes a test run and a real npm start two
+// genuinely separate things rather than one silently overwriting the
+// other. A fresh, uniquely-named directory every run, rather than one
+// fixed sandbox path reused each time, so a crashed previous run can
+// never leave behind state the next run accidentally inherits.
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
-const root = path.join(__dirname, "..");
-const dataDir = path.join(root, "data");
-const modulesDir = path.join(root, "modules");
-const themesDir = path.join(root, "themes");
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "omnicore-test-"));
 
-// Anything OmniCore persists, wiped between runs. Without this a test
-// would pass or fail depending on what a previous run happened to leave
-// behind, which is the fastest way to make a suite untrustworthy.
+process.env.OMNICORE_DATA_DIR = path.join(sandbox, "data");
+process.env.OMNICORE_MODULES_DIR = path.join(sandbox, "modules");
+process.env.OMNICORE_THEMES_DIR = path.join(sandbox, "themes");
+
+const root = path.join(__dirname, "..");
+const dataDir = process.env.OMNICORE_DATA_DIR;
+const modulesDir = process.env.OMNICORE_MODULES_DIR;
+const themesDir = process.env.OMNICORE_THEMES_DIR;
+
+fs.mkdirSync(dataDir, { recursive: true });
+fs.mkdirSync(modulesDir, { recursive: true });
+fs.mkdirSync(themesDir, { recursive: true });
+
+// Anything OmniCore persists, wiped between runs. Safe to do this
+// bluntly now -- this is the sandbox, never a real project folder, so
+// there's nothing here a previous run left behind that matters.
 function resetState() {
-	for (const name of ["faces.json", "admin.json", "settings.json", "installed.json"]) {
+	for (const name of [
+		"faces.json",
+		"admin.json",
+		"settings.json",
+		"installed.json",
+		"update-checks.json"
+	]) {
 		try {
 			fs.unlinkSync(path.join(dataDir, name));
 		} catch (error) {
@@ -31,9 +66,10 @@ function resetState() {
 	fs.rmSync(path.join(dataDir, "faces"), { recursive: true, force: true });
 }
 
-// Everything the registry install test downloaded. Removed afterward so
-// a developer running the suite locally doesn't silently end up with a
-// modules/ folder full of things they never chose to install.
+// Everything the registry install test downloaded, cleared from the
+// sandbox between runs. No .gitkeep handling needed here the way the
+// real modules/themes folders need it -- this directory isn't tracked
+// by git at all.
 function clearInstalled() {
 	for (const dir of [modulesDir, themesDir]) {
 		if (!fs.existsSync(dir)) {
@@ -41,10 +77,6 @@ function clearInstalled() {
 		}
 
 		for (const entry of fs.readdirSync(dir)) {
-			if (entry === ".gitkeep") {
-				continue;
-			}
-
 			fs.rmSync(path.join(dir, entry), { recursive: true, force: true });
 		}
 	}
@@ -96,7 +128,8 @@ async function signIn(port) {
 // happy path with real published modules; this covers what a real
 // published module won't reliably give you -- confirmation that one
 // module failing produces an error envelope rather than taking the
-// whole face down.
+// whole face down. Lands in the sandbox's modules folder, same as
+// everything else the suite creates.
 function writeFailingModule(id) {
 	const dir = path.join(modulesDir, id);
 

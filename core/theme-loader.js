@@ -21,12 +21,15 @@
 
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 const priority = require("./priority");
 
-const themesDir = path.join(__dirname, "..", "themes");
+function themesDir() {
+	return paths.themesDir();
+}
 
 function themeDir(themeId) {
-	return path.join(themesDir, themeId);
+	return path.join(themesDir(), themeId);
 }
 
 // A theme's name and description, falling back to its folder name
@@ -52,12 +55,12 @@ function readManifest(themeId) {
 
 // Every theme installed on this OmniCore
 function listThemes() {
-	if (!fs.existsSync(themesDir)) {
+	if (!fs.existsSync(themesDir())) {
 		return [];
 	}
 
 	return fs
-		.readdirSync(themesDir, { withFileTypes: true })
+		.readdirSync(themesDir(), { withFileTypes: true })
 		.filter((entry) => entry.isDirectory())
 		.map((entry) => readManifest(entry.name));
 }

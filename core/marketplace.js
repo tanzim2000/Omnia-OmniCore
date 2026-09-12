@@ -37,6 +37,7 @@ const fsSync = require("fs");
 const fsp = require("fs/promises");
 const os = require("os");
 const path = require("path");
+const paths = require("./paths");
 const tar = require("tar");
 const semver = require("semver");
 
@@ -44,8 +45,13 @@ const { readSettings, writeSettings } = require("./settings-store");
 const omnicoreVersion = require("./version");
 const installStore = require("./install-store");
 
-const modulesDir = path.join(__dirname, "..", "modules");
-const themesDir = path.join(__dirname, "..", "themes");
+function modulesDir() {
+	return paths.modulesDir();
+}
+
+function themesDir() {
+	return paths.themesDir();
+}
 
 // The project's own registry, used whenever the admin hasn't pointed
 // OmniCore somewhere else
@@ -384,7 +390,7 @@ async function installFromEntry(kind, entry, update) {
 	assertSafeId(entry.id);
 
 	const destDir = path.join(
-		kind === "theme" ? themesDir : modulesDir,
+		kind === "theme" ? themesDir() : modulesDir(),
 		entry.id
 	);
 
@@ -599,8 +605,8 @@ async function listAvailable() {
 		});
 
 	return {
-		modules: mark("module", registry.modules, modulesDir),
-		themes: mark("theme", registry.themes, themesDir),
+		modules: mark("module", registry.modules, modulesDir()),
+		themes: mark("theme", registry.themes, themesDir()),
 		sourceFailures: registry.sourceFailures
 	};
 }

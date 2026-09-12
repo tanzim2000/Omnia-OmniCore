@@ -13,10 +13,13 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 const { readInputSchema } = require("./module-config");
 const moduleStorage = require("./module-storage");
 
-const dataPath = path.join(__dirname, "..", "data", "faces.json");
+function dataPath() {
+	return path.join(paths.dataDir(), "faces.json");
+}
 
 // Port range rules:
 // 3xxx = admin faces (built in, never user-modifiable)
@@ -30,17 +33,17 @@ const INPUT_PORT_END = 5050;
 function readFaces() {
 	// A fresh install has no data folder yet — that's not an error,
 	// it just means no faces have been created
-	if (!fs.existsSync(dataPath)) {
+	if (!fs.existsSync(dataPath())) {
 		return [];
 	}
 
-	const raw = fs.readFileSync(dataPath, "utf-8");
+	const raw = fs.readFileSync(dataPath(), "utf-8");
 	return JSON.parse(raw).faces;
 }
 
 function writeFaces(faces) {
-	fs.mkdirSync(path.dirname(dataPath), { recursive: true });
-	fs.writeFileSync(dataPath, JSON.stringify({ faces }, null, "\t"));
+	fs.mkdirSync(path.dirname(dataPath()), { recursive: true });
+	fs.writeFileSync(dataPath(), JSON.stringify({ faces }, null, "\t"));
 }
 
 function findFace(id) {

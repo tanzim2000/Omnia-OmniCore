@@ -18,11 +18,14 @@
 
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 
-const facesDataDir = path.join(__dirname, "..", "data", "faces");
+function facesDataDir() {
+	return path.join(paths.dataDir(), "faces");
+}
 
 function instanceFilePath(faceId, instanceId) {
-	return path.join(facesDataDir, String(faceId), `${instanceId}.json`);
+	return path.join(facesDataDir(), String(faceId), `${instanceId}.json`);
 }
 
 function readInstanceData(faceId, instanceId) {

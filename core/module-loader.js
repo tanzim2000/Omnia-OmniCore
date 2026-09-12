@@ -34,8 +34,11 @@
 
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 
-const modulesDir = path.join(__dirname, "..", "modules");
+function modulesDir() {
+	return paths.modulesDir();
+}
 
 // Every module installed on this OmniCore
 //
@@ -46,12 +49,12 @@ const modulesDir = path.join(__dirname, "..", "modules");
 // follow the link just to answer that question. Left unhandled, that
 // makes a perfectly real, working module silently invisible.
 function listModules() {
-	if (!fs.existsSync(modulesDir)) {
+	if (!fs.existsSync(modulesDir())) {
 		return [];
 	}
 
 	return fs
-		.readdirSync(modulesDir, { withFileTypes: true })
+		.readdirSync(modulesDir(), { withFileTypes: true })
 		.filter((entry) => {
 			if (entry.isDirectory()) {
 				return true;
@@ -67,7 +70,7 @@ function listModules() {
 			// case already would be without a symlink involved at all.
 			try {
 				return fs
-					.statSync(path.join(modulesDir, entry.name))
+					.statSync(path.join(modulesDir(), entry.name))
 					.isDirectory();
 			} catch (error) {
 				return false;
@@ -79,7 +82,7 @@ function listModules() {
 // Load a module's function. Returns null if it's missing or won't load —
 // a broken module shouldn't stop OmniCore from starting.
 function loadModule(moduleId) {
-	const modulePath = path.join(modulesDir, moduleId);
+	const modulePath = path.join(modulesDir(), moduleId);
 
 	if (!fs.existsSync(modulePath)) {
 		return null;

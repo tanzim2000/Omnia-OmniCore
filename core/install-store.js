@@ -12,19 +12,22 @@
 
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 
-const storePath = path.join(__dirname, "..", "data", "installed.json");
+function storePath() {
+	return path.join(paths.dataDir(), "installed.json");
+}
 
 // { "module:weather": { kind, id, ref, minOmniCore, installedAt, updatedAt } }
 // Keyed by "kind:id" so a module and a theme can never collide even if
 // they happened to share an id.
 function readAll() {
-	if (!fs.existsSync(storePath)) {
+	if (!fs.existsSync(storePath())) {
 		return {};
 	}
 
 	try {
-		return JSON.parse(fs.readFileSync(storePath, "utf-8"));
+		return JSON.parse(fs.readFileSync(storePath(), "utf-8"));
 	} catch (error) {
 		// A corrupt record shouldn't stop OmniCore starting — worst case,
 		// every install briefly looks unrecorded again until reinstalled
@@ -34,8 +37,8 @@ function readAll() {
 }
 
 function writeAll(all) {
-	fs.mkdirSync(path.dirname(storePath), { recursive: true });
-	fs.writeFileSync(storePath, JSON.stringify(all, null, "\t"));
+	fs.mkdirSync(path.dirname(storePath()), { recursive: true });
+	fs.writeFileSync(storePath(), JSON.stringify(all, null, "\t"));
 }
 
 function key(kind, id) {

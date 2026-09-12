@@ -21,6 +21,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 
 const { uiStyles } = require("./ui-theme");
 const { portLinkScript, escapeHtml } = require("./face-links");
@@ -196,7 +197,7 @@ function startAboutFace() {
 	// from a CDN when the page renders, so this works with no internet.
 	// Missing simply means the wordmark falls back to a system serif.
 	app.get("/omnia-title.woff2", (req, res) => {
-		const file = path.join(__dirname, "..", "data", "omnia-title.woff2");
+		const file = path.join(paths.dataDir(), "omnia-title.woff2");
 
 		if (!fs.existsSync(file)) {
 			res.status(404).end();

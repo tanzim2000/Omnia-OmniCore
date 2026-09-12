@@ -10,6 +10,7 @@
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 const { loadModule } = require("./module-loader");
 const { makeModuleApi } = require("./module-api");
 const { applyDefaults } = require("./module-config");
@@ -217,7 +218,7 @@ function startFace(face) {
 
 		function themeHandler(themeId) {
 			if (!themeHandlers.has(themeId)) {
-				const themeDir = path.join(__dirname, "..", "themes", themeId);
+				const themeDir = path.join(paths.themesDir(), themeId);
 				themeHandlers.set(themeId, express.static(themeDir));
 			}
 			return themeHandlers.get(themeId);
@@ -226,7 +227,7 @@ function startFace(face) {
 		// Work out which file on disk a request is asking for.
 		// A bare "/" means the theme's index.html.
 		function resolveThemeFile(themeId, urlPath) {
-			const themeDir = path.join(__dirname, "..", "themes", themeId);
+			const themeDir = path.join(paths.themesDir(), themeId);
 			const requested = urlPath === "/" ? "/index.html" : urlPath;
 
 			const filePath = path.join(themeDir, requested);

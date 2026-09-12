@@ -7,15 +7,18 @@
 
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 const priority = require("./priority");
 
-const modulesDir = path.join(__dirname, "..", "modules");
+function modulesDir() {
+	return paths.modulesDir();
+}
 
 // A module's manifest: a readable name and description, from a module.json
 // in its folder. Mirrors how themes describe themselves in theme.json.
 // Falls back to the folder name so a module without one still works.
 function readManifest(moduleId) {
-	const manifestPath = path.join(modulesDir, moduleId, "module.json");
+	const manifestPath = path.join(modulesDir(), moduleId, "module.json");
 
 	// `provides` lists the block types this module can emit — "background",
 	// "image", and so on. It lets OmniCore offer only the modules that could
@@ -53,7 +56,7 @@ function readManifest(moduleId) {
 // What settings a module accepts, from its settings.json.
 // Returns an empty list if it has none — plenty of modules need nothing.
 function readSchema(moduleId) {
-	const schemaPath = path.join(modulesDir, moduleId, "settings.json");
+	const schemaPath = path.join(modulesDir(), moduleId, "settings.json");
 
 	if (!fs.existsSync(schemaPath)) {
 		return [];
@@ -72,7 +75,7 @@ function readSchema(moduleId) {
 // its input.json. Empty means the module has no input face at all, same
 // "missing file means none of this" pattern as settings.json.
 function readInputSchema(moduleId) {
-	const schemaPath = path.join(modulesDir, moduleId, "input.json");
+	const schemaPath = path.join(modulesDir(), moduleId, "input.json");
 
 	if (!fs.existsSync(schemaPath)) {
 		return [];

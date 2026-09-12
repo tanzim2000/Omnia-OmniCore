@@ -8,8 +8,11 @@
 
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 
-const settingsPath = path.join(__dirname, "..", "data", "settings.json");
+function settingsPath() {
+	return path.join(paths.dataDir(), "settings.json");
+}
 
 // Anything not yet saved falls back to these
 const DEFAULTS = {
@@ -59,12 +62,12 @@ const DEFAULTS = {
 };
 
 function readSettings() {
-	if (!fs.existsSync(settingsPath)) {
+	if (!fs.existsSync(settingsPath())) {
 		return { ...DEFAULTS };
 	}
 
 	try {
-		const saved = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+		const saved = JSON.parse(fs.readFileSync(settingsPath(), "utf-8"));
 		return { ...DEFAULTS, ...saved };
 	} catch (error) {
 		// A corrupt settings file shouldn't stop OmniCore starting
@@ -75,8 +78,8 @@ function readSettings() {
 function writeSettings(changes) {
 	const settings = { ...readSettings(), ...changes };
 
-	fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-	fs.writeFileSync(settingsPath, JSON.stringify(settings, null, "\t"));
+	fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
+	fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, "\t"));
 
 	return settings;
 }

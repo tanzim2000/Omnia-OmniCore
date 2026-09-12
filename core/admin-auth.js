@@ -12,8 +12,11 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const paths = require("./paths");
 
-const adminPath = path.join(__dirname, "..", "data", "admin.json");
+function adminPath() {
+	return path.join(paths.dataDir(), "admin.json");
+}
 
 const SESSION_COOKIE = "omnicore_session";
 const MIN_PASSWORD_LENGTH = 8;
@@ -23,11 +26,11 @@ const sessions = new Set();
 
 // Has an admin account been created yet?
 function isSetUp() {
-	return fs.existsSync(adminPath);
+	return fs.existsSync(adminPath());
 }
 
 function readAdmin() {
-	return JSON.parse(fs.readFileSync(adminPath, "utf-8"));
+	return JSON.parse(fs.readFileSync(adminPath(), "utf-8"));
 }
 
 // Hash a password with the given salt. 64 bytes out.
@@ -55,10 +58,10 @@ function createAdmin(username, password) {
 
 	const salt = crypto.randomBytes(16).toString("hex");
 
-	fs.mkdirSync(path.dirname(adminPath), { recursive: true });
+	fs.mkdirSync(path.dirname(adminPath()), { recursive: true });
 
 	fs.writeFileSync(
-		adminPath,
+		adminPath(),
 		JSON.stringify(
 			{
 				username: username.trim(),

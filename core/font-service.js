@@ -21,10 +21,19 @@ const fs = require("fs");
 const fsp = require("fs/promises");
 const https = require("https");
 const path = require("path");
+const paths = require("./paths");
 
-const dataDir = path.join(__dirname, "..", "data");
-const fontFile = path.join(dataDir, "ui-font.woff2");
-const metaFile = path.join(dataDir, "ui-font.json");
+function dataDir() {
+	return paths.dataDir();
+}
+
+function fontFile() {
+	return path.join(dataDir(), "ui-font.woff2");
+}
+
+function metaFile() {
+	return path.join(dataDir(), "ui-font.json");
+}
 
 // Google returns woff2 only when it believes the caller can handle it,
 // and decides that from the User-Agent. Ask as an old browser and it
@@ -172,10 +181,10 @@ async function installFont(family) {
 
 	const font = await get(woff2Url);
 
-	await fsp.mkdir(dataDir, { recursive: true });
-	await fsp.writeFile(fontFile, font);
+	await fsp.mkdir(dataDir(), { recursive: true });
+	await fsp.writeFile(fontFile(), font);
 	await fsp.writeFile(
-		metaFile,
+		metaFile(),
 		JSON.stringify(
 			{ family: known.family, installedAt: new Date().toISOString() },
 			null,
@@ -190,13 +199,13 @@ async function installFont(family) {
 // weight in data/.
 async function removeFont() {
 	try {
-		await fsp.unlink(fontFile);
+		await fsp.unlink(fontFile());
 	} catch (error) {
 		// Already gone, which is the desired end state anyway
 	}
 
 	try {
-		await fsp.unlink(metaFile);
+		await fsp.unlink(metaFile());
 	} catch (error) {
 		// Same
 	}
@@ -205,16 +214,16 @@ async function removeFont() {
 // Where the downloaded font actually is, or null if there isn't one.
 // The routes that serve /ui-font.woff2 use this.
 function installedFontPath() {
-	return fs.existsSync(fontFile) ? fontFile : null;
+	return fs.existsSync(fontFile()) ? fontFile() : null;
 }
 
 function installedFont() {
-	if (!fs.existsSync(metaFile)) {
+	if (!fs.existsSync(metaFile())) {
 		return null;
 	}
 
 	try {
-		return JSON.parse(fs.readFileSync(metaFile, "utf-8"));
+		return JSON.parse(fs.readFileSync(metaFile(), "utf-8"));
 	} catch (error) {
 		return null;
 	}
@@ -229,10 +238,12 @@ function installedFont() {
 // Separate from installFont above on purpose: that one is the user's
 // choice and can be changed or removed, this one isn't and can't.
 const TITLE_FONT_FAMILY = "Adamina";
-const titleFontFile = path.join(dataDir, "omnia-title.woff2");
+function titleFontFile() {
+	return path.join(dataDir(), "omnia-title.woff2");
+}
 
 async function ensureTitleFont() {
-	if (fs.existsSync(titleFontFile)) {
+	if (fs.existsSync(titleFontFile())) {
 		return true;
 	}
 
@@ -251,8 +262,8 @@ async function ensureTitleFont() {
 			return false;
 		}
 
-		await fsp.mkdir(dataDir, { recursive: true });
-		await fsp.writeFile(titleFontFile, await get(url));
+		await fsp.mkdir(dataDir(), { recursive: true });
+		await fsp.writeFile(titleFontFile(), await get(url));
 
 		return true;
 	} catch (error) {
