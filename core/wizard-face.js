@@ -223,8 +223,19 @@ const styles = `
 		flex-shrink: 0;
 	}
 
-	.flat { cursor: pointer; transition: background 0.15s ease; }
-	.flat:hover { background: var(--glass-bg); }
+	.flat {
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+	.flat:hover {
+		/* The exact same treatment On this face gets on hover, just in
+		   green instead of red: a tinted fill, a coloured border, and a
+		   minimal glow -- not just the glow on its own, which read as a
+		   halo around an otherwise plain grey hover state. */
+		background: var(--success-bg);
+		border-color: var(--success-border);
+		box-shadow: 0 0 14px rgba(62, 214, 122, 0.45);
+	}
 
 	.flat small,
 	.picked small {
@@ -236,10 +247,14 @@ const styles = `
 
 	/* Removing is destructive, so it says so on hover rather than
 	   looking like every other clickable row */
-	.picked.removable { cursor: pointer; transition: background 0.15s ease; }
+	.picked.removable {
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+	}
 	.picked.removable:hover {
 		background: var(--danger-bg);
 		border-color: var(--danger-border);
+		box-shadow: 0 0 14px rgba(255, 107, 107, 0.45);
 	}
 
 	/* The instance being configured right now */
@@ -1228,8 +1243,12 @@ function renderWizard(data) {
 		});
 
 		document.getElementById("cancel").addEventListener("click", function () {
-			// Nothing has been written, so there's nothing to undo
-			location.href = "/";
+			// Nothing has been written, so there's nothing to undo. "/"
+			// used to be the target, but that's this face's own root,
+			// which has no route at all -- the wizard only ever
+			// answers at /faces/new. Cross-port back to where creating
+			// a face is actually started from.
+			location.href = faceUrl(3000) + "/faces";
 		});
 
 		document.getElementById("next").addEventListener("click", async function () {

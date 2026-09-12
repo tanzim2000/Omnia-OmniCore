@@ -71,6 +71,8 @@ const PALETTES = {
 		dangerText: "#ffd6d6",
 		dangerBg: "rgba(70, 8, 8, 0.9)",
 		dangerBorder: "rgba(255, 70, 70, 0.4)",
+		successBg: "rgba(8, 46, 24, 0.9)",
+		successBorder: "rgba(62, 214, 122, 0.4)",
 		success: "#3ed67a",
 		successHover: "#2ab264",
 		successText: "#eafff2",
@@ -114,6 +116,8 @@ const PALETTES = {
 		dangerText: "#7a1c12",
 		dangerBg: "rgba(255, 235, 233, 0.95)",
 		dangerBorder: "rgba(192, 57, 43, 0.35)",
+		successBg: "rgba(230, 250, 238, 0.95)",
+		successBorder: "rgba(31, 154, 83, 0.35)",
 		success: "#1f9a53",
 		successHover: "#177a41",
 		successText: "#0c3d22",
@@ -195,6 +199,8 @@ function uiStyles(options) {
 		--danger-text: ${active.dangerText};
 		--danger-bg: ${active.dangerBg};
 		--danger-border: ${active.dangerBorder};
+		--success-bg: ${active.successBg};
+		--success-border: ${active.successBorder};
 		--success: ${active.success};
 		--success-hover: ${active.successHover};
 		--success-text: ${active.successText};
@@ -612,9 +618,15 @@ function uiStyles(options) {
 
 	.result:hover { background: var(--card-border); }
 
-	.status { font-size: 0.875em; min-height: 20px; margin-top: 14px; }
+	/* No min-height and no margin-top of its own -- the body's flex
+	   gap between its children already provides spacing here. This is
+	   exactly as tall as whatever text it holds, no taller, and
+	   collapses entirely rather than reserving space for a message
+	   that, most of the time, is never going to appear. */
+	.status { font-size: 0.875em; }
 	.status.good { color: var(--success); }
 	.status.bad { color: var(--danger); }
+	.status:empty { display: none; }
 
 	/* ---------------------------------------------------------------
 	   Step dock — the wizard's navigation, floating at the bottom.
