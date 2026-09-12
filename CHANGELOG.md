@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.12.2
+
+Polish for the wizard rebuild that shipped in v1.12.0.
+
+### Fixed
+
+- A large gap between a step's content and the navigation dock, caused by the status line reserving space for an error message on top of spacing the layout already provided elsewhere -- it now collapses to nothing when there's nothing to say, and is only ever as tall as its own text otherwise.
+- Cancel pointed at the wizard's own root, which has no route at all, the same class of dead link diagnosed earlier for the About face. It now goes to the admin face's Faces list.
+- Available modules had a glow on hover but no coloured background or border, unlike On this face, which had all three. Both now use the identical treatment, green for adding a module and red for removing one.
+
 ## v1.12.1
 
 The v1.12.0 tag went out with a stale package.json version and no changelog entry of its own, so this corrects both. See v1.12.0 below for what that release actually shipped -- nothing here beyond the correction itself.
