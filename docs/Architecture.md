@@ -75,7 +75,7 @@ administrative label; `title` is decoration on the screen itself.
 | `3xxx`  | Admin faces. OmniCore's own UI. No third-party code ever runs here.   |
 | `4000`  | The control face. Face creation, and the registry OmniView will read. |
 | `4001+` | Dashboard faces, assigned automatically in order.                     |
-| `5001+` | Input faces — one per module instance that declares one. See §5c.     |
+| `2001+` | Inports — one per dashboard face that has something taking input. Paired to its face by ID: face `001` is Outport `4001` and Inport `2001`. See §5c. |
 
 ### Instance
 
@@ -147,7 +147,7 @@ until the Marketplace puts something in them.
 | `module-api.js`        | Builds the object a module actually receives — `fetch`/`visible`/`share`/`storage`. The one seam a module reaches OmniCore through.                  |
 | `module-storage.js`    | Read/write for one module instance's own persisted data. See §5c.                                                                                    |
 | `input-face-loader.js` | Starts/stops one server per instance that declares an `input.json` — one instance, one port, unlike `face-loader.js`. See §5c.                       |
-| `input-face-page.js`   | Renders an input face's default page. Not a theme, and not meant to be one — OmniCore's own UI, same as `fallback-page.js`.                          |
+| `input-face-page.js`   | Renders an Inport's default page. Not a theme, and not meant to be one — OmniCore's own UI, same as `fallback-page.js`.                          |
 | `marketplace.js`       | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                                       |
 | `priority.js`          | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                                        |
 | `theme-loader.js`      | Finds themes, reads their manifest and both settings schemas.                                                                                        |
@@ -433,7 +433,7 @@ see §13.
 
 ---
 
-### 5c. System time, storage, and input faces
+### 5c. System time, storage, and Inports
 
 **System time — `omni.time()`**
 
@@ -518,11 +518,27 @@ pairing each with its own button keeps which-value-goes-where obvious.
 An empty or non-numeric field submits nothing at all rather than sending
 a null through, since that's a slip rather than an event worth recording.
 
-A module with no `input.json` simply has no input face — nothing else
+A module with no `input.json` simply takes no input — nothing else
 about it changes.
 
-Declaring one gets the instance its own port, `5001+` (see the port-range
-table in §3), auto-assigned the same way a dashboard face's own port is.
+Input is reached at the **Inport** of whichever face the module sits on.
+A face is one ID and two ports: face `001` means Outport `001` (port
+`4001`, the dashboard) and Inport `001` (port `2001`, its input). The
+pairing is arithmetic, never allocated — `4001` is always paired with
+`2001`, and nothing has to remember that.
+
+Several modules on the same face share that one Inport and are told
+apart by path: `/<instance-id>` for a module's page, and
+`POST /<instance-id>/input` for a tap. The Inport's root serves the one
+module's page directly when a face has exactly one taking input, and
+offers a choice when it has several — a picker holding a single option
+is just a tap someone has to make for no reason.
+
+An Inport only listens if its face actually has something taking input.
+A face of weather and wallpaper tiles has no reason to hold an open,
+unauthenticated port waiting for input that can never arrive, so it
+doesn't — and starts listening the moment an input-capable module is
+added, without a restart.
 **OmniCore renders the page itself — a plain black page with one glass
 button per control, no theme involved at all.** A module says what
 controls exist; it never says how a tap looks or feels, the same
@@ -547,7 +563,7 @@ shows one more point."
 
 **Trust.** Unauthenticated, same model as a dashboard face today — anyone
 on the network can reach the port and tap the button. Not solved
-per-feature: a dedicated auth service is planned to cover input faces
+per-feature: a dedicated auth service is planned to cover Inports
 and the control face (port 4000) together, rather than bolting something
 on for just this one.
 
@@ -833,7 +849,7 @@ light.
 | **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                                                                      |
 | **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                                                 |
 | **Dashboard faces (4001+)** | Unauthenticated. Serves data, `GET /time`, and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                    |
-| **Input faces (5001+)**     | Unauthenticated. One write: `POST /input`, reaching a module's `onInput`. Not yet solved — see §5c; planned to be covered by the same future auth work as the control face. |
+| **Inports (2001+)**     | Unauthenticated. One write: `POST /<instance-id>/input`, reaching a module's `onInput`. Not yet solved — see §5c; planned to be covered by the same future auth work as the control face. Because an Inport belongs to a face rather than an instance, that auth will cover every module behind it at once. |
 
 Passwords are salted scrypt hashes compared in constant time. Sessions are
 random tokens in an `HttpOnly`, `SameSite=Strict` cookie, held in memory so

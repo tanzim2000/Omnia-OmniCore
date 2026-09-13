@@ -349,7 +349,7 @@ if (!config.location) {
 
 ---
 
-## 5. System time, storage, and input faces
+## 5. System time, storage, and input
 
 ### System time
 
@@ -424,8 +424,15 @@ module.exports.onInput = async function (payload, omni) { ... }; // NEW
 `payload` is `{ key }` for a button, or `{ key, value }` for a number.
 This is where you actually call `omni.storage.write(...)`; your display
 function reads the same storage back to decide what to show. A module
-with no `input.json` has no input face at all — nothing else about it is
+with no `input.json` simply takes no input — nothing else about it is
 any different.
+
+Your module doesn't get a port of its own. Input arrives at the Inport
+of whichever face your module was placed on — face `001` uses port
+`2001`, alongside its dashboard on `4001` — and several modules on one
+face share it, told apart by path. None of that is something a module
+has to know or handle: you declare your controls, you handle `onInput`,
+and OmniCore does the rest.
 
 Throwing from `onInput` costs you one failed tap, the same way throwing
 from your display function costs you one dead tile — prefer returning

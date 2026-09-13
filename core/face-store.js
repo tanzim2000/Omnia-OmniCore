@@ -25,10 +25,37 @@ function dataPath() {
 // 3xxx = admin faces (built in, never user-modifiable)
 // 4000 = the OmniView welcome face
 // 4001+ = dashboard faces (auto-assigned by OmniCore)
-// 5001+ = Control faces (auto-assigned, one per instance that wants one)
+// 2001+ = input faces, paired to a dashboard face by its ID
+//
+// A Face is one ID and two ports. Face 001 means Outport 001 (port
+// 4001) and Inport 001 (port 2001) -- the last three digits are the
+// face's real ID, and the leading digit only says which half of the
+// pair a port belongs to. The pairing is arithmetic, never allocated:
+// 4001 is always paired with 2001 and nothing has to remember that.
+//
+// This replaced a pool of separately-allocated input ports, one per
+// module instance, which meant tracking which were taken, finding the
+// next free one, and avoiding collisions when several were handed out
+// in a single batch before anything was written to disk. None of that
+// bookkeeping has anything to answer any more.
 const DASHBOARD_PORT_START = 4001;
-const INPUT_PORT_START = 5001;
-const INPUT_PORT_END = 5050;
+const OUTPORT_PREFIX = 4000;
+const INPORT_PREFIX = 2000;
+
+// A face's ID is the shared last-three-digits of its port pair.
+function faceIdFromPort(port) {
+	return port % 1000;
+}
+
+// The two ports a face ID resolves to. Pure arithmetic in both
+// directions -- nothing is looked up, stored, or reserved.
+function outportFor(faceId) {
+	return OUTPORT_PREFIX + faceIdFromPort(faceId);
+}
+
+function inportFor(faceId) {
+	return INPORT_PREFIX + faceIdFromPort(faceId);
+}
 
 function readFaces() {
 	// A fresh install has no data folder yet — that's not an error,
@@ -61,37 +88,25 @@ function nextDashboardPort() {
 	return port;
 }
 
-// Find the next free input-face port (5001, 5002...), or null once the
-// reserved block (5001-5050 — see docker-compose.yml) is exhausted. An
-// instance simply not getting an input face is the graceful outcome of
-// that, not something that should stop it being created — the same way a
-// module with no settings just gets an empty config, not an error.
+// Does this face have anything that actually takes input?
 //
-// `alsoUsed` covers ports already handed out THIS call but not yet
-// written to disk — createFace can build several instances in one batch
-// before any of them are persisted, so checking readFaces() alone would
-// let two of them see the same "next free" port and collide.
-function nextInputPort(alsoUsed) {
-	const usedPorts = readFaces()
-		.flatMap((face) => face.instances)
-		.map((instance) => instance.inputPort)
-		.filter(Boolean)
-		.concat(alsoUsed || []);
-
-	let port = INPUT_PORT_START;
-	while (usedPorts.includes(port)) {
-		port++;
+// What decides whether a face's Inport is listening at all. A face whose
+// modules are all display-only (weather, a wallpaper, disk space) has no
+// reason to hold an open, unauthenticated port waiting for input that
+// can never arrive -- so it doesn't. The port number still exists in the
+// arithmetic sense, it just isn't bound to anything.
+//
+// Re-asked whenever a face's instances change, so adding an
+// input-capable module to a face that had none starts its Inport, and
+// removing the last one stops it again.
+function faceTakesInput(face) {
+	if (!face) {
+		return false;
 	}
-	return port > INPUT_PORT_END ? null : port;
-}
 
-// An input port for this module, if it declares an input.json — null for
-// every other module, which is exactly what "no input face" means
-// downstream (see input-face-loader.js).
-function inputPortFor(moduleId, alsoUsed) {
-	return readInputSchema(moduleId).length > 0
-		? nextInputPort(alsoUsed)
-		: null;
+	return face.instances.some(
+		(instance) => readInputSchema(instance.module).length > 0
+	);
 }
 
 // Create a new dashboard face and persist it.
@@ -155,29 +170,20 @@ function newInstanceId(moduleId) {
 }
 
 // Builds a batch of instances for a brand-new face, before any of them
-// are written to disk. Assigns input ports imperatively — accumulating
-// as it goes — rather than mapping each independently, which is exactly
-// what avoids two instances in the same batch computing the same "next
-// free" port (see nextInputPort's `alsoUsed`).
+// are written to disk.
+//
+// An instance no longer carries a port of its own. Input is reached at
+// its face's single Inport, by path -- so there is nothing here to
+// allocate, nothing to accumulate as it goes, and no way for two
+// instances in the same batch to collide over the same number.
 function buildInstances(rawInstances) {
-	const assignedPorts = [];
-
-	return (rawInstances || []).map((instance) => {
-		const inputPort = inputPortFor(instance.module, assignedPorts);
-
-		if (inputPort) {
-			assignedPorts.push(inputPort);
-		}
-
-		return {
-			id: newInstanceId(instance.module),
-			module: instance.module,
-			label: instance.label || "",
-			config: instance.config || {},
-			themeConfigs: instance.themeConfigs || {},
-			inputPort
-		};
-	});
+	return (rawInstances || []).map((instance) => ({
+		id: newInstanceId(instance.module),
+		module: instance.module,
+		label: instance.label || "",
+		config: instance.config || {},
+		themeConfigs: instance.themeConfigs || {}
+	}));
 }
 
 // Add a module to an existing face. Returns the new instance.
@@ -196,8 +202,7 @@ function addInstance(faceId, moduleId, label, config, themeConfigs) {
 		config: config || {},
 		// Per-theme settings, keyed by theme id. Whether this instance shows
 		// at all is one of these — every theme spells "hidden" its own way.
-		themeConfigs: themeConfigs || {},
-		inputPort: inputPortFor(moduleId)
+		themeConfigs: themeConfigs || {}
 	};
 
 	face.instances.push(instance);
@@ -293,6 +298,10 @@ module.exports = {
 	readFaces,
 	findFace,
 	nextDashboardPort,
+	faceIdFromPort,
+	outportFor,
+	inportFor,
+	faceTakesInput,
 	updateThemeConfig,
 	createFace,
 	updateFace,

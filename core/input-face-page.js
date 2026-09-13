@@ -73,7 +73,11 @@ function renderControl(control) {
 	return "";
 }
 
-function renderInputFacePage(label, controls) {
+// `postTo` is where this page sends input. It used to always be
+// "/input", back when an instance owned an entire port to itself. Now
+// several instances share their face's one Inport and are told apart by
+// path, so each page is told its own.
+function renderInputFacePage(label, controls, postTo) {
 	const rendered = controls.map(renderControl).join("");
 
 	return `<!DOCTYPE html>
@@ -156,7 +160,7 @@ ${uiStyles()}
 	<div class="controls">${rendered}</div>
 	<script>
 		async function send(payload) {
-			await fetch("/input", {
+			await fetch(${JSON.stringify(postTo || "/input")}, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(payload)
@@ -207,4 +211,59 @@ ${uiStyles()}
 </html>`;
 }
 
+// Shown at an Inport's root when a face has more than one instance
+// taking input. With exactly one, the root serves that instance's page
+// directly instead -- a menu with a single item in it is just an extra
+// tap for no reason.
+function renderInputPickerPage(faceName, entries) {
+	const rows = entries
+		.map(
+			(entry) =>
+				`<a class="card" href="${escapeHtml(entry.path)}">` +
+				`<strong>${escapeHtml(entry.label)}</strong>` +
+				`</a>`
+		)
+		.join("");
+
+	return `<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>${escapeHtml(faceName)} — OmniCore</title>
+	<style>
+${uiStyles()}
+
+		body {
+			min-height: 100vh;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 1.5em;
+			padding: 1.5em;
+			-webkit-user-select: none;
+			user-select: none;
+		}
+
+		h1 {
+			font-weight: 300;
+			font-size: 1.4em;
+			opacity: 0.85;
+			text-align: center;
+			margin: 0;
+		}
+
+		.list { width: 100%; max-width: 24em; }
+		.card { text-decoration: none; color: var(--fg); }
+	</style>
+</head>
+<body>
+	<h1>${escapeHtml(faceName)}</h1>
+	<div class="list">${rows}</div>
+</body>
+</html>`;
+}
+
 module.exports = renderInputFacePage;
+module.exports.renderInputPickerPage = renderInputPickerPage;

@@ -43,7 +43,7 @@ const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const coreUpdater = require("./core-updater");
 const updateStore = require("./update-store");
 const fontService = require("./font-service");
-const { startInputFace, stopInputFace } = require("./input-face-loader");
+const { startInputFace, stopInputFace, refreshInputFace } = require("./input-face-loader");
 const auth = require("./admin-auth");
 
 const ADMIN_PORT = 3000;
@@ -3181,10 +3181,12 @@ function startAdminFace() {
 			return;
 		}
 
-		// Only runs if the module actually declared an input.json —
-		// startInputFace itself is a no-op otherwise (see
-		// input-face-loader.js).
-		await startInputFace(id, instance);
+		// Brings the face's Inport in line with what it now holds. If
+		// this was the first input-capable module on a face that had
+		// none, this is what opens its Inport; if the face already had
+		// one running, this is what makes the new module reachable on
+		// it. A face with nothing taking input stays closed.
+		await refreshInputFace(faceStore.findFace(id));
 
 		refresh(id);
 		res.json(instance);
@@ -3366,7 +3368,7 @@ function startAdminFace() {
 		res.json(updated);
 	});
 
-	app.delete("/faces/:id/modules/:instanceId", (req, res) => {
+	app.delete("/faces/:id/modules/:instanceId", async (req, res) => {
 		const id = Number(req.params.id);
 		const removed = faceStore.removeInstance(id, req.params.instanceId);
 
@@ -3376,8 +3378,10 @@ function startAdminFace() {
 		}
 
 		// A deleted instance's button shouldn't keep answering taps for a
-		// module that's no longer even on the face.
-		stopInputFace(removed.inputPort);
+		// module that's no longer even on the face — and if that was the
+		// last thing on this face taking input, its Inport closes
+		// entirely rather than staying open with nothing behind it.
+		await refreshInputFace(faceStore.findFace(id));
 
 		refresh(id);
 		res.json({ ok: true });

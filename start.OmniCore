@@ -22,12 +22,11 @@ const faces = readFaces();
 for (const face of faces) {
 	startFace(face);
 
-	// Any instance on it that declared an input.json gets its own tiny
-	// server too — a face coming back up brings every button on it back
-	// up as well, not just the dashboard itself.
-	for (const instance of face.instances) {
-		startInputFace(face.id, instance);
-	}
+	// If anything on this face takes input, its Inport comes up too — a
+	// face coming back up brings every button on it back with it, not
+	// just the dashboard itself. A face with nothing taking input
+	// doesn't open a port it has no use for.
+	startInputFace(face);
 }
 
 // The welcome face is always running

@@ -9,7 +9,11 @@ const assert = require("node:assert");
 
 const faceStore = require("../core/face-store");
 const { startFace, refresh } = require("../core/face-loader");
-const { startInputFace, stopInputFace } = require("../core/input-face-loader");
+const {
+	startInputFace,
+	stopInputFace,
+	refreshInputFace
+} = require("../core/input-face-loader");
 const moduleStorage = require("../core/module-storage");
 const {
 	resetState,
@@ -273,12 +277,12 @@ test("about face: reports real system facts", async () => {
 	);
 });
 
-test("input face: a tap reaches the module and persists", async () => {
+test("inport: a tap reaches the right module and persists", async () => {
 	const fs = require("fs");
 	const path = require("path");
 	const { modulesDir } = require("./helpers");
 
-	// A module with an input face, written here rather than pulled from
+	// A module that takes input, written here rather than pulled from
 	// the registry because nothing published declares one yet.
 	const dir = path.join(modulesDir, "smoke-input-module");
 	fs.mkdirSync(dir, { recursive: true });
@@ -315,38 +319,104 @@ module.exports.onInput = async function (payload, omni) {
 `
 	);
 
-	const instance = {
-		id: "smoke-input-module-test",
-		module: "smoke-input-module",
-		label: "Smoke Input",
-		inputPort: 5001
-	};
+	// Two instances of it on one face, which is the case the Inport
+	// model exists for: they share one port and are told apart by path.
+	const face = faceStore.createFace("Inport Face", "", "windows8", [
+		{ module: "smoke-input-module", config: {} },
+		{ module: "smoke-input-module", config: {} }
+	]);
 
-	await startInputFace(4001, instance);
-	await waitForPort(5001);
+	await startInputFace(face);
 
-	const page = await (await fetch("http://127.0.0.1:5001/")).text();
+	const port = faceStore.inportFor(face.id);
+	await waitForPort(port);
+
+	// The port is arithmetic, not allocated -- 4001 pairs with 2001 and
+	// nothing had to remember that.
+	assert.equal(port, faceStore.inportFor(face.id), "inport must be stable");
+	assert.equal(
+		faceStore.faceIdFromPort(port),
+		faceStore.faceIdFromPort(face.id),
+		"a face's two ports must share an id"
+	);
+
+	const stored = faceStore.findFace(face.id);
+	const [first, second] = stored.instances;
+
+	// Two of them, so the root offers a choice rather than guessing
+	const root = await (await fetch(`http://127.0.0.1:${port}/`)).text();
+	assert.ok(root.includes(first.id), "the picker should link the first instance");
+	assert.ok(root.includes(second.id), "the picker should link the second instance");
+
+	// One instance's own page
+	const page = await (await fetch(`http://127.0.0.1:${port}/${first.id}`)).text();
 	assert.ok(page.includes("Tap"), "the button did not render");
 	assert.ok(page.includes('type="number"'), "the number field did not render");
 
 	// A button press carries no value; a number press carries one.
-	await fetch("http://127.0.0.1:5001/input", {
+	await fetch(`http://127.0.0.1:${port}/${first.id}/input`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ key: "tap" })
 	});
 
-	await fetch("http://127.0.0.1:5001/input", {
+	await fetch(`http://127.0.0.1:${port}/${first.id}/input`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ key: "amount", value: 20.5 })
 	});
 
-	const stored = moduleStorage.readInstanceData(4001, instance.id);
+	// And one for the OTHER instance, on the same port -- if paths
+	// weren't genuinely routing these apart, this would land in the
+	// first instance's storage instead of its own.
+	await fetch(`http://127.0.0.1:${port}/${second.id}/input`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ key: "tap" })
+	});
 
-	assert.equal(stored.entries.length, 2, "both inputs should have persisted");
-	assert.equal(stored.entries[0].value, 1, "a tap should record 1");
-	assert.equal(stored.entries[1].value, 20.5, "a decimal amount should survive");
+	const firstData = moduleStorage.readInstanceData(face.id, first.id);
+	const secondData = moduleStorage.readInstanceData(face.id, second.id);
 
-	stopInputFace(5001);
+	assert.equal(firstData.entries.length, 2, "both inputs should have persisted");
+	assert.equal(firstData.entries[0].value, 1, "a tap should record 1");
+	assert.equal(firstData.entries[1].value, 20.5, "a decimal amount should survive");
+	assert.equal(
+		secondData.entries.length,
+		1,
+		"the other instance should have its own separate storage"
+	);
+
+	stopInputFace(face.id);
+});
+
+test("inport: only listens when the face has something taking input", async () => {
+	// A face of display-only modules has no reason to hold an open,
+	// unauthenticated port waiting for input that can never arrive.
+	const face = faceStore.createFace("Quiet Face", "", "windows8", [
+		{ module: "weather", config: {} }
+	]);
+
+	await startInputFace(face);
+
+	const port = faceStore.inportFor(face.id);
+	const reachable = await fetch(`http://127.0.0.1:${port}/`)
+		.then(() => true)
+		.catch(() => false);
+
+	assert.equal(reachable, false, "a face with no input should not be listening");
+
+	// Adding the first input-capable module is what opens it -- this is
+	// the case that would otherwise need a restart to take effect.
+	faceStore.addInstance(face.id, "smoke-input-module", "", {}, {});
+	await refreshInputFace(faceStore.findFace(face.id));
+	await waitForPort(port);
+
+	const nowReachable = await fetch(`http://127.0.0.1:${port}/`)
+		.then((response) => response.status === 200)
+		.catch(() => false);
+
+	assert.equal(nowReachable, true, "adding an input module should open the inport");
+
+	stopInputFace(face.id);
 });

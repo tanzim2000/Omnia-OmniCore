@@ -395,12 +395,10 @@ function startWizardFace() {
 		// before responding, so the browser never redirects too early
 		await startFace(face);
 
-		// The wizard can bundle instances straight in at creation — any
-		// of them with an input.json gets its own tiny server too, same
-		// as one added later through the admin face.
-		for (const instance of face.instances) {
-			await startInputFace(face.id, instance);
-		}
+		// The wizard can bundle instances straight in at creation — if
+		// any of them takes input, the face's Inport comes up with it,
+		// same as one added later through the admin face.
+		await startInputFace(face);
 
 		res.json(face);
 	});
