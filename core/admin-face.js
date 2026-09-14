@@ -2593,6 +2593,7 @@ function startAdminFace() {
 			</div>
 
 			<div class="bento">
+			<div class="bento-row ${last.updateAvailable && last.latestVersion ? "three" : "two"}">
 			<div class="tile">
 				<div class="field">
 					<strong>Running</strong>
@@ -2624,6 +2625,7 @@ function startAdminFace() {
 				currentNotes,
 				"Release notes for this version couldn't be fetched. A development build has none to fetch."
 			)}
+			</div>
 			</div>`;
 
 		const script = `
@@ -2720,7 +2722,9 @@ function startAdminFace() {
 			</div>
 			<div class="bento">
 				<div class="tile">
-					${list || '<div class="empty">Nothing installed yet.</div>'}
+					<div class="list">
+						${list || '<div class="empty">Nothing installed yet.</div>'}
+					</div>
 				</div>
 				<div class="tile">
 					<a class="glass glass-block" href="/marketplace"
@@ -2736,9 +2740,13 @@ function startAdminFace() {
 		// The About face is on another port, so that link has to be
 		// built in the browser -- the server has no idea what hostname
 		// was used to reach it.
+		// faceUrl() comes from portLinkScript and is NOT on every page --
+		// it has to be included wherever it's used, which is exactly
+		// what this was missing: the handler threw on an undefined
+		// function, so the button did nothing at all.
 		const script =
 			req.query.from === "about"
-				? `
+				? portLinkScript + `
 					var back = document.querySelector(".floating");
 					if (back) {
 						back.onclick = function () {
@@ -2768,16 +2776,18 @@ function startAdminFace() {
 			.join("");
 
 		const body = `
-			<div class="panel">
-				<h1 style="margin-top:12px">Faces</h1>
-			</div>
-			<div class="panel list">
-				${faces || '<div class="empty">No faces yet.</div>'}
-			</div>
-			<div class="panel">
-				<button class="glass glass-block" onclick="goToWizard()">
-					Create a new face
-				</button>
+			<div class="bento">
+				<div class="tile">
+					<h1 style="margin-bottom:14px">Faces</h1>
+					<div class="list">
+						${faces || '<div class="empty">No faces yet.</div>'}
+					</div>
+				</div>
+				<div class="tile">
+					<button class="glass glass-block" onclick="goToWizard()">
+						Create a new face
+					</button>
+				</div>
 			</div>`;
 
 		// The wizard lives on its own face now (3999), so this has to be
@@ -2808,23 +2818,23 @@ function startAdminFace() {
 		const themeName = themeLoader.readManifest(face.theme).name;
 
 		const body = `
-			<div class="panel">
-				<h1 style="margin-top:12px">${escapeHtml(face.name)}</h1>
-				<p class="lede">Running on port ${face.id}</p>
-			</div>
-			<div class="panel">
-				<a class="row" href="/faces/${face.id}/modules">
+			<div class="bento">
+			<div class="bento-row two">
+				<div class="tile">
+					<h1>${escapeHtml(face.name)}</h1>
+					<p class="lede" style="margin-bottom:14px">Running on port ${face.id}</p>
+					<a class="row" href="/faces/${face.id}/modules">
 					<strong>Modules</strong>
 					<span>${count ? count + (count === 1 ? " module" : " modules") : "None added yet"}</span>
 				</a>
-				<a class="row" href="/faces/${face.id}/theme">
-					<strong>Theme</strong>
-					<span>${escapeHtml(themeName)}</span>
-				</a>
-			</div>
-			<div class="panel">
-				<div class="field">
-					<label for="name">Name</label>
+					<a class="row" href="/faces/${face.id}/theme">
+						<strong>Theme</strong>
+						<span>${escapeHtml(themeName)}</span>
+					</a>
+				</div>
+				<div class="tile">
+					<div class="field">
+						<label for="name">Name</label>
 					<input type="text" id="name" value="${escapeHtml(face.name)}">
 					<div class="help">
 						How you recognise this face here. Blank falls back to
@@ -2842,8 +2852,10 @@ function startAdminFace() {
 					</div>
 				</div>
 
-				<button class="glass glass-block" id="save">Save face</button>
-				<p class="status" id="status"></p>
+					<button class="glass glass-block" id="save">Save face</button>
+					<p class="status" id="status"></p>
+				</div>
+			</div>
 			</div>`;
 
 		const script = `
@@ -2917,26 +2929,26 @@ function startAdminFace() {
 		);
 
 		const body = `
-			<div class="panel">
-				<h1 style="margin-top:12px">${escapeHtml(manifest.name)}</h1>
-				<p class="lede">${escapeHtml(
-					manifest.description || "The theme this face is using"
-				)}</p>
-			</div>
-			<div class="panel">
-				<a class="row" href="/faces/${face.id}/theme/change">
-					<strong>Change theme</strong>
-					<span>Use a different theme on this face</span>
-				</a>
-			</div>
-			<div class="panel">
-				${
-					schema.length
-						? renderFields(schema, config, { instances: face.instances }) +
-						  '<button class="glass glass-block" id="save">Save</button>' +
-						  '<p class="status" id="status"></p>'
-						: '<div class="empty">This theme has nothing to configure.</div>'
-				}
+			<div class="bento">
+				<div class="tile">
+					<h1>${escapeHtml(manifest.name)}</h1>
+					<p class="lede" style="margin-bottom:14px">${escapeHtml(
+						manifest.description || "The theme this face is using"
+					)}</p>
+					<a class="row" href="/faces/${face.id}/theme/change">
+						<strong>Change theme</strong>
+						<span>Use a different theme on this face</span>
+					</a>
+				</div>
+				<div class="tile">
+					${
+						schema.length
+							? renderFields(schema, config, { instances: face.instances }) +
+							  '<button class="glass glass-block" id="save">Save</button>' +
+							  '<p class="status" id="status"></p>'
+							: '<div class="empty">This theme has nothing to configure.</div>'
+					}
+				</div>
 			</div>`;
 
 		const script = schema.length
@@ -3089,17 +3101,19 @@ function startAdminFace() {
 			.join("");
 
 		const body = `
-			<div class="panel">
-				<h1 style="margin-top:12px">Modules</h1>
-			</div>
-			<div class="panel list">
-				${instances || '<div class="empty">No modules on this face yet.</div>'}
-			</div>
-			<div class="panel">
-				<a class="glass" href="/faces/${face.id}/modules/add"
-					style="display:block;text-align:center;box-sizing:border-box">
-					Add a module
-				</a>
+			<div class="bento">
+				<div class="tile">
+					<h1 style="margin-bottom:14px">Modules</h1>
+					<div class="list">
+						${instances || '<div class="empty">No modules on this face yet.</div>'}
+					</div>
+				</div>
+				<div class="tile">
+					<a class="glass glass-block" href="/faces/${face.id}/modules/add"
+						style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
+						Add a module
+					</a>
+				</div>
 			</div>`;
 
 		res.send(page("Modules", body, "", "", `/faces/${req.params.id}`));

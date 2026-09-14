@@ -357,6 +357,12 @@ function uiStyles(options) {
 		scrollbar-color: var(--scroll-thumb) transparent;
 	}
 
+	/* Without this, a list holding more than fits its max-height squeezes
+	   every row below its own content height rather than scrolling --
+	   flex children shrink by default. That's what clipped the text in
+	   every row of the per-face Modules page. */
+	.list > * { flex-shrink: 0; }
+
 	.list::-webkit-scrollbar { width: 8px; }
 	.list::-webkit-scrollbar-track { background: transparent; }
 	.list::-webkit-scrollbar-thumb {
