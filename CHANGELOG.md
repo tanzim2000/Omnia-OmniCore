@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.12.3
+
+Finishes moving the admin face onto the bento layout introduced in v1.12.0, and fixes several real bugs found in the process.
+
+### Added
+
+- The wizard's Add Modules and Theme steps now link out to Marketplace directly, since an install with no resources yet -- the normal first run -- previously left both steps with an empty list and no way out.
+- Every remaining admin page still built on the pre-bento .panel layout is now on bento and tile: the per-face Theme, Modules, and detail pages, the Faces list, Installed Resources, and Updates.
+
+### Fixed
+
+- A list holding more content than its max-height squeezed every row below its own content height instead of scrolling, since flex children shrink by default. This was clipping every row's text on the per-face Modules page.
+- The Installed Resources page's back button did nothing when reached from the About face, since the script calling faceUrl() was missing the helper that defines it.
+- The wizard's bare root (port 3999 with no path) was a dead "Cannot GET /"; it now redirects to /faces/new.
+
 ## v1.12.2
 
 Polish for the wizard rebuild that shipped in v1.12.0.
