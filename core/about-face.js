@@ -74,6 +74,23 @@ function stat(label, value) {
 		</div>`;
 }
 
+// The same tile, but it goes somewhere. Used for Resources, where the
+// number is a count of a list worth actually seeing -- the list lives on
+// the admin face, since its Marketplace button needs that session
+// anyway. ?from=about is what lets its back button return here rather
+// than to Settings.
+function linkStat(label, value, id) {
+	if (value === null || value === undefined) {
+		return "";
+	}
+
+	return `
+		<button class="stat stat-button" id="${id}">
+			<div class="stat-label">${escapeHtml(label)}</div>
+			<div class="stat-value">${escapeHtml(String(value))}</div>
+		</button>`;
+}
+
 function systemRow(icon, label, value) {
 	if (!value) {
 		return "";
@@ -139,7 +156,7 @@ function renderPage(info) {
 
 	<div class="stats">
 		${versionStat(info)}
-		${stat("Resources", info.resources)}
+		${linkStat("Resources", info.resources, "resources-stat")}
 		${stat("Dashboards", info.dashboards)}
 	</div>
 
@@ -175,6 +192,15 @@ function renderPage(info) {
 		if (back) {
 			back.addEventListener("click", function () {
 				location.href = faceUrl(${ADMIN_PORT});
+			});
+		}
+
+		// The list this number counts. from=about tells that page to
+		// send its own back button here rather than to Settings.
+		var resources = document.getElementById("resources-stat");
+		if (resources) {
+			resources.addEventListener("click", function () {
+				location.href = faceUrl(${ADMIN_PORT}) + "/installed?from=about";
 			});
 		}
 	</script>

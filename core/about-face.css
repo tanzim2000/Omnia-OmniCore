@@ -232,3 +232,23 @@ body > * { position: relative; z-index: 1; }
 	.actions { max-width: 640px; flex-direction: row; }
 	.omnia-title { font-size: 3.25rem; }
 }
+/* The one stat that leads somewhere. A button rather than a div, so it
+   is reachable by keyboard and announced as clickable -- styled back to
+   match the plain stats beside it, since it should look like one of
+   them, just live. */
+.stat-button {
+	appearance: none;
+	-webkit-appearance: none;
+	width: 100%;
+	font-family: inherit;
+	color: inherit;
+	cursor: pointer;
+	transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.stat-button:hover,
+.stat-button:focus-visible {
+	outline: none;
+	background: var(--glass-bg-hover);
+	box-shadow: 0 0 14px var(--glow-strong);
+}

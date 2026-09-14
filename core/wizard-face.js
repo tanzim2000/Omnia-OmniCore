@@ -188,6 +188,42 @@ const styles = `
 		color: var(--fg-muted);
 	}
 
+	/* A tile heading with an action beside it. The heading keeps its own
+	   bottom margin so a tile without an action looks no different. */
+	.tile-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1em;
+		flex-shrink: 0;
+	}
+
+	/* Sized to sit beside a heading rather than stand on its own -- close
+	   to the text it accompanies, not a full control competing with the
+	   list below it. */
+	.mini {
+		appearance: none;
+		-webkit-appearance: none;
+		flex-shrink: 0;
+		margin-bottom: 14px;
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		border-radius: 999px;
+		color: var(--fg);
+		font-family: inherit;
+		font-size: 0.8em;
+		padding: 5px 12px;
+		cursor: pointer;
+		transition: background 0.15s ease, box-shadow 0.15s ease;
+	}
+
+	.mini:hover,
+	.mini:focus-visible {
+		outline: none;
+		background: var(--glass-bg-hover);
+		box-shadow: 0 0 14px var(--glow-strong);
+	}
+
 	/* The settings form inside a split step scrolls on its own too,
 	   rather than growing its tile past the screen */
 	.tile-scroll {
@@ -411,6 +447,13 @@ function startWizardFace() {
 	});
 
 	// The setup wizard
+	// The wizard only ever answers at /faces/new, so the bare root used
+	// to be a dead "Cannot GET /". Anyone who trims the path, or who
+	// bookmarked the port itself, lands somewhere real now.
+	app.get("/", (req, res) => {
+		res.redirect("/faces/new");
+	});
+
 	app.get("/faces/new", (req, res) => {
 		// Everything the wizard needs, handed over up front so it can run
 		// entirely in the browser without saving anything as it goes
@@ -604,33 +647,44 @@ function renderWizard(data) {
 				"</label>";
 			}).join("");
 
-			return '<div class="tile wizard-single">' +
-				'<div class="field">' +
-					'<label for="name">Name</label>' +
-					'<input type="text" id="name" value="' + escapeHtml(face.name) +
-						'" placeholder="Face ' + NEXT_PORT + '">' +
-					'<div class="help">How you recognise this face in settings. ' +
-						'Leave it blank and it will be called Face ' + NEXT_PORT +
-						".</div>" +
+			// Two tiles rather than one: naming and theme-picking are
+			// separate jobs, and splitting them gives the theme list its
+			// own room to scroll instead of pushing the name fields
+			// around. Uses the same split as the picker steps, so it
+			// divides by orientation for free.
+			return '<div class="wizard-split">' +
+				'<div class="tile">' +
+					'<div class="tile-scroll">' +
+						'<div class="field">' +
+							'<label for="name">Name</label>' +
+							'<input type="text" id="name" value="' + escapeHtml(face.name) +
+								'" placeholder="Face ' + NEXT_PORT + '">' +
+							'<div class="help">How you recognise this face in settings. ' +
+								'Leave it blank and it will be called Face ' + NEXT_PORT +
+								".</div>" +
+						"</div>" +
+						'<div class="field">' +
+							'<label for="title">Title</label>' +
+							'<input type="text" id="title" value="' + escapeHtml(face.title) +
+								'" placeholder="Optional">' +
+							'<div class="help">Shown on the dashboard itself, if the ' +
+								"theme displays one. Leave it blank for no heading.</div>" +
+						"</div>" +
+					"</div>" +
 				"</div>" +
-				'<div class="field">' +
-					'<label for="title">Title</label>' +
-					'<input type="text" id="title" value="' + escapeHtml(face.title) +
-						'" placeholder="Optional">' +
-					'<div class="help">Shown on the dashboard itself, if the ' +
-						"theme displays one. Leave it blank for no heading.</div>" +
-				"</div>" +
-				'<div class="field">' +
-					"<h2>Theme</h2>" +
+				'<div class="tile">' +
+					'<div class="tile-head">' +
+						"<h2>Theme</h2>" +
+						'<button class="mini" onclick="toMarketplace()">Download themes</button>' +
+					"</div>" +
 					// OmniCore ships bare, so an install with no themes yet
-					// is the normal first run — not a fault. Say where
-					// they come from rather than leaving a dead end: a
-					// face can't be created without one.
-					(themes || '<div class="empty">' +
-						"No themes installed yet. Open the admin face on " +
-						"port 3000 and go to Marketplace to install one, " +
-						"then come back here." +
-					"</div>") +
+					// is the normal first run — not a fault. The button
+					// above is the way out of that, rather than a dead end.
+					'<div class="list-fill">' +
+						(themes || '<div class="empty">' +
+							"No themes installed yet. Download one to get started." +
+						"</div>") +
+					"</div>" +
 				"</div>" +
 			"</div>";
 		}
@@ -659,7 +713,10 @@ function renderWizard(data) {
 			// all and simply grew the page instead.
 			return '<div class="wizard-split">' +
 				'<div class="tile">' +
-					"<h2>Available modules</h2>" +
+					'<div class="tile-head">' +
+						"<h2>Available modules</h2>" +
+						'<button class="mini" onclick="toMarketplace()">Download modules</button>' +
+					"</div>" +
 					'<div class="list-fill">' +
 						(available || '<div class="empty">No modules installed.</div>') +
 					"</div>" +
@@ -1239,6 +1296,16 @@ function renderWizard(data) {
 			if (step > 0) step--;
 			draw();
 		});
+
+		// Same tab, deliberately. The wizard holds everything in the
+		// browser and commits nothing until Finish, so this does discard
+		// what's been picked so far -- but installing a resource needs a
+		// reload to show up in these lists anyway, which would reset the
+		// wizard regardless. A new tab would only hide that, not avoid
+		// it.
+		function toMarketplace() {
+			location.href = faceUrl(3000) + "/marketplace";
+		}
 
 		document.getElementById("cancel").addEventListener("click", function () {
 			// Nothing has been written, so there's nothing to undo. "/"

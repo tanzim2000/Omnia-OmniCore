@@ -2578,8 +2578,8 @@ function startAdminFace() {
 			: `<p class="lede">This is the newest version.</p>`;
 
 		const notesSection = (heading, notes, fallback) => `
-			<div class="panel">
-				<h2 style="margin-bottom:10px">${escapeHtml(heading)}</h2>
+			<div class="tile">
+				<h2>${escapeHtml(heading)}</h2>
 				${
 					notes
 						? `<div class="changelog">${renderNotes(notes)}</div>`
@@ -2588,11 +2588,12 @@ function startAdminFace() {
 			</div>`;
 
 		const body = `
-			<div class="panel">
-				<h1 style="margin-top:12px">Updates</h1>
+			<div class="settings-head">
+				<h1>Updates</h1>
 			</div>
 
-			<div class="panel">
+			<div class="bento">
+			<div class="tile">
 				<div class="field">
 					<strong>Running</strong>
 					<div class="stat-value" style="font-size:1.4em;margin-top:4px">
@@ -2622,7 +2623,8 @@ function startAdminFace() {
 				`What's in ${running}`,
 				currentNotes,
 				"Release notes for this version couldn't be fetched. A development build has none to fetch."
-			)}`;
+			)}
+			</div>`;
 
 		const script = `
 			var button = document.getElementById("check");
@@ -2713,20 +2715,40 @@ function startAdminFace() {
 			.join("");
 
 		const body = `
-			<div class="panel">
-				<h1 style="margin-top:12px">Installed Resources</h1>
+			<div class="settings-head">
+				<h1>Installed Resources</h1>
 			</div>
-			<div class="panel list">
-				${list || '<div class="empty">Nothing installed yet.</div>'}
-			</div>
-			<div class="panel">
-				<a class="glass" href="/marketplace"
-					style="display:block;text-align:center;box-sizing:border-box">
-					Go to Marketplace
-				</a>
+			<div class="bento">
+				<div class="tile">
+					${list || '<div class="empty">Nothing installed yet.</div>'}
+				</div>
+				<div class="tile">
+					<a class="glass glass-block" href="/marketplace"
+						style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
+						Go to Marketplace
+					</a>
+				</div>
 			</div>`;
 
-		res.send(page("Installed Resources", body, "", "", "/"));
+		// Two entrances: Settings, and the Resources figure on the About
+		// face. Back returns to whichever was used rather than always
+		// guessing Settings and stranding anyone who came from About.
+		// The About face is on another port, so that link has to be
+		// built in the browser -- the server has no idea what hostname
+		// was used to reach it.
+		const script =
+			req.query.from === "about"
+				? `
+					var back = document.querySelector(".floating");
+					if (back) {
+						back.onclick = function () {
+							location.href = faceUrl(1303);
+						};
+					}
+				`
+				: "";
+
+		res.send(page("Installed Resources", body, script, "", "/"));
 	});
 
 	app.get("/faces", (req, res) => {
