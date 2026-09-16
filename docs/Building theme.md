@@ -139,6 +139,7 @@ The block types you'll see:
 { type: "progress",   value: 0..1, label }
 { type: "time",       kind: "clock", timestamp, timezone }
 { type: "graphdata",  points: [ { x, y } ], unit }
+{ type: "event",      start, end, summary }
 ```
 
 **You are not required to render every type differently.** A minimal theme
@@ -215,6 +216,51 @@ this the way nothing enforces honouring richness.
 **`graphdata` hands you raw points; how they become a chart is entirely
 your call** — bars, a line, dots, whatever fits your theme. There's no
 `kind` to branch on the way `time` has one.
+
+**`event` blocks are raw calendar data, and the calendar is yours to
+draw.** A module hands you one block per event and nothing else — no
+"today", no grid, no idea which ones matter:
+
+```js
+{ type: "event", start: "2026-09-15T09:00:00.000Z",
+                 end:   "2026-09-15T11:00:00.000Z", summary: "Team standup" }
+
+{ type: "event", start: "2026-09-20", end: "2026-09-22", summary: "Eid holiday" }
+```
+
+You get everything inside the window the module reads, which may be far
+more than you intend to show. Grouping events into days, laying out a
+month or a week, marking today, deciding how many fit — all yours. Use
+the device's own clock for "now"; a module can't tell you that, and
+`GET /time` gives you OmniCore's if you'd rather use the server's.
+
+**Read the shape of the date before you touch it.** A full ISO instant
+is a specific moment. A bare `YYYY-MM-DD` is an all-day event: a whole
+calendar day with no time and no timezone in it at all.
+
+```js
+function readEventDate(value) {
+  const bare = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  // All-day — build a LOCAL date from the parts
+  if (bare) {
+    return new Date(Number(bare[1]), Number(bare[2]) - 1, Number(bare[3]));
+  }
+
+  return new Date(value); // a real instant
+}
+```
+
+**`new Date("2026-09-20")` is the trap.** JavaScript reads a bare date
+string as UTC midnight, which is the evening of the 19th anywhere west
+of UTC — so an all-day event quietly renders on the wrong day for a good
+chunk of the world, and looks perfectly fine wherever you tested it.
+Take the string apart and build a local date, as above.
+
+**`end` is always there, and for all-day events it's the last day the
+event is actually on** — inclusive, so a three-day holiday starting the
+20th ends on the 22nd, not the 23rd. An event with no duration has `end`
+equal to `start`.
 
 ---
 

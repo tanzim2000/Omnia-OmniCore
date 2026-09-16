@@ -52,6 +52,101 @@ function formatDuration(totalSeconds) {
 	return `${minutes}:${paddedSecs}`;
 }
 
+// ---------------------------------------------------------------------
+// Event dates
+//
+// An `event` block carries its dates in one of two deliberately different
+// shapes, and which one it is carries real meaning:
+//
+//   "2026-09-15T09:00:00.000Z"  an INSTANT — a specific moment
+//   "2026-09-20"                a DATE — a whole calendar day, no time
+//
+// An all-day event genuinely has no time and no timezone attached. The
+// bare form is how it says so, and it must never be turned into an
+// instant: `new Date("2026-09-20")` is read by JavaScript as UTC
+// midnight, which is the evening of the 19th anywhere west of UTC — the
+// event would land on the wrong day. So the bare form is taken apart by
+// hand and rebuilt as a local date, where a calendar day belongs.
+function readEventDate(value) {
+	if (typeof value !== "string") {
+		return null;
+	}
+
+	const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+	if (dateOnly) {
+		return {
+			allDay: true,
+			date: new Date(
+				Number(dateOnly[1]),
+				Number(dateOnly[2]) - 1,
+				Number(dateOnly[3])
+			)
+		};
+	}
+
+	const instant = new Date(value);
+
+	if (Number.isNaN(instant.getTime())) {
+		return null;
+	}
+
+	return { allDay: false, date: instant };
+}
+
+function isSameDay(a, b) {
+	return (
+		a.getFullYear() === b.getFullYear() &&
+		a.getMonth() === b.getMonth() &&
+		a.getDate() === b.getDate()
+	);
+}
+
+function formatDay(date) {
+	return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function formatClock(date) {
+	return date.toLocaleTimeString("en-US", {
+		hour: "numeric",
+		minute: "2-digit"
+	});
+}
+
+// When an event happens, as plainly as it can be said.
+//
+// This is only ever the FALLBACK rendering — a theme that understands
+// `event` blocks does its own thing with the raw dates and never sees
+// this. So it aims at "readable in one line", not at completeness.
+function describeWhen(start, end) {
+	const startDay = formatDay(start.date);
+
+	if (start.allDay) {
+		// One day, or a span. A multi-day all-day event reports the last
+		// day it's actually on, so the two ends can be printed as-is.
+		if (!end || isSameDay(start.date, end.date)) {
+			return startDay;
+		}
+
+		return `${startDay} – ${formatDay(end.date)}`;
+	}
+
+	const startTime = formatClock(start.date);
+
+	// An event with no duration — the feed gave no end at all
+	if (!end || end.date.getTime() === start.date.getTime()) {
+		return `${startDay}, ${startTime}`;
+	}
+
+	if (isSameDay(start.date, end.date)) {
+		return `${startDay}, ${startTime} – ${formatClock(end.date)}`;
+	}
+
+	return `${startDay}, ${startTime} – ${formatDay(end.date)}, ${formatClock(
+		end.date
+	)}`;
+}
+
 // Give a block a plain-text form if it doesn't already have one
 function withFallbackText(block) {
 	if (block.text) {
@@ -119,6 +214,18 @@ function withFallbackText(block) {
 			latest === undefined
 				? "No data"
 				: String(latest.y) + (block.unit ? " " + block.unit : "");
+	} else if (block.type === "event") {
+		// One event. The fallback is a single readable line — a theme
+		// that can't draw a calendar should still be able to list what's
+		// on, the same way one that can't draw a chart still shows a
+		// number.
+		const summary = block.summary || "(no title)";
+		const start = readEventDate(block.start);
+		const end = readEventDate(block.end);
+
+		// A block with an unreadable start is still worth showing by
+		// name; dropping it entirely would be worse than saying less.
+		text = start ? `${describeWhen(start, end)} — ${summary}` : summary;
 	}
 
 	return { ...block, text: text };

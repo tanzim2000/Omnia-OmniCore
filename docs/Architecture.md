@@ -1,4 +1,4 @@
-# OmniCore — Architecture & Contracts
+# OmniCore: Architecture & Contracts
 
 This is the reference for how OmniCore works and the rules anything plugging
 into it must follow. It assumes no prior knowledge of the project.
@@ -12,8 +12,8 @@ follows from those two.
 ## 1. What OmniCore is
 
 OmniCore is the engine behind **Omnia**, a smart home dashboard that runs
-entirely on hardware you own. It serves one or more dashboards — each on its
-own port — assembles the data they display, and hands it to whichever theme
+entirely on hardware you own. It serves one or more dashboards, each on its
+own port, assembles the data they display, and hands it to whichever theme
 is rendering them.
 
 Nothing leaves your network except calls a module makes to a service you
@@ -24,7 +24,7 @@ OmniCore is one of three planned parts:
 | Part         | What it does                                  | Status         |
 | ------------ | --------------------------------------------- | -------------- |
 | **OmniCore** | Serves faces and their data. This repository. | In development |
-| **OmniView** | Display client — puts a face on a screen.     | Not started    |
+| **OmniView** | Display client; puts a face on a screen.      | Not started    |
 | **OmniSync** | Planned.                                      | Not started    |
 
 ---
@@ -37,7 +37,7 @@ dashboard software tangles together:
 - **Modules** fetch or measure data. They have **no opinion about how it
   looks** and produce no markup.
 - **Themes** decide how everything looks. They **never run on the server**.
-- **Faces** are the dashboards themselves — a port, a theme, and the module
+- **Faces** are the dashboards themselves. two ports, a theme, and the module
   instances on it.
 
 The payoff: **any theme can display any module without knowing what that
@@ -56,31 +56,31 @@ The rule that keeps it honest, and which the whole codebase defends:
 
 A dashboard served on its own port. **The port number is its ID.**
 
-| Attribute      | Meaning                                                             |
-| -------------- | ------------------------------------------------------------------- |
-| `id`           | Its port. Fixed at creation, never editable.                        |
-| `name`         | How the admin recognises it. Blank falls back to `Face <port>`.     |
-| `title`        | Cosmetic — what a theme displays, if it displays one. May be blank. |
-| `theme`        | Which theme renders it.                                             |
-| `instances`    | The module instances on it.                                         |
-| `themeConfigs` | Theme settings, keyed by theme id.                                  |
+| Attribute      | Meaning                                                            |
+| -------------- | ------------------------------------------------------------------ |
+| `id`           | the last 3 digitof the port. Fixed at creation, never editable.    |
+| `name`         | How the admin recognises it. Blank falls back to `Face:<port>`.    |
+| `title`        | Cosmetic. What a theme displays, if it displays one. May be blank. |
+| `theme`        | Which theme renders it.                                            |
+| `instances`    | The module instances on it.                                        |
+| `themeConfigs` | Theme settings, keyed by theme id.                                 |
 
 `name` and `title` are deliberately different things. `name` is an
 administrative label; `title` is decoration on the screen itself.
 
 **Port ranges carry meaning:**
 
-| Range   | Purpose                                                               |
-| ------- | --------------------------------------------------------------------- |
-| `3xxx`  | Admin faces. OmniCore's own UI. No third-party code ever runs here.   |
-| `4000`  | The control face. Face creation, and the registry OmniView will read. |
-| `4001+` | Dashboard faces, assigned automatically in order.                     |
-| `2001+` | Inports — one per dashboard face that has something taking input. Paired to its face by ID: face `001` is Outport `4001` and Inport `2001`. See §5c. |
+| Range   | Purpose                                                                                                                                             |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `3xxx`  | Admin faces. OmniCore's own UI. No third-party code ever runs here.                                                                                 |
+| `4000`  | The control face. Face creation, and the registry OmniView will read.                                                                               |
+| `4001+` | Outports; one per dashboard face, assigned automatically in order.                                                                                  |
+| `2001+` | Inports; one per dashboard face that has something taking input. Paired to its face by ID: face `001` is Outport `4001` and Inport `2001`. See §5c. |
 
 ### Instance
 
 **One use of a module on one face.** The same module can appear many times
-with different settings — two weather tiles for two cities.
+with different settings, two weather tiles for two cities.
 
 ```json
 {
@@ -112,7 +112,7 @@ A folder in `themes/` of **static files**. OmniCore serves it and never
 executes it, so a theme downloaded from anywhere can only render data the
 face already exposes.
 
-A theme usually arrives from the marketplace too — see §5b.
+A theme usually arrives from the marketplace too (see §5b).
 
 ---
 
@@ -120,13 +120,13 @@ A theme usually arrives from the marketplace too — see §5b.
 
 ```
 core/            OmniCore itself
-modules/         installed modules (gitignored — see §5b)
-themes/          installed themes (gitignored — see §5b)
+modules/         installed modules (gitignored see §5b)
+themes/          installed themes (gitignored see §5b)
 data/            per-install data (gitignored)
 start.OmniCore   entry point
 ```
 
-OmniCore ships bare. A fresh clone has no modules and no themes — both
+OmniCore ships bare. A fresh clone has no modules and no themes. Both
 folders exist (kept alive by a tracked `.gitkeep`) but are otherwise empty
 until the Marketplace puts something in them.
 
@@ -144,10 +144,10 @@ until the Marketplace puts something in them.
 | `module-loader.js`     | Finds modules, loads their function. **The module contract is documented here.**                                                                     |
 | `module-config.js`     | Reads a module's `module.json` and `settings.json`. Applies defaults, cleans submitted values.                                                       |
 | `module-fetch.js`      | Shared HTTP helper for modules: caching, timeouts, stale fallback, in-flight deduplication.                                                          |
-| `module-api.js`        | Builds the object a module actually receives — `fetch`/`visible`/`share`/`storage`. The one seam a module reaches OmniCore through.                  |
+| `module-api.js`        | Builds the object a module actually receives: `fetch`/`visible`/`share`/`storage`. The one seam a module reaches OmniCore through.                   |
 | `module-storage.js`    | Read/write for one module instance's own persisted data. See §5c.                                                                                    |
 | `input-face-loader.js` | Starts/stops one server per instance that declares an `input.json` — one instance, one port, unlike `face-loader.js`. See §5c.                       |
-| `input-face-page.js`   | Renders an Inport's default page. Not a theme, and not meant to be one — OmniCore's own UI, same as `fallback-page.js`.                          |
+| `input-face-page.js`   | Renders an Inport's default page. Not a theme, and not meant to be one — OmniCore's own UI, same as `fallback-page.js`.                              |
 | `marketplace.js`       | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                                       |
 | `priority.js`          | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                                        |
 | `theme-loader.js`      | Finds themes, reads their manifest and both settings schemas.                                                                                        |
@@ -229,6 +229,7 @@ A module describes **what it has**, never how it should look:
 | `progress`   | `{ type, value: 0..1, label }`                                     |
 | `time`       | `{ type, kind, timestamp, ... }` — see below                       |
 | `graphdata`  | `{ type, points: [{ x, y }], unit? }`                              |
+| `event`      | `{ type, start, end, summary }` — one event, see below             |
 
 **A `pair` keeps the name and the value apart, and a module must never
 join them.** Writing `value: "Humidity 62%"` is a module deciding how it
@@ -282,6 +283,43 @@ way `time` has one: whether the result looks like a bar chart, a line, or
 a row of dots is purely a rendering choice over the exact same points, so
 one shape covers all of them. The module emits data, never the graph
 itself.
+
+**`event` is one event, and the theme owns the calendar.** A module
+emitting events says only what exists and when:
+
+```
+{ type: "event", start: "2026-09-15T09:00:00.000Z",
+                 end:   "2026-09-15T11:00:00.000Z", summary: "Team standup" }
+
+{ type: "event", start: "2026-09-20", end: "2026-09-22", summary: "Eid holiday" }
+```
+
+One block per event, and **no notion of "today" anywhere in it**. A
+module cannot know what the display is drawing — a month grid, a week
+strip, an agenda list — and the theme already knows the device's own
+date, so which events belong on screen is the theme's decision alone. A
+calendar module returns everything inside whatever window it reads and
+stops there; it does not count, rank, slice, or pre-format events.
+
+**`start` and `end` come in two shapes, and the difference is the
+point.** A full ISO instant is a specific moment. A bare `YYYY-MM-DD` is
+a whole calendar day with no time and no timezone attached — which is
+what an all-day event genuinely is. The shape of the string is the only
+signal; there is no `allDay` flag to keep in sync with it.
+
+This is not cosmetic. Writing an all-day event as an instant (midnight
+UTC, say) pins a timezone-less thing to a timezone, and it lands on the
+wrong day for anyone west of UTC — `2026-09-20T00:00:00Z` is the evening
+of the 19th in Regina. Themes must not run a bare date through anything
+that resolves it as an instant, `new Date("2026-09-20")` included: that
+parses as UTC midnight and reintroduces exactly the bug the bare form
+avoids. Split it on the hyphens and build a local date.
+
+**`end` is always present, and for all-day events it is inclusive** — the
+last day the event is actually on. ICS itself uses an exclusive end for
+all-day events, so a module reading one corrects it before emitting;
+themes never see the raw convention. An event with no duration reports
+`end` equal to `start`.
 
 **Every block may carry a `text` string** — its plain-text rendering. A
 theme that has never heard of a block type falls back to that and still
@@ -842,14 +880,14 @@ restart, and nobody has to be standing in front of the screen.
 Worth being explicit, because several decisions only make sense in this
 light.
 
-| Surface                     | Trust                                                                                                                                                                       |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                                        |
-| **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install — full Node access, narrowed only by what `omni` actually hands over (§5a).                   |
-| **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                                                                      |
-| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                                                 |
-| **Dashboard faces (4001+)** | Unauthenticated. Serves data, `GET /time`, and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                    |
-| **Inports (2001+)**     | Unauthenticated. One write: `POST /<instance-id>/input`, reaching a module's `onInput`. Not yet solved — see §5c; planned to be covered by the same future auth work as the control face. Because an Inport belongs to a face rather than an instance, that auth will cover every module behind it at once. |
+| Surface                     | Trust                                                                                                                                                                                                                                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                                                                                                                                                                        |
+| **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install — full Node access, narrowed only by what `omni` actually hands over (§5a).                                                                                                                                                   |
+| **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                                                                                                                                                                                                      |
+| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                                                                                                                                                                                 |
+| **Dashboard faces (4001+)** | Unauthenticated. Serves data, `GET /time`, and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                                                                                                                                                    |
+| **Inports (2001+)**         | Unauthenticated. One write: `POST /<instance-id>/input`, reaching a module's `onInput`. Not yet solved — see §5c; planned to be covered by the same future auth work as the control face. Because an Inport belongs to a face rather than an instance, that auth will cover every module behind it at once. |
 
 Passwords are salted scrypt hashes compared in constant time. Sessions are
 random tokens in an `HttpOnly`, `SameSite=Strict` cookie, held in memory so

@@ -166,6 +166,7 @@ The current block types:
 { type: "progress",   value: 0..1, label }
 { type: "time",       kind: "clock", timestamp, timezone }
 { type: "graphdata",  points: [ { x, y } ], unit }
+{ type: "event",      start, end, summary }
 ```
 
 **Never fold a label into a value.** `{ type: "pair", label: "Humidity",
@@ -202,6 +203,37 @@ are reserved for later and need no changes here to start using.
 just `{ x, y }` pairs in order; whether a theme turns that into a bar
 chart, a line, or dots is entirely its call, which is why there's no
 `kind` the way `time` has one — one shape covers every rendering.
+
+**`event` says what's on and when — nothing about a calendar.** Emit one
+block per event and let the theme decide what to do with them:
+
+```js
+{ type: "event", start: "2026-09-15T09:00:00.000Z",
+                 end:   "2026-09-15T11:00:00.000Z", summary: "Team standup" }
+
+{ type: "event", start: "2026-09-20", end: "2026-09-22", summary: "Eid holiday" }
+```
+
+Don't count events, don't trim the list to what you think will fit, and
+don't write strings like `"in 3 days"`. You can't know whether the theme
+is drawing a month grid, a week strip, or a list — and it already knows
+the device's own date. Return everything in whatever window you read.
+This is one of the few block types where honouring richness usually
+means ignoring it: the theme is better placed to decide what's shown.
+
+**A timed event uses a full ISO instant; an all-day event uses a bare
+`YYYY-MM-DD`.** The shape of the string is how you say which it is —
+there's no `allDay` flag. Never write an all-day event as an instant:
+midnight UTC is the previous evening west of UTC, so the event shows up
+on the wrong day. Keep the date as year/month/day the whole way through
+and format it yourself rather than going via `toISOString()`.
+
+**Always send `end`, even when your source didn't.** A theme shouldn't
+have to handle a missing one. If the event has no duration, send `end`
+equal to `start`. If you're reading ICS, note that its all-day `DTEND`
+is _exclusive_ — a holiday running the 20th to the 22nd is written as
+`DTEND:20260923` — so step it back a day before emitting, since `end`
+here means the last day the event is actually on.
 
 **A block's `text` field is optional and you can usually skip it.**
 OmniCore derives a plain-text fallback for any block that doesn't supply
