@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.13.0
+
+First release with a block type for calendar data -- and a matching decision that OmniCore has no opinion on what a calendar looks like.
+
+### Added
+
+- **A new `event` block type**: `{ type: "event", start, end, summary }`, for modules that read calendars. A module reports raw events only, inside whatever window it reads -- no notion of "today", no grid, no week or month -- because it can't know whether the display is drawing a month grid, a week strip, or an agenda list, and the theme already knows the device's own date. Which events actually belong on screen stays entirely the theme's decision.
+- **`start` and `end` carry their own timezone signal.** A full ISO instant is a specific moment; a bare `YYYY-MM-DD` is a whole calendar day with no time or timezone attached at all -- what an all-day event genuinely is. The shape of the string says which one it is, so there's no separate `allDay` flag for a module and a theme to keep in sync with each other.
+- A theme that hasn't been updated to draw `event` blocks isn't left with nothing: it falls back to a plain readable line the same way every other block type does, e.g. "Sep 20 – Sep 22 — Eid holiday".
+
 ## v1.12.3
 
 Finishes moving the admin face onto the bento layout introduced in v1.12.0, and fixes several real bugs found in the process.
