@@ -18,7 +18,9 @@ const moduleStorage = require("../core/module-storage");
 const {
 	resetState,
 	waitForPort,
-	writeFailingModule
+	writeFailingModule,
+	modulesDir,
+	themesDir
 } = require("./helpers");
 
 const WELCOME_PORT = 4000;
@@ -29,13 +31,27 @@ const WIZARD_PORT = 3999;
 // also be run on its own, which matters when chasing one failure --
 // installEntry with update=true is a no-op-ish overwrite, not an error,
 // when something is already there.
+//
+// Check the directory the suite ACTUALLY runs against (a temp one, set
+// by OMNICORE_MODULES_DIR in helpers), not the repo's own modules/
+// folder. Those are usually the same shape -- the repo's is empty and
+// gitignored -- which is why looking at the wrong one went unnoticed.
+// It stops being harmless the moment a developer symlinks their module
+// repo into modules/ to work on it, which is the documented local setup:
+// the repo folder then looks populated, this test concludes there's
+// nothing to install, and the temp directory the face actually reads
+// from stays empty. The wizard then finds no installed modules, silently
+// drops the instance it was asked to create, and every test downstream
+// fails on a face with nothing on it.
 test("faces: the modules these tests need are installed", async () => {
 	const marketplace = require("../core/marketplace");
+	const fs = require("fs");
+	const path = require("path");
 
 	for (const [kind, id] of [["module", "weather"], ["theme", "windows8"]]) {
-		if (!require("fs").existsSync(
-			require("path").join(__dirname, "..", kind === "theme" ? "themes" : "modules", id)
-		)) {
+		const root = kind === "theme" ? themesDir : modulesDir;
+
+		if (!fs.existsSync(path.join(root, id))) {
 			await marketplace.installEntry(kind, id, true);
 		}
 	}
