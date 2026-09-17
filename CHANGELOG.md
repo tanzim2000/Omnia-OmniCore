@@ -9,6 +9,10 @@ Themes can now tell a genuinely new reading apart from the same one arriving aga
 - **Content tagging on `/api/<instanceId>`.** Every response carries an `ETag` standing for what the tile is showing. A face polls every few seconds forever and most answers are identical to the last one; until now nothing in the response said so, and each theme had to work it out for itself by diffing its own rendered output. Matters most for a theme that animates on new data -- flipping a tile, sliding a number -- where every poll would otherwise look like a change worth animating.
 - **`304 Not Modified`, but only when asked for.** Send `If-None-Match` and OmniCore skips the body entirely. Send nothing and you get the full `200` you always got. That opt-in is deliberate: a theme written before this existed reasonably treats a non-OK response as a dead tile, so an uninvited `304` would blank a tile whose data was fine. Every theme currently in the wild is such a theme, `windows8` included.
 
+### Fixed
+
+- **The smoke suite failed for anyone developing a module the documented way.** Its precondition test checked the repo's own `modules/` folder to decide whether anything needed installing, but the suite runs against a temporary directory instead. Those are normally the same shape -- the repo's copy is empty and gitignored -- so looking at the wrong one went unnoticed for a long time. Symlink a module repo into `modules/` to work on it, which is the local setup `Building modules.md` describes, and that folder looks populated: the test concludes there's nothing to install, the temp directory it actually reads from stays empty, the wizard finds no installed modules and silently drops the instance it was asked to create, and four tests downstream fail on a face with nothing on it. It now checks the directory the suite actually uses.
+
 ### Notes
 
 - The tag excludes `updated`, which is a fresh timestamp on every call by design -- including it would make every tag unique and the whole feature pointless for exactly the modules that poll fastest.
