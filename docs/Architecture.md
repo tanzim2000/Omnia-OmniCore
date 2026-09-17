@@ -863,6 +863,36 @@ Accepting a URL would make it an open relay anything on your network could
 point anywhere. Responses are checked to actually be images, cached, and
 size-capped.
 
+### Content tagging
+
+Every `/api/<instanceId>` response carries an **`ETag`** standing for the
+content it contains, so a theme can tell a genuinely new reading apart
+from the same one arriving again. A face polls every few seconds forever;
+most of those answers are identical to the one before.
+
+The tag is built from `title` and `content` and **deliberately excludes
+`updated`**, which is a fresh timestamp on every call by design — include
+it and every tag is unique, which is exactly useless for the modules that
+poll fastest.
+
+It's also built from the blocks **before image proxying**, which is a
+real distinction rather than an implementation detail. Proxying rewrites
+an image URL to a stable path (`/api/<instance>/image/0`) that is
+identical whether or not the picture behind it changed — so tagging the
+proxied form would report "nothing changed" every time Bing published a
+new wallpaper. The original URLs are the thing that actually moves.
+
+**A short answer is only ever sent when asked for.** OmniCore returns
+`304 Not Modified` if, and only if, the request carried a matching
+`If-None-Match`. A theme that has never heard of any of this sends no
+such header and receives the full body with a `200` exactly as it always
+did — the `ETag` is an extra header it's free to ignore.
+
+That opt-in is load-bearing, not politeness. A theme written before this
+existed reasonably treats any non-OK response as a dead tile, so an
+uninvited `304` would blank a tile whose data was perfectly fine. Every
+theme in the wild is such a theme.
+
 ### Live updates
 
 A face resolves **everything per request** — its theme, its name, its

@@ -105,6 +105,79 @@ test("dashboard face: serves its instance data over HTTP", async () => {
 	assert.ok(Array.isArray(envelope.content), "content is not an array");
 });
 
+// The change signal, and the promise that it costs old themes nothing.
+//
+// The second of these two is the one that would actually hurt if it
+// broke: every theme written before tagging existed sends no
+// If-None-Match and treats a non-OK response as a dead tile, so an
+// uninvited 304 would blank a tile whose data was perfectly fine.
+test("dashboard face: tags content so a theme can tell new data from the same data", async () => {
+	const face = faceStore.readFaces()[0];
+	await waitForPort(face.id);
+
+	const instance = face.instances[0];
+	const url = `http://127.0.0.1:${face.id}/api/${instance.id}?richness=50`;
+
+	const first = await fetch(url);
+	const tag = first.headers.get("etag");
+
+	assert.ok(tag, "no ETag on the response");
+
+	// Same content, asked for again. The tag has to match even though
+	// `updated` is a fresh timestamp every call -- if it didn't, the
+	// whole thing would be useless for exactly the modules that poll
+	// fastest.
+	const second = await fetch(url);
+
+	assert.equal(
+		second.headers.get("etag"),
+		tag,
+		"unchanged content produced a different tag"
+	);
+
+	// Asking the conditional question gets the short answer
+	const conditional = await fetch(url, {
+		headers: { "If-None-Match": tag }
+	});
+
+	assert.equal(conditional.status, 304, "expected a 304 for a matching tag");
+
+	// A tag that doesn't match gets the real thing
+	const stale = await fetch(url, {
+		headers: { "If-None-Match": '"not-the-current-tag"' }
+	});
+
+	assert.equal(stale.status, 200, "a stale tag should get the full body");
+	assert.ok((await stale.json()).content, "no content in the full response");
+});
+
+test("dashboard face: a theme that knows nothing about tags is unaffected", async () => {
+	const face = faceStore.readFaces()[0];
+	await waitForPort(face.id);
+
+	const instance = face.instances[0];
+	const url = `http://127.0.0.1:${face.id}/api/${instance.id}?richness=50`;
+
+	// No If-None-Match, twice -- which is every theme written before any
+	// of this existed, on every poll it has ever made.
+	for (const attempt of [1, 2]) {
+		const response = await fetch(url);
+
+		assert.equal(
+			response.status,
+			200,
+			`request ${attempt} did not get a 200 -- an old theme would show this tile as dead`
+		);
+
+		const envelope = await response.json();
+		assert.ok(envelope.title, `request ${attempt} had no title`);
+		assert.ok(
+			Array.isArray(envelope.content),
+			`request ${attempt} had no content array`
+		);
+	}
+});
+
 test("dashboard face: a module that throws does not take the face down", async () => {
 	writeFailingModule("smoke-failing-module");
 

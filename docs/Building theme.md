@@ -104,6 +104,51 @@ already the resolved one (the instance's label if it has one, otherwise
 whatever the module called itself) — you don't need to reconcile it with
 anything from `/identity`.
 
+**Every response carries an `ETag` header, and it's the cheapest way to
+know whether anything actually changed.** You're polling every few
+seconds, and most of those answers are identical to the one before — a
+calendar feed that regenerates a few times a day, an idle machine
+reporting the same CPU figure, a disk that hasn't moved. The tag is
+built from the content alone, deliberately ignoring `updated` (which is
+a fresh timestamp on every single call and would otherwise make the tag
+useless):
+
+```js
+const response = await fetch(`/api/${instance.id}?richness=${richness}`);
+const tag = response.headers.get("ETag");
+
+if (tag === lastTag[instance.id]) {
+  return; // same reading as last time — nothing to redraw
+}
+
+lastTag[instance.id] = tag;
+```
+
+This matters most if your theme **animates on new data** — flipping a
+tile, sliding a number, fading something in. Without a signal from
+OmniCore you'd have to diff your own rendered output to avoid animating
+on every poll forever. The tag gives you the answer directly.
+
+If you also want to skip downloading the body, send the tag back and
+OmniCore will answer `304 Not Modified` with nothing in it:
+
+```js
+const response = await fetch(url, {
+  headers: lastTag[id] ? { "If-None-Match": lastTag[id] } : {},
+});
+
+if (response.status === 304) {
+  return; // unchanged, and no body was sent
+}
+```
+
+**Only ask for that if you're ready to handle a 304.** OmniCore never
+sends one unless you send `If-None-Match` first, precisely so that a
+theme which knows nothing about any of this keeps getting plain 200s
+forever. If your fetch code treats a non-OK response as a failed tile —
+a very reasonable thing to write — then adding the header without
+handling the 304 would make your own tiles go blank.
+
 ### `GET /time`
 
 Not tied to any instance — call it whenever your theme wants to show the

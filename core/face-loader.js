@@ -21,6 +21,7 @@ const faceStore = require("./face-store");
 const renderFallbackPage = require("./fallback-page");
 const { attachEvents, pushToFace, CLIENT_SCRIPT } = require("./face-events");
 const { toBlocks, proxyImages } = require("./envelope");
+const { contentTag } = require("./content-tag");
 const imageProxy = require("./image-proxy");
 
 // Running faces, keyed by port: { server, face }
@@ -37,6 +38,54 @@ function problemEnvelope(label, reason) {
 		],
 		updated: new Date().toISOString()
 	};
+}
+
+// Answer a content request, tagged so a theme can tell a new reading
+// apart from the same one arriving again.
+//
+// BACKWARD COMPATIBILITY IS THE WHOLE DESIGN HERE
+//
+// A theme that knows nothing about any of this must keep working exactly
+// as it did, and every theme written before this existed is such a
+// theme. So the rule is: OmniCore never sends a "nothing changed"
+// response unless the caller explicitly asked a conditional question by
+// sending `If-None-Match`. A theme that doesn't send it always gets the
+// full body with a 200, byte for byte what it got before — the ETag is
+// just an extra header it's free to ignore.
+//
+// That matters more than it sounds. windows8 treats any non-OK response
+// as a dead tile (`if (!response.ok) throw`), so an uninvited 304 would
+// show "unavailable" on a tile whose data was perfectly fine. Making the
+// short answer opt-in means that can't happen to a theme that hasn't
+// been taught about it.
+//
+// A theme can use this at two levels:
+//   - read the ETag header off a normal response and compare it to the
+//     last one it saw, to decide whether to re-render or animate
+//   - send it back as If-None-Match to skip downloading the body at all
+function sendContent(req, res, payload, tagBlocks) {
+	// The tag is built from the blocks BEFORE image proxying, which is a
+	// real distinction and not a detail. Proxying rewrites an image URL
+	// to a stable path (/api/<instance>/image/0) that stays identical
+	// even when the picture behind it changes — so tagging the proxied
+	// form would say "nothing changed" every time Bing published a new
+	// wallpaper. The original URLs are what actually move.
+	const tag = contentTag(payload.title, tagBlocks);
+
+	res.set("ETag", tag);
+
+	// "You may store this, but always ask me before reusing it." Without
+	// this a browser is free to invent its own expiry and serve a stale
+	// tile without telling anyone.
+	res.set("Cache-Control", "no-cache");
+
+	// Only ever when asked
+	if (req.headers["if-none-match"] === tag) {
+		res.status(304).end();
+		return;
+	}
+
+	res.json(payload);
 }
 
 function startFace(face) {
@@ -120,7 +169,13 @@ function startFace(face) {
 
 			if (!moduleFn) {
 				const problem = problemEnvelope(label, "Module not installed");
-				res.json({ ...problem, content: toBlocks(problem) });
+				const blocks = toBlocks(problem);
+				sendContent(
+					req,
+					res,
+					{ ...problem, content: blocks },
+					blocks
+				);
 				return;
 			}
 
@@ -154,20 +209,27 @@ function startFace(face) {
 
 				// Themes only ever see blocks, whichever shape the module
 				// chose to return
+				const raw = toBlocks(envelope);
+
 				const blocks = proxyImages(
-					toBlocks(envelope),
+					raw,
 					instance.id,
 					imageProxy.remember
 				);
 
-				res.json({
-					// The instance's label wins over whatever the module
-					// called itself — that's how two weather tiles get told
-					// apart
-					title: instance.label || envelope.title || instance.module,
-					content: blocks,
-					updated: envelope.updated || new Date().toISOString()
-				});
+				sendContent(
+					req,
+					res,
+					{
+						// The instance's label wins over whatever the module
+						// called itself — that's how two weather tiles get told
+						// apart
+						title: instance.label || envelope.title || instance.module,
+						content: blocks,
+						updated: envelope.updated || new Date().toISOString()
+					},
+					raw
+				);
 			} catch (error) {
 				// Catching here means a badly written module costs you one
 				// tile, not the whole face
@@ -175,7 +237,8 @@ function startFace(face) {
 					`  Module "${instance.module}" failed: ${error.message}`
 				);
 				const problem = problemEnvelope(label, "Module error");
-				res.json({ ...problem, content: toBlocks(problem) });
+				const blocks = toBlocks(problem);
+				sendContent(req, res, { ...problem, content: blocks }, blocks);
 			}
 		});
 

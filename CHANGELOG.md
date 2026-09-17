@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.13.1
+
+Themes can now tell a genuinely new reading apart from the same one arriving again -- without giving up anything for themes that don't know how.
+
+### Added
+
+- **Content tagging on `/api/<instanceId>`.** Every response carries an `ETag` standing for what the tile is showing. A face polls every few seconds forever and most answers are identical to the last one; until now nothing in the response said so, and each theme had to work it out for itself by diffing its own rendered output. Matters most for a theme that animates on new data -- flipping a tile, sliding a number -- where every poll would otherwise look like a change worth animating.
+- **`304 Not Modified`, but only when asked for.** Send `If-None-Match` and OmniCore skips the body entirely. Send nothing and you get the full `200` you always got. That opt-in is deliberate: a theme written before this existed reasonably treats a non-OK response as a dead tile, so an uninvited `304` would blank a tile whose data was fine. Every theme currently in the wild is such a theme, `windows8` included.
+
+### Notes
+
+- The tag excludes `updated`, which is a fresh timestamp on every call by design -- including it would make every tag unique and the whole feature pointless for exactly the modules that poll fastest.
+- The tag is computed before image proxying. Proxying rewrites an image URL to a stable `/api/<instance>/image/<n>` path that stays identical even when the picture behind it changes, so tagging the proxied form would have reported "nothing changed" every time Bing published a new wallpaper.
+- This saves bytes on the wire and gives themes a change signal. It does **not** skip running the module -- OmniCore still has to call it to find out whether anything changed.
+
 ## v1.13.0
 
 First release with a block type for calendar data -- and a matching decision that OmniCore has no opinion on what a calendar looks like.
