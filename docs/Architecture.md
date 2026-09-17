@@ -58,7 +58,7 @@ A dashboard served on its own port. **The port number is its ID.**
 
 | Attribute      | Meaning                                                            |
 | -------------- | ------------------------------------------------------------------ |
-| `id`           | the last 3 digitof the port. Fixed at creation, never editable.    |
+| `id`           | the last 3 digits of the port. Fixed at creation, never editable.  |
 | `name`         | How the admin recognises it. Blank falls back to `Face:<port>`.    |
 | `title`        | Cosmetic. What a theme displays, if it displays one. May be blank. |
 | `theme`        | Which theme renders it.                                            |
@@ -68,14 +68,20 @@ A dashboard served on its own port. **The port number is its ID.**
 `name` and `title` are deliberately different things. `name` is an
 administrative label; `title` is decoration on the screen itself.
 
-**Port ranges carry meaning:**
+**Ports carry meaning:**
 
-| Range   | Purpose                                                                                                                                             |
+| Port    | Purpose                                                                                                                                             |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `3xxx`  | Admin faces. OmniCore's own UI. No third-party code ever runs here.                                                                                 |
+| `1303`  | The About face. What OmniCore is, real system facts, and the Updates page. Unauthenticated, same trust model as the welcome face.                   |
+| `3000`  | The admin face. Settings, faces, installed resources. OmniCore's own UI; no third-party code ever runs here.                                        |
+| `3999`  | The setup wizard, on its own port since v1.12.0.                                                                                                    |
 | `4000`  | The control face. Face creation, and the registry OmniView will read.                                                                               |
 | `4001+` | Outports; one per dashboard face, assigned automatically in order.                                                                                  |
 | `2001+` | Inports; one per dashboard face that has something taking input. Paired to its face by ID: face `001` is Outport `4001` and Inport `2001`. See §5c. |
+
+`1303` deliberately sits outside every other range: the About face holds
+no state, needs no configuration, and is the one page meant to answer
+"what is this?" for someone who has not set up an account yet.
 
 ### Instance
 
@@ -99,11 +105,11 @@ with different settings, two weather tiles for two cities.
 ### Module
 
 A folder whose `index.js` exports **one function**. It is given settings,
-how much room there is, and a small object of things it's allowed to use —
+how much room there is, and a small object of things it's allowed to use --
 never `require()` into `core/` directly (see §5a). It does not register
 routes, does not touch Express, and renders nothing.
 
-A module usually arrives from the marketplace rather than being bundled —
+A module usually arrives from the marketplace rather than being bundled --
 see §5b.
 
 ### Theme
@@ -132,39 +138,53 @@ until the Marketplace puts something in them.
 
 ### `core/` file by file
 
-| File                   | Responsibility                                                                                                                                       |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `face-store.js`        | Reads/writes `data/faces.json`. Creating faces, instances, port assignment. The only thing that touches face data on disk.                           |
-| `face-loader.js`       | Starts a face as an Express server on its port. Owns `/identity`, `/api/:instanceId`, theme serving, client-script injection.                        |
-| `face-events.js`       | Server-Sent Events. Pushes `face-changed` to displays. Holds the client script that gets injected into theme pages.                                  |
-| `fallback-page.js`     | The built-in "pick a theme" screen shown when a face has no usable theme. Not part of any theme.                                                     |
-| `control-face.js`      | Port 4000. Face registry API, and the face setup wizard.                                                                                             |
-| `admin-face.js`        | Port 3000. All settings UI. Renders every settings form from declared schemas.                                                                       |
-| `admin-auth.js`        | Admin account and sessions. scrypt hashing, constant-time comparison, in-memory sessions.                                                            |
-| `module-loader.js`     | Finds modules, loads their function. **The module contract is documented here.**                                                                     |
-| `module-config.js`     | Reads a module's `module.json` and `settings.json`. Applies defaults, cleans submitted values.                                                       |
-| `module-fetch.js`      | Shared HTTP helper for modules: caching, timeouts, stale fallback, in-flight deduplication.                                                          |
-| `module-api.js`        | Builds the object a module actually receives: `fetch`/`visible`/`share`/`storage`. The one seam a module reaches OmniCore through.                   |
-| `module-storage.js`    | Read/write for one module instance's own persisted data. See §5c.                                                                                    |
-| `input-face-loader.js` | Starts/stops one server per instance that declares an `input.json` — one instance, one port, unlike `face-loader.js`. See §5c.                       |
-| `input-face-page.js`   | Renders an Inport's default page. Not a theme, and not meant to be one — OmniCore's own UI, same as `fallback-page.js`.                              |
-| `marketplace.js`       | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                                       |
-| `priority.js`          | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                                        |
-| `theme-loader.js`      | Finds themes, reads their manifest and both settings schemas.                                                                                        |
-| `envelope.js`          | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                                         |
-| `image-proxy.js`       | Fetches images on the display's behalf so a display only ever talks to your server.                                                                  |
-| `location-service.js`  | One place that knows where OmniCore is. Resolves `location` settings before a module sees them. City search.                                         |
-| `time-service.js`      | One place that knows what time OmniCore thinks it is. Read-only; reachable by a module through `omni.time()` and by a theme directly at `GET /time`. |
-| `settings-store.js`    | OmniCore's own install-wide settings (`data/settings.json`).                                                                                         |
+| File                       | Responsibility                                                                                                                                       |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `face-store.js`            | Reads/writes `data/faces.json`. Creating faces, instances, port assignment. The only thing that touches face data on disk.                           |
+| `face-loader.js`           | Starts a face as an Express server on its port. Owns `/identity`, `/api/:instanceId`, theme serving, client-script injection.                        |
+| `face-events.js`           | Server-Sent Events. Pushes `face-changed` to displays. Holds the client script that gets injected into theme pages.                                  |
+| `fallback-page.js`         | The built-in "pick a theme" screen shown when a face has no usable theme. Not part of any theme.                                                     |
+| `control-face.js`          | Port 4000. Face registry API, and the face setup wizard.                                                                                             |
+| `admin-face.js`            | Port 3000. All settings UI. Renders every settings form from declared schemas.                                                                       |
+| `admin-auth.js`            | Admin account and sessions. scrypt hashing, constant-time comparison, in-memory sessions.                                                            |
+| `module-loader.js`         | Finds modules, loads their function. **The module contract is documented here.**                                                                     |
+| `module-config.js`         | Reads a module's `module.json` and `settings.json`. Applies defaults, cleans submitted values.                                                       |
+| `module-fetch.js`          | Shared HTTP helper for modules: caching, timeouts, stale fallback, in-flight deduplication.                                                          |
+| `module-api.js`            | Builds the object a module actually receives: `fetch`/`visible`/`share`/`storage`. The one seam a module reaches OmniCore through.                   |
+| `module-storage.js`        | Read/write for one module instance's own persisted data. See §5c.                                                                                    |
+| `input-face-loader.js`     | Starts/stops one server per instance that declares an `input.json` -- one instance, one port, unlike `face-loader.js`. See §5c.                      |
+| `input-face-page.js`       | Renders an Inport's default page. Not a theme, and not meant to be one -- OmniCore's own UI, same as `fallback-page.js`.                             |
+| `marketplace.js`           | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                                       |
+| `priority.js`              | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                                        |
+| `theme-loader.js`          | Finds themes, reads their manifest and both settings schemas.                                                                                        |
+| `envelope.js`              | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                                         |
+| `image-proxy.js`           | Fetches images on the display's behalf so a display only ever talks to your server.                                                                  |
+| `location-service.js`      | One place that knows where OmniCore is. Resolves `location` settings before a module sees them. City search.                                         |
+| `time-service.js`          | One place that knows what time OmniCore thinks it is. Read-only; reachable by a module through `omni.time()` and by a theme directly at `GET /time`. |
+| `settings-store.js`        | OmniCore's own install-wide settings (`data/settings.json`).                                                                                         |
+| `paths.js`                 | Resolves where `data/`, `modules/` and `themes/` actually live. Honours `OMNICORE_*_DIR` overrides, which is what lets the test suite use a sandbox. |
+| `content-tag.js`           | Builds the `ETag` standing for a tile's content, so a theme can tell new data from the same data again. See Content tagging in §8.                   |
+| `about-face.js`            | Port 1303. What OmniCore is, real system facts, and the Updates page. Unauthenticated by design.                                                     |
+| `system-info.js`           | Reads the real facts the About face reports: host OS, container runtime, resource counts. Every one fails soft rather than showing a blank.          |
+| `wizard-face.js`           | Port 3999. The setup wizard, on its own port since v1.12.0.                                                                                          |
+| `face-links.js`            | The cross-port link helper. A face on one port cannot assume the host name another is reached on, so links are resolved in the browser.              |
+| `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces. OmniCore's own look; never a dashboard theme.             |
+| `font-service.js`          | The UI font setting. Searches Google Fonts, downloads the chosen one once, then serves it locally so it works with no internet.                      |
+| `install-store.js`         | What is installed and at which pinned commit (`data/installed.json`).                                                                                |
+| `update-store.js`          | The record of update checks (`data/update-checks.json`): when last checked, what was offered.                                                        |
+| `version.js`               | The running version, read from `package.json`. One place, so nothing has to guess.                                                                   |
+| `resource-scheduler.js`    | Checks the registry for newer versions of installed modules and themes, and installs compatible ones.                                                |
+| `core-update-scheduler.js` | The same job for OmniCore itself, every six hours.                                                                                                   |
+| `core-updater.js`          | Performs a core self-update: pulls the new image, swaps the container, and rolls back automatically if the new version never reports healthy.        |
 
-### `data/` — never committed
+### `data/` -- never committed
 
-| File                               | Contents                                                                                                                             |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `faces.json`                       | Every face, its instances, and all their settings.                                                                                   |
-| `admin.json`                       | Admin username, salt, password hash.                                                                                                 |
-| `settings.json`                    | OmniCore's own settings (location service).                                                                                          |
-| `faces/<faceId>/<instanceId>.json` | One instance's own persisted data — see §5c. Absent entirely for the overwhelming majority of instances, which never write anything. |
+| File                               | Contents                                                                                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `faces.json`                       | Every face, its instances, and all their settings.                                                                                    |
+| `admin.json`                       | Admin username, salt, password hash.                                                                                                  |
+| `settings.json`                    | OmniCore's own settings (location service).                                                                                           |
+| `faces/<faceId>/<instanceId>.json` | One instance's own persisted data -- see §5c. Absent entirely for the overwhelming majority of instances, which never write anything. |
 
 ---
 
@@ -187,11 +207,11 @@ module.exports = async function (config, richness, omni) {
 };
 ```
 
-- `config` — this instance's settings, already resolved against the
+- `config` -- this instance's settings, already resolved against the
   defaults declared in `settings.json`. Location fields arrive as real
   coordinates.
-- `richness` — a number **1–100**. See below. **Mandatory to honour.**
-- `omni` — the only way to reach OmniCore. See §5a; never `require("../../core/...")`.
+- `richness` -- a number **1–100**. See below. **Mandatory to honour.**
+- `omni` -- the only way to reach OmniCore. See §5a; never `require("../../core/...")`.
 - Returns an envelope. `title` may be overridden by the instance's label.
 
 ### Richness
@@ -209,42 +229,164 @@ has. So a module never learns what theme is asking or what that theme calls
 its sizes, and a theme never learns what any module's content means. Both
 sides only ever deal in one number.
 
-More steps means more flexibility for a theme, not a better module — two
+More steps means more flexibility for a theme, not a better module -- two
 well-chosen steps beat twenty arbitrary ones.
 
 OmniCore clamps whatever arrives to 1–100 and defaults to 50 if absent or
 unparseable. A module can trust the number.
 
-### Content blocks
+### The Content Contract (TCC)
 
-A module describes **what it has**, never how it should look:
+**The Content Contract is the agreement about what a module is allowed to
+say and what a theme is allowed to assume.** It is the single most
+load-bearing thing in OmniCore: modules and themes are written by
+different people who never talk to each other, ship on their own
+schedules, and are installed in combinations nobody tested. TCC is what
+makes that safe.
 
-| Block        | Shape                                                              |
-| ------------ | ------------------------------------------------------------------ |
-| `text`       | `{ type, value, emphasis: "primary"｜"secondary"｜"body" }`        |
-| `quote`      | `{ type, value }`                                                  |
-| `pair`       | `{ type, label, value, emphasis? }`                                |
-| `image`      | `{ type, url, alt, fit: "cover"｜"contain" }` — content for a tile |
-| `background` | `{ type, url }` — a surface to go behind everything                |
-| `progress`   | `{ type, value: 0..1, label }`                                     |
-| `time`       | `{ type, kind, timestamp, ... }` — see below                       |
-| `graphdata`  | `{ type, points: [{ x, y }], unit? }`                              |
-| `event`      | `{ type, start, end, summary }` — one event, see below             |
+It has exactly one rule, and everything below follows from it:
 
-**A `pair` keeps the name and the value apart, and a module must never
-join them.** Writing `value: "Humidity 62%"` is a module deciding how it
-looks, which is the one thing the split exists to prevent — a theme can no
-longer hide that label, restyle it, or move it. Send `label` and `value`
-separately and let the theme choose. `emphasis` marks the pair worth
-reading from across a room; what that means visually stays the theme's
-decision, including whether the label is drawn at all.
+> A module describes **what it has**. A theme decides **how it looks**.
+> Neither is allowed to do the other's job.
 
-**`image` and `background` both carry a picture but mean different things.**
-An image is content; a background is the surface behind everything. The
-module says which; the theme decides whether to honour it.
+A module that writes `"Humidity 62%"` has decided how it looks. A theme
+that assumes a module will only ever send three blocks has decided what
+the module has. Both break the contract, and both fail in ways that only
+show up on somebody else's dashboard.
 
-**`time` carries one instant, and `kind` says what else there is to say
-about it:**
+#### Recognized Content Blocks (RCBs)
+
+Everything a module says, it says as blocks. A **Recognized Content
+Block** is a block type OmniCore knows by name: it has a defined shape, a
+defined meaning, and a plain-text fallback OmniCore can generate for it.
+
+There are **nine RCBs** today. `time` additionally splits into four
+`kind`s, of which only `clock` is currently implemented.
+
+| RCB          | Carries                              | Emitted by                                               |
+| ------------ | ------------------------------------ | -------------------------------------------------------- |
+| `text`       | A short status line                  | `weather`, `disk-space`, most modules' error states      |
+| `quote`      | A quotation                          | nothing yet                                              |
+| `pair`       | A name and its value, kept apart     | `weather`, `system-stats`, `disk-space`, `docker-status` |
+| `image`      | A picture that is content            | `bing-wallpaper`                                         |
+| `background` | A picture that is a surface          | `bing-wallpaper`                                         |
+| `progress`   | A fraction of something complete     | nothing yet                                              |
+| `time`       | One instant, plus what to do with it | `world-clock`                                            |
+| `graphdata`  | A series of points                   | nothing yet (`Tally`, planned)                           |
+| `event`      | One calendar event                   | `calendar`                                               |
+
+Each is specified below: its fields, which are required, and what the
+field actually means.
+
+---
+
+##### `text`
+
+A short line worth reading on its own. Status, a number, an error.
+
+| Field      | Required | Type   | Meaning                                 |
+| ---------- | -------- | ------ | --------------------------------------- |
+| `type`     | yes      | string | `"text"`                                |
+| `value`    | yes      | string | The line itself                         |
+| `emphasis` | no       | enum   | `"primary"`, `"secondary"`, or `"body"` |
+
+`emphasis` ranks importance, not appearance. `primary` means _this is the
+thing worth seeing from across a room_; what that looks like is the
+theme's call entirely.
+
+`text` is for a status line, not for prose. A genuine quotation is a
+`quote`, not a `text` that happens to be long.
+
+##### `quote`
+
+A quotation, as content in its own right.
+
+| Field   | Required | Type   | Meaning       |
+| ------- | -------- | ------ | ------------- |
+| `type`  | yes      | string | `"quote"`     |
+| `value` | yes      | string | The quotation |
+
+Separate from `text` because a theme may reasonably want to draw a
+quotation completely differently: pull-quote styling, a different
+typeface, quotation marks it adds itself. A theme cannot make that
+decision if the quotation arrives indistinguishable from an error
+message.
+
+##### `pair`
+
+A name and its value, kept as two separate things.
+
+| Field      | Required | Type   | Meaning                      |
+| ---------- | -------- | ------ | ---------------------------- |
+| `type`     | yes      | string | `"pair"`                     |
+| `label`    | yes      | string | The name (`"Humidity"`)      |
+| `value`    | yes      | string | The value (`"62%"`)          |
+| `emphasis` | no       | enum   | `"primary"` or `"secondary"` |
+
+**A module must never join them.** `{ label: "Humidity", value: "62%" }`
+is right; `{ type: "text", value: "Humidity 62%" }` is not. The second
+looks identical in one theme and is broken in every other one: no theme
+can hide that label, restyle it, move it, or lay it out in a column,
+because by the time it arrives it is just a sentence.
+
+`emphasis` marks the pair worth reading first. What that means visually
+stays the theme's decision, **including whether the label is drawn at
+all.**
+
+##### `image`
+
+A picture that is content: the thing the tile is showing.
+
+| Field  | Required | Type   | Meaning                                     |
+| ------ | -------- | ------ | ------------------------------------------- |
+| `type` | yes      | string | `"image"`                                   |
+| `url`  | yes      | string | A real, reachable URL. OmniCore proxies it. |
+| `alt`  | no       | string | Description, and the plain-text fallback    |
+| `fit`  | no       | enum   | `"cover"` or `"contain"`                    |
+
+The module supplies a real URL; OmniCore rewrites it to a path back to
+itself before any theme sees it, so the display only ever talks to your
+own server. See Image proxying in §8.
+
+##### `background`
+
+A picture meant to sit behind everything, rather than be looked at
+directly.
+
+| Field  | Required | Type   | Meaning                                      |
+| ------ | -------- | ------ | -------------------------------------------- |
+| `type` | yes      | string | `"background"`                               |
+| `url`  | yes      | string | A real, reachable URL. Proxied the same way. |
+
+Same picture, different meaning from `image`. The module says which one
+it means; the theme decides whether to honour it. A theme with no concept
+of a background is free to ignore it entirely.
+
+##### `progress`
+
+A fraction of something complete.
+
+| Field   | Required | Type   | Meaning                              |
+| ------- | -------- | ------ | ------------------------------------ |
+| `type`  | yes      | string | `"progress"`                         |
+| `value` | yes      | number | `0` to `1`. Not a percentage string. |
+| `label` | no       | string | What is being measured               |
+
+A fraction, not a rendering. Whether it becomes a bar, a ring, a gauge or
+just a number is the theme's decision. A theme that cannot draw any of
+those falls back to the percentage as text and still reads correctly.
+
+##### `time`
+
+One instant, plus a `kind` saying what else there is to say about it.
+
+| Field       | Required | Type   | Meaning                              |
+| ----------- | -------- | ------ | ------------------------------------ |
+| `type`      | yes      | string | `"time"`                             |
+| `kind`      | yes      | enum   | See the four kinds below             |
+| `timestamp` | yes      | string | ISO instant: when the module checked |
+
+Each `kind` adds its own fields:
 
 ```
 { type: "time", kind: "clock",     timestamp, timezone }
@@ -253,39 +395,54 @@ about it:**
 { type: "time", kind: "position",  timestamp, position, duration, running }
 ```
 
-`timestamp` is always a raw ISO instant — the moment the module actually
-checked, and the anchor a theme ticks forward from — **never** a
-decomposed `{ hour, minute, ... }`. Two concrete reasons, not just
-preference: a decomposed local wall-clock time is genuinely ambiguous
-once a year during a DST "fall back" (it happens twice, and decomposed
-fields can't say which), and a theme still needs a real `Date` to do any
-tick arithmetic anyway — a raw ISO string parses into one natively,
-decomposed fields would just have to be reassembled first, for nothing.
+| Kind        | Extra fields                      | Means                         |
+| ----------- | --------------------------------- | ----------------------------- |
+| `clock`     | `timezone` (IANA name)            | What time it is somewhere     |
+| `countdown` | `target`, `running`               | Time remaining until `target` |
+| `stopwatch` | `position`, `running`             | Time elapsed so far           |
+| `position`  | `position`, `duration`, `running` | How far through a fixed span  |
+
+`timestamp` is always a raw ISO instant, **never** a decomposed
+`{ hour, minute, ... }`. Two concrete reasons, not just preference: a
+decomposed local wall-clock time is genuinely ambiguous once a year
+during a DST "fall back" (it happens twice, and decomposed fields cannot
+say which), and a theme needs a real `Date` for any tick arithmetic
+anyway, which a raw ISO string parses into natively.
 
 **Nothing server-side keeps ticking a `time` block between polls.** A
-module (or core) only runs when asked — the theme is the only thing
-actually alive continuously, so it's the only place that can tick. A
-theme receives `{ timestamp, ... }`, anchors it, runs its own
-`setInterval`, and quietly re-anchors on each subsequent poll. A theme
-that instead polls every second to avoid this is wasteful, not broken —
-nothing enforces "tick locally," the same way nothing enforces honouring
-richness.
+module only runs when asked; the theme is the only thing alive
+continuously, so it is the only thing that can tick. A theme anchors the
+`timestamp`, runs its own `setInterval`, and quietly re-anchors on each
+poll. A theme that instead polls every second is wasteful, not broken.
 
-`clock` is the only kind any module emits today. `countdown`, `stopwatch`,
-and `position` are reserved shape for future modules — no change to this
-type will be needed to add them.
+`clock` is the only kind any module emits today. The other three are
+reserved shape: adding them later needs no change to this contract.
 
-**`graphdata` carries a series, and the theme decides how it's drawn.**
-`points` is an array of `{ x, y }` pairs — `x` a timestamp or label, `y`
-the value at that point. `unit` is an optional label for what's being
-counted (`"cigarettes"`, say). There's deliberately no `kind` split the
-way `time` has one: whether the result looks like a bar chart, a line, or
-a row of dots is purely a rendering choice over the exact same points, so
-one shape covers all of them. The module emits data, never the graph
-itself.
+##### `graphdata`
 
-**`event` is one event, and the theme owns the calendar.** A module
-emitting events says only what exists and when:
+A series of points. Not a graph.
+
+| Field    | Required | Type   | Meaning                                |
+| -------- | -------- | ------ | -------------------------------------- |
+| `type`   | yes      | string | `"graphdata"`                          |
+| `points` | yes      | array  | `{ x, y }` pairs                       |
+| `unit`   | no       | string | What is being counted (`"cigarettes"`) |
+
+`x` is a timestamp or a label; `y` is the value at that point. There is
+deliberately no `kind` split the way `time` has one: bar, line, or a row
+of dots are rendering choices over the identical points, so one shape
+covers all of them.
+
+##### `event`
+
+One calendar event. The theme owns the calendar.
+
+| Field     | Required | Type   | Meaning                           |
+| --------- | -------- | ------ | --------------------------------- |
+| `type`    | yes      | string | `"event"`                         |
+| `start`   | yes      | string | ISO instant, or bare `YYYY-MM-DD` |
+| `end`     | yes      | string | Same two shapes. Always present.  |
+| `summary` | yes      | string | What the event is                 |
 
 ```
 { type: "event", start: "2026-09-15T09:00:00.000Z",
@@ -295,37 +452,74 @@ emitting events says only what exists and when:
 ```
 
 One block per event, and **no notion of "today" anywhere in it**. A
-module cannot know what the display is drawing — a month grid, a week
-strip, an agenda list — and the theme already knows the device's own
-date, so which events belong on screen is the theme's decision alone. A
-calendar module returns everything inside whatever window it reads and
-stops there; it does not count, rank, slice, or pre-format events.
+module cannot know what the display is drawing, and the theme already
+knows the device's own date, so which events belong on screen is the
+theme's decision alone. A calendar module returns everything inside
+whatever window it reads and stops there: it does not count, rank, slice,
+or pre-format events.
 
 **`start` and `end` come in two shapes, and the difference is the
 point.** A full ISO instant is a specific moment. A bare `YYYY-MM-DD` is
-a whole calendar day with no time and no timezone attached — which is
-what an all-day event genuinely is. The shape of the string is the only
+a whole calendar day with no time and no timezone attached, which is what
+an all-day event genuinely is. The shape of the string is the only
 signal; there is no `allDay` flag to keep in sync with it.
 
 This is not cosmetic. Writing an all-day event as an instant (midnight
 UTC, say) pins a timezone-less thing to a timezone, and it lands on the
-wrong day for anyone west of UTC — `2026-09-20T00:00:00Z` is the evening
+wrong day for anyone west of UTC: `2026-09-20T00:00:00Z` is the evening
 of the 19th in Regina. Themes must not run a bare date through anything
-that resolves it as an instant, `new Date("2026-09-20")` included: that
-parses as UTC midnight and reintroduces exactly the bug the bare form
-avoids. Split it on the hyphens and build a local date.
+that resolves it as an instant, `new Date("2026-09-20")` included, since
+that parses as UTC midnight and reintroduces exactly the bug the bare
+form avoids. Split it on the hyphens and build a local date.
 
-**`end` is always present, and for all-day events it is inclusive** — the
+**`end` is always present, and for all-day events it is inclusive:** the
 last day the event is actually on. ICS itself uses an exclusive end for
-all-day events, so a module reading one corrects it before emitting;
+all-day events, so a module reading one corrects it before emitting, and
 themes never see the raw convention. An event with no duration reports
 `end` equal to `start`.
 
-**Every block may carry a `text` string** — its plain-text rendering. A
-theme that has never heard of a block type falls back to that and still
-looks reasonable. **This is what lets the block list grow without breaking
-themes people already installed.** OmniCore fills it in automatically if a
-module omits it.
+#### The `text` fallback is what lets TCC grow
+
+**Every block carries a `text` string:** its plain-text rendering.
+OmniCore fills this in automatically for every RCB if the module does not
+supply one.
+
+A theme that has never heard of a block type falls back to that string
+and still looks reasonable. **This is the single mechanism that lets new
+RCBs be added without breaking themes people already installed.** When
+`event` was added in v1.13.0, every existing theme kept working on the
+day it shipped, rendering events as readable lines, with no update and no
+coordination.
+
+It is also why a module never has to ask what a theme supports, and could
+not ask even if it wanted to: the data only flows one way. The fallback
+makes the question unnecessary.
+
+#### `emits` in the registry
+
+A registry entry declares which RCBs a module actually sends:
+
+```json
+"emits": ["event", "text", "pair"]
+```
+
+**This is a declaration, not a request.** Nothing enforces it and nothing
+reads it at install time to decide anything. It exists so the marketplace
+can describe a module honestly, and so a reviewer can tell at a glance
+whether a module is doing something a theme might not expect.
+
+Two rules, both easy to get wrong:
+
+- **List every RCB the module can send on any path, including failure
+  paths.** A module whose only `text` block is its "Not reachable" state
+  still emits `text`. Leaving it out is inaccurate: it describes the
+  happy path rather than the module.
+- **`emits` is about which RCBs, never how many blocks.** A module that
+  sends forty `pair` blocks still just emits `pair`.
+
+`emits` does not replace `minOmniCore`. If a module uses an RCB that a
+given OmniCore is too old to know, the version is what protects the
+install; `emits` only describes.
 
 ### Failing gracefully
 
@@ -344,7 +538,7 @@ return {
 ```
 
 OmniCore catches a module that throws and shows one dead tile rather than
-breaking the face — but relying on that is worse than handling it.
+breaking the face -- but relying on that is worse than handling it.
 
 ### `module.json`
 
@@ -357,12 +551,12 @@ breaking the face — but relying on that is worse than handling it.
 }
 ```
 
-| Field         | Meaning                                                                                                                            |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | Readable name. Falls back to the folder name.                                                                                      |
-| `description` | One line, shown in pickers.                                                                                                        |
-| `provides`    | Block types this module can emit. Lets OmniCore offer only modules that could do a job — a wallpaper picker shouldn't list Docker. |
-| `tile`        | `false` means it works behind the scenes and shouldn't get a tile by default.                                                      |
+| Field         | Meaning                                                                                                                             |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | Readable name. Falls back to the folder name.                                                                                       |
+| `description` | One line, shown in pickers.                                                                                                         |
+| `provides`    | Block types this module can emit. Lets OmniCore offer only modules that could do a job -- a wallpaper picker shouldn't list Docker. |
+| `tile`        | `false` means it works behind the scenes and shouldn't get a tile by default.                                                       |
 
 ### Using the network
 
@@ -382,7 +576,7 @@ down, and deduplication when several faces ask at once. A dashboard polling
 every few seconds would otherwise become hundreds of calls an hour against
 somebody else's free API.
 
-When `stale` is true, **say so** — append "(last known)" or similar rather
+When `stale` is true, **say so** -- append "(last known)" or similar rather
 than presenting old data as current.
 
 ---
@@ -392,14 +586,14 @@ than presenting old data as current.
 A module never reaches into `core/`. Everything it may use arrives as one
 object, built fresh per call in `core/module-api.js`:
 
-| Member                            | What it does                                                                               |
-| --------------------------------- | ------------------------------------------------------------------------------------------ |
-| `version`                         | Which shape of this object a module was written against.                                   |
-| `fetch(url, options)`             | The shared HTTP helper — caching, timeouts, stale fallback. See "Using the network" above. |
-| `visible(order, richness)`        | Which of a `priority`-ordered list to show.                                                |
-| `share(count, richness)`          | How many of a list of like rows to show.                                                   |
-| `storage.read()` / `.write(data)` | This instance's own persisted data. See §5c.                                               |
-| `time()`                          | `{ timestamp, timezone }` — what time OmniCore thinks it is right now. See §5c.            |
+| Member                            | What it does                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------- |
+| `version`                         | Which shape of this object a module was written against.                                    |
+| `fetch(url, options)`             | The shared HTTP helper -- caching, timeouts, stale fallback. See "Using the network" above. |
+| `visible(order, richness)`        | Which of a `priority`-ordered list to show.                                                 |
+| `share(count, richness)`          | How many of a list of like rows to show.                                                    |
+| `storage.read()` / `.write(data)` | This instance's own persisted data. See §5c.                                                |
+| `time()`                          | `{ timestamp, timezone }` -- what time OmniCore thinks it is right now. See §5c.            |
 
 This is deliberately not `require("../../core/module-fetch")`. Three
 things follow from handing capabilities to a module instead of letting it
@@ -407,15 +601,15 @@ reach for them:
 
 - **A module doesn't care where it's installed.** A relative `require`
   only resolves if the module sits exactly where OmniCore's own layout
-  expects — a fact about OmniCore leaking into someone else's repo. This
+  expects -- a fact about OmniCore leaking into someone else's repo. This
   object works the same regardless.
 - **The surface is one small, named thing**, not a set of file paths a
   module could poke around beyond. What a module may use is exactly what
   this table lists.
 - **It can be made smaller later.** A module that can `require` its way
   into `core/module-fetch` can equally `require("fs")` and read
-  `data/admin.json` — nothing stops it. A restricted build can instead
-  hand a module a smaller `omni` — a `fetch` that refuses, say — without
+  `data/admin.json` -- nothing stops it. A restricted build can instead
+  hand a module a smaller `omni` -- a `fetch` that refuses, say -- without
   changing a single well-behaved module. This is the seam any future
   sandboxing hangs off; `require`-into-core would have made that much
   harder to retrofit.
@@ -429,7 +623,7 @@ through `core/marketplace.js`, which does exactly three things and
 nothing more: fetch a registry, download a pinned commit, verify it
 before it touches `modules/` or `themes/`.
 
-**The registry** is one JSON file — by default the project's own,
+**The registry** is one JSON file -- by default the project's own,
 overridable per-install with a `registryUrl` setting. Getting an entry
 listed there means a pull request against that repo was reviewed and
 merged; review has already happened before any of this code runs.
@@ -450,7 +644,7 @@ reviewed-safe code could turn malicious in a later push and every
 existing install would silently receive it. Pinning means changing what
 an entry serves needs its own pull request, reviewed the same way.
 
-`path` is optional and names a subfolder — the same repo can hold several
+`path` is optional and names a subfolder -- the same repo can hold several
 modules or themes (a studio publishing ten themes from one repo), each
 getting its own registry entry. Empty means the repo root, which is every
 entry until this is used.
@@ -459,12 +653,12 @@ entry until this is used.
 extracted into an isolated staging folder, checked for the one file that
 makes it a real module (`index.js`) or theme (`index.html`), and only
 then moved into place. A failed check leaves nothing behind under
-`modules/` or `themes/` — nothing is written there until every check has
+`modules/` or `themes/` -- nothing is written there until every check has
 passed.
 
 **Extraction rejects anything that isn't a plain file or directory.**
 Path safety alone is not enough here: an archive entry can have a
-perfectly safe _name_ — `icon.png`, say — while being a symlink that
+perfectly safe _name_ -- `icon.png`, say -- while being a symlink that
 _points_ somewhere else on the machine entirely. This was found by
 attacking the installer during development, not theorised in advance;
 see §13.
@@ -473,10 +667,10 @@ see §13.
 
 ### 5c. System time, storage, and Inports
 
-**System time — `omni.time()`**
+**System time -- `omni.time()`**
 
 A module reads what time OmniCore thinks it is through `omni.time()`
-rather than calling `Date`/`Intl` itself — one place establishing it, the
+rather than calling `Date`/`Intl` itself -- one place establishing it, the
 same reasoning `location-service.js` already follows for location.
 
 ```js
@@ -484,47 +678,47 @@ const { timestamp, timezone } = omni.time();
 ```
 
 `timestamp` is the instant, right now; `timezone` is this machine's own
-resolved IANA zone. Infrastructure, not a module — no `settings.json`, no
+resolved IANA zone. Infrastructure, not a module -- no `settings.json`, no
 marketplace listing, nothing appears on a dashboard just because this
 exists. Read-only: the ability to _change_ the system's time is a real
 security question of its own, deliberately parked rather than folded in
 here.
 
 A theme can reach the exact same snapshot directly, with no module in
-between, at `GET /time` on its own face — for ambient chrome a theme
+between, at `GET /time` on its own face -- for ambient chrome a theme
 wants to own itself (a taskbar-style corner clock baked into the theme,
 say). This is a narrow, deliberate exception to "a theme only ever sees
-what a face hands it through a module" — the data itself is trivial and
+what a face hands it through a module" -- the data itself is trivial and
 carries no configuration, so there's nothing for a module to usefully
 sit in front of.
 
-Every module before this was stateless — fetch or compute, format,
+Every module before this was stateless -- fetch or compute, format,
 respond, forget. `config` persists, but only in one direction: an admin
 fills a form once and the module reads the same unchanged value back on
 every call. Nothing let a module write a new fact into existence itself,
-at runtime, from inside its own code — until a module needed to remember
+at runtime, from inside its own code -- until a module needed to remember
 that someone tapped a button.
 
-**Storage — `omni.storage`**
+**Storage -- `omni.storage`**
 
 ```js
 const data = omni.storage.read(); // -> {} if nothing's ever been saved
 omni.storage.write({ ...data, taps: [...data.taps, Date.now()] });
 ```
 
-One JSON file per instance, at `data/faces/<faceId>/<instanceId>.json` —
+One JSON file per instance, at `data/faces/<faceId>/<instanceId>.json` --
 whole-file-in, whole-file-out, exactly the same discipline `faces.json`
 itself is held to. `faceId` and `instanceId` are never something a
 module supplies or sees; `omni.storage` arrives already pointed at the
 right file, the same way `config` arrives already resolved. There is no
 way to reach another instance's data through this object.
 
-Deleting an instance deletes its storage file with it — nothing a module
+Deleting an instance deletes its storage file with it -- nothing a module
 saved outlives the instance that saved it.
 
 **Input faces**
 
-A module that needs a physical action — a button someone actually taps —
+A module that needs a physical action -- a button someone actually taps --
 declares one in `modules/<id>/input.json`, the same pattern
 `settings.json` already uses for its own schema:
 
@@ -556,28 +750,28 @@ pairing each with its own button keeps which-value-goes-where obvious.
 An empty or non-numeric field submits nothing at all rather than sending
 a null through, since that's a slip rather than an event worth recording.
 
-A module with no `input.json` simply takes no input — nothing else
+A module with no `input.json` simply takes no input -- nothing else
 about it changes.
 
 Input is reached at the **Inport** of whichever face the module sits on.
 A face is one ID and two ports: face `001` means Outport `001` (port
 `4001`, the dashboard) and Inport `001` (port `2001`, its input). The
-pairing is arithmetic, never allocated — `4001` is always paired with
+pairing is arithmetic, never allocated -- `4001` is always paired with
 `2001`, and nothing has to remember that.
 
 Several modules on the same face share that one Inport and are told
 apart by path: `/<instance-id>` for a module's page, and
 `POST /<instance-id>/input` for a tap. The Inport's root serves the one
 module's page directly when a face has exactly one taking input, and
-offers a choice when it has several — a picker holding a single option
+offers a choice when it has several -- a picker holding a single option
 is just a tap someone has to make for no reason.
 
 An Inport only listens if its face actually has something taking input.
 A face of weather and wallpaper tiles has no reason to hold an open,
 unauthenticated port waiting for input that can never arrive, so it
-doesn't — and starts listening the moment an input-capable module is
+doesn't -- and starts listening the moment an input-capable module is
 added, without a restart.
-**OmniCore renders the page itself — a plain black page with one glass
+**OmniCore renders the page itself -- a plain black page with one glass
 button per control, no theme involved at all.** A module says what
 controls exist; it never says how a tap looks or feels, the same
 separation that governs every other block type. This may open up to
@@ -591,7 +785,7 @@ module.exports = async function (config, richness, omni) { ... }; // existing
 module.exports.onInput = async function (payload, omni) { ... }; // new
 ```
 
-`payload` is `{ key }` for a button, or `{ key, value }` for a number —
+`payload` is `{ key }` for a button, or `{ key, value }` for a number --
 which control was activated, and what was typed into it. `onInput` is
 where a module actually calls `omni.storage.write(...)`; the display
 function reads that same file back to build whatever it shows. Both
@@ -599,7 +793,7 @@ arrive through the same `omni`, scoped to the same instance, which is
 the whole mechanism connecting "someone tapped the button" to "the tile
 shows one more point."
 
-**Trust.** Unauthenticated, same model as a dashboard face today — anyone
+**Trust.** Unauthenticated, same model as a dashboard face today -- anyone
 on the network can reach the port and tap the button. Not solved
 per-feature: a dedicated auth service is planned to cover Inports
 and the control face (port 4000) together, rather than bolting something
@@ -612,17 +806,17 @@ on for just this one.
 ### A theme is static files only
 
 OmniCore serves a theme's folder; it never executes it. This is structural,
-not a rule of etiquette — a theme has no server side, so the only data it
+not a rule of etiquette -- a theme has no server side, so the only data it
 can reach is what a face hands it.
 
 ### Files
 
-| File                     | Required | Purpose                                                      |
-| ------------------------ | -------- | ------------------------------------------------------------ |
-| `index.html`             | yes      | The page itself.                                             |
-| `theme.json`             | no       | `{ name, description }`. Falls back to folder name.          |
-| `settings.json`          | no       | Settings for the whole face.                                 |
-| `instance-settings.json` | no       | Settings the theme needs **per instance** — sizing, usually. |
+| File                     | Required | Purpose                                                       |
+| ------------------------ | -------- | ------------------------------------------------------------- |
+| `index.html`             | yes      | The page itself.                                              |
+| `theme.json`             | no       | `{ name, description }`. Falls back to folder name.           |
+| `settings.json`          | no       | Settings for the whole face.                                  |
+| `instance-settings.json` | no       | Settings the theme needs **per instance** -- sizing, usually. |
 
 ### What a theme fetches
 
@@ -639,7 +833,7 @@ path regardless of how a module chose to express itself.
 ### Rendering blocks
 
 Handle the types you know; **fall back to `block.text` for anything you
-don't**. That fallback is not optional — it is what keeps your theme working
+don't**. That fallback is not optional -- it is what keeps your theme working
 when a newer block type appears.
 
 ```js
@@ -695,10 +889,10 @@ const SIZES = {
 
 Three shapes of theme all work:
 
-- **Named steps** — like `windows8` above.
-- **A number** — one `number` field, e.g. 0–100, mapped to richness however
+- **Named steps** -- like `windows8` above.
+- **A number** -- one `number` field, e.g. 0–100, mapped to richness however
   you like.
-- **Nothing** — ship no `instance-settings.json`, no size field appears,
+- **Nothing** -- ship no `instance-settings.json`, no size field appears,
   and you size everything yourself.
 
 `hiddenValue` marks which of your values means "don't show this". A module
@@ -718,7 +912,7 @@ untrusted marketplace code runs. Sizing moved into settings instead, and
 
 **One write endpoint does remain on dashboard faces: `POST /select-theme`.**
 The built-in fallback screen uses it when a face has no theme set yet.
-It is narrow — it can only set the theme, on that one face — and is only
+It is narrow -- it can only set the theme, on that one face -- and is only
 meaningfully reachable before a theme is configured. But it is on an
 unauthenticated port, and it is not reached through any theme.
 
@@ -731,7 +925,7 @@ OmniCore injects a small script into every theme HTML page on the way out.
 It listens on `/events` and reloads the page on `face-changed`, and reloads
 after a reconnection in case a change was missed while disconnected.
 
-**Injection is deliberate, not a convention** — a theme physically cannot
+**Injection is deliberate, not a convention** -- a theme physically cannot
 ship without it, so an unattended display can always be changed remotely and
 will always recover after OmniCore restarts.
 
@@ -744,7 +938,7 @@ itself rather than sitting stale until somebody reloads it by hand.
 ## 7. Settings schemas
 
 Modules and themes both **declare** their settings. OmniCore renders the
-form. **Neither ever ships a settings UI** — that is what keeps every
+form. **Neither ever ships a settings UI** -- that is what keeps every
 settings page consistent no matter who wrote the thing.
 
 ```json
@@ -809,7 +1003,7 @@ what it offers without invalidating anybody's saved settings.
 
 In the form it renders as rows with up/down arrows. The chosen order lives
 in a hidden input, so every existing save handler collects it the same way
-it collects a text box — there is no special case in the collection code.
+it collects a text box -- there is no special case in the collection code.
 
 **This does not change the richness contract.** A theme still sends one
 number and learns nothing about what it buys; a module still decides what
@@ -833,7 +1027,7 @@ Anything not declared in a schema is discarded on save.
 
 ### Location
 
-Weather, prayer times, sunrise — all need to know where they are. Rather
+Weather, prayer times, sunrise -- all need to know where they are. Rather
 than each module working it out, OmniCore establishes it once.
 
 - **Settings → Location service.** On by default. Automatic (IP-based, via
@@ -843,9 +1037,9 @@ than each module working it out, OmniCore establishes it once.
 - Modules never implement location logic. They receive it or receive
   nothing.
 
-**Honest scope of the guarantee:** themes are genuinely sandboxed — with no
+**Honest scope of the guarantee:** themes are genuinely sandboxed -- with no
 server side, a theme has no path to a location OmniCore doesn't expose.
-Modules are trusted backend code — a module _could_ call a geolocation
+Modules are trusted backend code -- a module _could_ call a geolocation
 service itself. This service makes the right thing the easy path. Being
 reviewed into the registry (§5b) and receiving `omni` rather than raw
 `require` access (§5a) both narrow this over time; neither is a sandbox
@@ -854,7 +1048,7 @@ today, and shouldn't be described as one.
 ### Image proxying
 
 A theme requests `/api/<instanceId>/image/<n>`. OmniCore fetches the real
-URL and relays it, so a **display only ever talks to your own server** —
+URL and relays it, so a **display only ever talks to your own server** --
 not to Bing or any other CDN.
 
 **OmniCore never accepts a URL in the path.** The caller asks by instance
@@ -871,14 +1065,14 @@ from the same one arriving again. A face polls every few seconds forever;
 most of those answers are identical to the one before.
 
 The tag is built from `title` and `content` and **deliberately excludes
-`updated`**, which is a fresh timestamp on every call by design — include
+`updated`**, which is a fresh timestamp on every call by design -- include
 it and every tag is unique, which is exactly useless for the modules that
 poll fastest.
 
 It's also built from the blocks **before image proxying**, which is a
 real distinction rather than an implementation detail. Proxying rewrites
 an image URL to a stable path (`/api/<instance>/image/0`) that is
-identical whether or not the picture behind it changed — so tagging the
+identical whether or not the picture behind it changed -- so tagging the
 proxied form would report "nothing changed" every time Bing published a
 new wallpaper. The original URLs are the thing that actually moves.
 
@@ -886,7 +1080,7 @@ new wallpaper. The original URLs are the thing that actually moves.
 `304 Not Modified` if, and only if, the request carried a matching
 `If-None-Match`. A theme that has never heard of any of this sends no
 such header and receives the full body with a `200` exactly as it always
-did — the `ETag` is an extra header it's free to ignore.
+did -- the `ETag` is an extra header it's free to ignore.
 
 That opt-in is load-bearing, not politeness. A theme written before this
 existed reasonably treats any non-OK response as a dead tile, so an
@@ -895,7 +1089,7 @@ theme in the wild is such a theme.
 
 ### Live updates
 
-A face resolves **everything per request** — its theme, its name, its
+A face resolves **everything per request** -- its theme, its name, its
 instances and their settings. Nothing is decided at startup. That is what
 lets any of it be edited while OmniCore keeps running.
 
@@ -910,14 +1104,14 @@ restart, and nobody has to be standing in front of the screen.
 Worth being explicit, because several decisions only make sense in this
 light.
 
-| Surface                     | Trust                                                                                                                                                                                                                                                                                                       |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                                                                                                                                                                        |
-| **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install — full Node access, narrowed only by what `omni` actually hands over (§5a).                                                                                                                                                   |
-| **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                                                                                                                                                                                                      |
-| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                                                                                                                                                                                 |
-| **Dashboard faces (4001+)** | Unauthenticated. Serves data, `GET /time`, and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                                                                                                                                                    |
-| **Inports (2001+)**         | Unauthenticated. One write: `POST /<instance-id>/input`, reaching a module's `onInput`. Not yet solved — see §5c; planned to be covered by the same future auth work as the control face. Because an Inport belongs to a face rather than an instance, that auth will cover every module behind it at once. |
+| Surface                     | Trust                                                                                                                                                                                                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                                                                                                                                                                         |
+| **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install -- full Node access, narrowed only by what `omni` actually hands over (§5a).                                                                                                                                                   |
+| **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                                                                                                                                                                                                       |
+| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                                                                                                                                                                                  |
+| **Dashboard faces (4001+)** | Unauthenticated. Serves data, `GET /time`, and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                                                                                                                                                     |
+| **Inports (2001+)**         | Unauthenticated. One write: `POST /<instance-id>/input`, reaching a module's `onInput`. Not yet solved -- see §5c; planned to be covered by the same future auth work as the control face. Because an Inport belongs to a face rather than an instance, that auth will cover every module behind it at once. |
 
 Passwords are salted scrypt hashes compared in constant time. Sessions are
 random tokens in an `HttpOnly`, `SameSite=Strict` cookie, held in memory so
@@ -937,10 +1131,10 @@ npm install
 node start.OmniCore
 ```
 
-1. **Port 4000** — the setup wizard. Name and title, theme, module picker,
+1. **Port 4000** -- the setup wizard. Name and title, theme, module picker,
    per-module settings, theme settings, review, finish. Nothing is written
    until Finish, so Cancel leaves nothing behind.
-2. **Port 3000** — create the admin account, then edit anything directly.
+2. **Port 3000** -- create the admin account, then edit anything directly.
 
 The wizard is for **setting a face up**; the admin face is for **changing
 one thing afterwards**. A wizard is the wrong shape for editing.
@@ -973,15 +1167,15 @@ default; swaps the 3D motion for a flat sliding card).
 
 Three, chosen by _why_ a tile is changing, not by what it contains:
 
-| Motion           | When                                   | What it is                                               |
-| ---------------- | -------------------------------------- | -------------------------------------------------------- |
-| **Depth Swivel** | New data arrived                       | Recess, 180° turn, return — three non-overlapping phases |
-| **Prism Roll**   | Paging through content that didn't fit | One 90° turn, next face already perpendicular            |
-| **Sliding card** | Whenever _Simplify animation_ is on    | Flat, from left or right at random                       |
+| Motion           | When                                   | What it is                                                |
+| ---------------- | -------------------------------------- | --------------------------------------------------------- |
+| **Depth Swivel** | New data arrived                       | Recess, 180° turn, return -- three non-overlapping phases |
+| **Prism Roll**   | Paging through content that didn't fit | One 90° turn, next face already perpendicular             |
+| **Sliding card** | Whenever _Simplify animation_ is on    | Flat, from left or right at random                        |
 
 A tile is a **box with real depth**, not a flat card. Depth equals the
 tile's height, so every face around the rotation axis is the same shape as
-the front — that is what makes it read as a solid block tumbling rather
+the front -- that is what makes it read as a solid block tumbling rather
 than paper flipping, and why a blank side face is glimpsed mid-swivel.
 
 Three things about this were learned the hard way and are easy to undo by
@@ -995,7 +1189,7 @@ accident:
   off halfway.
 - **Never set an inline `transform` on an animating element.** Inline
   styles outrank CSS animations, so the keyframes silently do nothing.
-- **Simplify mode removes the whole 3D setup together** — perspective,
+- **Simplify mode removes the whole 3D setup together** -- perspective,
   `preserve-3d`, and the faces' own transforms. Neutralising only part of
   it pushed the front face toward the viewer and made every tile render
   oversized.
@@ -1012,7 +1206,7 @@ Admin login. The setup wizard. The `windows8` theme with three animations.
 
 The **marketplace**: browse, one-click install from a reviewed registry,
 and the module API split (`omni`) that made modules independent of
-OmniCore's own layout. OmniCore ships bare — nothing bundled — and the
+OmniCore's own layout. OmniCore ships bare -- nothing bundled -- and the
 eight modules and one theme it launched with now live in their own
 repo, installed like anything else would be.
 
@@ -1026,8 +1220,8 @@ use their own fixed steps.
 ### Not built yet
 
 - **Auto start/shutdown.**
-- **OmniView** — the display client.
-- **Container image** — the intended primary distribution.
+- **OmniView** -- the display client.
+- **Container image** -- the intended primary distribution.
 
 ### Known gaps
 
@@ -1060,14 +1254,14 @@ Things that cost real debugging time in this project:
 - **Two ways to do one thing is one too many.** A "hide this tile"
 - **A safe-looking path can still hide an unsafe target.** A downloaded
   archive's extraction filter checked that every entry's own path stayed
-  inside the destination — and missed that a symlink's own path can be
+  inside the destination -- and missed that a symlink's own path can be
   entirely safe while what it _points to_ is anywhere on the machine.
   Found by deliberately attacking the installer before anyone else could;
   fixed by rejecting anything that isn't a plain file or directory.
 - **`fs.rename()` assumes one filesystem.** Moving a download from the
   OS temp directory into place worked everywhere it was tested, then
   failed with `EXDEV` the first time source and destination happened to
-  be different mounts — true on Codespaces, not true in the sandbox this
+  be different mounts -- true on Codespaces, not true in the sandbox this
   was built in. A same-filesystem move is not guaranteed; fall back to
   copy-then-delete when the OS says no.
   checkbox alongside a "Hidden" size was redundant and confusing.

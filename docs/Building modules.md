@@ -2,7 +2,7 @@
 
 This is a practical guide to writing a module. If you want the reasoning
 behind the design rather than instructions for using it, read
-`docs/ARCHITECTURE.md` first — this guide assumes you've either read that or
+`docs/ARCHITECTURE.md` first -- this guide assumes you've either read that or
 don't need to.
 
 By the end of this you'll have a working module, understand richness well
@@ -27,7 +27,7 @@ module.exports = async function (config, richness, omni) {
   return {
     title: "My Module",
     content: [
-      /* blocks — see §3 */
+      /* blocks -- see §3 */
     ],
     updated: new Date().toISOString(),
   };
@@ -35,7 +35,7 @@ module.exports = async function (config, richness, omni) {
 ```
 
 That's it. No routes, no HTML, no imports of Express. OmniCore finds your
-folder, calls your function, and does everything else — routing, caching
+folder, calls your function, and does everything else -- routing, caching
 your response's images, handing your output to whichever theme is
 displaying it.
 
@@ -45,10 +45,10 @@ settings, this is `{}`.
 
 **`richness`** is a number from 1 to 100, always present, telling you how
 much room there is to fill. This is the part most guides for tile-based
-systems skip, and it's the part that matters most here — §2 is entirely
+systems skip, and it's the part that matters most here -- §2 is entirely
 about it.
 
-**`omni`** is the only way to reach anything OmniCore provides — network
+**`omni`** is the only way to reach anything OmniCore provides -- network
 fetching, the richness helpers, whatever gets added later. Never
 `require("../../core/...")`; a module that reaches for core files by
 relative path breaks the moment it's installed anywhere other than
@@ -61,12 +61,12 @@ timestamp.
 
 ---
 
-## 2. Richness — the one thing to actually understand
+## 2. Richness -- the one thing to actually understand
 
 ### The problem it solves
 
 A dashboard has tiles of different sizes. A naive design would let each
-theme trim your content to fit — cut rows until it stops overflowing. That
+theme trim your content to fit -- cut rows until it stops overflowing. That
 sort of worked for the first few modules built here, and it produces bad
 results: information gets sliced off arbitrarily, "wide" and "large" tiles
 end up looking the same because trimming can't tell the difference between
@@ -78,13 +78,13 @@ the same guesswork.
 **You decide what your module shows at any given size. Not the theme.**
 
 Every time OmniCore calls your function, it also tells you a number from 1
-to 100 — how much room the tile asking has. **What that number means is
+to 100 -- how much room the tile asking has. **What that number means is
 entirely up to you.** You define your own scale, with as many steps as
 actually make sense for your content. Two is fine. Twenty is fine, if you
-genuinely have that much to say. More steps is not automatically better —
+genuinely have that much to say. More steps is not automatically better --
 pick steps around what's actually useful to see, not evenly-spaced filler.
 
-Here's `modules/prayer-times`, in full, as the reference example — it has
+Here's `modules/prayer-times`, in full, as the reference example -- it has
 exactly four steps:
 
 | Richness | Returns                                   |
@@ -117,7 +117,7 @@ if (richness >= 80) {
 ### Why this split works across themes with nothing in common
 
 The theme side of this is symmetrical to yours. A theme has its own
-vocabulary for sizes — named steps, a number, or no concept of size at all —
+vocabulary for sizes -- named steps, a number, or no concept of size at all --
 and _it_ decides which richness number to ask for, based on how much room
 a given size actually has. `windows8`, for example, hardcodes:
 
@@ -133,29 +133,36 @@ whether "65" came from a tile called "Wide," a slider at 65%, or a theme
 that just always asks for 65. The theme never finds out what your numbers
 mean, only that a higher one gets more content. That's what lets one module
 work correctly in a theme with four named sizes and another theme with a
-0–100 slider and a third theme with no size concept at all — they can't
+0–100 slider and a third theme with no size concept at all -- they can't
 break each other because there's no shared vocabulary to disagree about.
 
 ### What if you ignore it?
 
-Nothing stops you — a module that always returns everything regardless of
+Nothing stops you -- a module that always returns everything regardless of
 `richness` still runs. But it will overflow small tiles (themes trim as a
 safety net, so nothing actually breaks the layout, but the trimming is
 blind and will cut your content wherever it happens to run out of room,
 which usually isn't where you'd choose). Honoring richness is the module
-contract, not something OmniCore enforces at the code level — same as
+contract, not something OmniCore enforces at the code level -- same as
 nothing stops a module from returning malformed data. It's the standard
 your module will be judged against.
 
 ---
 
-## 3. Content blocks
+## 3. The Content Contract
 
-You describe _what you have_, never _how it should look_. No colors, no
-sizes, no HTML. That decision belongs entirely to the theme, and it's what
-lets any theme render any module without knowing what the module does.
+Everything you send travels under **the Content Contract (TCC)**, the
+agreement that makes a module written by you work with a theme written by
+somebody else. It has one rule:
 
-The current block types:
+> You describe **what you have**. The theme decides **how it looks**.
+
+No colors, no sizes, no HTML, no sentences with the label baked in. That
+decision belongs entirely to the theme, and honouring it is what lets any
+theme render your module without knowing what your module does.
+
+You say what you have in **Recognized Content Blocks (RCBs)** -- block
+types OmniCore knows by name. There are nine:
 
 ```js
 { type: "text",       value, emphasis: "primary" | "secondary" | "body" }
@@ -169,31 +176,41 @@ The current block types:
 { type: "event",      start, end, summary }
 ```
 
+Field-by-field specifications for every RCB, including which fields are
+required, live in `docs/Architecture.md` under The Content Contract. What
+follows here is the practical side: which one to reach for, and the
+mistakes worth not making.
+
+**`text` is a status line, not prose.** A number, a word, an error. If
+you're sending an actual quotation, that's a `quote`, which exists
+precisely so a theme can draw it as a pull-quote rather than as something
+that looks like an error message.
+
 **Never fold a label into a value.** `{ type: "pair", label: "Humidity",
 value: "62%" }` is right; `{ type: "text", value: "Humidity 62%" }` is not.
-The second looks identical in one theme and is broken in every other one —
+The second looks identical in one theme and is broken in every other one --
 no theme can hide that label, restyle it, or lay it out differently,
 because by the time it arrives it is just a sentence. If your content has a
 name and a value, send both, separately, every time. Use `emphasis:
 "primary"` to say which one leads; what that looks like is the theme's
 business.
 
-**`image` vs `background`** — both carry a picture, but they mean different
+**`image` vs `background`** -- both carry a picture, but they mean different
 things. An `image` is content that belongs inside your tile. A `background`
 is a picture meant to sit behind _everything on the dashboard_, not just
-your tile — a theme may offer to use it as wallpaper. Use whichever matches
+your tile -- a theme may offer to use it as wallpaper. Use whichever matches
 what you're actually providing; a wallpaper-style module (Bing's picture of
 the day, say) should emit both, since it's simultaneously a tile's content
 and a candidate for the page background.
 
 **Image URLs are handled for you.** Just put a real, reachable URL in
-`block.url`. OmniCore proxies it — fetching and caching it server-side —
+`block.url`. OmniCore proxies it -- fetching and caching it server-side --
 so the display never talks to wherever your image actually came from. You
 don't do anything differently; this happens automatically to every `image`
 and `background` block.
 
 **`time` is one instant plus a `kind`.** `timestamp` is always a raw ISO
-string — never decompose it into `{ hour, minute }` yourself, since a
+string -- never decompose it into `{ hour, minute }` yourself, since a
 theme needs the real instant to tick from and a decomposed local time is
 genuinely ambiguous during a DST transition. `clock` (+ `timezone`) is the
 only kind a module emits today; `countdown`, `stopwatch`, and `position`
@@ -202,9 +219,9 @@ are reserved for later and need no changes here to start using.
 **`graphdata` is a series, nothing about how to draw it.** `points` is
 just `{ x, y }` pairs in order; whether a theme turns that into a bar
 chart, a line, or dots is entirely its call, which is why there's no
-`kind` the way `time` has one — one shape covers every rendering.
+`kind` the way `time` has one -- one shape covers every rendering.
 
-**`event` says what's on and when — nothing about a calendar.** Emit one
+**`event` says what's on and when -- nothing about a calendar.** Emit one
 block per event and let the theme decide what to do with them:
 
 ```js
@@ -216,13 +233,13 @@ block per event and let the theme decide what to do with them:
 
 Don't count events, don't trim the list to what you think will fit, and
 don't write strings like `"in 3 days"`. You can't know whether the theme
-is drawing a month grid, a week strip, or a list — and it already knows
+is drawing a month grid, a week strip, or a list -- and it already knows
 the device's own date. Return everything in whatever window you read.
 This is one of the few block types where honouring richness usually
 means ignoring it: the theme is better placed to decide what's shown.
 
 **A timed event uses a full ISO instant; an all-day event uses a bare
-`YYYY-MM-DD`.** The shape of the string is how you say which it is —
+`YYYY-MM-DD`.** The shape of the string is how you say which it is --
 there's no `allDay` flag. Never write an all-day event as an instant:
 midnight UTC is the previous evening west of UTC, so the event shows up
 on the wrong day. Keep the date as year/month/day the whole way through
@@ -231,13 +248,13 @@ and format it yourself rather than going via `toISOString()`.
 **Always send `end`, even when your source didn't.** A theme shouldn't
 have to handle a missing one. If the event has no duration, send `end`
 equal to `start`. If you're reading ICS, note that its all-day `DTEND`
-is _exclusive_ — a holiday running the 20th to the 22nd is written as
-`DTEND:20260923` — so step it back a day before emitting, since `end`
+is _exclusive_ -- a holiday running the 20th to the 22nd is written as
+`DTEND:20260923` -- so step it back a day before emitting, since `end`
 here means the last day the event is actually on.
 
 **A block's `text` field is optional and you can usually skip it.**
 OmniCore derives a plain-text fallback for any block that doesn't supply
-one — that's what lets a theme render a block type it's never heard of
+one -- that's what lets a theme render a block type it's never heard of
 (new types get added over time) without breaking. You only need to set
 `text` yourself if the derived version wouldn't make sense.
 
@@ -267,8 +284,8 @@ blocks once you want more than that.
 
 ## 4. Settings
 
-If your module needs configuration — an API region, a city, a refresh
-interval — declare it. Don't build your own settings UI; OmniCore renders
+If your module needs configuration -- an API region, a city, a refresh
+interval -- declare it. Don't build your own settings UI; OmniCore renders
 one from your declaration, which is what keeps every module's settings page
 looking the same.
 
@@ -300,12 +317,12 @@ Available `type`s: `text`, `url`, `number`, `password`, `boolean`, `select`
 
 Every field can carry `default`, `help` (a one-line explanation shown under
 the field), and `showWhen: { key, equals }` to hide it unless another field
-has a matching value — useful for "only show this when that mode is on."
+has a matching value -- useful for "only show this when that mode is on."
 
 Your function receives the resolved values as `config[key]`, with defaults
 already filled in for anything unset.
 
-### The `priority` type — letting the user order your content
+### The `priority` type -- letting the user order your content
 
 If your module has several distinct facts rather than a list of like rows,
 consider handing the _ordering_ to the user instead of hardcoding it.
@@ -321,7 +338,7 @@ consider handing the _ordering_ to the user instead of hardcoding it.
 ```
 
 You get `config.fieldOrder` back as an array in the user's order, already
-reconciled against your `options` — names you no longer declare are dropped,
+reconciled against your `options` -- names you no longer declare are dropped,
 and ones you have since added are appended. You never have to handle a stale
 order yourself.
 
@@ -336,7 +353,7 @@ returns the ones to show, **in the user's order**. Whatever they put at the
 top survives the smallest tile. `modules/weather` is the worked example.
 
 **This is not right for every module.** If every row you emit is the same
-kind of thing — one event, one container, one message — there is nothing
+kind of thing -- one event, one container, one message -- there is nothing
 meaningful to reorder, and a priority setting would be a second way to do a
 job richness already does. Use `share` instead:
 
@@ -347,7 +364,7 @@ const room = omni.share(rows.length, richness, { minimum: 0 });
 ```
 
 `modules/calendar`, `modules/docker-status` and `modules/ntfy-bridge` all do
-this. Neither helper is compulsory — a module is free to hardcode its own
+this. Neither helper is compulsory -- a module is free to hardcode its own
 steps, as `prayer-times` does.
 
 ### The `location` type
@@ -361,8 +378,8 @@ than asking the user to type in latitude/longitude yourself:
 
 You'll receive `config.location` as either `{ latitude, longitude, label }`
 or `null`. You never find out whether that came from OmniCore's own IP-based
-detection, a city the user searched for, or coordinates typed in by hand —
-and you shouldn't try to. **Always handle the `null` case** — it means
+detection, a city the user searched for, or coordinates typed in by hand --
+and you shouldn't try to. **Always handle the `null` case** -- it means
 location services are off, or nothing could be determined. Return a normal
 envelope explaining that; don't throw.
 
@@ -393,13 +410,13 @@ const { timestamp, timezone } = omni.time();
 ```
 
 `timestamp` is an ISO instant; `timezone` is this machine's own resolved
-IANA zone (not a location's — resolve that yourself if you need a
+IANA zone (not a location's -- resolve that yourself if you need a
 different one, the way World Clock does for its "a location" mode).
 Going through here rather than calling `Date` yourself is what keeps
 "what time is it" answerable from one place, the same reasoning
 `omni.fetch` already gives you for the network.
 
-Every module up to this point is stateless — fetch or compute, format,
+Every module up to this point is stateless -- fetch or compute, format,
 respond, forget. If yours needs to remember something across calls
 (a running total, a log of events someone triggers), you need both of
 the pieces below.
@@ -411,7 +428,7 @@ const data = omni.storage.read(); // {} if you've never saved anything
 omni.storage.write({ ...data, count: (data.count || 0) + 1 });
 ```
 
-One JSON file, whole-file-in, whole-file-out — read the current value,
+One JSON file, whole-file-in, whole-file-out -- read the current value,
 change it in memory, write the whole thing back. You never see a path or
 an ID; `omni.storage` already knows which instance it belongs to, and
 there's no way to reach any other instance's data through it. Deleting
@@ -419,8 +436,8 @@ the instance deletes this with it.
 
 ### Input faces
 
-If your module needs a physical action — someone actually tapping a
-button — rather than just settings someone fills in once, declare it in
+If your module needs a physical action -- someone actually tapping a
+button -- rather than just settings someone fills in once, declare it in
 `modules/my-module/input.json`:
 
 ```json
@@ -440,7 +457,7 @@ button — rather than just settings someone fills in once, declare it in
 Two types are available: `button` (one tappable button) and `number` (a
 number field with its own submit). A `number` control also accepts
 `placeholder` and `submitLabel`, both optional. Declaring either gets
-your instance its own port, rendered as **OmniCore's own plain page — a
+your instance its own port, rendered as **OmniCore's own plain page -- a
 black background, glass controls, no theme involved.** You say what the
 controls are; you don't get a say in how they look, same as everywhere
 else in OmniCore.
@@ -456,18 +473,18 @@ module.exports.onInput = async function (payload, omni) { ... }; // NEW
 `payload` is `{ key }` for a button, or `{ key, value }` for a number.
 This is where you actually call `omni.storage.write(...)`; your display
 function reads the same storage back to decide what to show. A module
-with no `input.json` simply takes no input — nothing else about it is
+with no `input.json` simply takes no input -- nothing else about it is
 any different.
 
 Your module doesn't get a port of its own. Input arrives at the Inport
-of whichever face your module was placed on — face `001` uses port
-`2001`, alongside its dashboard on `4001` — and several modules on one
+of whichever face your module was placed on -- face `001` uses port
+`2001`, alongside its dashboard on `4001` -- and several modules on one
 face share it, told apart by path. None of that is something a module
 has to know or handle: you declare your controls, you handle `onInput`,
 and OmniCore does the rest.
 
 Throwing from `onInput` costs you one failed tap, the same way throwing
-from your display function costs you one dead tile — prefer returning
+from your display function costs you one dead tile -- prefer returning
 normally and let a caller retry, but it won't take anything else down.
 
 ---
@@ -485,12 +502,37 @@ Optional, but worth having:
 }
 ```
 
-| Field         | Meaning                                                                                                                                                                                                                                              |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`        | Readable name, shown wherever your module appears in settings. Falls back to the folder name if you skip this.                                                                                                                                       |
-| `description` | One line.                                                                                                                                                                                                                                            |
-| `provides`    | Which block types you can emit. This is what lets OmniCore correctly offer your module wherever something needs a `background` — a theme's wallpaper picker uses this to _not_ offer, say, a Docker status module. Only list what you actually emit. |
-| `tile`        | Set to `false` if your module is meant to work invisibly — feeding a background, say, with nothing worth putting on screen itself. Instances of it start hidden by default; the user can still turn a tile on for it if they want to.                |
+| Field         | Meaning                                                                                                                                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | Readable name, shown wherever your module appears in settings. Falls back to the folder name if you skip this.                                                                                                                                          |
+| `description` | One line.                                                                                                                                                                                                                                               |
+| `provides`    | Which RCBs you can emit. Read at runtime: a settings field can filter on it, which is what lets a theme's wallpaper picker offer only modules that provide `background` and _not_ offer, say, a Docker status module. Only list what you actually emit. |
+| `tile`        | Set to `false` if your module is meant to work invisibly -- feeding a background, say, with nothing worth putting on screen itself. Instances of it start hidden by default; the user can still turn a tile on for it if they want to.                  |
+
+### `provides` here, `emits` in the registry
+
+The same list appears twice, in two files, under two names. This catches
+people out, so it is worth being precise about which is which:
+
+|                  | `provides`                                                                               | `emits`                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| Lives in         | `module.json`, in your module                                                            | `registry.json`, in Omnia-Registry                        |
+| Read by          | OmniCore at runtime                                                                      | The marketplace listing                                   |
+| Effect           | **Functional.** Settings fields filter on it, so it changes what the UI offers.          | **Descriptive.** Rendered as tags so a listing is honest. |
+| Getting it wrong | A wallpaper picker offers a module that cannot supply a wallpaper, or hides one that can | A listing misdescribes the module                         |
+
+Keep them in step, and keep both honest to the same standard:
+
+- **List every RCB you can send on any path, including failure paths.** If
+  your only `text` block is the "Not reachable" state, you still emit
+  `text`. Leaving it out describes your happy path rather than your
+  module.
+- **It is about which RCBs, never how many blocks.** Forty `pair` blocks
+  is still just `pair`.
+
+Neither field is a substitute for `minOmniCore` in the registry. If you
+use an RCB that an older OmniCore has never heard of, the version is what
+stops that install taking the update; `emits` only describes it.
 
 ---
 
@@ -500,10 +542,10 @@ Optional, but worth having:
 
 ```js
 const { data, stale } = await omni.fetch(url, {
-  cacheSeconds: 300, // default 300 — how long a cached answer stays fresh
-  timeoutSeconds: 10, // default 10 — give up after this long
+  cacheSeconds: 300, // default 300 -- how long a cached answer stays fresh
+  timeoutSeconds: 10, // default 10 -- give up after this long
   as: "json", // default "json"; use "text" for non-JSON responses
-  key: "custom-key", // optional — defaults to the URL itself
+  key: "custom-key", // optional -- defaults to the URL itself
 });
 ```
 
@@ -511,7 +553,7 @@ This one call gets you three things you would otherwise have to build
 yourself, and every module gets them for free:
 
 - **Caching.** A dashboard polls every few seconds. Without this, that's
-  hundreds of calls an hour to whatever API you're using — a fast way to
+  hundreds of calls an hour to whatever API you're using -- a fast way to
   get your users rate-limited, or banned, by a free service. Set
   `cacheSeconds` to something sane for how often your data actually
   changes: weather every 10 minutes, prayer times every few hours.
@@ -521,7 +563,7 @@ yourself, and every module gets them for free:
 - **Stale-beats-nothing.** If the service is briefly unreachable,
   `omni.fetch` hands back the last good answer instead of nothing, and
   sets `stale: true` so you know. On a wall display, a twenty-minute-old
-  temperature reads better than a blank tile — use `stale` to append
+  temperature reads better than a blank tile -- use `stale` to append
   something like "(last known)" if you want to be transparent about it.
 
 `data` is `null` if nothing has ever succeeded. Always check for that:
@@ -544,7 +586,7 @@ if (!data) {
 ## 8. Failure is a return value, not an exception
 
 If your function throws, OmniCore catches it, and the user sees one dead
-tile rather than the whole face breaking — but that's a safety net, not a
+tile rather than the whole face breaking -- but that's a safety net, not a
 design pattern to lean on. **Prefer returning a real envelope that explains
 what's wrong**, the way the examples above do. It's more informative and
 it's what a well-behaved module does.
@@ -562,13 +604,13 @@ Things worth explicitly handling rather than letting throw:
 
 **Never render.** No HTML, no inline styles, no assumptions about color or
 layout. The moment a module bakes in appearance, no theme can restyle it,
-and "any theme renders any module" — the entire point of the split — stops
+and "any theme renders any module" -- the entire point of the split -- stops
 being true for yours.
 
 **Never touch the server.** No `require("express")`, no defining routes, no
 reading files outside your own settings. OmniCore owns all of that. Modules
-are trusted backend code — nothing stops you technically, the same way
-nothing stops any Node script from doing whatever it wants — but doing so
+are trusted backend code -- nothing stops you technically, the same way
+nothing stops any Node script from doing whatever it wants -- but doing so
 breaks the architecture and won't be accepted anywhere modules get
 distributed from.
 
@@ -671,7 +713,7 @@ module.exports = async function countdown(config, richness, omni) {
 }
 ```
 
-Three richness tiers, no network calls, no location, nothing exotic — just
+Three richness tiers, no network calls, no location, nothing exotic -- just
 the pattern applied.
 
 ---
@@ -679,18 +721,18 @@ the pattern applied.
 ## 11. Checklist before you call it done
 
 - [ ] Function signature is `(config, richness, omni)`
-- [ ] Nothing in the file does `require("../../core/...")` — everything
+- [ ] Nothing in the file does `require("../../core/...")` -- everything
       comes through `omni`
 - [ ] `richness` actually changes what you return, at more than one point
 - [ ] If your module has distinct fields, you considered a `priority`
       setting so the user can order them; if it emits like rows, you scaled
       the row count instead
-- [ ] Every path returns a valid envelope, including failure cases —
+- [ ] Every path returns a valid envelope, including failure cases --
       nothing relies on throwing
 - [ ] Outbound HTTP goes through `omni.fetch`, with a `cacheSeconds` that
       matches how often your data actually changes
 - [ ] No HTML, no styling, no layout decisions anywhere in your output
-- [ ] No label folded into a value string — anything with a name and a
+- [ ] No label folded into a value string -- anything with a name and a
       value goes out as a `pair`, both halves separate
 - [ ] `module.json` exists with an honest `provides` list if you emit
       `image` or `background`
@@ -704,12 +746,12 @@ the pattern applied.
 A module on your own machine only helps you. Getting it into the
 Marketplace means:
 
-1. Push it to a public repo — its own, or a subfolder of one with several
+1. Push it to a public repo -- its own, or a subfolder of one with several
    modules or themes in it.
 2. Open a pull request against the registry repo, adding one entry that
    names your repo, the commit to pin, and a `path` if it's not at the
    repo's root.
 
-Full details — the entry's exact shape, why it pins a commit rather than a
-branch, how one repo can hold several modules — are in
+Full details -- the entry's exact shape, why it pins a commit rather than a
+branch, how one repo can hold several modules -- are in
 `docs/ARCHITECTURE.md` §5b, and in the registry repo's own README.

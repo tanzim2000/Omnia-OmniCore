@@ -20,7 +20,7 @@ Go to the
 and download **Source code (zip)** near the bottom. Unzip it somewhere
 you'll remember, like your Desktop.
 
-(Not the green **Code** button near the top of this page — that always
+(Not the green **Code** button near the top of this page -- that always
 gives you whatever's newest, which may not match these instructions.
 The release page is the version this guide was written for.)
 
@@ -39,7 +39,7 @@ The release page is the version this guide was written for.)
 docker compose up -d
 ```
 
-The first time, this takes a few minutes — it's downloading and setting
+The first time, this takes a few minutes -- it's downloading and setting
 everything up. You'll see a lot of text scroll by; that's normal.
 
 **5. Open your web browser and go to:**
@@ -49,7 +49,7 @@ http://localhost:3000
 ```
 
 Create your account, then click **Marketplace** to install a theme and
-some modules — weather, a calendar, whatever you want on your dashboard.
+some modules -- weather, a calendar, whatever you want on your dashboard.
 
 **6. Go to:**
 
@@ -57,9 +57,12 @@ some modules — weather, a calendar, whatever you want on your dashboard.
 http://localhost:4000
 ```
 
-This is where you build your actual dashboard: give it a name, pick the
-theme and modules you just installed, and finish. That's it — your
-dashboard is live.
+With no dashboards yet, this sends you straight to the setup wizard.
+Give your dashboard a name, pick the theme and modules you just
+installed, and finish. That's it -- your dashboard is live.
+
+(Afterwards, port 4000 becomes the picker for choosing between the
+dashboards you've made.)
 
 ### Turning it off, or starting it again
 
@@ -76,14 +79,14 @@ turns it off. To start it again later:
 docker compose up -d
 ```
 
-Everything you've set up is saved — your account, your dashboards,
-whatever you installed — even when it's off.
+Everything you've set up is saved -- your account, your dashboards,
+whatever you installed -- even when it's off.
 
 ### A limit worth knowing
 
 Ten dashboards can run at once out of the box. If you ever need an
 eleventh, that needs one small edit to a file by someone comfortable
-opening `docker-compose.yml` in a text editor — not something you'll run
+opening `docker-compose.yml` in a text editor -- not something you'll run
 into unless you're building something unusually large.
 
 ---
@@ -93,21 +96,21 @@ into unless you're building something unusually large.
 OmniCore keeps three things apart so none of them has to know about the
 others:
 
-- **Modules** fetch data — weather, a calendar, whatever. They have no
+- **Modules** fetch data -- weather, a calendar, whatever. They have no
   opinion about how it looks.
 - **Themes** decide how it looks. They never run on your server.
 - **Faces** are the dashboards themselves.
 
 Because they're genuinely separate, any theme can display any module.
-Everything beyond the basics — new modules, new themes — comes from the
+Everything beyond the basics -- new modules, new themes -- comes from the
 **Marketplace**, built into the account page you created in step 5. Each
 one is reviewed before it's listed, so you're not installing random code
 off the internet.
 
 ## For anyone comfortable with code
 
-If you'd rather run this from source instead of Docker — to modify it, to
-build your own modules or themes, or just because you prefer it —
+If you'd rather run this from source instead of Docker -- to modify it, to
+build your own modules or themes, or just because you prefer it --
 `docs/Architecture.md` is the real reference, and `docs/Building
 modules.md` / `docs/Building theme.md` cover writing your own.
 
@@ -118,16 +121,17 @@ npm install
 node start.OmniCore
 ```
 
-Requires Node 20 or newer. Same two pages afterward: port 3000 for the
-account and Marketplace, port 4000 for the setup wizard.
+Requires Node 20 or newer. Same pages afterward: port 3000 for the
+account and Marketplace, port 3999 for the setup wizard, and port 4000
+to pick which dashboard to show.
 
 ## Known limitations
 
 - Ten dashboards at once via the Docker setup above; unlimited from source
-- No password reset — delete your account data to start over
+- No password reset -- delete your account data to start over
 - Runs on plain HTTP; if you ever expose this beyond your own network, put
   it behind a VPN or reverse proxy first
-- Modules are reviewed before listing but not sandboxed — see
+- Modules are reviewed before listing but not sandboxed -- see
   `docs/Architecture.md` §9
 
 See `BACKLOG.md` for the fuller picture, including what a proper
@@ -137,9 +141,9 @@ double-click installer would take beyond this.
 
 OmniCore is one of three parts:
 
-- **OmniCore** — this repository. Serves faces and their data.
-- **OmniView** — the display client, for putting a face on a screen.
-- **OmniSync** — planned.
+- **OmniCore** -- this repository. Serves faces and their data.
+- **OmniView** -- the display client, for putting a face on a screen.
+- **OmniSync** -- planned.
 
 ## Licence
 
