@@ -8,6 +8,7 @@ const assert = require("node:assert");
 
 
 const faceStore = require("../core/face-store");
+const notifications = require("../core/notifications");
 const { startFace, refresh } = require("../core/face-loader");
 const {
 	startInputFace,
@@ -192,6 +193,85 @@ test("dashboard face: a theme that knows nothing about tags is unaffected", asyn
 			`request ${attempt} had no content array`
 		);
 	}
+});
+
+// Notifications. The second of these is the one that matters most: a
+// face opened in an ordinary browser tab must never receive one, and
+// that has to hold without Core checking anything -- a plain browser
+// simply never asks.
+test("notifications: an OmniView receives one, a plain browser does not", async () => {
+	const face = faceStore.readFaces()[0];
+	await waitForPort(face.id);
+
+	function listen(asOmniView) {
+		return new Promise((resolve) => {
+			const received = [];
+			const path = asOmniView ? "/events?client=omniview" : "/events";
+
+			const req = require("http").get(
+				{ port: face.id, path: path },
+				(res) => {
+					res.on("data", (chunk) => {
+						const text = chunk.toString();
+						if (text.includes("event: notification")) {
+							received.push(text.split("data: ")[1].split("\n")[0]);
+						}
+					});
+				}
+			);
+
+			setTimeout(() => resolve({ received, req }), 400);
+		});
+	}
+
+	const omniview = await listen(true);
+	const plain = await listen(false);
+
+	notifications.notify(face.id, {
+		title: "Container stopped",
+		description: "immich-server exited unexpectedly",
+		priority: 5
+	});
+
+	await new Promise((resolve) => setTimeout(resolve, 300));
+
+	assert.equal(omniview.received.length, 1, "OmniView got no notification");
+
+	const note = JSON.parse(omniview.received[0]);
+	assert.equal(note.title, "Container stopped");
+	assert.equal(note.priority, 5);
+	assert.equal(note.seconds, 60, "priority 5 should hold for a minute");
+
+	assert.equal(
+		plain.received.length,
+		0,
+		"a plain browser tab received a notification -- it never should"
+	);
+
+	omniview.req.destroy();
+	plain.req.destroy();
+});
+
+test("notifications: priorities map to the documented durations", () => {
+	assert.deepEqual(notifications.PRIORITY_SECONDS, {
+		1: 10,
+		2: 15,
+		3: 30,
+		4: 45,
+		5: 60
+	});
+
+	// A nonsense priority becomes the middle one rather than failing --
+	// a notification that didn't show because its priority was "high"
+	// would be worse than one that showed for thirty seconds
+	assert.equal(notifications.resolvePriority("high"), 3);
+	assert.equal(notifications.resolvePriority(9), 3);
+	assert.equal(notifications.resolvePriority(4), 4);
+});
+
+test("notifications: a title is required", () => {
+	const face = faceStore.readFaces()[0];
+	assert.equal(notifications.notify(face.id, { description: "no title" }), false);
 });
 
 test("dashboard face: a module that throws does not take the face down", async () => {

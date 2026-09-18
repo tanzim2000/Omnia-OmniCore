@@ -13,6 +13,7 @@
 // docs/planning/default-ui-architecture.md.
 
 const { uiStyles } = require("./ui-theme");
+const notifications = require("./notifications");
 
 function renderFallbackPage(themes) {
 	const hasThemes = themes.length > 0;
@@ -39,6 +40,7 @@ function renderFallbackPage(themes) {
 	<title>OmniCore</title>
 	<style>
 ${uiStyles()}
+${notifications.OVERLAY_STYLES}
 
 		body {
 			height: 100vh;
@@ -78,6 +80,7 @@ ${uiStyles()}
 			location.reload();
 		}
 	</script>
+	<script>${notifications.OVERLAY_SCRIPT}</script>
 </body>
 </html>`;
 }

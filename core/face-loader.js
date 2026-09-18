@@ -19,9 +19,15 @@ const { readSystemTime } = require("./time-service");
 const themeLoader = require("./theme-loader");
 const faceStore = require("./face-store");
 const renderFallbackPage = require("./fallback-page");
-const { attachEvents, pushToFace, CLIENT_SCRIPT } = require("./face-events");
+const {
+	attachEvents,
+	pushToFace,
+	clientBundle
+} = require("./face-events");
 const { toBlocks, proxyImages } = require("./envelope");
 const { contentTag } = require("./content-tag");
+const settingsStore = require("./settings-store");
+const notifications = require("./notifications");
 const imageProxy = require("./image-proxy");
 
 // Running faces, keyed by port: { server, face }
@@ -103,6 +109,70 @@ function startFace(face) {
 
 		// OmniCore's push channel — the /events stream browsers listen on
 		attachEvents(app, face);
+
+		// Notification settings, reachable by an OmniView and nothing
+		// else. They govern an overlay only an OmniView ever draws, so
+		// anything else asking is told no rather than shown a read-only
+		// copy -- a setting visible somewhere it can't apply is worse
+		// than one that isn't there.
+		//
+		// Same handshake the /events stream uses: OmniView announces
+		// itself, an ordinary browser doesn't, and never thinks to.
+		app.get("/notifications/settings", (req, res) => {
+			if (req.query.client !== "omniview") {
+				res.status(404).json({ error: "Not found" });
+				return;
+			}
+
+			const settings = settingsStore.readSettings();
+
+			res.json({
+				enabled: settings.notificationsEnabled,
+				storeWhileAsleep: settings.notificationsStoreWhileAsleep,
+				storedMax: settings.notificationsStoredMax,
+				minimumPriority: settings.notificationsMinimumPriority,
+				// So an OmniView never has to hardcode what a priority
+				// means -- Core stays the one place that decides
+				prioritySeconds: notifications.PRIORITY_SECONDS
+			});
+		});
+
+		app.post("/notifications/settings", (req, res) => {
+			if (req.query.client !== "omniview") {
+				res.status(404).json({ error: "Not found" });
+				return;
+			}
+
+			const body = req.body || {};
+			const patch = {};
+
+			if (body.enabled !== undefined) {
+				patch.notificationsEnabled = Boolean(body.enabled);
+			}
+
+			if (body.storeWhileAsleep !== undefined) {
+				patch.notificationsStoreWhileAsleep = Boolean(
+					body.storeWhileAsleep
+				);
+			}
+
+			if (body.storedMax !== undefined) {
+				// Clamped rather than rejected: a nonsense ceiling should
+				// not be a way to turn holding off by accident
+				patch.notificationsStoredMax = Math.min(
+					200,
+					Math.max(1, Math.round(Number(body.storedMax) || 20))
+				);
+			}
+
+			if (body.minimumPriority !== undefined) {
+				patch.notificationsMinimumPriority =
+					notifications.resolvePriority(body.minimumPriority);
+			}
+
+			settingsStore.writeSettings(patch);
+			res.json({ saved: true });
+		});
 
 		// Images are fetched by OmniCore rather than by the display
 		imageProxy.attachImageRoute(app);
@@ -327,11 +397,13 @@ function startFace(face) {
 			if (filePath && filePath.endsWith(".html") && fs.existsSync(filePath)) {
 				let html = fs.readFileSync(filePath, "utf-8");
 
+				const injected = clientBundle();
+
 				if (html.includes("</body>")) {
-					html = html.replace("</body>", CLIENT_SCRIPT + "\n</body>");
+					html = html.replace("</body>", injected + "\n</body>");
 				} else {
 					// Malformed theme HTML with no </body> — append anyway
-					html = html + CLIENT_SCRIPT;
+					html = html + injected;
 				}
 
 				res.setHeader("Content-Type", "text/html");

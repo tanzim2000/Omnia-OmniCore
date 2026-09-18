@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.14.0
+
+Notifications: a message that appears over whatever a display is showing, holds, and goes away again.
+
+### Added
+
+- **Notifications are Core's, not a theme's.** Everything else on screen travels under the Content Contract, where a module says what it has and a theme decides how it looks. This deliberately breaks that rule, for the same reason the reload-on-change script does: a theme that forgot to implement it, or implemented it badly, would be a theme that silently swallows the one message somebody actually needed to see. The overlay's shape, timing and animation are all Core's, and no theme has to know it exists.
+- **Five priorities, five durations.** 1 holds for 10 seconds, 2 for 15, 3 for 30, 4 for 45, 5 for a minute. A more urgent message is not louder or bigger, it simply stays long enough that somebody walking past has a chance to read it -- everything else about it is identical, so priority never becomes a way to shout. An unrecognised priority becomes 3 rather than failing, since a notification that didn't show because its priority said "high" is worse than one that showed for thirty seconds.
+- **Only an OmniView ever sees one.** A display says what it is when it connects to `/events`; OmniView announces itself, an ordinary browser tab doesn't, and never thinks to. So a face opened in a normal browser receives nothing -- not because Core checks and refuses, but because a plain browser never asks. Notification settings are gated the same way and answer 404 to anything else, since a setting visible somewhere it cannot apply is worse than one that isn't there.
+- **Nothing runs while nobody is watching.** A module only runs when something asks it to, and a sleeping OmniView asks for nothing, so notifications stop happening on their own -- no scheduler to pause and nothing to switch off. What happens to one raised in the meantime is a setting: dropped by default, since arriving to twenty stale notifications from overnight is worse than having missed them, or held for the next OmniView that connects, up to a ceiling so a module stuck in a loop cannot fill anything.
+- **The overlay is built from the Default UI's own tokens**, including the same draining amber lamp the welcome face's auto-advance timer uses. "Time is running out on this thing on screen" already had a look in OmniCore and should not grow a second one. Bottom-left, which the back button setting has always reserved for exactly this. Reduced-motion is honoured: the notification still arrives, holds and leaves, only the scaling stops.
+
+### Notes
+
+- OmniView does not exist yet, so this is Core's half of a contract rather than something testable end to end today. The overlay renders on the fallback page, which is what makes it visible at all for now.
+- Queued rather than stacked. Two notifications on top of each other is two nobody reads.
+
 ## v1.13.1
 
 Themes can now tell a genuinely new reading apart from the same one arriving again -- without giving up anything for themes that don't know how.
@@ -27,7 +44,7 @@ First release with a block type for calendar data -- and a matching decision tha
 
 - **A new `event` block type**: `{ type: "event", start, end, summary }`, for modules that read calendars. A module reports raw events only, inside whatever window it reads -- no notion of "today", no grid, no week or month -- because it can't know whether the display is drawing a month grid, a week strip, or an agenda list, and the theme already knows the device's own date. Which events actually belong on screen stays entirely the theme's decision.
 - **`start` and `end` carry their own timezone signal.** A full ISO instant is a specific moment; a bare `YYYY-MM-DD` is a whole calendar day with no time or timezone attached at all -- what an all-day event genuinely is. The shape of the string says which one it is, so there's no separate `allDay` flag for a module and a theme to keep in sync with each other.
-- A theme that hasn't been updated to draw `event` blocks isn't left with nothing: it falls back to a plain readable line the same way every other block type does, e.g. "Sep 20 – Sep 22 — Eid holiday".
+- A theme that hasn't been updated to draw `event` blocks isn't left with nothing: it falls back to a plain readable line the same way every other block type does, e.g. "Sep 20 – Sep 22 -- Eid holiday".
 
 ## v1.12.3
 
