@@ -54,6 +54,19 @@ function readManifest(themeId) {
 }
 
 // Every theme installed on this OmniCore
+//
+// A symlinked theme folder -- the common local-development setup, where
+// a theme lives in its own repo and is linked into themes/ rather than
+// copied -- needs special handling here. Node's own Dirent type reports
+// a symlink as neither a directory nor a file; it deliberately doesn't
+// follow the link just to answer that question. Left unhandled, that
+// makes a perfectly real, working theme silently invisible: the face
+// says "no theme is installed" while the folder is sitting right there.
+//
+// module-loader.js has always done this. themes never got the same
+// treatment, which is the whole bug -- a developer linking both in would
+// find their modules listed and their theme missing, with nothing
+// anywhere saying why.
 function listThemes() {
 	if (!fs.existsSync(themesDir())) {
 		return [];
@@ -61,7 +74,27 @@ function listThemes() {
 
 	return fs
 		.readdirSync(themesDir(), { withFileTypes: true })
-		.filter((entry) => entry.isDirectory())
+		.filter((entry) => {
+			if (entry.isDirectory()) {
+				return true;
+			}
+
+			if (!entry.isSymbolicLink()) {
+				return false;
+			}
+
+			// Resolve it ourselves. A dangling symlink (whatever it once
+			// pointed at is gone) or one pointing at a plain file rather
+			// than a folder is correctly excluded here, same as either
+			// case already would be without a symlink involved at all.
+			try {
+				return fs
+					.statSync(path.join(themesDir(), entry.name))
+					.isDirectory();
+			} catch (error) {
+				return false;
+			}
+		})
 		.map((entry) => readManifest(entry.name));
 }
 

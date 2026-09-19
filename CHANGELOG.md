@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.14.1
+
+### Fixed
+
+- **A symlinked theme was invisible to OmniCore**, so a face reported "no theme is installed" while the theme sat in `themes/` the whole time. `listThemes()` only counted an entry that `isDirectory()` reported true for, and Node deliberately reports a symlink as neither a file nor a directory -- it does not follow the link just to answer that. `listModules()` has resolved symlinks from the start; themes never got the same treatment. Since linking a repo into `themes/` or `modules/` is the local development setup `Building modules.md` actually documents, anyone following it found their modules listed and their theme missing, with nothing anywhere explaining the difference. A dangling link, or one pointing at a plain file, is still excluded exactly as it would be with no symlink involved.
+
 ## v1.14.0
 
 Notifications: a message that appears over whatever a display is showing, holds, and goes away again.

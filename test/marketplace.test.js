@@ -100,6 +100,54 @@ test(
 	}
 );
 
+// Themes and modules must agree about symlinks, because the documented
+// way to develop either one is to link its repo into themes/ or
+// modules/ rather than copy it. listModules() resolved symlinks from the
+// start; listThemes() did not, so a developer who linked both in found
+// their modules listed and their theme missing, with the face reporting
+// "no theme is installed" and nothing anywhere saying why.
+test("themes: a symlinked theme folder is visible, same as a symlinked module", () => {
+	const source = path.join(themesDir, "symlink-source");
+
+	fs.mkdirSync(source, { recursive: true });
+	fs.writeFileSync(
+		path.join(source, "theme.json"),
+		JSON.stringify({ name: "Linked Theme" })
+	);
+	fs.writeFileSync(path.join(source, "index.html"), "<html></html>");
+
+	const link = path.join(themesDir, "symlink-linked");
+	fs.rmSync(link, { recursive: true, force: true });
+	fs.symlinkSync(source, link);
+
+	const listed = themeLoader.listThemes().map((manifest) => manifest.id);
+
+	assert.ok(
+		listed.includes("symlink-linked"),
+		"a symlinked theme was invisible -- this is the bug that made a " +
+			"linked theme report as not installed at all"
+	);
+
+	// A link pointing at nothing, and a link pointing at a plain file,
+	// must both still be excluded -- exactly as they would be without a
+	// symlink involved at all.
+	const dangling = path.join(themesDir, "symlink-dangling");
+	fs.rmSync(dangling, { recursive: true, force: true });
+	fs.symlinkSync(path.join(themesDir, "does-not-exist"), dangling);
+
+	const plainFile = path.join(themesDir, "symlink-plain-source.txt");
+	fs.writeFileSync(plainFile, "not a theme");
+
+	const toFile = path.join(themesDir, "symlink-to-file");
+	fs.rmSync(toFile, { recursive: true, force: true });
+	fs.symlinkSync(plainFile, toFile);
+
+	const after = themeLoader.listThemes().map((manifest) => manifest.id);
+
+	assert.ok(!after.includes("symlink-dangling"), "a dangling symlink was listed");
+	assert.ok(!after.includes("symlink-to-file"), "a symlink to a file was listed");
+});
+
 test("marketplace: an installed module actually runs", async () => {
 	// weather is the one polled rather than all of them: it's small,
 	// needs no API key, and every other module goes through the exact
