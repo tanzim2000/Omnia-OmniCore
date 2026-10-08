@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.15.0
+
+A new block type for things meant to be scanned -- and the first one where OmniCore draws the content itself rather than only passing it along.
+
+### Added
+
+- **A new `qr` block type**: `{ type: "qr", value, label }`. A module says what the code should hold -- a link, usually -- and optionally what scanning it does. It never builds the code itself: encoding a QR code is identical for every module and fiddly enough (error correction, masking, picking the smallest size the data fits) that nobody should write it twice, so OmniCore does it on the way out and hands the theme a ready-made `svg` beside the `value`.
+- **`core/qr.js`, Core's own QR engine**, deliberately separate from the Content Contract plumbing so anything else in Core that wants a scannable code on a screen can call it directly. Built on `qrcode-generator` -- one small dependency with no dependencies of its own -- which does the encoding; turning the result into SVG is Core's. Neighbouring squares are merged into single rectangles, so a typical link comes out around 2.5 KB rather than hundreds of separate shapes, and finished drawings are remembered by value, since a tile asks for the same code on every poll and the machine this runs on isn't fast.
+- **Text is encoded as UTF-8.** The library's default reads one byte per character, which turns a Bangla name or an emoji into a code that scans as garbage. Checked end to end before release: Bangla, emoji, plain links, and a 1,200-character value were all rendered in Chromium, screenshotted, and decoded back to exactly what went in.
+
+### Security
+
+- **`svg` is only ever OmniCore's.** A theme inserts it into its page as raw markup, so any `svg` a module sends is discarded and replaced -- otherwise a module could put whatever HTML it liked on somebody's dashboard. Core's drawing is built from the encoder's grid of squares alone, and the module's text never appears inside it, not even as a title or accessibility label. Both halves are covered by tests, one of them over real HTTP.
+
+### Notes
+
+- **Black on white, with a four-square border, whatever the theme looks like.** Many scanner apps can't read an inverted code, and all of them need that blank margin to find the edges. A theme can restyle it through `.omni-qr-dark` and `.omni-qr-light`, but the default is the one that scans.
+- **A value too big for any QR code** (past roughly 2,300 characters) gets `svg: null` rather than an error. The block still arrives, and its `text` still carries the value.
+- **A theme that doesn't know `qr` yet shows its `text` instead**: the value, or `label: value`. For a link that's genuinely usable -- somebody can type it in -- and it's the same fallback that let `event` ship in v1.13.0 without breaking a single installed theme.
+- Nothing emits `qr` yet. `ntfy` will, for scan-to-subscribe.
+
 ## v1.14.1
 
 ### Fixed

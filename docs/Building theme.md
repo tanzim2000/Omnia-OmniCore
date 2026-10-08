@@ -181,7 +181,7 @@ decisions for you. Your side is that you never assume what a module will
 send.
 
 A module says what it has in **Recognized Content Blocks (RCBs)**, block
-types OmniCore knows by name. There are nine you might see:
+types OmniCore knows by name. There are ten you might see:
 
 ```js
 { type: "text",       value, emphasis: "primary" | "secondary" | "body" }
@@ -193,6 +193,7 @@ types OmniCore knows by name. There are nine you might see:
 { type: "time",       kind: "clock", timestamp, timezone }
 { type: "graphdata",  points: [ { x, y } ], unit }
 { type: "event",      start, end, summary }
+{ type: "qr",         value, label, svg }
 ```
 
 **You are not required to render every type differently.** A minimal theme
@@ -269,6 +270,40 @@ this the way nothing enforces honouring richness.
 **`graphdata` hands you raw points; how they become a chart is entirely
 your call** -- bars, a line, dots, whatever fits your theme. There's no
 `kind` to branch on the way `time` has one.
+
+**`qr` blocks arrive already drawn.** A module only sends `value` (what
+the code holds) and maybe a `label` (what scanning it does); OmniCore
+adds `svg`, a complete drawing of the code. Your job is placement and
+size, nothing else:
+
+```js
+if (block.type === "qr") {
+  // No drawing (value empty or too long for a QR code) -- show the text
+  if (!block.svg) return block.text ? escapeHtml(block.text) : "";
+
+  return (
+    '<div class="qr">' +
+    block.svg +
+    (block.label ? "<div>" + escapeHtml(block.label) + "</div>" : "") +
+    "</div>"
+  );
+}
+```
+
+**Insert `svg` as markup, as-is -- it's the one field built for that.**
+It's safe because OmniCore generates it from the code's squares alone:
+the module's text is never inside it, and anything a module tries to
+send as `svg` is replaced before you see it. Everything else a block
+carries still gets escaped like always, `label` and `text` included.
+
+**Give it room, and leave its colours alone.** The drawing has a
+`viewBox` and no fixed size, so it fills whatever box you give it; make
+that box square and as large as the tile allows, because a phone reads a
+big coarse code from much further away than a small one. It's black on
+white with a blank border on purpose -- many scanner apps can't read an
+inverted code, and none can read one without that border. You can
+restyle `.omni-qr-dark` and `.omni-qr-light`, but test it with a real
+phone if you do.
 
 **`event` blocks are raw calendar data, and the calendar is yours to
 draw.** A module hands you one block per event and nothing else -- no

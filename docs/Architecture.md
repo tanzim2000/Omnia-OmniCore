@@ -260,7 +260,7 @@ Everything a module says, it says as blocks. A **Recognized Content
 Block** is a block type OmniCore knows by name: it has a defined shape, a
 defined meaning, and a plain-text fallback OmniCore can generate for it.
 
-There are **nine RCBs** today. `time` additionally splits into four
+There are **ten RCBs** today. `time` additionally splits into four
 `kind`s, of which only `clock` is currently implemented.
 
 | RCB          | Carries                              | Emitted by                                               |
@@ -274,6 +274,7 @@ There are **nine RCBs** today. `time` additionally splits into four
 | `time`       | One instant, plus what to do with it | `world-clock`                                            |
 | `graphdata`  | A series of points                   | nothing yet (`Tally`, planned)                           |
 | `event`      | One calendar event                   | `calendar`                                               |
+| `qr`         | Something to be scanned              | nothing yet (`ntfy`, planned)                            |
 
 Each is specified below: its fields, which are required, and what the
 field actually means.
@@ -477,6 +478,52 @@ last day the event is actually on. ICS itself uses an exclusive end for
 all-day events, so a module reading one corrects it before emitting, and
 themes never see the raw convention. An event with no duration reports
 `end` equal to `start`.
+
+##### `qr`
+
+Something to be scanned. The module says what goes in it; OmniCore draws the code.
+
+| Field   | Required | Type   | Meaning                                                |
+| ------- | -------- | ------ | ------------------------------------------------------ |
+| `type`  | yes      | string | `"qr"`                                                 |
+| `value` | yes      | string | What the code holds -- a link, usually. Any text works |
+| `label` | no       | string | What scanning it does (`"Scan to subscribe"`)          |
+| `svg`   | --       | string | **Added by OmniCore.** Never sent by a module          |
+
+```
+{ type: "qr", value: "https://ntfy.sh/GitHub", label: "Scan to subscribe" }
+```
+
+This is the first RCB where OmniCore adds content rather than only
+checking it. Encoding a QR code -- error correction, masking, picking the
+smallest size that fits -- is identical for every module and fiddly
+enough that nobody should write it twice, so it lives in Core
+(`core/qr.js`) and happens on the way out. What reaches the theme carries
+a ready-drawn `svg` next to the `value` the module sent.
+
+**`svg` is only ever Core's.** A theme inserts it into its page as
+markup, so whatever `svg` a module sends is discarded and replaced every
+time -- a module able to supply its own would be a module able to put any
+HTML it liked onto somebody's dashboard. Core's drawing is built from the
+encoder's grid of squares alone; the module's text never appears inside
+it, not even as a title. That is the property that makes it safe to
+insert, and it must not be traded away for anything, accessibility
+labels included -- a theme that wants one builds it from `text`, escaped,
+outside the SVG.
+
+**Black on white with a four-square border, whatever the theme looks
+like.** Many scanner apps can't read an inverted code, and all of them
+need the blank margin to find the edges. Both are baked into the drawing.
+A theme can restyle it through `.omni-qr-dark` and `.omni-qr-light` if it
+has a good reason; the default is the one that scans.
+
+**`svg` is `null` when there's nothing to draw** -- an empty `value`, or
+one too long for any QR code to hold (roughly 2,300 characters of plain
+text). The block still arrives, and `text` still carries the value.
+
+`value` is encoded as UTF-8, so non-Latin text and emoji scan correctly.
+The drawing has a `viewBox` and no fixed size: it scales to whatever box
+the theme gives it without blurring.
 
 #### The `text` fallback is what lets TCC grow
 

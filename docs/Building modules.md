@@ -162,7 +162,7 @@ decision belongs entirely to the theme, and honouring it is what lets any
 theme render your module without knowing what your module does.
 
 You say what you have in **Recognized Content Blocks (RCBs)** -- block
-types OmniCore knows by name. There are nine:
+types OmniCore knows by name. There are ten:
 
 ```js
 { type: "text",       value, emphasis: "primary" | "secondary" | "body" }
@@ -174,6 +174,7 @@ types OmniCore knows by name. There are nine:
 { type: "time",       kind: "clock", timestamp, timezone }
 { type: "graphdata",  points: [ { x, y } ], unit }
 { type: "event",      start, end, summary }
+{ type: "qr",         value, label }
 ```
 
 Field-by-field specifications for every RCB, including which fields are
@@ -251,6 +252,23 @@ equal to `start`. If you're reading ICS, note that its all-day `DTEND`
 is _exclusive_ -- a holiday running the 20th to the 22nd is written as
 `DTEND:20260923` -- so step it back a day before emitting, since `end`
 here means the last day the event is actually on.
+
+**`qr` is what goes in the code, never the code itself.** Send the
+link (or whatever text) as `value`, and optionally a `label` saying what
+scanning it does. OmniCore encodes it and hands the theme a finished
+drawing -- you don't need a QR library, and you can't supply your own
+drawing either: anything you put in an `svg` field is thrown away,
+because a theme inserts that field into its page as raw markup.
+
+```js
+{ type: "qr", value: "https://ntfy.sh/GitHub", label: "Scan to subscribe" }
+```
+
+Keep `value` short where you can. A short link makes a small, coarse
+code that a phone picks up from across a room; a long one makes a dense
+code that needs the phone held close. Past roughly 2,300 characters it
+won't fit in a QR code at all -- the block still arrives, and the theme
+shows the text instead.
 
 **A block's `text` field is optional and you can usually skip it.**
 OmniCore derives a plain-text fallback for any block that doesn't supply

@@ -12,6 +12,7 @@
 //   { type: "image",      url, alt, fit: "cover"|"contain" }
 //   { type: "background", url }
 //   { type: "progress",   value: 0..1, label }
+//   { type: "qr",         value, label? }
 //
 // A "pair" is a NAME and a VALUE kept apart. A module always sends both;
 // whether a theme draws the name, hides it, or puts it elsewhere is the
@@ -24,6 +25,10 @@
 // meant to sit behind something — the module says what the picture is FOR,
 // and the theme decides where that ends up.
 //
+// "qr" is something to be scanned. The module sends only what the code
+// should hold; OmniCore draws the code itself and hands the theme an
+// `svg` alongside it (see withQrDrawing below, and core/qr.js).
+//
 // Every block also carries a `text` string: its plain-text rendering. A
 // theme that has never heard of a block type falls back to that and still
 // looks fine. That fallback is what lets the type list grow without
@@ -33,6 +38,8 @@
 // and details — and OmniCore converts it here. So a module only moves to
 // blocks when it needs something the flat shape can't express, and themes
 // only ever deal with blocks.
+
+const qr = require("./qr");
 
 // Formats a count of seconds as "M:SS", or "H:MM:SS" once it's over an
 // hour — shared by every `time` kind that has to show elapsed or
@@ -226,9 +233,34 @@ function withFallbackText(block) {
 		// A block with an unreadable start is still worth showing by
 		// name; dropping it entirely would be worse than saying less.
 		text = start ? `${describeWhen(start, end)} — ${summary}` : summary;
+	} else if (block.type === "qr") {
+		// A theme that can't draw the code can still print what's in it.
+		// For a link — which is what a QR code nearly always holds — that
+		// is genuinely usable: somebody can type it in by hand.
+		const value = String(block.value === undefined ? "" : block.value);
+		text = block.label ? block.label + ": " + value : value;
 	}
 
 	return { ...block, text: text };
+}
+
+// Attach OmniCore's own drawing to every `qr` block.
+//
+// Whatever `svg` a block arrived with is always replaced, never kept,
+// and that's not tidiness. A theme inserts `svg` straight into its page
+// as markup, so a module able to supply its own would be a module able
+// to put any HTML it liked onto somebody's dashboard. The only thing
+// that ever travels in that field is Core's drawing, which is built from
+// geometry and never contains the module's text — see core/qr.js.
+//
+// `svg` is null when there's nothing drawable: an empty value, or one
+// too long for any QR code to hold. The theme falls back to `text`.
+function withQrDrawing(block) {
+	if (block.type !== "qr") {
+		return block;
+	}
+
+	return { ...block, svg: qr.toSvg(block.value) };
 }
 
 // Convert the flat envelope into blocks
@@ -268,7 +300,7 @@ function toBlocks(envelope) {
 		? envelope.content
 		: fromFlat(envelope);
 
-	return blocks.filter(Boolean).map(withFallbackText);
+	return blocks.filter(Boolean).map(withFallbackText).map(withQrDrawing);
 }
 
 // Replace external picture URLs with paths back to OmniCore, and hand the

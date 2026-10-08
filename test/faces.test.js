@@ -316,6 +316,58 @@ test("dashboard face: a module that throws does not take the face down", async (
 	refresh(face.id);
 });
 
+test("dashboard face: a qr block arrives drawn, over real HTTP", async () => {
+	const fs = require("fs");
+	const path = require("path");
+
+	// Written here rather than pulled from the registry, because nothing
+	// published emits a qr block yet. It also tries to smuggle in its own
+	// svg, which the route must throw away -- test/qr.test.js covers that
+	// in isolation; this proves it still holds by the time it's on the wire.
+	const dir = path.join(modulesDir, "smoke-qr-module");
+	fs.mkdirSync(dir, { recursive: true });
+	fs.writeFileSync(
+		path.join(dir, "module.json"),
+		JSON.stringify({ name: "Smoke QR", description: "Emits a qr block" })
+	);
+	fs.writeFileSync(
+		path.join(dir, "index.js"),
+		`module.exports = async function () {
+	return {
+		title: "Smoke QR",
+		content: [{
+			type: "qr",
+			value: "https://ntfy.sh/GitHub",
+			label: "Scan to subscribe",
+			svg: "<img src=x onerror=alert(1)>"
+		}],
+		updated: new Date().toISOString()
+	};
+};
+`
+	);
+
+	const face = faceStore.readFaces()[0];
+	const instance = faceStore.addInstance(face.id, "smoke-qr-module", "", {}, {});
+	refresh(face.id);
+
+	const response = await fetch(
+		`http://127.0.0.1:${face.id}/api/${instance.id}?richness=50`
+	);
+	assert.equal(response.status, 200);
+
+	const envelope = await response.json();
+	const block = envelope.content.find((candidate) => candidate.type === "qr");
+
+	assert.ok(block, "the qr block didn't survive the route");
+	assert.ok(block.svg && block.svg.startsWith("<svg"), "no drawing attached");
+	assert.ok(!block.svg.includes("onerror"), "the module's own svg got through");
+	assert.equal(block.text, "Scan to subscribe: https://ntfy.sh/GitHub");
+
+	faceStore.removeInstance(face.id, instance.id);
+	refresh(face.id);
+});
+
 test("welcome face: with one face, it offers the countdown", async () => {
 	const html = await (await fetch(`http://127.0.0.1:${WELCOME_PORT}/`)).text();
 
