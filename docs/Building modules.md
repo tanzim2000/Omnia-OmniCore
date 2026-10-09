@@ -414,6 +414,107 @@ if (!config.location) {
 }
 ```
 
+### Widget types -- more than one shape for the same data
+
+Some modules have one set of data that can sensibly be shown in more than
+one way. A calendar can be a month grid or an agenda list; both read the
+same calendar, they only differ in what the tile looks like. Rather than
+writing two modules, offer **widget types**.
+
+List them in `module.json` (§6), at least two:
+
+```json
+"widgets": [
+	{ "id": "month-view", "name": "Month View", "description": "A full grid for the whole month" },
+	{ "id": "agenda-view", "name": "Agenda View" }
+]
+```
+
+`id` is letters, digits, `-` and `_`. `name` is what the user sees on the
+button. `description` is optional, shown under the name. A list with only
+one entry offers no choice, so OmniCore treats the module as having no
+widget types at all (and says so in the log).
+
+What changes once you do:
+
+- **The user picks one per instance.** The instance's settings page (and
+  the setup wizard) shows a row of buttons at the top, one per widget
+  type. A module without widget types never shows that row.
+- **Your function is told which was picked**, as `config.widgetType`. It
+  is always one of your ids. Nothing picked yet means your first one; so
+  does a stored id you've since renamed or removed. There's no second
+  export and no separate function per type: read the value and branch.
+  `start` gets it the same way, in its `config`.
+- **Every field in `settings.json` must say which widget types it's for**,
+  with `widgets`: a list of ids, or `"all"`. The form only shows the
+  fields for the picked type. Your function still receives **every**
+  field's value whichever type is picked, defaults filled in as usual,
+  and the user's values for the other types are kept, so switching back
+  finds them as they were left.
+- **A field without a `widgets` tag is dropped**, with a line in
+  OmniCore's log saying which and why. So is one whose tag isn't a list
+  of ids or `"all"`, and one listing only ids you don't declare. An id
+  you don't declare, listed next to ones you do, is just ignored (and
+  logged). Nothing about this ever throws: the rest of your settings
+  still work.
+- **`widgetType` is OmniCore's key.** Don't declare a setting of your own
+  with that name; it's dropped too.
+
+The settings:
+
+```json
+{
+  "settings": [
+    {
+      "key": "source",
+      "label": "Calendar address",
+      "type": "url",
+      "default": "",
+      "widgets": "all"
+    },
+    {
+      "key": "weekNumbers",
+      "label": "Week numbers",
+      "type": "boolean",
+      "default": false,
+      "widgets": ["month-view"]
+    },
+    {
+      "key": "days",
+      "label": "Days ahead",
+      "type": "number",
+      "default": 7,
+      "widgets": ["agenda-view"]
+    }
+  ]
+}
+```
+
+And the function:
+
+```js
+module.exports = async function (config, richness, omni) {
+  // Always one of the ids in module.json -- the first one if nothing
+  // has been picked. On an OmniCore older than 1.18.0 it's missing,
+  // and this falls through to the first type too.
+  if (config.widgetType === "agenda-view") {
+    return agenda(config, richness, omni);
+  }
+
+  return month(config, richness, omni);
+};
+```
+
+Widget types are a settings matter only. Your output is still blocks, and
+a theme draws them without needing to know which widget type made them.
+A theme _can_ size a tile by widget type, though (see "Settings" in the
+theme guide), so pick ids that will still make sense when you add a third.
+
+Widget types need **OmniCore 1.18.0** or later. On anything older the
+picker never appears and `config.widgetType` is never set, so either set
+`minOmniCore` to at least `1.18.0` in the registry, or treat a missing
+value as your first type (the example above already does).
+
 ---
 
 ## 5. System time, storage, input, and running in the background
@@ -682,6 +783,7 @@ Optional, but worth having:
 | `provides`    | Which RCBs you can emit. Read at runtime: a settings field can filter on it, which is what lets a theme's wallpaper picker offer only modules that provide `background` and _not_ offer, say, a Docker status module. Only list what you actually emit. |
 | `tile`        | Set to `false` if your module is meant to work invisibly -- feeding a background, say, with nothing worth putting on screen itself. Instances of it start hidden by default; the user can still turn a tile on for it if they want to.                  |
 | `background`  | Set to `true` if your module keeps running between requests and exports a `start`. See "Running in the background" in §5. Only an exact `true` counts.                                                                                                  |
+| `widgets`     | The widget types your module offers, if it can show its data in more than one shape: a list of `{ id, name, description }`, two or more. Leave it out otherwise. See "Widget types" in §4.                                                              |
 
 ### `provides` here, `emits` in the registry
 
@@ -916,6 +1018,10 @@ the pattern applied.
       a `start`, a `stop` for anything you set up yourself, errors caught
       in your own callbacks, memory kept bounded, and `minOmniCore` set to
       at least `1.16.0` in the registry
+- [ ] If you offer widget types: at least two in `module.json`, a
+      `widgets` tag on every field in `settings.json`, your function
+      branching on `config.widgetType`, and `minOmniCore` at least
+      `1.18.0` (or a missing `widgetType` handled as your first type)
 
 ---
 

@@ -604,6 +604,62 @@ function uiStyles(options) {
 	.option:hover { background: var(--hover-subtle); }
 	.option input { width: 17px; height: 17px; }
 
+	/* The widget type picker: one button per widget type a module offers
+	   (Month View, Agenda View...), at the top of an instance's settings.
+	   Shaped like the option rows above so it reads as part of the same
+	   form, but laid out as a grid, since it's a pick-one row of named
+	   choices rather than a list. Only shown for a module that actually
+	   offers a choice. */
+	.widget-picker {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+		gap: 8px;
+	}
+
+	.widget-choice {
+		appearance: none;
+		-webkit-appearance: none;
+		display: block;
+		width: 100%;
+		text-align: left;
+		font-family: inherit;
+		font-size: 0.95em;
+		color: var(--fg);
+		background: var(--card-bg);
+		border: 1px solid var(--card-border);
+		border-radius: 10px;
+		padding: 12px 14px;
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+
+	.widget-choice:hover { background: var(--hover-subtle); }
+
+	.widget-choice.active {
+		background: var(--glass-bg-hover);
+		border-color: var(--glass-border);
+		box-shadow: inset 0 1px 0 var(--glass-sheen), 0 0 0 1px var(--glass-border);
+	}
+
+	.widget-choice:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px var(--glow-strong);
+	}
+
+	.widget-choice strong { display: block; font-weight: 500; }
+
+	.widget-choice small {
+		display: block;
+		color: var(--fg-muted);
+		font-size: 0.8em;
+		margin-top: 3px;
+	}
+
+	/* A setting that belongs to a widget type other than the one picked.
+	   Hidden with a class, not style.display, so it can't fight with a
+	   field that's hidden because of another field's value (showWhen). */
+	.widget-off { display: none !important; }
+
 	.search-row { display: flex; gap: 8px; }
 	.search-row input { flex: 1; }
 

@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.18.0
+
+One module, more than one way to show it
+
+### Added
+
+- **Widget types.** A module can now offer more than one shape for the same data: a calendar's month grid and agenda list, say. It lists them in `module.json` (`widgets`, two or more, each with an id, a name and an optional description). An instance is still just a module plus its settings; which widget type it shows is one more setting, `widgetType`, which the module reads to decide what to draw. Modules that list no widget types are untouched and look exactly as before.
+- **A widget picker** at the top of an instance's settings, in the admin face and in the setup wizard's per-module step: one button per widget type, with its description underneath. The form below shows only the settings for the picked type, and switches as soon as you pick another. Only modules with a choice get the row.
+- **Per-widget-type settings.** Each field in such a module's `settings.json` says which widget types it belongs to (`widgets: [ids]` or `"all"`). Values for the types not picked are kept, so switching back finds them as they were. A field that doesn't say, or says something unusable, is left out with a line in the log rather than breaking the module.
+- **Themes can size each widget type differently.** A field in a theme's `instance-settings.json` can carry the same `widgets` tag, naming widget types or whole modules by id. Untagged theme fields still apply to everything, so existing themes are unaffected. `/identity` now tells a theme each instance's `widgetType` and sends it only the theme settings that fit it.
+- The Modules list, and the wizard's lists, name the widget type an instance shows ("Calendar · Month View").
+
+### Fixed
+
+- **Settings made in the setup wizard were stored as typed, not cleaned.** A number came out as text, a checkbox could come out as the string `"true"`, and a setting the module doesn't declare was kept. The wizard now saves through the same cleaning the admin face's Save uses.
+- **An empty number box was saved as 0**, in the admin face (and now would have been in the wizard). It's now left unset, so the module's default applies. Theme settings likewise.
+- **"Set coordinates here" with the boxes left empty was saved as 0, 0**, a real spot in the Atlantic, in the admin face. It's now saved as manual with no coordinates, which a module receives as no location.
+- **A module's or theme's name could break the setup wizard's page.** The wizard writes every installed module and theme into a script on the page, and a name containing `</script>` ended that script early. Those are now written so only the script reads them.
+
+### Notes
+
+- A module that uses widget types needs OmniCore 1.18.0. Set `minOmniCore` accordingly, or treat a missing `config.widgetType` as the first type.
+- No published module uses widget types yet.
+
 ## v1.17.0
 
 Richer notifications, and knowing how current everything is

@@ -28,10 +28,12 @@ const {
 	readManifest,
 	readSchema,
 	applyDefaults,
-	cleanConfig
+	cleanConfig,
+	widgetTypeOf
 } = require("./module-config");
 const themeLoader = require("./theme-loader");
 const priority = require("./priority");
+const widgetTypes = require("./widget-types");
 const marketplace = require("./marketplace");
 const imageProxy = require("./image-proxy");
 const { readSettings, writeSettings } = require("./settings-store");
@@ -1099,8 +1101,13 @@ function renderFields(schema, config, context, scope) {
 				  )}"`
 				: "";
 
+			// A field that only belongs to some widget types says which, so
+			// the picker at the top of the page can hide it while another
+			// type is picked. See widget-types.js.
+			const widgets = widgetTypes.widgetsAttribute(field);
+
 			return `
-				<div class="field"${condition}>
+				<div class="field"${condition}${widgets}>
 					<label>${escapeHtml(field.label || field.key)}</label>
 					${input}
 					${help}
@@ -3313,10 +3320,22 @@ function startAdminFace() {
 			.map((instance) => {
 				const manifest = readManifest(instance.module);
 
+				// For a module with a choice of widget types, which one this
+				// instance shows -- two calendars side by side are easier
+				// to tell apart as "Month View" and "Agenda View"
+				const widgetType = widgetTypes.offersChoice(manifest)
+					? manifest.widgets.find(
+							(widget) => widget.id === widgetTypeOf(instance.module, instance.config)
+					  )
+					: null;
+				const kind = widgetType
+					? `${manifest.name} · ${widgetType.name}`
+					: manifest.name;
+
 				return `
 				<a class="row" href="/faces/${face.id}/modules/${encodeURIComponent(instance.id)}">
 					<strong>${escapeHtml(instance.label || manifest.name)}</strong>
-					<span>${escapeHtml(manifest.name)}</span>
+					<span>${escapeHtml(kind)}</span>
 				</a>`;
 			})
 			.join("");
@@ -3484,10 +3503,32 @@ function startAdminFace() {
 		const schema = readSchema(instance.module);
 		const config = applyDefaults(instance.module, instance.config);
 
+		// A module with a choice of widget types gets a picker at the top,
+		// one button per type. Every field for every type is on the page;
+		// the ones that don't fit the picked type are just hidden, so
+		// switching shows them straight away and nothing typed is lost.
+		const offersChoice = widgetTypes.offersChoice(manifest);
+		const picker = offersChoice
+			? widgetTypes.pickerHtml(
+					manifest.id,
+					manifest.widgets,
+					config[widgetTypes.KEY],
+					escapeHtml
+			  )
+			: "";
+
 		// The face's theme may want things configured per instance — how big
 		// this tile is, usually. Those fields come from the THEME, not the
-		// module, and are stored separately under the theme's own key.
-		const themeSchema = themeLoader.readInstanceSchema(face.theme);
+		// module, and are stored separately under the theme's own key. Only
+		// the ones that could apply to one of this module's widget types.
+		const themeSchema = widgetTypes.fieldsForAny(
+			themeLoader.readInstanceSchema(face.theme),
+			manifest
+		);
+
+		// Somebody is looking at the theme's fields, so this is the moment
+		// to log any that name a widget type nothing installed offers
+		themeLoader.checkInstanceTags(face.theme);
 		const themeConfig = themeLoader.applyInstanceDefaults(
 			face.theme,
 			(instance.themeConfigs || {})[face.theme]
@@ -3500,6 +3541,7 @@ function startAdminFace() {
 				<p class="lede">${escapeHtml(manifest.description || manifest.name)}</p>
 			</div>
 			<div class="panel">
+				${picker}
 				<div class="field">
 					<label for="label">Label</label>
 					<input type="text" id="label" value="${escapeHtml(instance.label)}">
@@ -3540,6 +3582,9 @@ function startAdminFace() {
 			${conditionalScript}
 			${priorityScript}
 			${locationScript}
+			${widgetTypes.pickerScript}
+
+			applyWidgetFilter();
 
 			const base = "/faces/${face.id}/modules/${encodeURIComponent(instance.id)}";
 

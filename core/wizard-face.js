@@ -30,7 +30,13 @@ const { startInputFace } = require("./input-face-loader");
 const background = require("./background");
 const themeLoader = require("./theme-loader");
 const { listModules } = require("./module-loader");
-const { readManifest, readSchema, applyDefaults } = require("./module-config");
+const {
+	readManifest,
+	readSchema,
+	applyDefaults,
+	cleanConfig
+} = require("./module-config");
+const widgetTypes = require("./widget-types");
 const { searchCities } = require("./location-service");
 const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
 const { uiStyles } = require("./ui-theme");
@@ -395,6 +401,12 @@ function startWizardFace() {
 			theme,
 			wanted.map((instance) => ({
 				...instance,
+				// Only what the module declared, converted to its real types
+				// -- the same cleaning the admin face's Save does. Form
+				// values arrive as strings, so without this a number setting
+				// made here was stored as text. It's also what keeps a
+				// widget type the module doesn't offer from being saved.
+				config: cleanConfig(instance.module, instance.config),
 				// The theme's settings for this instance, under the theme's
 				// own key — separate from the module's own config
 				themeConfigs: {
@@ -474,10 +486,22 @@ function startWizardFace() {
 				provides: manifest.provides || [],
 				// Whether this module wants a tile by default
 				tile: manifest.tile !== false,
+				// The shapes this module can show its data in. Empty for a
+				// module with no choice, which then gets no picker at all.
+				widgets: manifest.widgets,
+				// Every widget type it can show: the declared ones, or just
+				// its own id. Theme fields are matched against these.
+				widgetTypes: widgetTypes.typesOf(manifest),
 				schema: readSchema(moduleId),
 				defaults: applyDefaults(moduleId, {})
 			};
 		});
+
+		// Log any theme field naming a widget type nothing installed offers,
+		// now that someone is about to see the themes' fields
+		for (const theme of themeLoader.listThemes()) {
+			themeLoader.checkInstanceTags(theme.id);
+		}
 
 		res.send(
 			renderWizard({
@@ -511,6 +535,14 @@ function startWizardFace() {
 	});
 }
 
+// JSON written into a <script>. Names and descriptions come from other
+// people's modules and themes, and a "</script>" inside one would end the
+// script right there and let the rest be read as HTML. Writing every "<"
+// as \u003c means the same thing to JavaScript and nothing to HTML.
+function scriptJson(value) {
+	return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 function renderWizard(data) {
 	const body = `
 		<div class="wizard-head" id="header"></div>
@@ -531,8 +563,8 @@ function renderWizard(data) {
 	const script = `
 		${portLinkScript}
 
-		const MODULES = ${JSON.stringify(data.modules)};
-		const THEMES = ${JSON.stringify(data.themes)};
+		const MODULES = ${scriptJson(data.modules)};
+		const THEMES = ${scriptJson(data.themes)};
 		const NEXT_PORT = ${data.nextPort};
 
 		// Everything the wizard is building, held here and only sent to the
@@ -577,6 +609,51 @@ function renderWizard(data) {
 				return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
 			});
 		}
+
+		// Widget types. These are OmniCore's own functions, handed over
+		// as source rather than rewritten here, so the wizard and the
+		// admin face can never disagree about which field belongs to
+		// which widget type. See core/widget-types.js.
+		${widgetTypes.appliesTo.toString()}
+		${widgetTypes.pickerHtml.toString()}
+		${widgetTypes.widgetsAttribute.toString()}
+		${widgetTypes.pickerScript}
+
+		// The name of the widget type an instance shows, or "" for a
+		// module with no choice. For the lists, so two calendars read as
+		// "Month View" and "Agenda View" rather than the same thing twice.
+		function widgetName(instance) {
+			const module = moduleById(instance.module);
+			if (!module.widgets.length) return "";
+
+			const picked = module.widgets.find(function (widget) {
+				return widget.id === instance.config.widgetType;
+			}) || module.widgets[0];
+
+			return picked.name;
+		}
+
+		function moduleLine(instance) {
+			const name = widgetName(instance);
+			return moduleById(instance.module).name + (name ? " · " + name : "");
+		}
+
+		// Picking a widget type on a settings step: remember it straight
+		// away and update the instance's line in the list opposite, which
+		// would otherwise keep naming the old type until the next step.
+		// Runs after pickerScript's own listener has stored the new id.
+		document.addEventListener("click", function (event) {
+			const choice = event.target.closest("[data-widget-choice]");
+			if (!choice || step < 2 || step >= themeStep()) return;
+
+			const instance = face.instances[step - 2];
+			if (!instance) return;
+
+			instance.config.widgetType = choice.dataset.widgetChoice;
+
+			const line = document.querySelector(".picked.current small");
+			if (line) line.textContent = moduleLine(instance);
+		});
 
 		// ---- reading the current step's inputs back into "face" ----
 
@@ -746,9 +823,21 @@ function renderWizard(data) {
 				return '<div class="picked' +
 					(itemIndex === index ? " current" : "") + '">' +
 					escapeHtml(item.label) +
-					"<small>" + escapeHtml(moduleById(item.module).name) + "</small>" +
+					"<small>" + escapeHtml(moduleLine(item)) + "</small>" +
 				"</div>";
 			}).join("");
+
+			// A module with a choice of widget types gets a row of buttons
+			// at the very top, one per type. A module without one looks
+			// exactly as it always did -- no empty picker row.
+			const picker = module.widgets.length
+				? pickerHtml(
+					module.id,
+					module.widgets,
+					instance.config.widgetType || module.widgets[0].id,
+					escapeHtml
+				)
+				: "";
 
 			const fields = module.schema.map(function (field) {
 				return renderField(field, instance.config[field.key], "module");
@@ -756,8 +845,16 @@ function renderWizard(data) {
 
 			// The chosen theme may want this instance sized. Those fields
 			// come from the THEME, not the module, and are kept apart.
+			// Only the ones that could apply to one of this module's
+			// widget types are offered.
 			const theme = selectedTheme();
-			const themeSchema = (theme && theme.instanceSchema) || [];
+			const themeSchema = ((theme && theme.instanceSchema) || []).filter(
+				function (field) {
+					return module.widgetTypes.some(function (type) {
+						return appliesTo(field, type, module.id);
+					});
+				}
+			);
 
 			const themeFields = themeSchema.map(function (field) {
 				return renderField(
@@ -778,6 +875,7 @@ function renderWizard(data) {
 					// growing it past the bottom of the screen, the same
 					// way the list opposite does.
 					'<div class="tile-scroll">' +
+						picker +
 						'<div class="field">' +
 							'<label for="label">Label</label>' +
 							'<input type="text" id="label" value="' +
@@ -1045,7 +1143,7 @@ function renderWizard(data) {
 				  ) + '"'
 				: "";
 
-			return '<div class="field"' + condition + ">" +
+			return '<div class="field"' + condition + widgetsAttribute(field) + ">" +
 				"<label>" + escapeHtml(field.label || field.key) + "</label>" +
 				inner +
 			"</div>";
@@ -1082,7 +1180,7 @@ function renderWizard(data) {
 			const rows = face.instances.map(function (instance) {
 				return '<div class="review-row">' +
 					"<strong>" + escapeHtml(instance.label) + "</strong>" +
-					"<span>" + escapeHtml(moduleById(instance.module).name) + "</span>" +
+					"<span>" + escapeHtml(moduleLine(instance)) + "</span>" +
 				"</div>";
 			}).join("");
 
@@ -1150,6 +1248,11 @@ function renderWizard(data) {
 			}
 
 			applyFieldConditions();
+
+			// Hide the fields that don't belong to the picked widget type,
+			// and light up its button. Does nothing on a step without a
+			// picker.
+			applyWidgetFilter();
 
 			// The rows were just rebuilt, so their numbering and disabled
 			// arrows need setting for the order they're actually in

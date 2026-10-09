@@ -99,6 +99,9 @@ with different settings, two weather tiles for two cities.
 ```
 
 - `config` belongs to the **module**. Theme-agnostic. Never touched by a theme.
+  For a module that offers more than one widget type, it also holds
+  `widgetType`: which one this instance shows (see "Widget types" in §7).
+  That's a setting like any other, not a different kind of instance.
 - `themeConfigs` belongs to **themes**, keyed by theme id, so two themes
   never collide and switching themes never damages the other's settings.
 
@@ -161,6 +164,7 @@ until the Marketplace puts something in them.
 | `input-face-page.js`       | Renders an Inport's default page. Not a theme, and not meant to be one -- OmniCore's own UI, same as `fallback-page.js`.                              |
 | `marketplace.js`           | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                                        |
 | `priority.js`              | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                                         |
+| `widget-types.js`          | Widget types: a module offering more than one shape for its data. Reads and checks the declarations, the `widgets` tags, and draws the picker.        |
 | `theme-loader.js`          | Finds themes, reads their manifest and both settings schemas.                                                                                         |
 | `envelope.js`              | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                                          |
 | `image-proxy.js`           | Fetches images on the display's behalf so a display only ever talks to your server.                                                                   |
@@ -1181,6 +1185,48 @@ number and learns nothing about what it buys; a module still decides what
 its own content means. The user simply gets a say in which parts of it are
 worth the smallest tile.
 
+### Widget types
+
+A module can offer more than one **widget type**: a different shape for
+the same data, a calendar's month grid and agenda list, say. It lists
+them in `module.json` (`widgets: [{ id, name, description }]`, two or
+more). A module that lists none has exactly one, named after itself, and
+nothing below applies to it. `core/widget-types.js` holds all of it.
+
+- **An instance is still a module plus its settings.** The widget type is
+  one more setting, `config.widgetType`, picked from a row of buttons at
+  the top of the instance's settings (and the wizard's per-module step).
+  Changing it later is just saving a setting.
+- **Core resolves it before the module runs.** The module always receives
+  one of its declared ids: the stored one, or its first if nothing usable
+  is stored (never picked, or renamed since). It's how the module knows
+  which shape to draw; it branches on the value. No new export.
+- **Every field of such a module's `settings.json` carries a `widgets`
+  tag**, a list of ids or `"all"`. The form shows only the fields for the
+  picked type; every field's value is still stored and still passed to
+  the module, so switching back loses nothing. An untagged or malformed
+  field, or one listing only undeclared ids, is dropped with a logged
+  warning, the same fail-loud-in-the-log, fail-safe-on-the-dashboard rule
+  as an unreadable `settings.json`.
+- **A theme's `instance-settings.json` can use the same tag** to give a
+  widget type its own sizing. Unlike a module's, an untagged theme field
+  applies to every widget type, because a theme is written for every
+  module at once. A theme tag may also name a module id, covering every
+  widget type that module shows, so a field tagged for a module survives
+  the module gaining widget types. `/identity` sends each instance only
+  the theme fields that fit it, and says which widget type it is. Tags
+  naming nothing installed are logged from the settings pages and the
+  wizard, never from the dashboard's polling path.
+- **Only plain ids reach a page.** Ids are letters, digits, `-` and `_`;
+  `data-widgets` is only written when every id in the tag passes that
+  check, whatever schema it came from. A module without widget types has
+  any stray `widgets` tag removed, so its form is exactly what it was.
+- **The form filtering is the browser's job.** Every field that could
+  apply to one of the module's types is on the page, marked
+  `data-widgets="a|b"`; the picker hides the rest with a class, so it
+  can't fight a `showWhen` that hides with `style.display`. The wizard is
+  handed the same functions' source, not a copy of them.
+
 ### Where values are stored
 
 | Kind                        | Stored in                        |
@@ -1407,6 +1453,11 @@ per server with its other instances and raising notifications. See §5d.
 over one shared stream per server, notifies only on messages that arrive
 while it's running, and keeps a tile of three facts: how many came in the
 window, when the latest came, and its priority.
+
+**Widget types** (v1.18.0): a module can offer more than one shape for
+its data, picked per instance from a row of buttons at the top of its
+settings. A theme can size each shape separately. See "Widget types" in
+§7. No published module uses them yet.
 
 All eight of those modules honour richness. Those with distinct fields
 (`weather`, `disk-space`, `system-stats`) let the user order them with a

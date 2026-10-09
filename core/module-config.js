@@ -9,6 +9,7 @@ const fs = require("fs");
 const path = require("path");
 const paths = require("./paths");
 const priority = require("./priority");
+const widgetTypes = require("./widget-types");
 
 function modulesDir() {
 	return paths.modulesDir();
@@ -29,7 +30,8 @@ function readManifest(moduleId) {
 		description: "",
 		provides: [],
 		tile: true,
-		background: false
+		background: false,
+		widgets: []
 	};
 
 	if (!fs.existsSync(manifestPath)) {
@@ -54,7 +56,13 @@ function readManifest(moduleId) {
 			// `start` -- so it can be read without running any of the
 			// module's code, and shown to somebody before they install it.
 			// Only an exact `true` counts. See core/background.js.
-			background: parsed.background === true
+			background: parsed.background === true,
+			// The different shapes this module can show its data in -- a
+			// month grid and an agenda list, say. Empty for a module that
+			// offers no choice, which is nearly all of them. Checked here,
+			// once, so nothing downstream has to wonder whether an entry is
+			// usable. See core/widget-types.js.
+			widgets: widgetTypes.readWidgets(moduleId, parsed.widgets)
 		};
 	} catch (error) {
 		return blank;
@@ -63,6 +71,11 @@ function readManifest(moduleId) {
 
 // What settings a module accepts, from its settings.json.
 // Returns an empty list if it has none — plenty of modules need nothing.
+//
+// For a module that offers widget types, every field comes back with a
+// clean `widgets` tag saying which types it belongs to, and a field that
+// doesn't say is left out (with a warning in the log). A module without
+// widget types gets its fields back exactly as written.
 function readSchema(moduleId) {
 	const schemaPath = path.join(modulesDir(), moduleId, "settings.json");
 
@@ -70,13 +83,39 @@ function readSchema(moduleId) {
 		return [];
 	}
 
+	let fields;
+
 	try {
 		const parsed = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
-		return parsed.settings || [];
+		fields = Array.isArray(parsed.settings) ? parsed.settings : [];
 	} catch (error) {
 		console.log(`  Unreadable settings.json in module: ${moduleId}`);
 		return [];
 	}
+
+	const manifest = readManifest(moduleId);
+
+	if (widgetTypes.offersChoice(manifest)) {
+		return widgetTypes.moduleFields(moduleId, fields, manifest.widgets);
+	}
+
+	// No choice of widget types, so a `widgets` tag means nothing here.
+	// Taken off so it can't change how the form is drawn: a module like
+	// this gets exactly the form it always did.
+	return fields.map((field) => {
+		if (!field || typeof field !== "object" || !("widgets" in field)) {
+			return field;
+		}
+
+		const { widgets, ...rest } = field;
+		return rest;
+	});
+}
+
+// Which widget type an instance shows, from its stored settings. For a
+// module that offers no choice this is just the module's own id.
+function widgetTypeOf(moduleId, stored) {
+	return widgetTypes.resolve(readManifest(moduleId), stored && stored[widgetTypes.KEY]);
 }
 
 // What input controls a module wants — a button to tap, for now — from
@@ -100,9 +139,23 @@ function readInputSchema(moduleId) {
 
 // An instance's stored settings, with the schema's defaults filling any gap.
 // A setting the user never touched still arrives with a sensible value.
+//
+// A module that offers widget types also gets `widgetType`: the one this
+// instance shows. It's always one the module offers right now -- a stored
+// type that's since been renamed or removed becomes the module's first.
+// That one value is how the module knows which shape to draw; it simply
+// reads it and branches. A module without widget types never sees it.
 function applyDefaults(moduleId, stored) {
 	const schema = readSchema(moduleId);
+	const manifest = readManifest(moduleId);
 	const config = {};
+
+	if (widgetTypes.offersChoice(manifest)) {
+		config[widgetTypes.KEY] = widgetTypes.resolve(
+			manifest,
+			stored && stored[widgetTypes.KEY]
+		);
+	}
 
 	for (const field of schema) {
 		const value =
@@ -127,7 +180,20 @@ function applyDefaults(moduleId, stored) {
 // fields arrive as strings.
 function cleanConfig(moduleId, values) {
 	const schema = readSchema(moduleId);
+	const manifest = readManifest(moduleId);
 	const clean = {};
+
+	// The picked widget type, if this module offers a choice and the value
+	// is one it actually offers. Anything else is left out, and the
+	// instance shows the module's first type -- never an id that would
+	// leave the module guessing.
+	if (
+		widgetTypes.offersChoice(manifest) &&
+		values &&
+		manifest.widgets.some((widget) => widget.id === values[widgetTypes.KEY])
+	) {
+		clean[widgetTypes.KEY] = values[widgetTypes.KEY];
+	}
 
 	for (const field of schema) {
 		if (!values || values[field.key] === undefined) {
@@ -137,6 +203,10 @@ function cleanConfig(moduleId, values) {
 		let value = values[field.key];
 
 		if (field.type === "number") {
+			// A box left empty means "not set", so the default applies --
+			// not zero, which is what Number("") would quietly make it
+			if (value === "" || value === null) continue;
+
 			value = Number(value);
 			if (Number.isNaN(value)) continue;
 		}
@@ -153,6 +223,17 @@ function cleanConfig(moduleId, values) {
 		}
 
 		if (field.type === "location") {
+			// "Set coordinates here", with the boxes left empty. Kept as
+			// manual with no coordinates, which the module receives as
+			// null ("no location") -- not as 0, 0, a real spot in the
+			// Atlantic, which is what converting the empty boxes gave.
+			const blank = (part) => part === undefined || part === null || part === "";
+
+			if (value && value.mode === "manual" && (blank(value.latitude) || blank(value.longitude))) {
+				clean[field.key] = { mode: "manual" };
+				continue;
+			}
+
 			// Either "use OmniCore's location", or coordinates typed in here
 			value =
 				value && value.mode === "manual"
@@ -178,4 +259,11 @@ function cleanConfig(moduleId, values) {
 	return clean;
 }
 
-module.exports = { readManifest, readSchema, readInputSchema, applyDefaults, cleanConfig };
+module.exports = {
+	readManifest,
+	readSchema,
+	readInputSchema,
+	applyDefaults,
+	cleanConfig,
+	widgetTypeOf
+};
