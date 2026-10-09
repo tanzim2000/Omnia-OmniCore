@@ -381,7 +381,7 @@ job richness already does. Use `share` instead:
 const room = omni.share(rows.length, richness, { minimum: 0 });
 ```
 
-`modules/calendar`, `modules/docker-status` and `modules/ntfy` all do
+`modules/calendar` and `modules/docker-status` both do
 this. Neither helper is compulsory -- a module is free to hardcode its own
 steps, as `prayer-times` does.
 

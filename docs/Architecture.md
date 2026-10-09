@@ -276,7 +276,7 @@ There are **ten RCBs** today. `time` additionally splits into four
 | `time`       | One instant, plus what to do with it | `world-clock`                                            |
 | `graphdata`  | A series of points                   | nothing yet (`Tally`, planned)                           |
 | `event`      | One calendar event                   | `calendar`                                               |
-| `qr`         | Something to be scanned              | `ntfy`                                                   |
+| `qr`         | Something to be scanned              | nothing yet                                              |
 
 Each is specified below: its fields, which are required, and what the
 field actually means.
@@ -1373,15 +1373,16 @@ repo, installed like anything else would be.
 requests, started and stopped with its instance, sharing one connection
 per server with its other instances and raising notifications. See §5d.
 `ntfy` (formerly `ntfy-bridge`) is the first: it listens to its topics
-over one shared stream per server, fills its tile from what it hears, and
-notifies only on messages that arrive while it's running.
+over one shared stream per server, notifies only on messages that arrive
+while it's running, and keeps a tile of three facts: how many came in the
+window, when the latest came, and its priority.
 
 All eight of those modules honour richness. Those with distinct fields
 (`weather`, `disk-space`, `system-stats`) let the user order them with a
 `priority` setting; those that emit a list of like rows (`calendar`,
-`docker-status`, `ntfy`) scale the number of rows instead, since
-there is nothing meaningful to reorder. `prayer-times` and `bing-wallpaper`
-use their own fixed steps.
+`docker-status`) scale the number of rows instead, since there is nothing
+meaningful to reorder. `prayer-times`, `bing-wallpaper` and `ntfy` use
+their own fixed steps.
 
 ### Not built yet
 
