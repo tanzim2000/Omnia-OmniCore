@@ -31,6 +31,13 @@
 // Because a module is just a function, the same module can be used many
 // times over on one face with different settings each time. That's what
 // makes two weather tiles for two cities possible.
+//
+// A module can hang more on that function, as properties, when it does
+// more than answer requests: `onInput` for a module that takes taps (see
+// input-face-loader.js), and `start` / `stop` for one that keeps running
+// in the background (see background.js). loadModule() below hands back
+// the function with whatever is attached to it; it's the code that
+// needs each extra that goes looking for it.
 
 const fs = require("fs");
 const path = require("path");

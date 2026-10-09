@@ -1,31 +1,55 @@
 # Changelog
 
-## v1.15.0
+## v1.16.0
 
-A new block type for things meant to be scanned -- and the first one where OmniCore draws the content itself rather than only passing it along.
+Modules can now keep running between requests
 
 ### Added
 
-- **A new `qr` block type**: `{ type: "qr", value, label }`. A module says what the code should hold -- a link, usually -- and optionally what scanning it does. It never builds the code itself: encoding a QR code is identical for every module and fiddly enough (error correction, masking, picking the smallest size the data fits) that nobody should write it twice, so OmniCore does it on the way out and hands the theme a ready-made `svg` beside the `value`.
-- **`core/qr.js`, Core's own QR engine**, deliberately separate from the Content Contract plumbing so anything else in Core that wants a scannable code on a screen can call it directly. Built on `qrcode-generator` -- one small dependency with no dependencies of its own -- which does the encoding; turning the result into SVG is Core's. Neighbouring squares are merged into single rectangles, so a typical link comes out around 2.5 KB rather than hundreds of separate shapes, and finished drawings are remembered by value, since a tile asks for the same code on every poll and the machine this runs on isn't fast.
+- **Background modules.** Until now every module ran only when a display asked for its tile, answered, and stopped. A module can now say `"background": true` in its `module.json` and export a `start` (and optionally a `stop`) next to its usual function, the same way `onInput` sits next to it for input faces. Declared outright rather than guessed from whether a `start` happens to exist, so it can be read without running the module's code and shown in a marketplace listing one day, before anyone installs it. Both halves are required: the flag without a `start` is logged and the module treated as an ordinary one, and a `start` without the flag is never called.
+- **`core/background.js` runs them.** One run per instance, started when OmniCore boots and when an instance is added, stopped when it's removed, and restarted with the new settings when its settings change. Changing only the label restarts nothing. Whatever `start` returns is handed back to `stop`, so a module never keeps its own list of instances. On a restart the new run's `start` waits for the old run's `stop` to finish, so the two never run side by side, and the swap on the list of what's running happens in one step, so two saves landing together can't leave a second copy behind that nothing would ever stop. Both are covered by tests.
+- **`core/shared-connections.js`: one connection per server, shared.** Three instances of one module on one server open one connection between them, not three, which matters on the modest machine a home server usually is. An instance joins with a `key` (the server) and an `interest` (a topic); Core calls the module's own `open` with every interest at once, reopens it when the set changes, closes it when the last instance leaves, and reconnects after a drop with a doubling wait capped at a minute. The connection is opened by the most recently joined instance's `open`, and reopened when that instance leaves, so changing a password takes effect even when the topics stay the same. A burst of joins on boot settles into one open. Core owns the bookkeeping and knows no protocol: two different modules never share, even to the same server. Built generic on purpose.
+- **`omni.notify()`**, for background runs only. The notification system shipped in v1.14.0 with nothing able to call it; this is the first way in. Not on a tile call's `omni`, since a tile runs on every poll and would raise the same notification every few seconds.
+- **`omni.memory`**, an in-memory scratch space per instance, shared between its tile function and its background run how what the background half heard reaches the tile. Not on disk: a message stream would otherwise be written out on every message, for data that's caught up again from the server on the next start anyway. Gone on restart, and when the instance is removed.
+- **`omni.signal`**, aborted when an instance stops. Pass it to a `fetch` and that request ends on its own.
+
+### Changed
+
+- **An unhandled promise rejection is now logged instead of stopping OmniCore.** Background code runs its own callbacks long after Core has handed over control, where nothing of Core's is waiting to catch anything, and one forgotten `.catch()` in one module shouldn't blank every display in the house. A plain uncaught exception still stops the process, deliberately: at that point nothing can say what state things were left in.
+
+### Notes
+
+- **Core cleans up after a stopped instance by itself**: its signal is aborted, every shared connection it joined is left, and `notify`, `connections.join` and writes to `memory` and `storage` do nothing from then on so a timer firing one last time can't recreate data that removing the instance just deleted. `stop` is only needed for things a module set up entirely on its own, like a `setInterval`.
+- **A module that fails to start costs only its background work.** Its tile still renders, and it gets another try the next time its face changes or OmniCore restarts never in a loop.
+- **A module using any of this needs `minOmniCore: "1.16.0"`** in its registry entry. An older OmniCore ignores the flag and only ever calls the tile function.
+- Nothing ships using it yet. `ntfy` is next.
+
+## v1.15.0
+
+A new block type for things meant to be scanned and the first one where OmniCore draws the content itself rather than only passing it along.
+
+### Added
+
+- **A new `qr` block type**: `{ type: "qr", value, label }`. A module says what the code should hold a link, usually and optionally what scanning it does. It never builds the code itself: encoding a QR code is identical for every module and fiddly enough (error correction, masking, picking the smallest size the data fits) that nobody should write it twice, so OmniCore does it on the way out and hands the theme a ready-made `svg` beside the `value`.
+- **`core/qr.js`, Core's own QR engine**, deliberately separate from the Content Contract plumbing so anything else in Core that wants a scannable code on a screen can call it directly. Built on `qrcode-generator` one small dependency with no dependencies of its own which does the encoding; turning the result into SVG is Core's. Neighbouring squares are merged into single rectangles, so a typical link comes out around 2.5 KB rather than hundreds of separate shapes, and finished drawings are remembered by value, since a tile asks for the same code on every poll and the machine this runs on isn't fast.
 - **Text is encoded as UTF-8.** The library's default reads one byte per character, which turns a Bangla name or an emoji into a code that scans as garbage. Checked end to end before release: Bangla, emoji, plain links, and a 1,200-character value were all rendered in Chromium, screenshotted, and decoded back to exactly what went in.
 
 ### Security
 
-- **`svg` is only ever OmniCore's.** A theme inserts it into its page as raw markup, so any `svg` a module sends is discarded and replaced -- otherwise a module could put whatever HTML it liked on somebody's dashboard. Core's drawing is built from the encoder's grid of squares alone, and the module's text never appears inside it, not even as a title or accessibility label. Both halves are covered by tests, one of them over real HTTP.
+- **`svg` is only ever OmniCore's.** A theme inserts it into its page as raw markup, so any `svg` a module sends is discarded and replaced otherwise a module could put whatever HTML it liked on somebody's dashboard. Core's drawing is built from the encoder's grid of squares alone, and the module's text never appears inside it, not even as a title or accessibility label. Both halves are covered by tests, one of them over real HTTP.
 
 ### Notes
 
 - **Black on white, with a four-square border, whatever the theme looks like.** Many scanner apps can't read an inverted code, and all of them need that blank margin to find the edges. A theme can restyle it through `.omni-qr-dark` and `.omni-qr-light`, but the default is the one that scans.
 - **A value too big for any QR code** (past roughly 2,300 characters) gets `svg: null` rather than an error. The block still arrives, and its `text` still carries the value.
-- **A theme that doesn't know `qr` yet shows its `text` instead**: the value, or `label: value`. For a link that's genuinely usable -- somebody can type it in -- and it's the same fallback that let `event` ship in v1.13.0 without breaking a single installed theme.
+- **A theme that doesn't know `qr` yet shows its `text` instead**: the value, or `label: value`. For a link that's genuinely usable somebody can type it in and it's the same fallback that let `event` ship in v1.13.0 without breaking a single installed theme.
 - Nothing emits `qr` yet. `ntfy` will, for scan-to-subscribe.
 
 ## v1.14.1
 
 ### Fixed
 
-- **A symlinked theme was invisible to OmniCore**, so a face reported "no theme is installed" while the theme sat in `themes/` the whole time. `listThemes()` only counted an entry that `isDirectory()` reported true for, and Node deliberately reports a symlink as neither a file nor a directory -- it does not follow the link just to answer that. `listModules()` has resolved symlinks from the start; themes never got the same treatment. Since linking a repo into `themes/` or `modules/` is the local development setup `Building modules.md` actually documents, anyone following it found their modules listed and their theme missing, with nothing anywhere explaining the difference. A dangling link, or one pointing at a plain file, is still excluded exactly as it would be with no symlink involved.
+- **A symlinked theme was invisible to OmniCore**, so a face reported "no theme is installed" while the theme sat in `themes/` the whole time. `listThemes()` only counted an entry that `isDirectory()` reported true for, and Node deliberately reports a symlink as neither a file nor a directory it does not follow the link just to answer that. `listModules()` has resolved symlinks from the start; themes never got the same treatment. Since linking a repo into `themes/` or `modules/` is the local development setup `Building modules.md` actually documents, anyone following it found their modules listed and their theme missing, with nothing anywhere explaining the difference. A dangling link, or one pointing at a plain file, is still excluded exactly as it would be with no symlink involved.
 
 ## v1.14.0
 
@@ -34,9 +58,9 @@ Notifications: a message that appears over whatever a display is showing, holds,
 ### Added
 
 - **Notifications are Core's, not a theme's.** Everything else on screen travels under the Content Contract, where a module says what it has and a theme decides how it looks. This deliberately breaks that rule, for the same reason the reload-on-change script does: a theme that forgot to implement it, or implemented it badly, would be a theme that silently swallows the one message somebody actually needed to see. The overlay's shape, timing and animation are all Core's, and no theme has to know it exists.
-- **Five priorities, five durations.** 1 holds for 10 seconds, 2 for 15, 3 for 30, 4 for 45, 5 for a minute. A more urgent message is not louder or bigger, it simply stays long enough that somebody walking past has a chance to read it -- everything else about it is identical, so priority never becomes a way to shout. An unrecognised priority becomes 3 rather than failing, since a notification that didn't show because its priority said "high" is worse than one that showed for thirty seconds.
-- **Only an OmniView ever sees one.** A display says what it is when it connects to `/events`; OmniView announces itself, an ordinary browser tab doesn't, and never thinks to. So a face opened in a normal browser receives nothing -- not because Core checks and refuses, but because a plain browser never asks. Notification settings are gated the same way and answer 404 to anything else, since a setting visible somewhere it cannot apply is worse than one that isn't there.
-- **Nothing runs while nobody is watching.** A module only runs when something asks it to, and a sleeping OmniView asks for nothing, so notifications stop happening on their own -- no scheduler to pause and nothing to switch off. What happens to one raised in the meantime is a setting: dropped by default, since arriving to twenty stale notifications from overnight is worse than having missed them, or held for the next OmniView that connects, up to a ceiling so a module stuck in a loop cannot fill anything.
+- **Five priorities, five durations.** 1 holds for 10 seconds, 2 for 15, 3 for 30, 4 for 45, 5 for a minute. A more urgent message is not louder or bigger, it simply stays long enough that somebody walking past has a chance to read it everything else about it is identical, so priority never becomes a way to shout. An unrecognised priority becomes 3 rather than failing, since a notification that didn't show because its priority said "high" is worse than one that showed for thirty seconds.
+- **Only an OmniView ever sees one.** A display says what it is when it connects to `/events`; OmniView announces itself, an ordinary browser tab doesn't, and never thinks to. So a face opened in a normal browser receives nothing not because Core checks and refuses, but because a plain browser never asks. Notification settings are gated the same way and answer 404 to anything else, since a setting visible somewhere it cannot apply is worse than one that isn't there.
+- **Nothing runs while nobody is watching.** A module only runs when something asks it to, and a sleeping OmniView asks for nothing, so notifications stop happening on their own no scheduler to pause and nothing to switch off. What happens to one raised in the meantime is a setting: dropped by default, since arriving to twenty stale notifications from overnight is worse than having missed them, or held for the next OmniView that connects, up to a ceiling so a module stuck in a loop cannot fill anything.
 - **The overlay is built from the Default UI's own tokens**, including the same draining amber lamp the welcome face's auto-advance timer uses. "Time is running out on this thing on screen" already had a look in OmniCore and should not grow a second one. Bottom-left, which the back button setting has always reserved for exactly this. Reduced-motion is honoured: the notification still arrives, holds and leaves, only the scaling stops.
 
 ### Notes
@@ -46,32 +70,32 @@ Notifications: a message that appears over whatever a display is showing, holds,
 
 ## v1.13.1
 
-Themes can now tell a genuinely new reading apart from the same one arriving again -- without giving up anything for themes that don't know how.
+Themes can now tell a genuinely new reading apart from the same one arriving again without giving up anything for themes that don't know how.
 
 ### Added
 
-- **Content tagging on `/api/<instanceId>`.** Every response carries an `ETag` standing for what the tile is showing. A face polls every few seconds forever and most answers are identical to the last one; until now nothing in the response said so, and each theme had to work it out for itself by diffing its own rendered output. Matters most for a theme that animates on new data -- flipping a tile, sliding a number -- where every poll would otherwise look like a change worth animating.
+- **Content tagging on `/api/<instanceId>`.** Every response carries an `ETag` standing for what the tile is showing. A face polls every few seconds forever and most answers are identical to the last one; until now nothing in the response said so, and each theme had to work it out for itself by diffing its own rendered output. Matters most for a theme that animates on new data flipping a tile, sliding a number where every poll would otherwise look like a change worth animating.
 - **`304 Not Modified`, but only when asked for.** Send `If-None-Match` and OmniCore skips the body entirely. Send nothing and you get the full `200` you always got. That opt-in is deliberate: a theme written before this existed reasonably treats a non-OK response as a dead tile, so an uninvited `304` would blank a tile whose data was fine. Every theme currently in the wild is such a theme, `windows8` included.
 
 ### Fixed
 
-- **The smoke suite failed for anyone developing a module the documented way.** Its precondition test checked the repo's own `modules/` folder to decide whether anything needed installing, but the suite runs against a temporary directory instead. Those are normally the same shape -- the repo's copy is empty and gitignored -- so looking at the wrong one went unnoticed for a long time. Symlink a module repo into `modules/` to work on it, which is the local setup `Building modules.md` describes, and that folder looks populated: the test concludes there's nothing to install, the temp directory it actually reads from stays empty, the wizard finds no installed modules and silently drops the instance it was asked to create, and four tests downstream fail on a face with nothing on it. It now checks the directory the suite actually uses.
+- **The smoke suite failed for anyone developing a module the documented way.** Its precondition test checked the repo's own `modules/` folder to decide whether anything needed installing, but the suite runs against a temporary directory instead. Those are normally the same shape the repo's copy is empty and gitignored so looking at the wrong one went unnoticed for a long time. Symlink a module repo into `modules/` to work on it, which is the local setup `Building modules.md` describes, and that folder looks populated: the test concludes there's nothing to install, the temp directory it actually reads from stays empty, the wizard finds no installed modules and silently drops the instance it was asked to create, and four tests downstream fail on a face with nothing on it. It now checks the directory the suite actually uses.
 
 ### Notes
 
-- The tag excludes `updated`, which is a fresh timestamp on every call by design -- including it would make every tag unique and the whole feature pointless for exactly the modules that poll fastest.
+- The tag excludes `updated`, which is a fresh timestamp on every call by design including it would make every tag unique and the whole feature pointless for exactly the modules that poll fastest.
 - The tag is computed before image proxying. Proxying rewrites an image URL to a stable `/api/<instance>/image/<n>` path that stays identical even when the picture behind it changes, so tagging the proxied form would have reported "nothing changed" every time Bing published a new wallpaper.
-- This saves bytes on the wire and gives themes a change signal. It does **not** skip running the module -- OmniCore still has to call it to find out whether anything changed.
+- This saves bytes on the wire and gives themes a change signal. It does **not** skip running the module OmniCore still has to call it to find out whether anything changed.
 
 ## v1.13.0
 
-First release with a block type for calendar data -- and a matching decision that OmniCore has no opinion on what a calendar looks like.
+First release with a block type for calendar data and a matching decision that OmniCore has no opinion on what a calendar looks like.
 
 ### Added
 
-- **A new `event` block type**: `{ type: "event", start, end, summary }`, for modules that read calendars. A module reports raw events only, inside whatever window it reads -- no notion of "today", no grid, no week or month -- because it can't know whether the display is drawing a month grid, a week strip, or an agenda list, and the theme already knows the device's own date. Which events actually belong on screen stays entirely the theme's decision.
-- **`start` and `end` carry their own timezone signal.** A full ISO instant is a specific moment; a bare `YYYY-MM-DD` is a whole calendar day with no time or timezone attached at all -- what an all-day event genuinely is. The shape of the string says which one it is, so there's no separate `allDay` flag for a module and a theme to keep in sync with each other.
-- A theme that hasn't been updated to draw `event` blocks isn't left with nothing: it falls back to a plain readable line the same way every other block type does, e.g. "Sep 20 – Sep 22 -- Eid holiday".
+- **A new `event` block type**: `{ type: "event", start, end, summary }`, for modules that read calendars. A module reports raw events only, inside whatever window it reads no notion of "today", no grid, no week or month because it can't know whether the display is drawing a month grid, a week strip, or an agenda list, and the theme already knows the device's own date. Which events actually belong on screen stays entirely the theme's decision.
+- **`start` and `end` carry their own timezone signal.** A full ISO instant is a specific moment; a bare `YYYY-MM-DD` is a whole calendar day with no time or timezone attached at all what an all-day event genuinely is. The shape of the string says which one it is, so there's no separate `allDay` flag for a module and a theme to keep in sync with each other.
+- A theme that hasn't been updated to draw `event` blocks isn't left with nothing: it falls back to a plain readable line the same way every other block type does, e.g. "Sep 20 – Sep 22 Eid holiday".
 
 ## v1.12.3
 
@@ -79,7 +103,7 @@ Finishes moving the admin face onto the bento layout introduced in v1.12.0, and 
 
 ### Added
 
-- The wizard's Add Modules and Theme steps now link out to Marketplace directly, since an install with no resources yet -- the normal first run -- previously left both steps with an empty list and no way out.
+- The wizard's Add Modules and Theme steps now link out to Marketplace directly, since an install with no resources yet the normal first run previously left both steps with an empty list and no way out.
 - Every remaining admin page still built on the pre-bento .panel layout is now on bento and tile: the per-face Theme, Modules, and detail pages, the Faces list, Installed Resources, and Updates.
 
 ### Fixed
@@ -94,13 +118,13 @@ Polish for the wizard rebuild that shipped in v1.12.0.
 
 ### Fixed
 
-- A large gap between a step's content and the navigation dock, caused by the status line reserving space for an error message on top of spacing the layout already provided elsewhere -- it now collapses to nothing when there's nothing to say, and is only ever as tall as its own text otherwise.
+- A large gap between a step's content and the navigation dock, caused by the status line reserving space for an error message on top of spacing the layout already provided elsewhere it now collapses to nothing when there's nothing to say, and is only ever as tall as its own text otherwise.
 - Cancel pointed at the wizard's own root, which has no route at all, the same class of dead link diagnosed earlier for the About face. It now goes to the admin face's Faces list.
 - Available modules had a glow on hover but no coloured background or border, unlike On this face, which had all three. Both now use the identical treatment, green for adding a module and red for removing one.
 
 ## v1.12.1
 
-The v1.12.0 tag went out with a stale package.json version and no changelog entry of its own, so this corrects both. See v1.12.0 below for what that release actually shipped -- nothing here beyond the correction itself.
+The v1.12.0 tag went out with a stale package.json version and no changelog entry of its own, so this corrects both. See v1.12.0 below for what that release actually shipped nothing here beyond the correction itself.
 
 ## v1.12.0
 
@@ -109,10 +133,10 @@ Settings and the setup wizard both rebuilt, and brought onto one shared componen
 ### Added
 
 - **Settings is now a grid of tiles rather than one long column**, everything on one screen with nothing behind a tab or a scroll. Location Service, Appearance Mode, Back Button Position, Text Size and the font picker each get their own tile; landscape switches to a wider grid on screen orientation rather than a pixel threshold, since a phone can report more CSS pixels than an older desktop monitor.
-- **The font picker and manual location entry now open in floating panels** instead of expanding inside their tiles, so a long list of search results can't shove the rest of the layout around. Font search results render live in their own real typeface, fetched from Google for the results actually shown -- safe since the search itself is already an online-only action, and separate from the guarantee that the one font someone actually installs works with no internet afterward.
+- **The font picker and manual location entry now open in floating panels** instead of expanding inside their tiles, so a long list of search results can't shove the rest of the layout around. Font search results render live in their own real typeface, fetched from Google for the results actually shown safe since the search itself is already an online-only action, and separate from the guarantee that the one font someone actually installs works with no internet afterward.
 - **The version tile links through to a real Updates page**, showing what's running, when it was last checked, when it started, and release notes for both the running and offered versions. A manual check only ever checks; applying an update stays the scheduler's job, so no button anywhere can swap a container mid-click. A failed check is reported as a failure, never as if everything were up to date.
 - **The resource update check shows real progress** instead of running silently for thirty seconds: a live countdown for the deliberate startup delay, a spinner during the registry fetch, and a genuine per-item bar when something is actually being installed.
-- **The setup wizard is rebuilt on the same shared components as Settings**, closing out something flagged as future work back when the wizard was first split onto its own port. Its own ~300-line stylesheet is gone. The module picker and per-module settings steps now split the screen in two and divide by orientation -- vertically in landscape, horizontally in portrait -- filling the space rather than sizing to content, since a wizard step is one task to focus on rather than a page to scan. Long lists inside them scroll within their own space instead of growing the whole page.
+- **The setup wizard is rebuilt on the same shared components as Settings**, closing out something flagged as future work back when the wizard was first split onto its own port. Its own ~300-line stylesheet is gone. The module picker and per-module settings steps now split the screen in two and divide by orientation vertically in landscape, horizontally in portrait filling the space rather than sizing to content, since a wizard step is one task to focus on rather than a page to scan. Long lists inside them scroll within their own space instead of growing the whole page.
 - **A capsule navigation dock** for the wizard's Cancel/Back/Next/Finish, replacing separate buttons: one continuous pill, a fixed width so the page doesn't shift underfoot between steps, with Back hidden rather than shown disabled on the first step.
 
 ### Fixed

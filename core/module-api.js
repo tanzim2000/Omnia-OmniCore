@@ -41,6 +41,29 @@ const priority = require("./priority");
 const moduleStorage = require("./module-storage");
 const { readSystemTime } = require("./time-service");
 
+// Every instance's in-memory scratch space, keyed by "<faceId>:<instanceId>".
+// See `memory` below. Lives exactly as long as this OmniCore process does.
+const memories = new Map();
+
+function memoryKey(faceId, instanceId) {
+	return faceId + ":" + instanceId;
+}
+
+// Forget the memory of every instance on a face that isn't in `keepIds`
+// any more. Called whenever a face's instances change (see
+// core/background.js), which is how a removed instance's memory goes
+// with it -- the same promise storage makes, just for the in-memory kind.
+function forgetRemovedMemories(faceId, keepIds) {
+	const prefix = faceId + ":";
+	const keep = new Set(keepIds);
+
+	for (const key of memories.keys()) {
+		if (key.startsWith(prefix) && !keep.has(key.slice(prefix.length))) {
+			memories.delete(key);
+		}
+	}
+}
+
 // Bumped when the shape below changes in a way modules would notice, so a
 // module can say what it was written against. Additions don't count —
 // only changes that could break somebody.
@@ -102,8 +125,41 @@ function makeModuleApi(faceId, instanceId) {
 		// own, same as everything else a module can reach.
 		//
 		//   time() -> { timestamp, timezone }
-		time: readSystemTime
+		time: readSystemTime,
+
+		// This instance's scratch space in memory -- shared between every
+		// part of the same instance, gone when OmniCore restarts.
+		//
+		// It exists for the background modules (see core/background.js):
+		// the part running in the background receives something, and the
+		// tile function, which runs separately every time a display asks,
+		// needs to see it. Both are handed this same object, so whatever
+		// one puts in, the other reads.
+		//
+		// Storage could do that too, but storage is a file on disk. A
+		// message stream would be written out on every message, for data
+		// that's caught up again from the server on the next start anyway.
+		// This is for exactly that: things worth sharing, not worth keeping.
+		//
+		//   memory.read()      -> the live object ({} the first time). Change
+		//                         its properties and the change is visible
+		//                         everywhere straight away.
+		//   memory.write(data) -> replace it entirely
+		memory: {
+			read() {
+				const key = memoryKey(faceId, instanceId);
+
+				if (!memories.has(key)) {
+					memories.set(key, {});
+				}
+
+				return memories.get(key);
+			},
+			write(data) {
+				memories.set(memoryKey(faceId, instanceId), data);
+			}
+		}
 	};
 }
 
-module.exports = { makeModuleApi, API_VERSION };
+module.exports = { makeModuleApi, forgetRemovedMemories, API_VERSION };

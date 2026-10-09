@@ -44,6 +44,7 @@ const coreUpdater = require("./core-updater");
 const updateStore = require("./update-store");
 const fontService = require("./font-service");
 const { startInputFace, stopInputFace, refreshInputFace } = require("./input-face-loader");
+const background = require("./background");
 const auth = require("./admin-auth");
 
 const ADMIN_PORT = 3000;
@@ -3224,6 +3225,11 @@ function startAdminFace() {
 		// it. A face with nothing taking input stays closed.
 		await refreshInputFace(faceStore.findFace(id));
 
+		// And if it's a module that runs in the background, this is what
+		// starts it. Not waited on: starting may mean reaching a server,
+		// and saving shouldn't hang on somebody else's network.
+		background.syncFace(faceStore.findFace(id));
+
 		refresh(id);
 		res.json(instance);
 	});
@@ -3400,6 +3406,11 @@ function startAdminFace() {
 			)
 		});
 
+		// A background instance was started with its old settings. If they
+		// just changed, this stops it and starts it again with the new ones;
+		// if only the label changed, it's left running as it was.
+		background.syncFace(faceStore.findFace(id));
+
 		refresh(id);
 		res.json(updated);
 	});
@@ -3418,6 +3429,9 @@ function startAdminFace() {
 		// last thing on this face taking input, its Inport closes
 		// entirely rather than staying open with nothing behind it.
 		await refreshInputFace(faceStore.findFace(id));
+
+		// Anything it was doing in the background stops with it
+		background.syncFace(faceStore.findFace(id));
 
 		refresh(id);
 		res.json({ ok: true });

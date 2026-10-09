@@ -14,8 +14,31 @@ const startControlFace = require("./core/control-face");
 const startWizardFace = require("./core/wizard-face");
 const startAboutFace = require("./core/about-face");
 const startAdminFace = require("./core/admin-face");
+const background = require("./core/background");
 const resourceScheduler = require("./core/resource-scheduler");
 const coreUpdateScheduler = require("./core/core-update-scheduler");
+
+// A promise that fails with nothing waiting to catch it would, by Node's
+// default, take the whole of OmniCore down with it.
+//
+// Most module code can't do that: OmniCore awaits a tile function, and
+// whatever it throws is caught there and costs one tile. A background
+// module is different. It runs its own callbacks -- a stream's events, its
+// own timers -- long after OmniCore handed control over, where nothing of
+// Core's is waiting to catch anything. One forgotten `.catch()` in one
+// module shouldn't blank every display in the house, so it's logged here
+// instead.
+//
+// Only promises. A plain exception thrown outside any promise still stops
+// the process, as Node intends: at that point nothing can say what state
+// things were left in, and the container restarting cleanly is the safer
+// outcome than carrying on.
+process.on("unhandledRejection", (reason) => {
+	console.log(
+		"A promise failed with nothing to catch it: " +
+			(reason && reason.message ? reason.message : String(reason))
+	);
+});
 
 // Bring back every dashboard face that was previously created
 const faces = readFaces();
@@ -27,6 +50,11 @@ for (const face of faces) {
 	// just the dashboard itself. A face with nothing taking input
 	// doesn't open a port it has no use for.
 	startInputFace(face);
+
+	// And anything on it that runs in the background -- a message stream,
+	// say -- starts listening again. Those don't wait for a display to ask;
+	// they pick up where they left off as soon as OmniCore is back.
+	background.syncFace(face);
 }
 
 // The welcome face is always running

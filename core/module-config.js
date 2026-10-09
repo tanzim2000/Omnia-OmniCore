@@ -28,7 +28,8 @@ function readManifest(moduleId) {
 		name: moduleId,
 		description: "",
 		provides: [],
-		tile: true
+		tile: true,
+		background: false
 	};
 
 	if (!fs.existsSync(manifestPath)) {
@@ -46,7 +47,14 @@ function readManifest(moduleId) {
 			// Some modules work behind the scenes — a wallpaper source has
 			// nothing useful to show in a tile of its own, and giving it one
 			// just wastes a slot. They can still be switched on per instance.
-			tile: parsed.tile !== false
+			tile: parsed.tile !== false,
+			// Does this module keep running between requests, rather than
+			// only when a display asks it for something? Said outright
+			// rather than guessed from whether index.js happens to export a
+			// `start` -- so it can be read without running any of the
+			// module's code, and shown to somebody before they install it.
+			// Only an exact `true` counts. See core/background.js.
+			background: parsed.background === true
 		};
 	} catch (error) {
 		return blank;

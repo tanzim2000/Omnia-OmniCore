@@ -416,7 +416,7 @@ if (!config.location) {
 
 ---
 
-## 5. System time, storage, and input
+## 5. System time, storage, input, and running in the background
 
 ### System time
 
@@ -505,6 +505,139 @@ Throwing from `onInput` costs you one failed tap, the same way throwing
 from your display function costs you one dead tile -- prefer returning
 normally and let a caller retry, but it won't take anything else down.
 
+### Running in the background
+
+Everything so far only runs when a display asks for your tile: called,
+answer, gone. That's right for nearly every module, and it's what keeps
+a dashboard cheap. It's wrong for anything that has to _hear_ about
+something the moment it happens -- a message stream, a mailbox that
+pushes new mail. For those, your module can keep running between
+requests. Needs OmniCore v1.16.0 or newer.
+
+Say so in `module.json`, outright:
+
+```json
+{ "name": "My Stream", "background": true }
+```
+
+and add a `start`, plus a `stop` if you need one, next to your usual
+function -- the same way `onInput` sits next to it:
+
+```js
+module.exports = async function (config, richness, omni) { ... }; // the tile, as always
+module.exports.start = async function (config, omni) { ... };     // NEW
+module.exports.stop = async function (handle) { ... };            // NEW, optional
+```
+
+Both are needed. A module that says `"background": true` but has no
+`start` is treated as an ordinary module (and OmniCore logs why); a
+module with a `start` but no flag never has it called.
+
+**When they're called.** `start` runs once per instance: when the
+instance is added, every time OmniCore starts, and again whenever its
+settings change -- only once the old run's `stop` has finished, with the
+new settings. Changing only the label doesn't restart anything. Removing
+the instance calls `stop`. Whatever `start` returns is what `stop` is
+given back, so return whatever you'll need to shut down -- you never keep
+a list of your own instances.
+
+**`start` sets things up and returns -- promptly.** Open your connection,
+set your timer, and return. Don't run your listening loop inside `start`
+and await it: until `start` returns, OmniCore has no handle to give `stop`,
+and the instance counts as still starting.
+
+**The `omni` that `start` gets** has everything your tile function's
+does, plus three things only background work has any use for:
+
+| Member                                     | What it does                                                                                                                                                                           |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signal`                                   | Aborted the moment this instance stops. Pass it to the plain `fetch(url, { signal: omni.signal })` -- not `omni.fetch`, which is shared and cached -- and that request ends by itself. |
+| `notify({ title, description, priority })` | Shows a notification on any OmniView showing this face. Priority 1 to 5 sets how long it stays up.                                                                                     |
+| `connections.join({ ... })`                | Joins a connection shared with your module's other instances on the same server. See below.                                                                                            |
+
+Your tile function doesn't get `notify`. It runs every time a display
+polls, so anything it raised would be raised again every few seconds.
+
+**Getting what you heard onto the tile: `omni.memory`.** Your tile
+function and your `start` run separately, so they need somewhere to
+meet. That's `omni.memory` -- the same object for both halves of the
+same instance:
+
+```js
+// The tile function first -- assigning module.exports replaces it, so
+// anything attached before this line would be thrown away
+module.exports = async function (config, richness, omni) {
+  const { messages = [] } = omni.memory.read();
+  // ...turn them into blocks
+};
+
+module.exports.start = async function (config, omni) {
+  omni.memory.write({ messages: [] }); // start fresh
+  // ...later, when something arrives:
+  omni.memory.read().messages.unshift(message);
+};
+```
+
+`memory.read()` hands you the live object, so changing it is enough;
+`memory.write(data)` replaces it. It lives in memory only -- gone when
+OmniCore restarts, gone when the instance is removed. If something has
+to survive a restart, that's `omni.storage`. Set up what you need in
+`start` rather than trusting what's already there: when settings
+change, `start` runs again and finds whatever the previous run left.
+
+**Sharing one connection.** If three of your instances talk to the same
+server, they shouldn't open three connections. Join a shared one
+instead, and OmniCore keeps exactly one open per server for your module:
+
+```js
+omni.connections.join({
+  key: config.server, // instances with the same key share
+  interest: config.topic, // what this instance wants from it
+  open({ interests, emit, drop, signal }) {
+    // Open ONE connection for every interest at once. Call emit(event,
+    // interest) for each thing that arrives, and drop(error) if the
+    // connection is lost -- OmniCore waits and reopens it for you.
+    // Return a function that closes it, if `signal` can't do that alone.
+  },
+  onEvent(event) {
+    // Called with each event meant for THIS instance
+  },
+});
+```
+
+Everything that decides _how_ you connect -- the server, and a login if
+there is one -- belongs in `key`. The connection is opened with the
+`open` of whichever instance joined most recently, so two instances with
+different passwords under one key would end up sharing one password.
+`interest` is only for what you want once connected.
+
+You never call `open` yourself. OmniCore calls it when the first
+instance joins, again with the new list whenever the set of interests
+changes, and closes the connection when the last instance leaves. After
+a drop it waits one second, then two, then four, up to a minute,
+before trying again. Two different modules never share a connection,
+even to the same server.
+
+**What OmniCore cleans up for you.** When an instance stops, its
+`signal` is aborted, every connection it joined is left, and `notify`,
+`connections.join` and any write to `memory` or `storage` quietly do
+nothing from then on. So you only
+need `stop` for things you set up entirely yourself -- a `setInterval`,
+say.
+
+**Failing.** A `start` that throws costs that instance its background
+work, logged, and nothing else -- its tile still renders. It gets
+another try the next time its face changes or OmniCore restarts, not in
+a loop. Inside your own callbacks, though, nothing of OmniCore's is
+waiting to catch you: a rejected promise is logged, but a plain
+exception thrown from a timer stops the whole process. Catch your own
+errors there.
+
+**Go easy.** This runs on a home server, all day, whether anyone is
+looking or not. Prefer one held-open connection to polling, never poll
+faster than the data actually changes, and keep what you put in memory
+bounded -- the last ten messages, not every one ever received.
+
 ---
 
 ## 6. `module.json`
@@ -526,6 +659,7 @@ Optional, but worth having:
 | `description` | One line.                                                                                                                                                                                                                                               |
 | `provides`    | Which RCBs you can emit. Read at runtime: a settings field can filter on it, which is what lets a theme's wallpaper picker offer only modules that provide `background` and _not_ offer, say, a Docker status module. Only list what you actually emit. |
 | `tile`        | Set to `false` if your module is meant to work invisibly -- feeding a background, say, with nothing worth putting on screen itself. Instances of it start hidden by default; the user can still turn a tile on for it if they want to.                  |
+| `background`  | Set to `true` if your module keeps running between requests and exports a `start`. See "Running in the background" in §5. Only an exact `true` counts.                                                                                                  |
 
 ### `provides` here, `emits` in the registry
 
@@ -756,6 +890,10 @@ the pattern applied.
       `image` or `background`
 - [ ] Settings are declared in `settings.json`, not asked for any other way
 - [ ] A `location` field's `null` case is handled, if you use one
+- [ ] If you run in the background: `"background": true` in `module.json`,
+      a `start`, a `stop` for anything you set up yourself, errors caught
+      in your own callbacks, memory kept bounded, and `minOmniCore` set to
+      at least `1.16.0` in the registry
 
 ---
 

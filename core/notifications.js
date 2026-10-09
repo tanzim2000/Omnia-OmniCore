@@ -21,10 +21,18 @@
 // not because Core checks and refuses, but because a plain browser never
 // asks for them in the first place.
 //
-// That also settles what happens while nobody is watching: a module only
-// runs when something asks it to, and a sleeping OmniView asks for
-// nothing. Notifications stop happening on their own, with no scheduler
-// to pause and nothing to switch off.
+// WHO RAISES ONE
+//
+// A background module (see core/background.js), through `omni.notify`.
+// Those keep running while nobody is watching -- that's what they're
+// for -- so a notification can be raised with no OmniView there to see
+// it. What happens then is the install's own setting: dropped (the
+// default), or held for the next OmniView that connects. See notify()
+// below.
+//
+// An ordinary tile module can't raise one at all. It only runs when a
+// display asks for its tile, every few seconds, so anything it raised
+// would be raised again on every poll.
 
 const faceEvents = require("./face-events");
 const { readSettings } = require("./settings-store");

@@ -150,7 +150,9 @@ until the Marketplace puts something in them.
 | `module-loader.js`         | Finds modules, loads their function. **The module contract is documented here.**                                                                     |
 | `module-config.js`         | Reads a module's `module.json` and `settings.json`. Applies defaults, cleans submitted values.                                                       |
 | `module-fetch.js`          | Shared HTTP helper for modules: caching, timeouts, stale fallback, in-flight deduplication.                                                          |
-| `module-api.js`            | Builds the object a module actually receives: `fetch`/`visible`/`share`/`storage`. The one seam a module reaches OmniCore through.                   |
+| `module-api.js`            | Builds the object a module actually receives: `fetch`/`visible`/`share`/`storage`/`time`/`memory`. The one seam a module reaches OmniCore through.   |
+| `background.js`            | Starts and stops the modules that keep running between requests, one run per instance, kept in line with the faces on disk. See §5d.                 |
+| `shared-connections.js`    | One live connection per server, shared by every instance of a module that needs it. Owns opening, closing and reconnecting; knows no protocol. §5d.  |
 | `module-storage.js`        | Read/write for one module instance's own persisted data. See §5c.                                                                                    |
 | `input-face-loader.js`     | Starts/stops one server per instance that declares an `input.json` -- one instance, one port, unlike `face-loader.js`. See §5c.                      |
 | `input-face-page.js`       | Renders an Inport's default page. Not a theme, and not meant to be one -- OmniCore's own UI, same as `fallback-page.js`.                             |
@@ -604,6 +606,7 @@ breaking the face -- but relying on that is worse than handling it.
 | `description` | One line, shown in pickers.                                                                                                         |
 | `provides`    | Block types this module can emit. Lets OmniCore offer only modules that could do a job -- a wallpaper picker shouldn't list Docker. |
 | `tile`        | `false` means it works behind the scenes and shouldn't get a tile by default.                                                       |
+| `background`  | `true` means it keeps running between requests and exports a `start`. See §5d. Only an exact `true` counts.                         |
 
 ### Using the network
 
@@ -641,6 +644,11 @@ object, built fresh per call in `core/module-api.js`:
 | `share(count, richness)`          | How many of a list of like rows to show.                                                    |
 | `storage.read()` / `.write(data)` | This instance's own persisted data. See §5c.                                                |
 | `time()`                          | `{ timestamp, timezone }` -- what time OmniCore thinks it is right now. See §5c.            |
+| `memory.read()` / `.write(data)`  | This instance's in-memory scratch space, shared by its tile and its background run. §5d.    |
+
+A background module's `start` gets the same object plus `signal`,
+`notify` and `connections` -- see §5d. Those three are deliberately not on
+the object a tile call gets.
 
 This is deliberately not `require("../../core/module-fetch")`. Three
 things follow from handing capabilities to a module instead of letting it
@@ -845,6 +853,107 @@ on the network can reach the port and tap the button. Not solved
 per-feature: a dedicated auth service is planned to cover Inports
 and the control face (port 4000) together, rather than bolting something
 on for just this one.
+
+### 5d. Background modules
+
+Every module up to v1.16.0 runs only when asked: a display wants a tile,
+OmniCore calls the module, the module answers, and nothing of it runs
+until the next request. That's what keeps twenty tiles cheap, and it's
+still how nearly every module works.
+
+It can't work for anything that has to be _told_ something happened --
+a message stream, pushed mail -- since that needs a connection held open
+whether or not a display is looking. So a module can now opt into
+running in the background.
+
+**Declared, never guessed.** `module.json` says `"background": true`, and
+`index.js` exports `start` (and optionally `stop`) as properties of the
+module function, the same convention `onInput` already set. Both are
+required: the flag without a `start` is logged and the module treated as
+ordinary; a `start` without the flag is never called. Saying it in the
+manifest means it can be read without running any of the module's code,
+and shown to someone before they install it.
+
+```js
+module.exports = async function (config, richness, omni) { ... }; // the tile
+module.exports.start = async function (config, omni) { ... };     // returns a handle
+module.exports.stop = async function (handle) { ... };            // optional
+```
+
+**Lifecycle** -- owned by `core/background.js`, which keeps one run per
+instance and lines it up with the faces on disk:
+
+| When                          | What happens                                         |
+| ----------------------------- | ---------------------------------------------------- |
+| OmniCore starts               | Every background instance on every face is started   |
+| An instance is added          | It's started (wizard or admin face)                  |
+| An instance's settings change | Stopped; once `stop` finishes, started with new ones |
+| Only its label changes        | Nothing                                              |
+| An instance is removed        | It's stopped                                         |
+
+`start` gets the same resolved `config` the tile function gets (defaults
+filled in, locations turned into coordinates). Whatever it returns is
+handed back to `stop`. `start` is expected to set up and return
+promptly, not to run its listening loop itself. On a restart the
+bookkeeping swaps the old run for the new one in one step, so two saves
+arriving together can never leave two copies of one instance on the
+list -- and the new run's `start` then waits until the old run's `stop`
+has finished, so the two never actually run side by side.
+
+**What a background run's `omni` adds** to the usual one:
+
+| Member                                               | What it does                                                              |
+| ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| `signal`                                             | An `AbortSignal`, aborted when the instance stops (for the plain `fetch`) |
+| `notify({ title, description, priority })`           | Raises a notification on this face's OmniViews (`core/notifications.js`)  |
+| `connections.join({ key, interest, open, onEvent })` | Joins a shared connection -- see below; returns `{ leave }`               |
+
+`notify` exists only here. A tile call runs on every poll, so a
+notification raised from one would repeat every few seconds. A
+notification raised while no OmniView is connected follows the install's
+own setting: dropped by default, or held for the next one to connect.
+
+**`omni.memory`** is how the two halves of one instance meet. The tile
+function and the background run are separate calls; both are handed the
+same in-memory object for that instance. Not persisted -- gone on restart
+and when the instance is removed -- because what a background module
+hears is usually caught up again from its server on the next start, and
+writing every message to disk would be wasted work on this hardware.
+Anything that must survive a restart belongs in `omni.storage`.
+
+**Shared connections** (`core/shared-connections.js`). Three instances of
+one module pointed at the same server open one connection between them,
+not three. An instance joins a pool named by `key` (usually the server's
+address) with an `interest` (a topic, a channel). OmniCore alone calls the
+module's `open`, passing every member's interest at once, and calls it
+again whenever the set of interests changes -- after a short settle, so a
+burst of joins on boot costs one open. The module reads the connection
+and calls `emit(event, interest)` to route each event to the members that
+want it, or `drop(error)` when it's lost; OmniCore then reopens it after
+1s, 2s, 4s... up to a minute. The `open` used is the one from whichever
+member joined most recently, and the connection is reopened when the
+member it came from leaves -- that's how a changed password takes effect
+even though the topics didn't change. Anything that decides how to
+connect (server, login) therefore belongs in the `key`. The last member leaving closes it. Pools are
+keyed by module _and_ key, so two modules never share a connection even
+to the same server. OmniCore owns the bookkeeping; it knows nothing about
+any protocol.
+
+**Cleanup and failure.** When an instance stops, Core aborts its `signal`,
+leaves every pool it joined, and makes `notify`, `connections.join` and
+writes to `memory` and `storage` do nothing -- so a timer firing one last
+time can't recreate what removing the instance just deleted, and `stop` is
+only needed for what a module set up by itself.
+A `start` that throws costs that instance its background work and nothing
+else; it's retried on the next sync, never in a loop. Because background
+code runs callbacks long after Core handed over control, OmniCore now
+logs an unhandled promise rejection instead of exiting on it
+(`start.OmniCore`). A plain uncaught exception still stops the process,
+deliberately.
+
+**Updates.** A module's code is loaded once per OmniCore process, same as
+before. A marketplace update to a background module takes effect, like
+any other module's, on the next OmniCore restart.
 
 ## 6. The theme agreement
 
@@ -1256,6 +1365,10 @@ and the module API split (`omni`) that made modules independent of
 OmniCore's own layout. OmniCore ships bare -- nothing bundled -- and the
 eight modules and one theme it launched with now live in their own
 repo, installed like anything else would be.
+
+**Background modules** (v1.16.0): a module can keep running between
+requests, started and stopped with its instance, sharing one connection
+per server with its other instances and raising notifications. See §5d.
 
 All eight of those modules honour richness. Those with distinct fields
 (`weather`, `disk-space`, `system-stats`) let the user order them with a

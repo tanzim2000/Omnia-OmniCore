@@ -27,6 +27,7 @@ const express = require("express");
 const faceStore = require("./face-store");
 const { startFace } = require("./face-loader");
 const { startInputFace } = require("./input-face-loader");
+const background = require("./background");
 const themeLoader = require("./theme-loader");
 const { listModules } = require("./module-loader");
 const { readManifest, readSchema, applyDefaults } = require("./module-config");
@@ -435,6 +436,10 @@ function startWizardFace() {
 		// any of them takes input, the face's Inport comes up with it,
 		// same as one added later through the admin face.
 		await startInputFace(face);
+
+		// Same for anything on it that runs in the background. Not waited
+		// on -- see the same call in admin-face.js.
+		background.syncFace(face);
 
 		res.json(face);
 	});
