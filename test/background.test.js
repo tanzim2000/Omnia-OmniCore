@@ -301,6 +301,48 @@ test("shared connections: a member rejoining with new settings reopens with them
 	await settle();
 });
 
+test("shared connections: a newcomer to a running connection gets it reopened, a leaver doesn't", async () => {
+	// A service that replays recent messages only at the start of a
+	// connection: someone joining a connection already running must get
+	// that start too, or it sits empty until something new arrives
+	const { opens, open } = recordingOpener();
+	const heardByLate = [];
+
+	const early = sharedConnections.join("test-newcomer", {
+		key: "https://seven.example",
+		interest: "same",
+		open,
+		onEvent: () => {}
+	});
+
+	await settle();
+	assert.equal(opens.length, 1);
+
+	const late = sharedConnections.join("test-newcomer", {
+		key: "https://seven.example",
+		interest: "same",
+		open,
+		onEvent: (event) => heardByLate.push(event)
+	});
+
+	await settle();
+	assert.equal(opens.length, 2, "reopened for the newcomer, same topics or not");
+	assert.equal(opens[0].closed, true);
+
+	// What the fresh connection sends at its start reaches the newcomer
+	opens[1].emit("replay");
+	await settle();
+	assert.deepEqual(heardByLate, ["replay"]);
+
+	// Leaving needs no reopen: everyone left already has what they need
+	early.leave();
+	await settle();
+	assert.equal(opens.length, 2, "no reopen when someone leaves");
+
+	late.leave();
+	await settle();
+});
+
 test("shared connections: refuses a join that's missing what it needs", () => {
 	assert.throws(() =>
 		sharedConnections.join("test-bad", { open: () => {}, onEvent: () => {} })

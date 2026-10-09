@@ -31,8 +31,11 @@
 // recently, so the newest settings win -- handing it every member's
 // interest at once. When the list of interests changes -- someone joins wanting a
 // new topic, the last one wanting a topic leaves -- Core closes the
-// connection and opens it again with the new list. When the last member
-// leaves, the connection closes for good.
+// connection and opens it again with the new list. The same happens when
+// a new member joins a connection already running, so it gets whatever
+// the connection sends at the start (a replay of recent messages, say)
+// like everyone else did. When the last member leaves, the connection
+// closes for good.
 //
 // Core knows nothing about what's on the other end. It doesn't speak
 // ntfy, or anything else: opening, reading and parsing are all the
@@ -167,6 +170,9 @@ function openConnection(pool) {
 		// Whose `open` this connection came from. If that member leaves,
 		// the connection is reopened with someone else's -- see sync().
 		openedBy: opener,
+		// Everyone who was a member when it opened. Someone joining later
+		// gets the connection reopened for them -- see sync().
+		openedFor: new Set(pool.members),
 		openedAt: Date.now()
 	};
 
@@ -294,17 +300,34 @@ function sync(pool) {
 	const wantedKey = JSON.stringify(interestsOf(pool));
 
 	// Already open, with exactly the right interests, opened by a member
-	// that's still here. Nothing to do.
+	// that's still here, and every member there since it opened. Nothing
+	// to do. Each of those last two conditions earns its place:
 	//
-	// That last condition is what makes a settings change take effect.
-	// Changing a password restarts the instance: it leaves and joins again
-	// in a moment, wanting the same topics as before. Without this, the
-	// interests would look unchanged and the connection would carry on
-	// with the old password for as long as it stayed up.
+	// Opened by a member that's still here: that's what makes a settings
+	// change take effect. Changing a password restarts the instance: it
+	// leaves and joins again in a moment, wanting the same topics as
+	// before. Without this, the interests would look unchanged and the
+	// connection would carry on with the old password for as long as it
+	// stayed up.
+	//
+	// Every member there since it opened: plenty of services send
+	// something only at the START of a connection -- a greeting, a replay
+	// of recent messages. A member joining a connection that's already
+	// running would never see any of that, and would sit empty until
+	// something new happened to arrive. So a newcomer gets the connection
+	// reopened, and starts from the beginning like everyone else. Joins
+	// only happen when an instance starts (boot, being added, a settings
+	// change), so this costs a reconnect at those moments and no others.
+	// Someone LEAVING never needs one; the rest already have what they need.
+	const everyoneWasThere = [...pool.members].every((member) =>
+		pool.connection ? pool.connection.openedFor.has(member) : false
+	);
+
 	if (
 		pool.connection &&
 		pool.connection.interestsKey === wantedKey &&
-		pool.members.has(pool.connection.openedBy)
+		pool.members.has(pool.connection.openedBy) &&
+		everyoneWasThere
 	) {
 		return;
 	}

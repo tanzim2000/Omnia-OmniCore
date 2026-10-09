@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.16.1
+
+### Fixed
+
+- **An instance joining a shared connection that was already open never saw its start.** Core only reopened a shared connection when the set of interests changed or the member that opened it left. So a second instance wanting a topic already being streamed or any instance restarted by a settings change while another kept the connection open joined midway, and missed whatever the service sends only at the start of a connection. For ntfy that's the replay of recent messages, and the tile sat on "Connecting…" until something new happened to be published. A connection is now reopened whenever someone joins who wasn't there when it opened, so every member starts from the beginning. Joins only happen when an instance starts (boot, being added, a settings change), so this costs a reconnect at those moments and none otherwise. Someone leaving still never reopens it.
+
+### Notes
+
+- Found while building `ntfy`, the first module to use shared connections. `ntfy` needs this release, and says so in the registry.
+
 ## v1.16.0
 
 Modules can now keep running between requests

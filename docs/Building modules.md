@@ -381,7 +381,7 @@ job richness already does. Use `share` instead:
 const room = omni.share(rows.length, richness, { minimum: 0 });
 ```
 
-`modules/calendar`, `modules/docker-status` and `modules/ntfy-bridge` all do
+`modules/calendar`, `modules/docker-status` and `modules/ntfy` all do
 this. Neither helper is compulsory -- a module is free to hardcode its own
 steps, as `prayer-times` does.
 
@@ -613,7 +613,11 @@ different passwords under one key would end up sharing one password.
 
 You never call `open` yourself. OmniCore calls it when the first
 instance joins, again with the new list whenever the set of interests
-changes, and closes the connection when the last instance leaves. After
+changes, again whenever an instance joins a connection that's already
+running (so it gets the connection's start -- a replay of recent messages,
+say -- like everyone else), and closes the connection when the last
+instance leaves. Whatever the connection sends at its start, expect it
+more than once: every member sees it again on each reopen. After
 a drop it waits one second, then two, then four, up to a minute,
 before trying again. Two different modules never share a connection,
 even to the same server.

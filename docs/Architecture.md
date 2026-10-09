@@ -276,7 +276,7 @@ There are **ten RCBs** today. `time` additionally splits into four
 | `time`       | One instant, plus what to do with it | `world-clock`                                            |
 | `graphdata`  | A series of points                   | nothing yet (`Tally`, planned)                           |
 | `event`      | One calendar event                   | `calendar`                                               |
-| `qr`         | Something to be scanned              | nothing yet (`ntfy`, planned)                            |
+| `qr`         | Something to be scanned              | `ntfy`                                                   |
 
 Each is specified below: its fields, which are required, and what the
 field actually means.
@@ -930,9 +930,12 @@ again whenever the set of interests changes -- after a short settle, so a
 burst of joins on boot costs one open. The module reads the connection
 and calls `emit(event, interest)` to route each event to the members that
 want it, or `drop(error)` when it's lost; OmniCore then reopens it after
-1s, 2s, 4s... up to a minute. The `open` used is the one from whichever
-member joined most recently, and the connection is reopened when the
-member it came from leaves -- that's how a changed password takes effect
+1s, 2s, 4s... up to a minute. It's also reopened whenever a member joins
+that wasn't there when it opened, so a newcomer gets whatever the service
+sends at the start of a connection (a replay of recent messages, say)
+instead of joining midway; someone leaving never reopens it. The `open`
+used is the one from whichever member joined most recently, and the
+connection is reopened when the member it came from leaves -- that's how a changed password takes effect
 even though the topics didn't change. Anything that decides how to
 connect (server, login) therefore belongs in the `key`. The last member leaving closes it. Pools are
 keyed by module _and_ key, so two modules never share a connection even
@@ -1369,11 +1372,14 @@ repo, installed like anything else would be.
 **Background modules** (v1.16.0): a module can keep running between
 requests, started and stopped with its instance, sharing one connection
 per server with its other instances and raising notifications. See §5d.
+`ntfy` (formerly `ntfy-bridge`) is the first: it listens to its topics
+over one shared stream per server, fills its tile from what it hears, and
+notifies only on messages that arrive while it's running.
 
 All eight of those modules honour richness. Those with distinct fields
 (`weather`, `disk-space`, `system-stats`) let the user order them with a
 `priority` setting; those that emit a list of like rows (`calendar`,
-`docker-status`, `ntfy-bridge`) scale the number of rows instead, since
+`docker-status`, `ntfy`) scale the number of rows instead, since
 there is nothing meaningful to reorder. `prayer-times` and `bing-wallpaper`
 use their own fixed steps.
 
