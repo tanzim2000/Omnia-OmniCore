@@ -298,9 +298,75 @@ test("notifications: priorities map to the documented durations", () => {
 	assert.equal(notifications.resolvePriority(4), 4);
 });
 
-test("notifications: a title is required", () => {
+test("notifications: a title or a description is required, either will do", async () => {
 	const face = faceStore.readFaces()[0];
-	assert.equal(notifications.notify(face.id, { description: "no title" }), false);
+	await waitForPort(face.id);
+
+	// Nothing to say at all: dropped
+	assert.equal(notifications.notify(face.id, {}), false);
+	assert.equal(notifications.notify(face.id, { title: "  ", description: "" }), false);
+
+	// A description on its own is a whole message
+	const plain = await listen(face.id, false);
+	notifications.notify(face.id, { description: "no title, still a message" }, "ntfy");
+	await new Promise((resolve) => setTimeout(resolve, 300));
+
+	assert.equal(plain.received.length, 1);
+	const note = JSON.parse(plain.received[0]);
+	assert.equal(note.title, "");
+	assert.equal(note.description, "no title, still a message");
+
+	plain.req.destroy();
+});
+
+test("notifications: the source box says where it came from", async () => {
+	const face = faceStore.readFaces()[0];
+	await waitForPort(face.id);
+	await new Promise((resolve) => setTimeout(resolve, 200));
+
+	const plain = await listen(face.id, false);
+
+	// No source from the module: Core's module name stands in
+	notifications.notify(face.id, { title: "one" }, "Calendar");
+
+	// The module's own source wins, cleaned to one short line
+	notifications.notify(
+		face.id,
+		{ title: "two", source: "  ntfy.sh\n\tsecond line " + "x".repeat(100) },
+		"ntfy"
+	);
+
+	// Something that isn't text is ignored, not shown as "[object Object]"
+	notifications.notify(face.id, { title: "three", source: { evil: true } }, "ntfy");
+
+	await new Promise((resolve) => setTimeout(resolve, 300));
+
+	const notes = plain.received.map((text) => JSON.parse(text));
+	assert.equal(notes.length, 3);
+	assert.equal(notes[0].source, "Calendar");
+	assert.ok(notes[1].source.startsWith("ntfy.sh second line x"), notes[1].source);
+	assert.ok(!/[\n\t]/.test(notes[1].source), "one line");
+	assert.equal(notes[1].source.length, 60);
+	assert.equal(notes[2].source, "ntfy");
+
+	plain.req.destroy();
+});
+
+test("notifications: the overlay carries Core's look and the emoji fonts onto any page", () => {
+	const css = notifications.overlayStyles();
+
+	// Its own colours and size, so a theme's page (which has none of the
+	// Default UI's) still gets them
+	assert.match(css, /--omni-note-card:/);
+	assert.match(css, /--omni-note-size: \d+px/);
+
+	// The emoji fonts, always, at the end of both font lists
+	assert.ok(notifications.EMOJI_FONTS.includes("Noto Color Emoji"));
+	assert.equal(css.split(notifications.EMOJI_FONTS).length - 1, 2);
+
+	// A table's text: half of Core's font size
+	assert.equal(notifications.TABLE_TEXT_SCALE, 0.5);
+	assert.match(css, /font-size: calc\(var\(--omni-note-size\) \* 0\.5\)/);
 });
 
 test("dashboard face: a module that throws does not take the face down", async () => {

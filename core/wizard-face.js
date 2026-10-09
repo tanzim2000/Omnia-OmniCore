@@ -1132,17 +1132,25 @@ function renderWizard(data) {
 			"</div>";
 		}
 
+		// Show or hide fields that depend on another field's value. A
+		// checkbox's .value is always "on", ticked or not, so for one of
+		// those it's whether it's ticked that counts, as "true" or "false"
+		// -- which is what a showWhen of { "equals": true } becomes.
 		function applyFieldConditions() {
 			for (const field of document.querySelectorAll("[data-when-key]")) {
 				const control = document.querySelector(
-					'[data-key="' + field.dataset.whenKey + '"]'
+					'[data-key="' + CSS.escape(field.dataset.whenKey) + '"]'
 				);
 
 				if (!control) continue;
 
+				const current = control.type === "checkbox"
+					? String(control.checked)
+					: control.value;
+
 				const allowed = field.dataset.whenIs.split("|");
 				field.style.display =
-					allowed.indexOf(control.value) === -1 ? "none" : "";
+					allowed.indexOf(current) === -1 ? "none" : "";
 			}
 		}
 

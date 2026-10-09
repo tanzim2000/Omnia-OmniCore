@@ -959,4 +959,4 @@ function backButton(href) {
 		aria-label="Back">&#8592;</button>`;
 }
 
-module.exports = { uiStyles, backButton, PALETTES, SYSTEM_FONT };
+module.exports = { uiStyles, backButton, fontStack, fontFace, PALETTES, SYSTEM_FONT };

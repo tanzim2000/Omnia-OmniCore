@@ -29,6 +29,7 @@ const { contentTag } = require("./content-tag");
 const settingsStore = require("./settings-store");
 const notifications = require("./notifications");
 const imageProxy = require("./image-proxy");
+const { attachFontRoute } = require("./font-service");
 
 // Running faces, keyed by port: { server, face }
 const runningFaces = new Map();
@@ -176,6 +177,11 @@ function startFace(face) {
 
 		// Images are fetched by OmniCore rather than by the display
 		imageProxy.attachImageRoute(app);
+
+		// The font picked in OmniCore's settings, so the notification
+		// overlay can use it on top of a theme's page too. A font file is
+		// fetched from the page's own address, and every face has its own.
+		attachFontRoute(app);
 
 		// The face's own identity — themes fetch this to know what to draw.
 		// Registered before the theme's files so a theme can never shadow it.

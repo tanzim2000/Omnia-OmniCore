@@ -336,6 +336,15 @@ Available `type`s: `text`, `url`, `number`, `password`, `boolean`, `select`
 Every field can carry `default`, `help` (a one-line explanation shown under
 the field), and `showWhen: { key, equals }` to hide it unless another field
 has a matching value -- useful for "only show this when that mode is on."
+`equals` can be one value or a list of them. For a checkbox (`boolean`),
+use `true` or `false`: `{ "key": "notify", "equals": true }` shows the field
+only while that box is ticked.
+
+A field that isn't an object with a `key` -- a stray `null` left by a hand
+edit, say -- is skipped with a line in OmniCore's log, and so is a choice in
+`options` that isn't text or a number. The rest of your settings keep
+working; nothing you get wrong in this file can stop a settings page from
+opening.
 
 Your function receives the resolved values as `config[key]`, with defaults
 already filled in for anything unset.
@@ -654,32 +663,53 @@ and the instance counts as still starting.
 **The `omni` that `start` gets** has everything your tile function's
 does, plus three things only background work has any use for:
 
-| Member                                           | What it does                                                                                                                                                                           |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `signal`                                         | Aborted the moment this instance stops. Pass it to the plain `fetch(url, { signal: omni.signal })` -- not `omni.fetch`, which is shared and cached -- and that request ends by itself. |
-| `notify({ title, description, priority, link })` | Shows a notification on every display showing this face (a browser tab included). Priority 1 to 5 sets how long it stays up. See below for `description` and `link`.                   |
-| `connections.join({ ... })`                      | Joins a connection shared with your module's other instances on the same server. See below.                                                                                            |
+| Member                                                   | What it does                                                                                                                                                                           |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signal`                                                 | Aborted the moment this instance stops. Pass it to the plain `fetch(url, { signal: omni.signal })` -- not `omni.fetch`, which is shared and cached -- and that request ends by itself. |
+| `notify({ source, title, description, priority, link })` | Shows a notification on every display showing this face (a browser tab included). Priority 1 to 5 sets how long it stays up. See below for the rest.                                   |
+| `connections.join({ ... })`                              | Joins a connection shared with your module's other instances on the same server. See below.                                                                                            |
 
 Your tile function doesn't get `notify`. It runs every time a display
 polls, so anything it raised would be raised again every few seconds.
 
-**What a notification can say.** `title` is plain text and required.
-`description` may use a small Markdown subset: `**bold**`, `*italic*`,
-`` `code` ``, `- lists`, `1. numbered lists`, and `# a subtitle`. That's
-all of it -- no links, images or HTML; anything else shows exactly as you
-wrote it. Nothing on a display can be clicked, so to point somewhere pass
+**What a notification can say.** It needs a `title`, a `description`, or
+both. `title` is plain text. `description` may use a small Markdown subset:
+`**bold**`, `*italic*`, `` `code` ``, `- lists`, `1. numbered lists`,
+`# a subtitle`, and tables. That's all of it -- no links, images or HTML;
+anything else shows exactly as you wrote it. Emoji just work: the overlay
+always has emoji fonts to fall back on.
+
+A table is the usual Markdown one -- a header row, a row of dashes, then
+rows -- shown at half of OmniCore's font size so it fits. At most 6
+columns and 11 rows, the header counting as one; anything past that is
+left off, and a line under the table says how much was. Write a `|` that
+belongs inside a cell as `\|`.
+
+Nothing on a display can be clicked, so to point somewhere pass
 `link: { url, title }` instead: the overlay shows a QR code for it beside
 the message, with the address printed underneath. Only `http` and `https`
 links are shown, and never one with a username and password in it.
 
+**Where it came from.** Every notification has a small box on top saying
+where it's from. OmniCore fills it with your module's name. Pass
+`source` -- a short line of plain text -- to say something more useful
+than that: ntfy names the server it heard the message on, `ntfy.sh`. It's
+read by everyone in the room, so never put anything private in it, nor in
+the title or description.
+
 ```js
 omni.notify({
+  source: "GitHub",
   title: "Build failed",
   description: "**main** is red after `a1b2c3`",
   priority: 5,
   link: { url: "https://github.com/me/app/actions", title: "Open the build" },
 });
 ```
+
+An untitled notification (`title` left out) shows just its description,
+which needs OmniCore 1.19.0. Older versions drop a notification without a
+title, so set `minOmniCore` to `1.19.0` if you rely on it.
 
 **Getting what you heard onto the tile: `omni.memory`.** Your tile
 function and your `start` run separately, so they need somewhere to

@@ -40,10 +40,17 @@
 //
 // WHAT ONE CAN SAY
 //
-//   title        required, plain text
+//   title        optional, plain text
 //   description  optional, a small subset of Markdown -- bold, italic,
-//                code, lists, a subtitle. See core/markdown.js for exactly
-//                which, and why links aren't one of them.
+//                code, lists, a subtitle, tables. See core/markdown.js for
+//                exactly which, and why links aren't one of them.
+//                A notification needs a title, a description, or both.
+//   source       optional, plain text: where the message came from, shown
+//                in its own small box at the top. Leave it out and Core
+//                fills in the module's name. A module only needs it to
+//                say something more useful than its name -- ntfy says
+//                which server, "ntfy.sh". It's never a place for a secret:
+//                everyone in the room can read it.
 //   priority     1 to 5; decides how long it stays up (see below)
 //   link         optional { url, title }. Nothing on a display can be
 //                clicked, so a link is shown as a QR code beside the
@@ -56,10 +63,33 @@ const faceEvents = require("./face-events");
 const markdown = require("./markdown");
 const qr = require("./qr");
 const { readSettings } = require("./settings-store");
+const { PALETTES, fontStack, fontFace } = require("./ui-theme");
 
 // Longest link title worth showing above a QR code. It's a caption for a
 // code, not a second message.
 const LINK_TITLE_LONGEST = 80;
+
+// Longest source worth showing. It's a label -- "ntfy.sh", "Calendar" --
+// not a sentence.
+const SOURCE_LONGEST = 60;
+
+// How big a table's text is, as a share of Core's font size (Settings >
+// Font size). Tables are the one dense thing a notification can hold, so
+// they're set smaller than everything around them to fit.
+const TABLE_TEXT_SCALE = 0.5;
+
+// Emoji fonts, always at the end of every font list the overlay uses.
+// Not a setting: a message with an emoji in it should show the emoji,
+// whatever font the install has picked. A browser looks for each
+// character in the fonts in order, so letters still come from the
+// chosen font, and only what that font doesn't have -- the emoji --
+// falls through to these. One for each system's own: Apple, Windows,
+// Linux and Android, then two that are often added by hand.
+const EMOJI_FONTS =
+	'"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", ' +
+	'"Noto Color Emoji", "Android Emoji", "Twemoji Mozilla", "EmojiOne Color"';
+
+const CODE_FONTS = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
 // HOW LONG ONE STAYS UP
 //
@@ -142,6 +172,30 @@ function readLink(link) {
 	return { url: url.href, title: title, svg: svg };
 }
 
+// A source label, made safe to show: plain text on one line, not too
+// long. Returns "" for nothing usable. It's set as text on the page, never
+// as markup, so this is about tidiness, not safety.
+function readSource(value) {
+	if (typeof value !== "string") {
+		return "";
+	}
+
+	const tidy = value
+		// Line breaks, tabs and other control characters become plain
+		// spaces -- a label is one line
+		.replace(/[\u0000-\u001f\u007f-\u009f]+/g, " ")
+		// Invisible characters that change how text around them is shown
+		// -- zero-width spaces, and the marks that flip text right to
+		// left -- are taken out: a label should read as it looks
+		.replace(/[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "")
+		.replace(/\s+/g, " ")
+		.trim();
+
+	// Cut by characters rather than by JavaScript's half-characters, so
+	// an emoji at the cut is kept or dropped whole, never split in two
+	return Array.from(tidy).slice(0, SOURCE_LONGEST).join("").trim();
+}
+
 // Notifications raised while nobody was watching, keyed by face id.
 //
 // Only used when the install has asked for it. In memory rather than on
@@ -151,18 +205,28 @@ const held = new Map();
 
 // Send one notification to every display currently showing this face.
 //
-// `faceId` is the face's own id (its port). `title` is required; a
-// notification with nothing to say is not worth interrupting anyone for.
-function notify(faceId, message) {
+// `faceId` is the face's own id (its port). `message` is what the module
+// passed to omni.notify. `origin` is the name of the module that raised
+// it, filled in by Core (see background.js) -- the module doesn't get a
+// say in it, and it's what the source box shows when the module didn't
+// name a source of its own.
+//
+// A title or a description is required, either will do; a notification
+// with nothing to say is not worth interrupting anyone for.
+function notify(faceId, message, origin) {
 	const settings = readSettings();
 
 	if (!settings.notificationsEnabled) {
 		return false;
 	}
 
-	const title = String((message && message.title) || "").trim();
+	// Invisible NUL characters taken out first: they're dropped when the
+	// description is rendered anyway, and a description made of nothing
+	// else must count as empty, not show up as a blank box
+	const title = String((message && message.title) || "").replace(/\u0000/g, "").trim();
+	const description = String((message && message.description) || "").replace(/\u0000/g, "").trim();
 
-	if (!title) {
+	if (!title && !description) {
 		return false;
 	}
 
@@ -172,9 +236,9 @@ function notify(faceId, message) {
 		return false;
 	}
 
-	const description = String((message && message.description) || "").trim();
-
 	const note = {
+		// Where it came from: what the module said, or else its name
+		source: readSource(message && message.source) || readSource(origin),
 		title: title,
 		// Both: the plain text, and the same rendered from Markdown. The
 		// overlay shows the rendered one; the plain one is there for
@@ -238,15 +302,52 @@ function releaseHeld(faceId) {
 // ---------------------------------------------------------------------
 // The overlay itself
 //
-// Built out of the Default UI's own tokens (`--card-bg`, `--radius`, the
-// glass sheen, the timer lamp) rather than its own look, so a
-// notification reads as part of OmniCore rather than something bolted
-// on. See docs/planning/default-ui-architecture.md.
+// Built out of the Default UI's look -- its glass cards, its colours, its
+// font, the timer lamp -- so a notification reads as part of OmniCore
+// rather than something bolted on. See
+// docs/planning/default-ui-architecture.md.
+//
+// It carries that look with it. The overlay is drawn on top of a theme's
+// page as often as on OmniCore's own, and a theme's page has none of the
+// Default UI's colours or font in it. So the overlay sets its own copies
+// on itself (the --omni-note-* values below), taken from the install's
+// settings each time a page is served: the same light or dark, and the
+// same font and size, as the admin pages. Whatever theme is underneath,
+// a notification looks the same.
+//
+// Three boxes, a bento:
+//
+//   +--------------------------------------+
+//   |  ntfy.sh                    (source) |   where it came from
+//   +-------------------------+------------+
+//   |  Title                  |   QR code  |   the message, and its link
+//   |  Description, Markdown  |   address  |   when it has one
+//   +-------------------------+------------+
+//
+// On a screen taller than it is wide, the QR box goes under the message.
 
-const OVERLAY_STYLES = `
-	/* The dimmed layer behind the card. Sits above everything a theme
-	   draws, which is the whole point of an overlay. */
+function overlayStyles() {
+	const settings = readSettings();
+	const palette = PALETTES[settings.uiMode] || PALETTES.dark;
+	const size = Number(settings.uiFontSize) || 16;
+
+	return `
+	${fontFace(settings)}
+
+	/* The dimmed layer behind the boxes. Sits above everything a theme
+	   draws, which is the whole point of an overlay. Everything inside
+	   reads its colours and font from here. */
 	.omni-note-layer {
+		--omni-note-fg: ${palette.fg};
+		--omni-note-muted: ${palette.fgMuted};
+		--omni-note-card: ${palette.cardBg};
+		--omni-note-base: color-mix(in srgb, ${palette.bg} 72%, transparent);
+		--omni-note-border: ${palette.glassBorder};
+		--omni-note-sheen: ${palette.glassSheen};
+		--omni-note-glow: ${palette.glow};
+		--omni-note-radius: 12px;
+		--omni-note-size: ${size}px;
+
 		position: fixed;
 		inset: 0;
 		display: flex;
@@ -258,39 +359,81 @@ const OVERLAY_STYLES = `
 		opacity: 0;
 		transition: opacity 260ms ease;
 		pointer-events: none;
+
+		color: var(--omni-note-fg);
+		font-family: ${fontStack(settings)}, ${EMOJI_FONTS};
+		font-size: var(--omni-note-size);
+		font-weight: normal;
+		line-height: normal;
+		text-align: center;
 	}
+
+	/* A theme's own rules -- "every h2 is red", "every p is Comic Sans"
+	   -- would otherwise reach inside the overlay and win over what it
+	   inherits from the layer. This puts the layer's font and colour back
+	   on everything inside. The overlay's own rules below come after
+	   this, so they still win where they set something different. */
+	.omni-note-layer * {
+		font-family: inherit;
+		font-size: inherit;
+		font-weight: inherit;
+		font-style: inherit;
+		color: inherit;
+		letter-spacing: normal;
+		text-transform: none;
+		text-shadow: none;
+		background: none;
+		border: 0;
+		margin: 0;
+		padding: 0;
+	}
+
+	/* The reset above takes bold and italic off too; these put them back */
+	.omni-note-layer strong { font-weight: 700; }
+	.omni-note-layer em { font-style: italic; }
 
 	.omni-note-layer.is-open { opacity: 1; }
 
-	/* The card and, when there's a link, its QR pane beside it: a bento
-	   pair, the message the bigger of the two. On a screen taller than it
-	   is wide, the pane goes underneath instead. */
+	/* The source on top, the message and its QR code underneath */
 	.omni-note-bento {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.8em;
+		max-width: 94vw;
+	}
+
+	.omni-note-row {
 		display: flex;
 		align-items: stretch;
 		justify-content: center;
 		gap: 1.2em;
-		max-width: 94vw;
 	}
 
 	@media (max-aspect-ratio: 1/1) {
-		.omni-note-bento {
+		.omni-note-row {
 			flex-direction: column;
 			align-items: center;
 		}
 	}
 
-	/* The card. Same glass treatment as every other surface in the
-	   Default UI, just larger and centred. */
+	/* Every box. Same glass treatment as every other surface in the
+	   Default UI. */
 	.omni-note {
-		width: min(70vw, 34em);
-		padding: 2.5em 2em;
-		text-align: center;
-		border-radius: var(--radius);
-		border: 1px solid var(--glass-border);
-		background: var(--card-bg);
+		box-sizing: border-box;
+		border-radius: var(--omni-note-radius);
+		border: 1px solid var(--omni-note-border);
+		/* The Default UI's glass card, laid over a darker (or, in light
+		   mode, lighter) base. The glass alone is almost see-through,
+		   which is fine on OmniCore's plain pages but leaves text hard to
+		   read over a bright wallpaper. A browser too old to mix colours
+		   keeps just the glass. */
+		background: var(--omni-note-card);
+		background:
+			linear-gradient(var(--omni-note-card), var(--omni-note-card)),
+			var(--omni-note-base);
 		backdrop-filter: blur(14px);
-		box-shadow: 0 0 2.5em var(--glow);
+		box-shadow: 0 0 2.5em var(--omni-note-glow);
 		position: relative;
 		overflow: hidden;
 
@@ -327,13 +470,37 @@ const OVERLAY_STYLES = `
 		right: 0;
 		height: 40%;
 		background: linear-gradient(
-			to bottom, var(--glass-sheen), transparent
+			to bottom, var(--omni-note-sheen), transparent
 		);
 		pointer-events: none;
 	}
 
-	/* Narrower when it shares the screen with a QR pane, and centred
-	   top to bottom, since the pane is usually the taller of the two */
+	/* The source box. Small and quiet: it answers "where's this from?"
+	   at a glance and then gets out of the way of the message. */
+	.omni-note-source {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5em;
+		padding: 0.6em 1.2em;
+		font-size: 0.85em;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		color: var(--omni-note-muted);
+	}
+
+	/* Where a module's icon will go. Empty, and so not shown, until
+	   modules can have one. */
+	.omni-note-source-icon:empty { display: none; }
+
+	/* The message */
+	.omni-note-main {
+		width: min(70vw, 34em);
+		padding: 2.5em 2em;
+	}
+
+	/* Narrower when it shares the row with a QR box, and centred top to
+	   bottom, since the QR box is usually the taller of the two */
 	.omni-note-layer.has-link .omni-note-main {
 		width: min(56vw, 30em);
 		display: flex;
@@ -343,8 +510,10 @@ const OVERLAY_STYLES = `
 
 	.omni-note-title {
 		font-size: 1.8em;
+		font-weight: 600;
 		line-height: 1.2;
 		margin: 0;
+		color: var(--omni-note-fg);
 	}
 
 	/* The description, rendered from Markdown. Capped in height: a wall
@@ -352,16 +521,24 @@ const OVERLAY_STYLES = `
 	   the title off the screen. */
 	.omni-note-description {
 		margin: 0.6em 0 0;
-		color: var(--fg-muted);
+		color: var(--omni-note-muted);
 		line-height: 1.45;
 		max-height: 45vh;
 		overflow: hidden;
 	}
 
+	/* No title above it: the description is the whole message, so it
+	   takes the full colour rather than the quieter one, and the gap a
+	   title would have needed goes */
+	.omni-note-description.is-alone {
+		margin-top: 0;
+		color: var(--omni-note-fg);
+	}
+
 	.omni-note-description p { margin: 0 0 0.5em; }
 	.omni-note-description > :last-child { margin-bottom: 0; }
 
-	/* The card is centred, but a list reads badly centred line by line.
+	/* The box is centred, but a list reads badly centred line by line.
 	   As a table it shrinks to fit and sits in the middle as a whole, with
 	   its own lines lined up on the left -- and, unlike an inline block,
 	   two lists in a row still stack rather than sitting side by side. */
@@ -374,32 +551,65 @@ const OVERLAY_STYLES = `
 	}
 
 	.omni-note-description code {
-		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		font-family: ${CODE_FONTS}, ${EMOJI_FONTS};
 		font-size: 0.9em;
 		padding: 0.05em 0.35em;
 		border-radius: 0.3em;
-		background: rgba(255, 255, 255, 0.1);
+		background: rgba(127, 127, 127, 0.18);
 	}
 
-	.omni-note-description strong { color: var(--fg); }
+	.omni-note-description strong { color: var(--omni-note-fg); }
 
 	.omni-md-subtitle {
-		color: var(--fg);
+		color: var(--omni-note-fg);
 		font-weight: 600;
 		font-size: 1.1em;
+	}
+
+	/* A table. Its text is a fixed share of Core's font size (see
+	   TABLE_TEXT_SCALE), not of whatever surrounds it, so every table is
+	   the same size wherever it sits. Centred as a whole, its cells lined
+	   up on the left. */
+	.omni-note-description table {
+		font-size: calc(var(--omni-note-size) * ${TABLE_TEXT_SCALE});
+		border-collapse: collapse;
+		margin: 0.4em auto 1em;
+		text-align: left;
+	}
+
+	.omni-note-description th,
+	.omni-note-description td {
+		padding: 0.35em 0.8em;
+		border-bottom: 1px solid var(--omni-note-border);
+		vertical-align: top;
+	}
+
+	.omni-note-description th {
+		color: var(--omni-note-fg);
+		font-weight: 600;
+		border-bottom-width: 2px;
+	}
+
+	.omni-note-description tr:last-child td { border-bottom: none; }
+
+	/* "...3 more rows not shown", under a table that was cut down */
+	.omni-note-description .omni-md-table-more {
+		margin-top: -0.6em;
+		font-size: 0.75em;
+		opacity: 0.8;
 	}
 
 	/* "3 earlier notifications skipped" -- small, under everything */
 	.omni-note-skipped {
 		margin: 0.9em 0 0;
 		font-size: 0.8em;
-		color: var(--fg-muted);
+		color: var(--omni-note-muted);
 		opacity: 0.8;
 	}
 
-	/* The QR pane. Only there when the notification has a link. */
+	/* The QR box. Only there when the notification has a link. */
 	.omni-note-link {
-		/* As wide as what's in it, not as wide as a message card */
+		/* As wide as what's in it, not as wide as a message box */
 		width: auto;
 		display: none;
 		flex-direction: column;
@@ -431,7 +641,7 @@ const OVERLAY_STYLES = `
 		margin: 0.7em 0 0;
 		max-width: 16em;
 		font-size: 0.8em;
-		color: var(--fg-muted);
+		color: var(--omni-note-muted);
 		word-break: break-all;
 	}
 
@@ -449,8 +659,11 @@ const OVERLAY_STYLES = `
 		width: 3.2em;
 		height: 3.2em;
 		border-radius: 50%;
-		border: 1px solid var(--glass-border);
-		background: var(--card-bg);
+		border: 1px solid var(--omni-note-border);
+		background: var(--omni-note-card);
+		background:
+			linear-gradient(var(--omni-note-card), var(--omni-note-card)),
+			var(--omni-note-base);
 		backdrop-filter: blur(12px);
 		overflow: hidden;
 		z-index: 9001;
@@ -494,7 +707,7 @@ const OVERLAY_STYLES = `
 		right: 0;
 		height: 50%;
 		background: linear-gradient(
-			to bottom, var(--glass-sheen), transparent
+			to bottom, var(--omni-note-sheen), transparent
 		);
 		pointer-events: none;
 	}
@@ -512,6 +725,7 @@ const OVERLAY_STYLES = `
 		}
 	}
 `;
+}
 
 // The client half. Injected into a page by whoever is rendering it, and
 // written to do nothing at all until a notification actually arrives --
@@ -538,16 +752,22 @@ const OVERLAY_SCRIPT = `
 			layer = document.createElement("div");
 			layer.className = "omni-note-layer";
 			layer.innerHTML =
-				'<div class="omni-note-bento">' +
-					'<div class="omni-note omni-note-main">' +
-						'<h2 class="omni-note-title"></h2>' +
-						'<div class="omni-note-description"></div>' +
-						'<p class="omni-note-skipped"></p>' +
+				'<div class="omni-note-bento" role="status" aria-live="polite">' +
+					'<div class="omni-note omni-note-source">' +
+						'<span class="omni-note-source-icon" aria-hidden="true"></span>' +
+						'<span class="omni-note-source-name"></span>' +
 					'</div>' +
-					'<div class="omni-note omni-note-link">' +
-						'<p class="omni-note-link-title"></p>' +
-						'<div class="omni-note-qr"></div>' +
-						'<p class="omni-note-link-url"></p>' +
+					'<div class="omni-note-row">' +
+						'<div class="omni-note omni-note-main">' +
+							'<h2 class="omni-note-title"></h2>' +
+							'<div class="omni-note-description"></div>' +
+							'<p class="omni-note-skipped"></p>' +
+						'</div>' +
+						'<div class="omni-note omni-note-link">' +
+							'<p class="omni-note-link-title"></p>' +
+							'<div class="omni-note-qr"></div>' +
+							'<p class="omni-note-link-url"></p>' +
+						'</div>' +
 					'</div>' +
 				'</div>' +
 				'<div class="omni-note-timer">' +
@@ -571,6 +791,7 @@ const OVERLAY_SCRIPT = `
 			}, 260);
 		}
 
+		// Set something as plain text, and hide it when there's nothing
 		function setText(selector, text) {
 			var element = layer.querySelector(selector);
 			element.textContent = text || "";
@@ -579,6 +800,13 @@ const OVERLAY_SCRIPT = `
 
 		function show(note) {
 			showing = true;
+
+			// Where it came from. Set as text: it's whatever the module
+			// said, so it's never read as markup. The whole box goes when
+			// there's nothing to say (only an older Core sends none).
+			setText(".omni-note-source-name", note.source);
+			layer.querySelector(".omni-note-source").style.display =
+				note.source ? "" : "none";
 
 			setText(".omni-note-title", note.title);
 
@@ -595,6 +823,7 @@ const OVERLAY_SCRIPT = `
 			}
 
 			description.style.display = note.html || note.description ? "" : "none";
+			description.classList.toggle("is-alone", !note.title);
 
 			setText(
 				".omni-note-skipped",
@@ -606,7 +835,7 @@ const OVERLAY_SCRIPT = `
 			);
 			skipped = 0;
 
-			// The QR pane. The code is Core's own drawing -- an SVG built
+			// The QR box. The code is Core's own drawing -- an SVG built
 			// from numbers only (see core/qr.js) -- and the address and its
 			// title go in as plain text.
 			var link = note.link && note.link.svg ? note.link : null;
@@ -644,7 +873,8 @@ const OVERLAY_SCRIPT = `
 		}
 
 		window.omniNotify = function (note) {
-			if (!note || !note.title) {
+			// Something to say: a title, a description, or both
+			if (!note || !(note.title || note.description || note.html)) {
 				return;
 			}
 
@@ -669,7 +899,10 @@ module.exports = {
 	releaseHeld,
 	resolvePriority,
 	readLink,
+	readSource,
+	overlayStyles,
 	PRIORITY_SECONDS,
-	OVERLAY_STYLES,
+	TABLE_TEXT_SCALE,
+	EMOJI_FONTS,
 	OVERLAY_SCRIPT
 };

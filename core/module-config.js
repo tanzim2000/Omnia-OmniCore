@@ -10,6 +10,7 @@ const path = require("path");
 const paths = require("./paths");
 const priority = require("./priority");
 const widgetTypes = require("./widget-types");
+const { usableFields } = require("./schema-fields");
 
 function modulesDir() {
 	return paths.modulesDir();
@@ -87,7 +88,10 @@ function readSchema(moduleId) {
 
 	try {
 		const parsed = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
-		fields = Array.isArray(parsed.settings) ? parsed.settings : [];
+
+		// A stray null or a field with no key is dropped here, once, so
+		// nothing that walks the list later has to check
+		fields = usableFields(`Module "${moduleId}" settings.json`, parsed.settings);
 	} catch (error) {
 		console.log(`  Unreadable settings.json in module: ${moduleId}`);
 		return [];
@@ -103,7 +107,7 @@ function readSchema(moduleId) {
 	// Taken off so it can't change how the form is drawn: a module like
 	// this gets exactly the form it always did.
 	return fields.map((field) => {
-		if (!field || typeof field !== "object" || !("widgets" in field)) {
+		if (!("widgets" in field)) {
 			return field;
 		}
 
@@ -130,7 +134,7 @@ function readInputSchema(moduleId) {
 
 	try {
 		const parsed = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
-		return Array.isArray(parsed.controls) ? parsed.controls : [];
+		return usableFields(`Module "${moduleId}" input.json`, parsed.controls);
 	} catch (error) {
 		console.log(`  Unreadable input.json in module: ${moduleId}`);
 		return [];

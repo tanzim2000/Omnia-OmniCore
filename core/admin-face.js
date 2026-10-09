@@ -737,17 +737,26 @@ function page(title, body, script, bodyClass, back, backLabel) {
 // coordinate boxes as the radio changes, and read location fields back out
 const conditionalScript = `
 	// Show or hide fields that depend on another field's value, and keep
-	// doing so as that value changes
+	// doing so as that value changes.
+	//
+	// A checkbox's .value is always "on", ticked or not, so for one of
+	// those it's whether it's ticked that counts, as "true" or "false".
+	// That's what a showWhen of { "equals": true } turns into once it's
+	// written into the page.
 	function applyFieldConditions() {
 		for (const field of document.querySelectorAll("[data-when-key]")) {
 			const control = document.querySelector(
-				'[data-key="' + field.dataset.whenKey + '"]'
+				'[data-key="' + CSS.escape(field.dataset.whenKey) + '"]'
 			);
 
 			if (!control) continue;
 
+			const current = control.type === "checkbox"
+				? String(control.checked)
+				: control.value;
+
 			const allowed = field.dataset.whenIs.split("|");
-			field.style.display = allowed.indexOf(control.value) === -1 ? "none" : "";
+			field.style.display = allowed.indexOf(current) === -1 ? "none" : "";
 		}
 	}
 

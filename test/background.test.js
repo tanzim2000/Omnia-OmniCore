@@ -639,6 +639,47 @@ test("background: saving twice at once leaves exactly one running", async () => 
 	assert.equal(starts.length - stops.length, 1, global.__backgroundLog.join(", "));
 });
 
+test("background: three saves in a row never have two runs alive at once", async () => {
+	// Straight through syncFace, so the three land within the same moment,
+	// while the run already going is still in its slow (50 ms) stop. That's
+	// the case that used to let the third start alongside the first.
+	const current = faceStore.findFace(face.id);
+	const withWord = (word) => ({
+		...current,
+		instances: current.instances.map((instance) =>
+			instance.id === instanceId
+				? { ...instance, config: { ...instance.config, word } }
+				: instance
+		)
+	});
+
+	const logBefore = global.__backgroundLog.length;
+
+	await Promise.all([
+		background.syncFace(withWord("one")),
+		background.syncFace(withWord("two")),
+		background.syncFace(withWord("three"))
+	]);
+
+	await waitFor(
+		() => global.__backgroundLog.includes("start three"),
+		"the last save to start"
+	);
+
+	// Walk the log: a start while something else is still alive is the bug
+	let alive = 1;
+
+	for (const line of global.__backgroundLog.slice(logBefore)) {
+		alive += line.startsWith("start") ? 1 : -1;
+		assert.ok(alive <= 1, "two runs alive at once: " + global.__backgroundLog.slice(logBefore).join(", "));
+	}
+
+	assert.equal(alive, 1, "exactly one left running");
+
+	// Back to what's saved on disk, for the tests after this one
+	await background.syncFace(faceStore.findFace(face.id));
+});
+
 test("background: half-written, unflagged and broken modules don't take anything down", async () => {
 	for (const moduleId of [
 		"smoke-background-no-start",
@@ -689,8 +730,13 @@ test("background: removing the instance stops it and forgets its memory", async 
 		"the instance to stop"
 	);
 
-	const last = global.__backgroundLog[global.__backgroundLog.length - 1];
-	assert.ok(last.startsWith("stop"), "its own stop ran: " + last);
+	// The admin face answers without waiting for background work to
+	// finish, and the module's stop takes a moment -- so wait for its last
+	// line rather than reading the log straight away
+	await waitFor(() => {
+		const last = global.__backgroundLog[global.__backgroundLog.length - 1];
+		return last.startsWith("stop");
+	}, "its own stop to run");
 
 	await settle();
 	assert.equal(smokePools().length, 0, "its shared connection closed");

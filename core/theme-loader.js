@@ -23,6 +23,7 @@ const fs = require("fs");
 const path = require("path");
 const paths = require("./paths");
 const priority = require("./priority");
+const { usableFields } = require("./schema-fields");
 
 function themesDir() {
 	return paths.themesDir();
@@ -108,7 +109,7 @@ function listThemes() {
 // for a module's tag and hide the field when a widget type is picked.
 function withoutWidgetTags(fields) {
 	return fields.map((field) => {
-		if (!field || typeof field !== "object" || !("widgets" in field)) {
+		if (!("widgets" in field)) {
 			return field;
 		}
 
@@ -127,7 +128,9 @@ function readSchema(themeId) {
 
 	try {
 		const parsed = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
-		return withoutWidgetTags(Array.isArray(parsed.settings) ? parsed.settings : []);
+		return withoutWidgetTags(
+			usableFields(`Theme "${themeId}" settings.json`, parsed.settings)
+		);
 	} catch (error) {
 		console.log(`  Unreadable settings.json in theme: ${themeId}`);
 		return [];
@@ -216,7 +219,7 @@ function readInstanceSchema(themeId) {
 
 	try {
 		const parsed = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
-		fields = Array.isArray(parsed.settings) ? parsed.settings : [];
+		fields = usableFields(`Theme "${themeId}" instance-settings.json`, parsed.settings);
 	} catch (error) {
 		console.log(`  Unreadable instance-settings.json in theme: ${themeId}`);
 		return [];

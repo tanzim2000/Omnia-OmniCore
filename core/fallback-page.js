@@ -40,7 +40,7 @@ function renderFallbackPage(themes) {
 	<title>OmniCore</title>
 	<style>
 ${uiStyles()}
-${notifications.OVERLAY_STYLES}
+${notifications.overlayStyles()}
 
 		body {
 			height: 100vh;

@@ -85,13 +85,15 @@ test("markdown: HTML in the source is escaped, wherever it is", () => {
 		"- <b>in a list</b>",
 		"# <i>in a subtitle</i>",
 		"`<code>`",
-		'quote " and apostrophe \' and & amp'
+		'quote " and apostrophe \' and & amp',
+		'| <b>head</b> | x" y |\n|---|---|\n| <img src=x> | \'q\' |',
+		"| a |\n|---|\n" + "| row |\n".repeat(20)
 	];
 
 	for (const source of hostile) {
 		const html = markdown.render(source);
 		const withoutOwnTags = html.replace(
-			/<\/?(p|strong|em|code|ul|ol|li|br)( class="omni-md-subtitle"| start="\d+")?>/g,
+			/<\/?(p|strong|em|code|ul|ol|li|br|table|thead|tbody|tr|th|td)( class="omni-md-subtitle"| class="omni-md-table-more"| start="\d+")?>/g,
 			""
 		);
 
@@ -99,6 +101,90 @@ test("markdown: HTML in the source is escaped, wherever it is", () => {
 		assert.ok(!withoutOwnTags.includes(">"), `unescaped > from ${source}: ${html}`);
 		assert.ok(!/["']/.test(withoutOwnTags), `unescaped quote from ${source}: ${html}`);
 	}
+});
+
+test("markdown: a table, with inline formatting in its cells", () => {
+	const html = markdown.render(
+		"Build 🎉\n\n| Job | Result |\n| --- | :---: |\n| build | **passed** |\n| a\\|b | `ok` |\nafter"
+	);
+
+	assert.equal(
+		html,
+		"<p>Build 🎉</p>" +
+			"<table><thead><tr><th>Job</th><th>Result</th></tr></thead>" +
+			"<tbody><tr><td>build</td><td><strong>passed</strong></td></tr>" +
+			"<tr><td>a|b</td><td><code>ok</code></td></tr></tbody></table>" +
+			"<p>after</p>",
+		"emoji pass straight through; \\| is a | in the cell; a line with no | ends the table"
+	);
+});
+
+test("markdown: not a table unless the dashes match the header", () => {
+	// Two header cells, one divider cell
+	assert.equal(
+		markdown.render("| a | b |\n|---|\n| 1 | 2 |"),
+		"<p>| a | b |<br>|---|<br>| 1 | 2 |</p>"
+	);
+
+	// A line of dashes on its own is just text
+	assert.equal(markdown.render("---\nhello"), "<p>---<br>hello</p>");
+});
+
+test("markdown: a table is cut to 6 columns and 11 rows, header included, and says so", () => {
+	const header = "|" + [1, 2, 3, 4, 5, 6, 7, 8].map((n) => "h" + n).join("|") + "|";
+	const divider = "|" + "---|".repeat(8);
+	const rows = [];
+
+	for (let row = 0; row < 14; row++) {
+		rows.push("|" + [1, 2, 3, 4, 5, 6, 7, 8].map((n) => row + "." + n).join("|") + "|");
+	}
+
+	const html = markdown.render([header, divider].concat(rows).join("\n"));
+
+	assert.equal((html.match(/<tr>/g) || []).length, 11, "the header and 10 rows");
+	assert.equal((html.match(/<th>/g) || []).length, 6, "6 columns");
+	assert.ok(!html.includes("h7"), "the 7th column is gone");
+	assert.ok(!html.includes(">10.1<"), "the 11th row under the header is gone");
+	assert.ok(
+		html.endsWith('<p class="omni-md-table-more">\u20264 more rows and 2 more columns not shown</p>'),
+		html.slice(-120)
+	);
+
+	// Exactly at the limit: nothing cut, nothing said
+	const fits = markdown.render(
+		[header.split("|").slice(0, 7).join("|") + "|", "|---|---|---|---|---|---|"]
+			.concat(rows.slice(0, 10).map((row) => row.split("|").slice(0, 7).join("|") + "|"))
+			.join("\n")
+	);
+
+	assert.equal((fits.match(/<tr>/g) || []).length, 11);
+	assert.ok(!fits.includes("not shown"));
+});
+
+test("markdown: a row wider than the limit says its columns weren't shown", () => {
+	const html = markdown.render("|a|b|\n|-|-|\n|1|2|3|4|5|6|7|8|");
+	assert.ok(html.endsWith("\u20266 more columns not shown</p>"), html);
+});
+
+test("source: one tidy line, cut by whole characters", () => {
+	assert.equal(notifications.readSource("  ntfy.sh\n\tsecond "), "ntfy.sh second");
+	assert.equal(notifications.readSource("a\u0085b\u202ec\u200bd"), "a bcd", "C1, bidi and zero-width");
+	assert.equal(notifications.readSource(42), "");
+
+	// 59 letters then an emoji: the emoji is kept whole at the 60th place
+	const cut = notifications.readSource("x".repeat(59) + "🎉🎉");
+	assert.equal(Array.from(cut).length, 60);
+	assert.ok(cut.endsWith("🎉"));
+	assert.ok(!/[\ud800-\udbff]$/.test(cut), "no half an emoji");
+});
+
+test("markdown: a short row is filled out, a long one cut to the header", () => {
+	assert.equal(
+		markdown.render("| a | b |\n|---|---|\n| 1 |\n| 1 | 2 | 3 |"),
+		"<table><thead><tr><th>a</th><th>b</th></tr></thead>" +
+			"<tbody><tr><td>1</td><td></td></tr><tr><td>1</td><td>2</td></tr></tbody></table>" +
+			'<p class="omni-md-table-more">\u20261 more column not shown</p>'
+	);
 });
 
 test("markdown: empty, missing and huge descriptions", () => {
@@ -155,11 +241,18 @@ test("notify: the payload carries the rendered description and the link", () => 
 		});
 
 		notifications.notify(4001, { title: "Plain one" });
+
+		// Not a table: a long run of dashes and pipes in a message, cut
+		// short, must still come out as text
+		notifications.notify(4001, { title: "Odd", description: "|||\n---" });
+
+		// Nothing but invisible NULs is nothing at all: not sent
+		assert.equal(notifications.notify(4001, { description: "\u0000\u0000" }), false);
 	} finally {
 		faceEvents.pushToFace = original;
 	}
 
-	assert.equal(sent.length, 2);
+	assert.equal(sent.length, 3);
 	assert.equal(sent[0].description, "**3** files, `2 MB`", "the plain text is kept too");
 	assert.equal(sent[0].html, "<p><strong>3</strong> files, <code>2 MB</code></p>");
 	assert.equal(sent[0].link.url, "https://example.com/report");
@@ -167,6 +260,8 @@ test("notify: the payload carries the rendered description and the link", () => 
 
 	assert.equal(sent[1].html, "");
 	assert.equal(sent[1].link, null, "no link means the plain single card");
+
+	assert.equal(sent[2].html, "<p>|||<br>---</p>");
 });
 
 test("overlay: the waiting line is capped and says how many were skipped", () => {

@@ -151,7 +151,7 @@ function clientBundle() {
 	const notifications = require("./notifications");
 
 	return (
-		`<style>${notifications.OVERLAY_STYLES}</style>\n` +
+		`<style>${notifications.overlayStyles()}</style>\n` +
 		`<script>${notifications.OVERLAY_SCRIPT}</script>\n` +
 		CLIENT_SCRIPT
 	);

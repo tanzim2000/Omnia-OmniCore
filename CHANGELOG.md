@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.19.0
+
+Notifications say where they're from, and a round of fixes
+
+### Added
+
+- **A source box on every notification.** A small box above the message says where it came from. OmniCore fills in the module's name; a module can pass `source` to say something more useful (ntfy shows its server, `ntfy.sh`). The space for a module icon is there, unused until modules can have one.
+- **Tables in notifications.** The usual Markdown table, with bold, italic and code working inside cells. At most 6 columns and 11 rows, the header counting as one; anything past that is left off and a line under the table says how much was. Table text is half of OmniCore's font size.
+- **Emoji fonts, always.** The overlay's font list always ends with the emoji fonts for Apple, Windows, Linux and Android, whatever font the install has picked. A display with none of them installed still shows boxes.
+- **A notification can have no title.** It then shows just its description, in full colour. It needs a title, a description, or both.
+
+### Changed
+
+- **The overlay looks the same on every theme.** It used to borrow the theme's font and size, and the Default UI colours it asked for didn't exist on a theme's page, so on top of a theme it was a plain square box. It now carries OmniCore's own colours, font and font size with it. Theme faces serve OmniCore's downloaded font for this.
+
+### Fixed
+
+- **Security warnings in three libraries OmniCore uses**, all patched by updating them: `qs` (moderate; a crafted address could tie the server up), `proxy-addr` (critical, but only when running behind a trusted proxy, which OmniCore doesn't set up) and `@grpc/grpc-js` (high, through the Docker library; OmniCore talks to Docker over its local socket). `npm audit` now finds nothing.
+- **Saving a background module's settings several times quickly could leave two copies running.** With the first copy slow to stop, a third save started its copy before the first had finished stopping. Each run now waits for every run before it.
+- **A stray `null`, or a field with no key, in a module's or theme's settings file crashed things.** The settings pages wouldn't open, and the module's tile failed too. Such entries, and choices in `options` that aren't text or numbers, are now skipped with a line in the log. Applies to `settings.json`, `input.json` and `instance-settings.json`.
+- **`showWhen` couldn't depend on a checkbox.** A checkbox's value is always "on", ticked or not. The settings page now compares whether it's ticked, so `{ "key": "notify", "equals": true }` works, in the admin face and the setup wizard.
+
+### Notes
+
+- A module that sends untitled notifications needs OmniCore 1.19.0; older versions drop them. The updated ntfy module does this and requires 1.19.0.
+
 ## v1.18.2
 
 Notifications show up in a browser

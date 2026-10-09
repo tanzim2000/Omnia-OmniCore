@@ -62,6 +62,14 @@
 // just set up, or the old one still holding something (a port, a file)
 // the new one needs.
 //
+// That has to hold however quickly the saves come. Save twice in a row
+// while the first run is slow to stop, and there are three runs: the
+// first, still stopping; the second, waiting for it and never started;
+// and the third. Stopping the second therefore also waits for whatever
+// the second was waiting on -- the first's stop -- so the third can't
+// start until the first is truly gone. (Before 1.19.0 it didn't, and the
+// third would start alongside a first that was still shutting down.)
+//
 // A MODULE THAT FAILS TO START
 //
 // Costs that one instance its background work, logged, and nothing else.
@@ -89,6 +97,10 @@ const notifications = require("./notifications");
 //   handle       whatever `start` returned, for `stop`
 //   started      has `start` finished yet?
 //   stopped      has it been told to stop?
+//   startup      resolves once this run is settled one way or the other:
+//                the run before it has stopped, and then `start` has
+//                finished, failed, or been skipped because it was told
+//                to stop first
 const running = new Map();
 
 // What went wrong, as words. A module can throw anything at all --
@@ -197,11 +209,14 @@ function backgroundApi(run, instanceId) {
 		// Show a notification on whichever display is showing this
 		// instance's face. Same shape notifications.js documents:
 		//
-		//   notify({ title, description, priority, link }) -> true if it
-		//   was shown or held for later, false if it was dropped
+		//   notify({ source, title, description, priority, link }) -> true
+		//   if it was shown or held for later, false if it was dropped
 		//
 		// `description` may use a small Markdown subset; `link` is
 		// { url, title } and shows as a QR code beside the message.
+		//
+		// Core adds the module's own name, so the source box always says
+		// where a message came from even when the module names no source.
 		//
 		// Only here, not on the tile function's `omni`. The tile function
 		// runs every time a display polls -- every few seconds, forever --
@@ -212,7 +227,11 @@ function backgroundApi(run, instanceId) {
 				return false;
 			}
 
-			return notifications.notify(run.faceId, message);
+			return notifications.notify(
+				run.faceId,
+				message,
+				readManifest(run.moduleId).name
+			);
 		},
 
 		// Join a connection shared with every other instance of this
@@ -259,14 +278,16 @@ function startInstance(faceId, instance, signature, after) {
 		moduleFn: null,
 		handle: undefined,
 		started: false,
-		stopped: false
+		stopped: false,
+		startup: null
 	};
 
 	running.set(instance.id, run);
 
 	// Resolves once `start` has finished, whichever way it went. Never
-	// rejects -- a failure is handled in here, not passed on.
-	return (async () => {
+	// rejects -- a failure is handled in here, not passed on. Kept on the
+	// run so stopInstance can wait for it (see the top of this file).
+	run.startup = (async () => {
 		if (after) {
 			await after;
 		}
@@ -313,6 +334,8 @@ function startInstance(faceId, instance, signature, after) {
 			}
 		}
 	})();
+
+	return run.startup;
 }
 
 function releaseMemberships(run) {
@@ -339,10 +362,18 @@ async function stopInstance(instanceId) {
 	run.controller.abort();
 	releaseMemberships(run);
 
-	// If `start` is still running, there's no handle yet. startInstance
-	// notices `stopped` once it finishes and calls `stop` itself then.
+	// Already started: stop it now.
+	//
+	// Not started yet -- still waiting for the run before it to stop, or
+	// in the middle of its own `start`. Either way there's no handle to
+	// stop yet. startInstance notices `stopped` when it gets there and
+	// either skips `start` or calls `stop` straight after it. So this
+	// waits for that, which is what makes "this run has stopped" also
+	// mean "every run before it has stopped".
 	if (run.started) {
 		await callStop(run);
+	} else {
+		await run.startup;
 	}
 }
 
