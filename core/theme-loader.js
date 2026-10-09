@@ -23,9 +23,6 @@ const fs = require("fs");
 const path = require("path");
 const paths = require("./paths");
 const priority = require("./priority");
-const widgetTypes = require("./widget-types");
-const { listModules } = require("./module-loader");
-const { readManifest: readModuleManifest } = require("./module-config");
 
 function themesDir() {
 	return paths.themesDir();
@@ -101,6 +98,25 @@ function listThemes() {
 		.map((entry) => readManifest(entry.name));
 }
 
+// A theme's fields with any `widgets` tag taken off.
+//
+// Widget types belong to modules. A theme never learns which one a tile
+// is showing, any more than it learns what a module's content means --
+// that's the line richness exists to hold. So a theme has nothing to tag,
+// and a tag found in a theme's file is simply ignored. Taken off here,
+// rather than left lying there, so the settings pages can't mistake it
+// for a module's tag and hide the field when a widget type is picked.
+function withoutWidgetTags(fields) {
+	return fields.map((field) => {
+		if (!field || typeof field !== "object" || !("widgets" in field)) {
+			return field;
+		}
+
+		const { widgets, ...rest } = field;
+		return rest;
+	});
+}
+
 // What settings a theme accepts. Empty list if it has none.
 function readSchema(themeId) {
 	const schemaPath = path.join(themeDir(themeId), "settings.json");
@@ -111,7 +127,7 @@ function readSchema(themeId) {
 
 	try {
 		const parsed = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
-		return parsed.settings || [];
+		return withoutWidgetTags(Array.isArray(parsed.settings) ? parsed.settings : []);
 	} catch (error) {
 		console.log(`  Unreadable settings.json in theme: ${themeId}`);
 		return [];
@@ -185,13 +201,10 @@ function cleanConfig(themeId, values) {
 }
 
 // What a theme wants configured for each module instance — its size,
-// usually. Empty list if the theme sizes things for itself.
-//
-// A field may carry a `widgets` tag, the same way a module's settings can,
-// to say it only applies to some widget types (a month grid may want
-// bigger size steps than an agenda list). Unlike a module's, an untagged
-// field here is normal and applies to everything: a theme is written for
-// every module at once, before most of them exist. See widget-types.js.
+// usually. Empty list if the theme sizes things for itself. The same
+// fields for every instance, whatever module it runs and whichever
+// widget type that module is showing: a theme gives a tile room, and the
+// module decides what fits in it, through richness.
 function readInstanceSchema(themeId) {
 	const schemaPath = path.join(themeDir(themeId), "instance-settings.json");
 
@@ -209,32 +222,7 @@ function readInstanceSchema(themeId) {
 		return [];
 	}
 
-	return widgetTypes.themeFields(themeId, fields);
-}
-
-// Logs any widget type a theme's instance settings name that no installed
-// module offers. Called from the settings pages and the wizard, where
-// someone is looking at those fields -- not from the dashboard, which
-// asks for the instance settings on every poll and would read every
-// installed module's manifest each time to do it.
-function checkInstanceTags(themeId) {
-	const schema = readInstanceSchema(themeId);
-
-	// Most themes name no widget type at all, so there's nothing to check
-	if (!schema.some((field) => Array.isArray(field.widgets))) {
-		return;
-	}
-
-	const known = [];
-
-	// Every widget type an installed module offers, plus every module's
-	// own id, which a theme tag may also name
-	for (const moduleId of listModules()) {
-		const manifest = readModuleManifest(moduleId);
-		known.push(moduleId, ...widgetTypes.typesOf(manifest));
-	}
-
-	widgetTypes.warnUnknownThemeTags(themeId, schema, known);
+	return withoutWidgetTags(fields);
 }
 
 // Layer an instance's stored theme settings over that schema's defaults
@@ -260,20 +248,10 @@ function instanceDefaults(themeId, wantsTile) {
 	return config;
 }
 
-// `widgetType` (and the instance's `moduleId`), when given, narrow it to
-// the fields that apply to that instance -- what a theme gets for it on
-// the dashboard, so a size meant for a month grid never reaches an agenda
-// tile. Left out, every field comes back, which is what a settings form
-// needs.
-function applyInstanceDefaults(themeId, stored, widgetType, moduleId) {
-	const schema = readInstanceSchema(themeId);
-
-	return fill(
-		widgetType === undefined
-			? schema
-			: schema.filter((field) => widgetTypes.appliesTo(field, widgetType, moduleId)),
-		stored
-	);
+// An instance's stored theme settings, with the schema's defaults filling
+// any gap
+function applyInstanceDefaults(themeId, stored) {
+	return fill(readInstanceSchema(themeId), stored);
 }
 
 // Tidy values from an instance's theme settings form
@@ -288,7 +266,6 @@ module.exports = {
 	applyDefaults,
 	cleanConfig,
 	readInstanceSchema,
-	checkInstanceTags,
 	instanceDefaults,
 	applyInstanceDefaults,
 	cleanInstanceConfig

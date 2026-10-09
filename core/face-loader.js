@@ -13,7 +13,7 @@ const path = require("path");
 const paths = require("./paths");
 const { loadModule } = require("./module-loader");
 const { makeModuleApi } = require("./module-api");
-const { applyDefaults, widgetTypeOf } = require("./module-config");
+const { applyDefaults } = require("./module-config");
 const { resolveLocations } = require("./location-service");
 const { readSystemTime } = require("./time-service");
 const themeLoader = require("./theme-loader");
@@ -191,29 +191,27 @@ function startFace(face) {
 					(themeConfigs || {})[face.theme]
 				),
 				instances: instances.map((instance) => {
-					const { themeConfigs: perTheme, ...instanceRest } = instance;
-
-					// Which shape this instance's module draws -- a month
-					// grid or an agenda list, say. A module with no choice of
-					// widget types reports its own id here. A theme doesn't
-					// need this to draw the content (blocks are blocks), but
-					// it's here for a theme that wants to size or place a
-					// tile by it.
-					const widgetType = widgetTypeOf(instance.module, instance.config);
+					// The module's own settings (`config`) are left out on
+					// purpose. They're the module's business, not the theme's:
+					// which widget type it's showing, and things no display
+					// should be handed at all, like a password. A theme gives
+					// a tile room and asks for content; it never needs to know
+					// how the module was set up to produce it.
+					const {
+						themeConfigs: perTheme,
+						config,
+						...instanceRest
+					} = instance;
 
 					return {
 						...instanceRest,
-						widgetType: widgetType,
 						// This theme's settings for this instance — its size,
 						// mostly. Resolved against the theme's own defaults,
 						// and only ever this theme's: another theme's choices
-						// aren't exposed here. Only the fields that apply to
-						// this widget type are included.
+						// aren't exposed here.
 						themeConfig: themeLoader.applyInstanceDefaults(
 							face.theme,
-							(perTheme || {})[face.theme],
-							widgetType,
-							instance.module
+							(perTheme || {})[face.theme]
 						)
 					};
 				})

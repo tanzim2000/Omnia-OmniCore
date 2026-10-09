@@ -995,11 +995,11 @@ can reach is what a face hands it.
 
 ### What a theme fetches
 
-| Endpoint                           | Gives you                                                                                                     |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `GET /identity`                    | The face: `id`, `name`, `title`, `theme`, `themeConfig`, and `instances[]` each with their own `themeConfig`. |
-| `GET /api/<instanceId>?richness=N` | That instance's envelope: `{ title, content, updated }`.                                                      |
-| `GET /events`                      | Server-Sent Events. OmniCore pushes `face-changed` when anything about the face changes.                      |
+| Endpoint                           | Gives you                                                                                                                                    |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /identity`                    | The face: `id`, `name`, `title`, `theme`, `themeConfig`, and `instances[]` each with their own `themeConfig`. Never a module's own `config`. |
+| `GET /api/<instanceId>?richness=N` | That instance's envelope: `{ title, content, updated }`.                                                                                     |
+| `GET /events`                      | Server-Sent Events. OmniCore pushes `face-changed` when anything about the face changes.                                                     |
 
 A theme **only ever sees blocks.** OmniCore converts anything a module
 returned into the block format before it reaches you, so there is one code
@@ -1208,21 +1208,22 @@ nothing below applies to it. `core/widget-types.js` holds all of it.
   field, or one listing only undeclared ids, is dropped with a logged
   warning, the same fail-loud-in-the-log, fail-safe-on-the-dashboard rule
   as an unreadable `settings.json`.
-- **A theme's `instance-settings.json` can use the same tag** to give a
-  widget type its own sizing. Unlike a module's, an untagged theme field
-  applies to every widget type, because a theme is written for every
-  module at once. A theme tag may also name a module id, covering every
-  widget type that module shows, so a field tagged for a module survives
-  the module gaining widget types. `/identity` sends each instance only
-  the theme fields that fit it, and says which widget type it is. Tags
-  naming nothing installed are logged from the settings pages and the
-  wizard, never from the dashboard's polling path.
+- **Themes know nothing about widget types.** A theme never learns which
+  one a tile shows: not through `/identity` (which carries no module
+  `config` at all, since 1.18.1) and not through its own settings, where
+  a `widgets` tag is ignored and taken off. Sizing stays what it always
+  was: the theme gives a tile room and asks for a richness, and each of
+  the module's widget types decides what fits at that richness. That's
+  the module/theme line richness exists to hold. (1.18.0 briefly let a
+  theme tag its instance settings per widget type; it was taken out
+  because a theme naming `month-view` is a theme knowing about one
+  module.)
 - **Only plain ids reach a page.** Ids are letters, digits, `-` and `_`;
   `data-widgets` is only written when every id in the tag passes that
-  check, whatever schema it came from. A module without widget types has
-  any stray `widgets` tag removed, so its form is exactly what it was.
-- **The form filtering is the browser's job.** Every field that could
-  apply to one of the module's types is on the page, marked
+  check. A module without widget types, and every theme, has any stray
+  `widgets` tag removed, so its form is exactly what it was.
+- **The form filtering is the browser's job.** Every one of the module's
+  fields is on the page, marked
   `data-widgets="a|b"`; the picker hides the rest with a class, so it
   can't fight a `showWhen` that hides with `style.display`. The wizard is
   handed the same functions' source, not a copy of them.
@@ -1456,8 +1457,9 @@ window, when the latest came, and its priority.
 
 **Widget types** (v1.18.0): a module can offer more than one shape for
 its data, picked per instance from a row of buttons at the top of its
-settings. A theme can size each shape separately. See "Widget types" in
-§7. No published module uses them yet.
+settings. Themes never learn which shape a tile shows; each shape copes
+with whatever richness it's given. See "Widget types" in §7. No
+published module uses them yet.
 
 All eight of those modules honour richness. Those with distinct fields
 (`weather`, `disk-space`, `system-stats`) let the user order them with a

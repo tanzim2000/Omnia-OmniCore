@@ -489,19 +489,10 @@ function startWizardFace() {
 				// The shapes this module can show its data in. Empty for a
 				// module with no choice, which then gets no picker at all.
 				widgets: manifest.widgets,
-				// Every widget type it can show: the declared ones, or just
-				// its own id. Theme fields are matched against these.
-				widgetTypes: widgetTypes.typesOf(manifest),
 				schema: readSchema(moduleId),
 				defaults: applyDefaults(moduleId, {})
 			};
 		});
-
-		// Log any theme field naming a widget type nothing installed offers,
-		// now that someone is about to see the themes' fields
-		for (const theme of themeLoader.listThemes()) {
-			themeLoader.checkInstanceTags(theme.id);
-		}
 
 		res.send(
 			renderWizard({
@@ -612,9 +603,9 @@ function renderWizard(data) {
 
 		// Widget types. These are OmniCore's own functions, handed over
 		// as source rather than rewritten here, so the wizard and the
-		// admin face can never disagree about which field belongs to
-		// which widget type. See core/widget-types.js.
-		${widgetTypes.appliesTo.toString()}
+		// admin face can never disagree about how the picker looks or
+		// which field belongs to which widget type. See
+		// core/widget-types.js.
 		${widgetTypes.pickerHtml.toString()}
 		${widgetTypes.widgetsAttribute.toString()}
 		${widgetTypes.pickerScript}
@@ -832,7 +823,6 @@ function renderWizard(data) {
 			// exactly as it always did -- no empty picker row.
 			const picker = module.widgets.length
 				? pickerHtml(
-					module.id,
 					module.widgets,
 					instance.config.widgetType || module.widgets[0].id,
 					escapeHtml
@@ -845,16 +835,9 @@ function renderWizard(data) {
 
 			// The chosen theme may want this instance sized. Those fields
 			// come from the THEME, not the module, and are kept apart.
-			// Only the ones that could apply to one of this module's
-			// widget types are offered.
+			// The same fields whichever widget type is picked.
 			const theme = selectedTheme();
-			const themeSchema = ((theme && theme.instanceSchema) || []).filter(
-				function (field) {
-					return module.widgetTypes.some(function (type) {
-						return appliesTo(field, type, module.id);
-					});
-				}
-			);
+			const themeSchema = (theme && theme.instanceSchema) || [];
 
 			const themeFields = themeSchema.map(function (field) {
 				return renderField(

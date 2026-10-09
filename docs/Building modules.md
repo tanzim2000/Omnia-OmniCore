@@ -505,10 +505,14 @@ module.exports = async function (config, richness, omni) {
 };
 ```
 
-Widget types are a settings matter only. Your output is still blocks, and
-a theme draws them without needing to know which widget type made them.
-A theme _can_ size a tile by widget type, though (see "Settings" in the
-theme guide), so pick ids that will still make sense when you add a third.
+Widget types are your module's business alone. Your output is still
+blocks, and a theme draws them without ever learning which widget type
+made them. That includes size: the theme gives a tile whatever room the
+user set and sends a richness number, the same as for any module. So
+**every widget type has to cope with every richness**. A Month View asked
+for richness 10 can't draw a month; it should show what does fit (today's
+date and the next event, say) rather than a cramped grid. Each widget type
+reads richness its own way, and that's yours to decide.
 
 Widget types need **OmniCore 1.18.0** or later. On anything older the
 picker never appears and `config.widgetType` is never set, so either set
@@ -1020,8 +1024,9 @@ the pattern applied.
       at least `1.16.0` in the registry
 - [ ] If you offer widget types: at least two in `module.json`, a
       `widgets` tag on every field in `settings.json`, your function
-      branching on `config.widgetType`, and `minOmniCore` at least
-      `1.18.0` (or a missing `widgetType` handled as your first type)
+      branching on `config.widgetType`, every widget type still making
+      sense at low richness, and `minOmniCore` at least `1.18.0` (or a
+      missing `widgetType` handled as your first type)
 
 ---
 

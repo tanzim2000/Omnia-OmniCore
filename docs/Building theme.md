@@ -57,8 +57,6 @@ Call this once, on load. It tells you what you're displaying:
       "id": "weather-3f2a91bc",
       "module": "weather",
       "label": "Regina",
-      "config": { "units": "Celsius" },
-      "widgetType": "weather",
       "themeConfig": { "size": "Wide" }
     }
   ]
@@ -78,16 +76,13 @@ A few things worth knowing about this shape:
 - **Each instance's `themeConfig` is separately resolved**, against
   whatever you declared in `instance-settings.json` (§5). This is where a
   tile's size lives, if your theme has a size concept at all.
-- **`widgetType` says which shape the instance's module draws.** A
-  module can offer more than one (a calendar's month grid and agenda
-  list); the user picks one per instance. A module that offers no choice,
-  which is most of them, reports its own id here. You don't need this to
-  draw the content, since blocks are blocks whichever type made them, but
-  it's here if you want to size or place a tile by it. See
-  `instance-settings.json` in §5 for the usual way to do that.
-- **`config` on an instance is the module's own settings** -- not yours.
-  You'll never need to read it; it's shown here only so the shape is
-  complete. Leave it alone.
+- **You never see a module's own settings.** How a module was set up --
+  including, for a module that can show its data in more than one shape,
+  which shape it's showing -- is the module's business. You give a tile
+  room and ask for content at a richness that fits it; the module decides
+  what that content is. (Before OmniCore 1.18.1 each instance also
+  carried the module's `config` here. Nothing should have been reading
+  it, and it's gone.)
 
 ### `GET /api/<instanceId>?richness=N`
 
@@ -513,59 +508,12 @@ just don't include this key.
 module -- two weather tiles, say -- can have completely different sizes for
 each, because the values live per instance, not per theme.
 
-**A field can be limited to some widget types** (OmniCore 1.18.0 and
-later). Some modules offer more than one shape for their data -- a month
-grid and an agenda list, say -- and a month grid may want bigger size
-steps than an agenda list. Tag a field with `widgets`, a list of widget
-type ids, and it's only offered, and only sent to you, for instances
-showing one of those:
-
-```json
-{
-  "settings": [
-    {
-      "key": "size",
-      "label": "Tile size",
-      "type": "select",
-      "options": ["Small", "Wide"],
-      "default": "Wide"
-    },
-    {
-      "key": "gridSize",
-      "label": "Grid size",
-      "type": "select",
-      "options": ["4x4", "6x6"],
-      "default": "4x4",
-      "widgets": ["month-view"]
-    }
-  ]
-}
-```
-
-- **No tag means every widget type.** That's the normal case: a theme is
-  written for every module at once, so an untagged field is never a
-  mistake. Every theme written before widget types existed keeps working
-  untouched.
-- **A tag can also name a module**, by its id: `"widgets": ["weather"]`
-  limits a field to weather tiles, whatever widget type they show. A
-  module with no choice of widget types has exactly one, named after
-  itself, so this covers it now, and keeps covering it if it gains widget
-  types later. (Ids aren't namespaced: a tag `"agenda"` would match a
-  module called agenda and any module's widget type called agenda. Pick
-  tags you mean.)
-- **An instance's `themeConfig` in `/identity` only holds the fields that
-  apply to it** (its widget type, or its module). In the example, an agenda tile gets `size`
-  and no `gridSize`. The stored value isn't lost: switch the instance
-  back to month view and `gridSize` is there again.
-- **An id that no installed module offers** (as a widget type or as a
-  module id) is logged once, when someone opens a settings page or the
-  wizard, and the field just doesn't show, rather than failing anything. It's also what a
-  renamed widget type looks like, so the log line is worth reading.
-- **A tag that isn't a list of ids** (or `"all"`, which means the same
-  as no tag) drops the field, with a line in the log.
-- **Keep keys unique.** Two fields with the same key, tagged for
-  different widget types, would share one stored value; give them
-  different keys instead, as above.
+**Every field applies to every tile.** Some modules can show their data
+in more than one shape (a calendar's month grid and agenda list, say),
+but you never learn which one a tile is showing, and you don't need to:
+size the tile, and the module fits its content to the richness you ask
+for. A month grid in a small tile is the module's job to make sense of.
+A `widgets` key on one of your fields means nothing and is ignored.
 
 ---
 

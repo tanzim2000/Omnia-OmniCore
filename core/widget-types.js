@@ -25,11 +25,12 @@
 // fields for the widget type that's picked. Values for the others stay
 // stored, so switching back finds them as they were.
 //
-// Themes can tag the fields of their instance-settings.json the same way
-// (a month grid may want bigger size steps than an agenda list). For a
-// theme, a field with no tag applies to every widget type -- a theme is
-// written for every module at once, so leaving a field untagged is the
-// normal case, not a mistake.
+// Widget types are entirely the module's business. A theme never learns
+// which one a tile is showing: it gives the tile room and sends a
+// richness number, and the module decides what fits, the same as for any
+// other module. A month grid in a small tile is the module's problem to
+// solve (show less), not the theme's. That's the line between modules
+// and themes richness exists to hold, and widget types don't cross it.
 //
 // Everything that's wrong in a declaration is dropped with a warning in
 // the log, never thrown. A module with one broken field still shows up
@@ -237,109 +238,16 @@ function moduleFields(moduleId, schema, widgets) {
 	return kept;
 }
 
-// A theme's instance-settings fields, with their tags cleaned up. An
-// untagged field stays untagged, which means "every widget type". A
-// malformed tag is the only thing dropped here: whether a listed id
-// exists depends on which module the instance runs, so that's checked
-// per instance (see appliesTo) rather than here.
-function themeFields(themeId, schema) {
-	const kept = [];
-
-	for (const field of schema) {
-		if (!field || typeof field !== "object") {
-			continue;
-		}
-
-		const tag = readTag(field);
-
-		if (tag === null) {
-			const name = field.key ? `"${field.key}"` : "(no key)";
-
-			warnOnce(
-				`Theme ${themeId}: instance setting ${name} was skipped. Its "widgets" ` +
-					'tag must be a list of widget type ids, or "all".'
-			);
-			continue;
-		}
-
-		if (tag === undefined) {
-			kept.push(field);
-		} else {
-			kept.push({ ...field, widgets: tag });
-		}
-	}
-
-	return kept;
-}
-
-// Does this field belong on a tile showing this widget type, of this
-// module?
-//
-// A tag can name a widget type, or (for a theme) a module's own id, which
-// then covers every widget type that module shows. That second part is
-// what keeps a theme field tagged "calendar" working after the calendar
-// module gains widget types of its own, rather than quietly vanishing.
-//
-// Written as a plain function with nothing from outside it, on purpose:
-// the setup wizard runs in the browser and needs the very same rule, so
-// it's handed this function's own source rather than a second copy that
-// could drift. See wizard-face.js.
-function appliesTo(field, widgetType, moduleId) {
-	if (!field.widgets || field.widgets === "all") {
-		return true;
-	}
-
-	return (
-		field.widgets.indexOf(widgetType) !== -1 ||
-		(moduleId !== undefined && field.widgets.indexOf(moduleId) !== -1)
-	);
-}
-
-// The fields worth putting on a settings form for an instance of this
-// module (`manifest` from module-config.readManifest). On the form the
-// ones that don't fit the picked type are hidden, not left out, so
-// switching type in the picker shows them straight away.
-function fieldsForAny(schema, manifest) {
-	return schema.filter((field) =>
-		typesOf(manifest).some((type) => appliesTo(field, type, manifest.id))
-	);
-}
-
-// A theme's tags, checked against what's actually installed. A theme
-// can't know in advance which modules it'll meet, so an id no installed
-// module offers isn't an error in the theme -- but it's worth a line in
-// the log, because it's also what a renamed widget type looks like.
-// `knownTypes` is every widget type every installed module offers, and
-// every installed module's own id.
-function warnUnknownThemeTags(themeId, schema, knownTypes) {
-	for (const field of schema) {
-		if (!Array.isArray(field.widgets)) {
-			continue;
-		}
-
-		for (const id of field.widgets) {
-			if (!knownTypes.includes(id)) {
-				warnOnce(
-					`Theme ${themeId}: instance setting "${field.key}" is for widget type ` +
-						`"${id}", which no installed module offers. It won't show until one does.`
-				);
-			}
-		}
-	}
-}
-
 // The row of buttons, one per widget type, that sits at the top of an
 // instance's settings. The picked id lives in a hidden input marked
 // data-key="widgetType", so every settings page saves it the same way it
 // saves a text box: by reading .value.
 //
-// The hidden input also carries the module's id, so the browser can apply
-// the same "a module's id covers all its widget types" rule appliesTo
-// does.
-//
-// Like appliesTo, this is self-contained so the wizard can be handed its
-// source; `escape` is passed in because each page already has its own.
-function pickerHtml(moduleId, widgets, current, escape) {
+// Written as a plain function with nothing from outside it, on purpose:
+// the setup wizard runs in the browser and is handed this function's own
+// source, rather than a second copy that could drift. `escape` is passed
+// in because each page already has its own.
+function pickerHtml(widgets, current, escape) {
 	let buttons = "";
 
 	for (let index = 0; index < widgets.length; index++) {
@@ -358,8 +266,7 @@ function pickerHtml(moduleId, widgets, current, escape) {
 	return '<div class="field">' +
 		"<label>Widget</label>" +
 		'<input type="hidden" data-key="widgetType" data-scope="module" ' +
-			'data-type="widgetType" data-module="' + escape(moduleId) + '" ' +
-			'value="' + escape(current) + '">' +
+			'data-type="widgetType" value="' + escape(current) + '">' +
 		'<div class="widget-picker" role="radiogroup" aria-label="Widget">' + buttons + "</div>" +
 		"</div>";
 }
@@ -370,8 +277,7 @@ function pickerHtml(moduleId, widgets, current, escape) {
 // wizard rebuilds its form on each step.
 //
 // A field marked data-widgets="a|b" is shown only while "a" or "b" is
-// picked (or when one of them is the module's own id). It's hidden with
-// a class rather than style.display, because fields that depend on
+// picked. It's hidden with a class rather than style.display, because fields that depend on
 // another field's value (showWhen) already use style.display, and the
 // two mustn't undo each other.
 //
@@ -381,13 +287,10 @@ const pickerScript = `
 	function applyWidgetFilter() {
 		const store = document.querySelector('[data-type="widgetType"]');
 		const current = store ? store.value : null;
-		const moduleId = store ? store.dataset.module : null;
 
 		for (const field of document.querySelectorAll("[data-widgets]")) {
-			const listed = field.dataset.widgets.split("|");
 			const fits = current === null ||
-				listed.indexOf(current) !== -1 ||
-				listed.indexOf(moduleId) !== -1;
+				field.dataset.widgets.split("|").indexOf(current) !== -1;
 			field.classList.toggle("widget-off", !fits);
 		}
 
@@ -418,11 +321,11 @@ const pickerScript = `
 // widget types. Nothing for a field that belongs to all of them.
 //
 // Every id is checked against the same pattern ID_PATTERN uses before it
-// goes anywhere near the page. A tag normally arrives here already
-// cleaned, but not every schema passes through the cleaning (a theme's
-// face-wide settings don't), and a tag is text from somebody else's
-// module or theme. One id that isn't plain means no attribute at all,
-// rather than a quote breaking out of it. The pattern is written out
+// goes anywhere near the page. Only a cleaned module tag should ever
+// arrive here (a module without widget types, and every theme, has its
+// tags taken off when read), but a tag is text from somebody else's
+// module, so this doesn't rely on that. One id that isn't plain means no
+// attribute at all, rather than a quote breaking out of it. The pattern is written out
 // here rather than shared because the wizard gets this function's source
 // on its own.
 function widgetsAttribute(field) {
@@ -448,10 +351,6 @@ module.exports = {
 	typesOf,
 	resolve,
 	moduleFields,
-	themeFields,
-	appliesTo,
-	fieldsForAny,
-	warnUnknownThemeTags,
 	pickerHtml,
 	pickerScript,
 	widgetsAttribute

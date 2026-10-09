@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.18.1
+
+Widget types stay on the module's side
+
+### Changed
+
+- **Themes no longer know anything about widget types.** 1.18.0 let a theme tag its per-tile settings (`instance-settings.json`) with widget types, so a month grid could get different size steps from an agenda list, and told the theme each tile's `widgetType`. Both are gone. A theme naming `month-view` is a theme knowing about one particular module, which is the exact line richness exists to keep. A theme sizes a tile and asks for a richness; each of the module's widget types decides what fits at that richness, the same as every module already does. A `widgets` key in a theme's settings is now ignored, and every theme field shows on every tile.
+- **`/identity` no longer includes each instance's module `config`.** It carried the module's own settings to every display: which widget type it shows, and anything else, a password field included. No theme read it, and the theme guide already said not to.
+
+### Notes
+
+- If a theme was updated for 1.18.0 to tag its instance settings, it doesn't need undoing; the tags are just ignored.
+
 ## v1.18.0
 
 One module, more than one way to show it

@@ -3510,7 +3510,6 @@ function startAdminFace() {
 		const offersChoice = widgetTypes.offersChoice(manifest);
 		const picker = offersChoice
 			? widgetTypes.pickerHtml(
-					manifest.id,
 					manifest.widgets,
 					config[widgetTypes.KEY],
 					escapeHtml
@@ -3519,16 +3518,10 @@ function startAdminFace() {
 
 		// The face's theme may want things configured per instance — how big
 		// this tile is, usually. Those fields come from the THEME, not the
-		// module, and are stored separately under the theme's own key. Only
-		// the ones that could apply to one of this module's widget types.
-		const themeSchema = widgetTypes.fieldsForAny(
-			themeLoader.readInstanceSchema(face.theme),
-			manifest
-		);
-
-		// Somebody is looking at the theme's fields, so this is the moment
-		// to log any that name a widget type nothing installed offers
-		themeLoader.checkInstanceTags(face.theme);
+		// module, and are stored separately under the theme's own key. The
+		// same fields whichever widget type is picked: the theme sizes the
+		// tile, the module decides what fits.
+		const themeSchema = themeLoader.readInstanceSchema(face.theme);
 		const themeConfig = themeLoader.applyInstanceDefaults(
 			face.theme,
 			(instance.themeConfigs || {})[face.theme]

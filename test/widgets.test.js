@@ -4,7 +4,8 @@
 //
 // Everything here is written to the sandbox by the test itself -- a
 // calendar-like module that offers two widget types, a plain module that
-// offers none, and a small theme that tags some of its instance settings.
+// offers none, and a small theme that tries to tag its settings (which a
+// theme can't do: widget types are the module's business alone).
 // No network. The wizard, a dashboard face and the admin face are all
 // real servers, talked to over real HTTP, the same as the rest of the
 // suite.
@@ -97,16 +98,16 @@ function writePlain() {
 	);
 }
 
-// A theme with per-instance settings: one for every tile, one only for
-// month grids, one only for the plain module (its single, implicit
-// widget type is its own id), one for a type nobody offers, and one with
-// a broken tag.
+// A theme that tries to tag its per-instance settings with widget types,
+// the way a module can. A theme can't: it never learns which widget type
+// a tile shows. Every one of these tags must be ignored, so every field
+// shows on every tile.
 function writeTheme() {
 	const dir = path.join(themesDir, "tagtheme");
 
 	writeJson(path.join(dir, "theme.json"), { name: "Tag Theme" });
-	// Face-wide settings never go through the tag cleaning. A tag here
-	// that tries to break out of its attribute must not reach the page.
+	// A tag here that tries to break out of its attribute must not reach
+	// the page either.
 	writeJson(path.join(dir, "settings.json"), {
 		settings: [
 			{ key: "accent", label: "Accent", type: "text", default: "", widgets: ['x" autofocus onfocus="alert(1)'] }
@@ -116,10 +117,6 @@ function writeTheme() {
 		settings: [
 			{ key: "size", label: "Size", type: "select", options: ["small", "large"], default: "small" },
 			{ key: "monthSize", label: "Month grid size", type: "select", options: ["4x4", "6x6"], default: "4x4", widgets: ["month-view"] },
-			{ key: "plainOnly", label: "Plain only", type: "text", default: "p", widgets: ["plain"] },
-			// A module's id covers every widget type it shows
-			{ key: "calendarAny", label: "Any calendar", type: "text", default: "c", widgets: ["calendar"] },
-			{ key: "yearOnly", label: "Year only", type: "text", default: "y", widgets: ["year-view"] },
 			{ key: "broken", label: "Broken tag", type: "text", default: "b", widgets: 7 }
 		]
 	});
@@ -325,44 +322,24 @@ test("config: an empty number box means unset, and empty coordinates mean no loc
 
 // ---- the theme's side
 
-test("theme: untagged instance settings apply everywhere, tagged ones only where they say", () => {
+test("theme: a widgets tag in a theme's file is ignored, and every field applies to every tile", () => {
 	let schema;
 	const lines = captureLog(() => {
 		schema = themeLoader.readInstanceSchema("tagtheme");
 	});
 
+	assert.deepEqual(schema.map((field) => field.key), ["size", "monthSize", "broken"], "nothing is dropped");
+	assert.ok(schema.every((field) => !("widgets" in field)), "every tag is taken off");
+	assert.deepEqual(lines, [], "and nothing is logged about it");
+
+	assert.ok(
+		themeLoader.readSchema("tagtheme").every((field) => !("widgets" in field)),
+		"the face-wide settings lose theirs too"
+	);
+
 	assert.deepEqual(
-		schema.map((field) => field.key),
-		["size", "monthSize", "plainOnly", "calendarAny", "yearOnly"],
-		"only the broken tag is dropped"
-	);
-	assert.ok(lines.some((line) => line.includes('"broken"') && line.includes("skipped")));
-	assert.ok(
-		!lines.some((line) => line.includes("no installed module offers")),
-		"reading the schema doesn't go through every installed module -- the dashboard does it on every poll"
-	);
-
-	const checked = captureLog(() => themeLoader.checkInstanceTags("tagtheme"));
-
-	assert.ok(
-		checked.some((line) => line.includes('"yearOnly"') && line.includes("no installed module offers")),
-		"a type nobody offers is worth a line in the log"
-	);
-	assert.ok(
-		!checked.some((line) => line.includes('"plainOnly"') || line.includes('"calendarAny"')),
-		"a module's own id is a real thing to name"
-	);
-
-	const keys = (widgetType, moduleId) =>
-		Object.keys(themeLoader.applyInstanceDefaults("tagtheme", {}, widgetType, moduleId));
-
-	assert.deepEqual(keys("month-view", "calendar"), ["size", "monthSize", "calendarAny"]);
-	assert.deepEqual(keys("agenda-view", "calendar"), ["size", "calendarAny"]);
-	assert.deepEqual(keys("plain", "plain"), ["size", "plainOnly"]);
-	assert.deepEqual(
-		keys(undefined),
-		["size", "monthSize", "plainOnly", "calendarAny", "yearOnly"],
-		"with no widget type given, a form gets every field"
+		themeLoader.applyInstanceDefaults("tagtheme", {}),
+		{ size: "small", monthSize: "4x4", broken: "b" }
 	);
 });
 
@@ -370,7 +347,7 @@ test("theme: untagged instance settings apply everywhere, tagged ones only where
 
 let face;
 
-test("wizard: hands the browser the widget types and its own copy of the rules", async () => {
+test("wizard: hands the browser the widget types and OmniCore's own picker", async () => {
 	require("../core/wizard-face")();
 	await waitForPort(WIZARD_PORT);
 
@@ -379,7 +356,8 @@ test("wizard: hands the browser the widget types and its own copy of the rules",
 	assert.ok(html.includes('"Month View"'), "the widget types are in the page's data");
 	assert.ok(!html.includes("Agenda View</script>"), "a name can't end the page's script");
 	assert.ok(html.includes("Agenda View\\u003c/script>"), "it's written so only JavaScript reads it");
-	assert.ok(html.includes("function appliesTo("), "the shared rule is in the page");
+	assert.ok(!html.includes("function appliesTo("), "the theme-filtering rule is gone");
+	assert.ok(html.includes("function widgetsAttribute("), "the shared tagging rule is in the page");
 	assert.ok(html.includes("function pickerHtml("), "and the shared picker");
 	assert.ok(html.includes("function applyWidgetFilter("), "and the script that drives it");
 });
@@ -421,27 +399,23 @@ test("wizard: a face is created with the picked widget type, cleaned like any sa
 	assert.ok(!("days" in invented.config), "an empty number box is unset, not zero");
 	assert.deepEqual(invented.config.place, { mode: "manual" }, "and empty coordinates aren't 0, 0");
 	assert.ok(!("widgetType" in plain.config), "nor one for a module without a choice");
-	assert.deepEqual(agenda.themeConfigs.tagtheme, { size: "large", monthSize: "6x6" }, "theme values for other types are kept");
+	assert.deepEqual(agenda.themeConfigs.tagtheme, { size: "large", monthSize: "6x6" }, "the theme's values are kept as given");
 });
 
-test("dashboard: the module gets its widget type, the theme gets only what fits it", async () => {
+test("dashboard: the module gets its widget type, and the theme never learns it", async () => {
 	await waitForPort(face.id);
 
 	const identity = await (await fetch(`http://127.0.0.1:${face.id}/identity`)).json();
 	const [agenda, invented, plain] = identity.instances;
 
-	assert.equal(agenda.widgetType, "agenda-view");
-	assert.deepEqual(
-		agenda.themeConfig,
-		{ size: "large", calendarAny: "c" },
-		"the month-grid size isn't sent for an agenda; the every-calendar one is"
-	);
+	for (const instance of [agenda, invented, plain]) {
+		assert.ok(!("widgetType" in instance), "no widget type is handed to the theme");
+		assert.ok(!("config" in instance), "nor the module's own settings, which would carry it");
+	}
 
-	assert.equal(invented.widgetType, "month-view", "nothing usable stored means the first type");
-	assert.deepEqual(invented.themeConfig, { size: "small", monthSize: "4x4", calendarAny: "c" });
-
-	assert.equal(plain.widgetType, "plain", "a module without a choice reports its own id");
-	assert.deepEqual(plain.themeConfig, { size: "small", plainOnly: "p" });
+	assert.deepEqual(agenda.themeConfig, { size: "large", monthSize: "6x6", broken: "b" });
+	assert.deepEqual(invented.themeConfig, { size: "small", monthSize: "4x4", broken: "b" });
+	assert.deepEqual(plain.themeConfig, { size: "small", monthSize: "4x4", broken: "b" }, "the same fields on every tile");
 
 	const tile = await (
 		await fetch(`http://127.0.0.1:${face.id}/api/${encodeURIComponent(agenda.id)}?richness=50`)
@@ -489,20 +463,17 @@ test("admin: the picker sits at the top, and fields say which widget types they'
 		"the stored type is the one lit up"
 	);
 	assert.ok(html.includes("<small>The whole month at once</small>"), "a description is shown");
-	assert.ok(html.includes('data-module="calendar" value="agenda-view"'), "and saved like any field");
+	assert.ok(html.includes('data-type="widgetType" value="agenda-view"'), "and saved like any field");
 
 	assert.ok(fieldTag(html, "weekNumbers").includes('data-widgets="month-view"'));
 	assert.ok(fieldTag(html, "days").includes('data-widgets="agenda-view"'));
 	assert.ok(!fieldTag(html, "source").includes("data-widgets"), "an \"all\" field is never hidden");
 
-	// The theme's fields: the month-grid size is on the page (hidden until
-	// Month View is picked), the plain module's isn't, nor is one for a
-	// type that doesn't exist
-	assert.ok(fieldTag(html, "monthSize").includes('data-widgets="month-view"'));
-	assert.ok(!html.includes('data-key="plainOnly"'));
-	assert.ok(fieldTag(html, "calendarAny").includes('data-widgets="calendar"'), "a field for the whole module is offered");
-	assert.ok(html.includes('data-module="calendar"'), "and the page knows which module it is, to show it");
-	assert.ok(!html.includes('data-key="yearOnly"'));
+	// The theme's fields are all there, and none of them can be hidden by
+	// the picker: the tag the theme tried to give one is gone
+	for (const key of ["size", "monthSize", "broken"]) {
+		assert.ok(!fieldTag(html, key).includes("data-widgets"), `the theme's ${key} isn't tied to a widget type`);
+	}
 	assert.ok(!html.includes('data-key="untagged"'), "a dropped module field never reaches the form");
 
 	assert.ok(html.includes("function applyWidgetFilter("), "the picker's script is on the page");
@@ -514,8 +485,7 @@ test("admin: a module without widget types gets no picker", async () => {
 
 	assert.ok(!html.includes('class="widget-picker"'));
 	assert.ok(!html.includes('data-key="widgetType"'), "no widget type is stored from this page");
-	assert.ok(html.includes('data-key="plainOnly"'), "the theme field for this module is offered");
-	assert.ok(!html.includes('data-key="monthSize"'), "the month-grid one isn't");
+	assert.ok(html.includes('data-key="monthSize"'), "every theme field is offered here too");
 	for (const key of ["word", "tagged", "sneaky"]) {
 		assert.ok(
 			!fieldTag(html, key).includes("data-widgets"),
