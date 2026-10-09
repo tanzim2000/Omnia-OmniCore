@@ -23,9 +23,9 @@ const CLIENT_SCRIPT = `<script>
 		// face? OmniView is a specialised browser and announces itself by
 		// defining window.OmniView before the page's own scripts run.
 		//
-		// This decides one thing only: whether this display receives
-		// notifications. Everything else on this connection works the
-		// same either way.
+		// Nothing treats the two differently yet -- every display gets the
+		// same notifications. It's recorded now so that OmniView, once it
+		// exists, can be given a kind of notification of its own.
 		const isOmniView = Boolean(window.OmniView);
 
 		const events = new EventSource(
@@ -37,10 +37,9 @@ const CLIENT_SCRIPT = `<script>
 			location.reload();
 		});
 
-		// Only ever arrives on an OmniView connection, since Core sends
-		// this event nowhere else. The overlay that draws it is Core's
-		// own -- see notifications.js -- so no theme implements, styles,
-		// or can accidentally swallow it.
+		// A notification for this face. The overlay that draws it is
+		// Core's own -- see notifications.js -- so no theme implements,
+		// styles, or can accidentally swallow it.
 		events.addEventListener("notification", function (event) {
 			if (typeof window.omniNotify !== "function") {
 				return;
@@ -85,11 +84,8 @@ function attachEvents(app, face) {
 
 		// A display says what it is when it connects. OmniView sends
 		// `?client=omniview`; an ordinary browser tab sends nothing,
-		// because nothing tells it to.
-		//
-		// This is what decides who sees a notification, and it needs no
-		// checking on Core's side: a plain browser never asks for them,
-		// so it never gets any. See notifications.js.
+		// because nothing tells it to. Kept for when OmniView gets
+		// notifications of its own; today every display is treated alike.
 		const listener = {
 			res: res,
 			isOmniView: req.query.client === "omniview"
@@ -97,12 +93,10 @@ function attachEvents(app, face) {
 
 		connections.get(face.id).add(listener);
 
-		// An OmniView arriving is the moment "nobody was watching" stops
+		// A display arriving is the moment "nobody was watching" stops
 		// being true, so anything held for this face goes out now.
 		// Required lazily to avoid a circular import.
-		if (listener.isOmniView) {
-			setImmediate(() => require("./notifications").releaseHeld(face.id));
-		}
+		setImmediate(() => require("./notifications").releaseHeld(face.id));
 
 		// Clean up when the browser closes the tab or navigates away
 		req.on("close", () => {
@@ -114,8 +108,8 @@ function attachEvents(app, face) {
 // Push a message to every browser currently showing this face.
 //
 // `options.omniViewOnly` limits it to displays that identified as an
-// OmniView. Used by notifications, which are deliberately not something
-// a face opened in an ordinary browser tab ever receives.
+// OmniView. Nothing uses it right now (notifications go to every
+// display); it's there for OmniView's own kind of notification, later.
 function pushToFace(faceId, eventName, data, options) {
 	const listeners = connections.get(faceId);
 

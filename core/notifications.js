@@ -15,19 +15,23 @@
 //
 // WHO ACTUALLY SEES ONE
 //
-// Only an OmniView. A notification is pushed to displays that identified
-// themselves as one when they connected (see face-events.js), which
-// means a face opened in an ordinary browser tab never receives any --
-// not because Core checks and refuses, but because a plain browser never
-// asks for them in the first place.
+// Every display showing the face: a browser tab, a kiosk browser, a
+// laptop with the face open. Each one draws this overlay. Two tabs on
+// the same face both show it.
+//
+// (Before 1.18.2 only an OmniView got them, so in practice nothing did:
+// OmniView isn't built yet. When it is, it gets a kind of notification
+// of its own, and this overlay will be switched off for it then.
+// face-events.js still records which displays are an OmniView, ready for
+// that.)
 //
 // WHO RAISES ONE
 //
 // A background module (see core/background.js), through `omni.notify`.
 // Those keep running while nobody is watching -- that's what they're
-// for -- so a notification can be raised with no OmniView there to see
+// for -- so a notification can be raised with no display there to see
 // it. What happens then is the install's own setting: dropped (the
-// default), or held for the next OmniView that connects. See notify()
+// default), or held for the next display that connects. See notify()
 // below.
 //
 // An ordinary tile module can't raise one at all. It only runs when a
@@ -145,7 +149,7 @@ function readLink(link) {
 // up next, not worth surviving a restart of OmniCore itself.
 const held = new Map();
 
-// Send one notification to every OmniView currently showing this face.
+// Send one notification to every display currently showing this face.
 //
 // `faceId` is the face's own id (its port). `title` is required; a
 // notification with nothing to say is not worth interrupting anyone for.
@@ -182,11 +186,8 @@ function notify(faceId, message) {
 		link: readLink(message && message.link)
 	};
 
-	// OmniView only. A plain browser tab showing this same face gets
-	// nothing, which is the intended behaviour rather than a gap.
-	const delivered = faceEvents.pushToFace(faceId, "notification", note, {
-		omniViewOnly: true
-	});
+	// Every display showing this face, browser tabs included
+	const delivered = faceEvents.pushToFace(faceId, "notification", note);
 
 	if (delivered > 0) {
 		return true;
@@ -217,8 +218,9 @@ function notify(faceId, message) {
 
 // Hand over anything held for this face and forget it.
 //
-// Called when an OmniView connects, which is the moment "nobody was
-// watching" stops being true.
+// Called when any display connects, which is the moment "nobody was
+// watching" stops being true. The first display to connect gets them all;
+// a second one opening a moment later doesn't see them again.
 function releaseHeld(faceId) {
 	const queue = held.get(faceId);
 
@@ -229,9 +231,7 @@ function releaseHeld(faceId) {
 	held.delete(faceId);
 
 	for (const note of queue) {
-		faceEvents.pushToFace(faceId, "notification", note, {
-			omniViewOnly: true
-		});
+		faceEvents.pushToFace(faceId, "notification", note);
 	}
 }
 

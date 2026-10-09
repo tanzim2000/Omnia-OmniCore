@@ -195,37 +195,38 @@ test("dashboard face: a theme that knows nothing about tags is unaffected", asyn
 	}
 });
 
-// Notifications. The second of these is the one that matters most: a
-// face opened in an ordinary browser tab must never receive one, and
-// that has to hold without Core checking anything -- a plain browser
-// simply never asks.
-test("notifications: an OmniView receives one, a plain browser does not", async () => {
+// Notifications go to every display showing the face. Until 1.18.2 they
+// went only to an OmniView, which in practice meant nobody: OmniView
+// isn't built yet. A face open in a plain browser must get them now.
+
+// Listens to a face's event stream the way a display does, and collects
+// any notifications that arrive
+function listen(faceId, asOmniView) {
+	return new Promise((resolve) => {
+		const received = [];
+		const path = asOmniView ? "/events?client=omniview" : "/events";
+
+		const req = require("http").get({ port: faceId, path: path }, (res) => {
+			res.on("data", (chunk) => {
+				const text = chunk.toString();
+
+				// One chunk can carry more than one event
+				for (const part of text.split("event: notification").slice(1)) {
+					received.push(part.split("data: ")[1].split("\n")[0]);
+				}
+			});
+		});
+
+		setTimeout(() => resolve({ received, req }), 400);
+	});
+}
+
+test("notifications: every display gets one, a plain browser included", async () => {
 	const face = faceStore.readFaces()[0];
 	await waitForPort(face.id);
 
-	function listen(asOmniView) {
-		return new Promise((resolve) => {
-			const received = [];
-			const path = asOmniView ? "/events?client=omniview" : "/events";
-
-			const req = require("http").get(
-				{ port: face.id, path: path },
-				(res) => {
-					res.on("data", (chunk) => {
-						const text = chunk.toString();
-						if (text.includes("event: notification")) {
-							received.push(text.split("data: ")[1].split("\n")[0]);
-						}
-					});
-				}
-			);
-
-			setTimeout(() => resolve({ received, req }), 400);
-		});
-	}
-
-	const omniview = await listen(true);
-	const plain = await listen(false);
+	const omniview = await listen(face.id, true);
+	const plain = await listen(face.id, false);
 
 	notifications.notify(face.id, {
 		title: "Container stopped",
@@ -235,21 +236,49 @@ test("notifications: an OmniView receives one, a plain browser does not", async 
 
 	await new Promise((resolve) => setTimeout(resolve, 300));
 
-	assert.equal(omniview.received.length, 1, "OmniView got no notification");
+	assert.equal(plain.received.length, 1, "a plain browser tab got no notification");
+	assert.equal(omniview.received.length, 1, "an OmniView got no notification");
 
-	const note = JSON.parse(omniview.received[0]);
+	const note = JSON.parse(plain.received[0]);
 	assert.equal(note.title, "Container stopped");
 	assert.equal(note.priority, 5);
 	assert.equal(note.seconds, 60, "priority 5 should hold for a minute");
 
-	assert.equal(
-		plain.received.length,
-		0,
-		"a plain browser tab received a notification -- it never should"
-	);
-
 	omniview.req.destroy();
 	plain.req.destroy();
+});
+
+test("notifications: held while nobody watched, then shown on the next browser to open", async () => {
+	const { readSettings, writeSettings } = require("../core/settings-store");
+	const face = faceStore.readFaces()[0];
+	await waitForPort(face.id);
+
+	// Let the earlier test's connections finish closing, so nobody is
+	// watching this face
+	await new Promise((resolve) => setTimeout(resolve, 200));
+
+	const before = readSettings();
+	writeSettings({ ...before, notificationsStoreWhileAsleep: true });
+
+	try {
+		assert.equal(
+			notifications.notify(face.id, { title: "Held one", priority: 3 }),
+			true,
+			"with holding on, it's kept"
+		);
+
+		const first = await listen(face.id, false);
+		assert.equal(first.received.length, 1, "the browser that opened got what was held");
+		assert.equal(JSON.parse(first.received[0]).title, "Held one");
+
+		const second = await listen(face.id, false);
+		assert.equal(second.received.length, 0, "and it isn't shown a second time");
+
+		first.req.destroy();
+		second.req.destroy();
+	} finally {
+		writeSettings(before);
+	}
 });
 
 test("notifications: priorities map to the documented durations", () => {

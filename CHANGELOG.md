@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.18.2
+
+Notifications show up in a browser
+
+### Changed
+
+- **Every display showing a face now gets its notifications,** a plain browser tab included. Until now only an OmniView did, and since OmniView isn't built yet, nothing ever showed one: a background module like `ntfy` raised notifications that no screen drew. A browser now draws the same overlay as before (Markdown, the QR pane for a link, priority deciding how long it stays). Two tabs on the same face both show it.
+- **Notifications held while nobody was watching** (when the install holds them) now go to the next display that opens, not only the next OmniView. The first one to connect gets them; they aren't shown again on the one after.
+
+### Notes
+
+- Core still records whether a display is an OmniView. When OmniView is built it'll get a kind of notification of its own, and the browser overlay will be switched off for it then.
+
 ## v1.18.1
 
 Widget types stay on the module's side

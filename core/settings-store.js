@@ -62,18 +62,18 @@ const DEFAULTS = {
 
 	// --- Notifications ----------------------------------------------
 	// Live here rather than in a face or a theme because the overlay is
-	// Core's, not a theme's. Reachable only by an OmniView, since it is
-	// the only thing that ever shows one -- see notifications.js.
+	// Core's, not a theme's. Every display showing a face draws it -- see
+	// notifications.js.
 
-	// Off means Core sends nothing at all, and no OmniView shows
+	// Off means Core sends nothing at all, and no display shows
 	// anything, regardless of what raised it.
 	notificationsEnabled: true,
 
-	// What happens to a notification raised while no OmniView is
+	// What happens to a notification raised while no display is
 	// watching. False drops it, which is the honest default for a wall
 	// display: arriving to twenty stale notifications from overnight is
 	// worse than having missed them. True holds them for the next
-	// OmniView that connects.
+	// display that connects.
 	notificationsStoreWhileAsleep: false,
 
 	// The ceiling on what gets held while asleep, so a module stuck in a

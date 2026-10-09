@@ -194,7 +194,7 @@ function backgroundApi(run, instanceId) {
 		// thing ends by itself, with no stop code needed.
 		signal: run.controller.signal,
 
-		// Show a notification on whichever OmniView is showing this
+		// Show a notification on whichever display is showing this
 		// instance's face. Same shape notifications.js documents:
 		//
 		//   notify({ title, description, priority, link }) -> true if it

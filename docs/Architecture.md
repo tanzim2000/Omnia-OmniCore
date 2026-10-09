@@ -909,15 +909,15 @@ has finished, so the two never actually run side by side.
 
 **What a background run's `omni` adds** to the usual one:
 
-| Member                                               | What it does                                                              |
-| ---------------------------------------------------- | ------------------------------------------------------------------------- |
-| `signal`                                             | An `AbortSignal`, aborted when the instance stops (for the plain `fetch`) |
-| `notify({ title, description, priority, link })`     | Raises a notification on this face's OmniViews (`core/notifications.js`)  |
-| `connections.join({ key, interest, open, onEvent })` | Joins a shared connection -- see below; returns `{ leave }`               |
+| Member                                               | What it does                                                                       |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `signal`                                             | An `AbortSignal`, aborted when the instance stops (for the plain `fetch`)          |
+| `notify({ title, description, priority, link })`     | Raises a notification on every display showing this face (`core/notifications.js`) |
+| `connections.join({ key, interest, open, onEvent })` | Joins a shared connection -- see below; returns `{ leave }`                        |
 
 `notify` exists only here. A tile call runs on every poll, so a
 notification raised from one would repeat every few seconds. A
-notification raised while no OmniView is connected follows the install's
+notification raised while no display is connected follows the install's
 own setting: dropped by default, or held for the next one to connect.
 
 `description` is rendered by Core from a small Markdown subset (bold,

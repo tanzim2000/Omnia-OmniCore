@@ -657,7 +657,7 @@ does, plus three things only background work has any use for:
 | Member                                           | What it does                                                                                                                                                                           |
 | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `signal`                                         | Aborted the moment this instance stops. Pass it to the plain `fetch(url, { signal: omni.signal })` -- not `omni.fetch`, which is shared and cached -- and that request ends by itself. |
-| `notify({ title, description, priority, link })` | Shows a notification on any OmniView showing this face. Priority 1 to 5 sets how long it stays up. See below for `description` and `link`.                                             |
+| `notify({ title, description, priority, link })` | Shows a notification on every display showing this face (a browser tab included). Priority 1 to 5 sets how long it stays up. See below for `description` and `link`.                   |
 | `connections.join({ ... })`                      | Joins a connection shared with your module's other instances on the same server. See below.                                                                                            |
 
 Your tile function doesn't get `notify`. It runs every time a display
