@@ -197,8 +197,11 @@ function backgroundApi(run, instanceId) {
 		// Show a notification on whichever OmniView is showing this
 		// instance's face. Same shape notifications.js documents:
 		//
-		//   notify({ title, description, priority }) -> true if it was
-		//   shown or held for later, false if it was dropped
+		//   notify({ title, description, priority, link }) -> true if it
+		//   was shown or held for later, false if it was dropped
+		//
+		// `description` may use a small Markdown subset; `link` is
+		// { url, title } and shows as a QR code beside the message.
 		//
 		// Only here, not on the tile function's `omni`. The tile function
 		// runs every time a display polls -- every few seconds, forever --
@@ -412,6 +415,34 @@ async function syncFace(face) {
 	await Promise.all(work);
 }
 
+// Restart every running instance of one module, so each picks up new code.
+//
+// Called after an update has replaced the module on disk (and Node has
+// been told to forget the old copy, see module-loader.js). Each instance
+// goes through the same stop-then-start a settings change gets, so the
+// old code's `stop` runs before the new code's `start`. Faces that hold
+// the module but have nothing running yet are synced too: an update can
+// be what turns an ordinary module into a background one.
+async function restartModule(moduleId) {
+	for (const run of running.values()) {
+		if (run.moduleId === moduleId) {
+			// Matches no instance's settings, so syncFace restarts it
+			run.signature = null;
+		}
+	}
+
+	// Required here rather than at the top: nothing else in this file needs
+	// the face list, and it keeps this file from depending on face storage
+	// just for this one job.
+	const { readFaces } = require("./face-store");
+
+	const faces = readFaces().filter((face) =>
+		face.instances.some((instance) => instance.module === moduleId)
+	);
+
+	await Promise.all(faces.map(syncFace));
+}
+
 // What's running right now, for tests and for anyone curious
 function list() {
 	return [...running.entries()].map(([instanceId, run]) => ({
@@ -422,4 +453,4 @@ function list() {
 	}));
 }
 
-module.exports = { syncFace, list };
+module.exports = { syncFace, restartModule, list };

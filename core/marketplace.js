@@ -185,6 +185,52 @@ function tarballUrl(owner, repo, ref) {
 	return `https://codeload.github.com/${owner}/${repo}/tar.gz/${ref}`;
 }
 
+// When the commit an entry pins was made, as an ISO date -- or null.
+//
+// Resources don't carry a version number: the registry pinning a newer
+// commit IS the update (see checkForUpdates). So the date of that commit
+// is what the Installed page shows as the version. It isn't in the
+// downloaded archive, so it's asked of GitHub's API separately.
+//
+// Best effort, always. The API allows an anonymous caller 60 requests an
+// hour, and this is one per install or update -- nowhere near it -- but
+// if GitHub says no, or is slow, the install itself must never fail over
+// a date. It just goes unrecorded and gets another try on the next check.
+const COMMIT_DATE_TIMEOUT_MS = 10 * 1000;
+
+// How long an install waits for an updated module's background instances
+// to restart onto the new code before carrying on without them
+const RESTART_WAIT_MS = 15 * 1000;
+
+async function fetchCommitDate(entry) {
+	try {
+		const { owner, repo } = parseRepoUrl(entry.repo);
+		const url =
+			`https://api.github.com/repos/${owner}/${repo}/commits/` +
+			encodeURIComponent(String(entry.ref || ""));
+
+		let timer;
+		const body = await Promise.race([
+			fetchUrl(url),
+			new Promise((resolve, reject) => {
+				timer = setTimeout(
+					() => reject(new Error("GitHub took too long")),
+					COMMIT_DATE_TIMEOUT_MS
+				);
+			})
+		]).finally(() => clearTimeout(timer));
+
+		const commit = JSON.parse(body.toString("utf-8")).commit || {};
+		const when = (commit.committer || {}).date || (commit.author || {}).date;
+
+		return when && !Number.isNaN(Date.parse(when))
+			? new Date(when).toISOString()
+			: null;
+	} catch (error) {
+		return null;
+	}
+}
+
 // A destination folder name must be safe to use as a literal path segment.
 // The registry is reviewed, but this check costs nothing and means a typo
 // or a compromised registry entry can't turn an id into a path.
@@ -407,11 +453,18 @@ async function installFromEntry(kind, entry, update) {
 		throw new Error(compatibility.reason);
 	}
 
+	// Asked for alongside the download rather than after it, and waited
+	// on BEFORE the folder is swapped: once new files are on disk, code
+	// already loaded from the old ones mustn't be left running beside them
+	// any longer than it takes to reload. Never rejects.
+	const commitDatePromise = module.exports.fetchCommitDate(entry);
+
 	const stagingDir = await stageEntry(entry);
 
 	try {
 		const sourceDir = resolveSourceDir(stagingDir, entry.path);
 		await assertLooksReal(sourceDir, kind);
+		await commitDatePromise;
 
 		// Only now does anything under modules/ or themes/ change. rm
 		// first so an update fully replaces rather than merges with
@@ -432,8 +485,38 @@ async function installFromEntry(kind, entry, update) {
 	// of an install that isn't really sitting on disk.
 	const recorded = installStore.record(kind, entry.id, {
 		ref: entry.ref,
-		minOmniCore: entry.minOmniCore || null
+		minOmniCore: entry.minOmniCore || null,
+		commitDate: await commitDatePromise
 	});
+
+	// A module that's already running keeps running the code it was
+	// loaded with -- Node holds on to every file it has read. So the old
+	// copy is forgotten, and anything of it running in the background is
+	// restarted onto the new one. Tiles need nothing more: they load the
+	// module afresh on every request. Themes are plain files, read from
+	// disk each time they're served, so they need nothing at all.
+	//
+	// The restart is waited on only so long. A new `start` that never
+	// returns -- a connection that never opens -- must not hold the install
+	// open with it, or every later check would queue up behind this one
+	// for good. The files are in place either way, and the restart goes on
+	// by itself. Nor can a failure here turn a finished install into a
+	// failed one.
+	if (kind === "module") {
+		try {
+			require("./module-loader").forgetModule(entry.id);
+
+			let timer;
+			await Promise.race([
+				require("./background").restartModule(entry.id),
+				new Promise((resolve) => {
+					timer = setTimeout(resolve, RESTART_WAIT_MS);
+				})
+			]).finally(() => clearTimeout(timer));
+		} catch (error) {
+			console.log(`  Updated module "${entry.id}" couldn't be restarted: ${error.message}`);
+		}
+	}
 
 	return {
 		id: entry.id,
@@ -476,8 +559,8 @@ async function installEntry(kind, id, update) {
 // record here, so it's silently excluded rather than reported as
 // unavailable — there is nothing wrong with it, there's just nothing to
 // compare it against yet.
-async function checkForUpdates() {
-	const registry = await fetchRegistry();
+async function checkForUpdates(alreadyFetched) {
+	const registry = alreadyFetched || (await fetchRegistry());
 
 	return installStore
 		.listAll()
@@ -525,7 +608,8 @@ async function checkForUpdates() {
 // those has to represent that honestly as indeterminate, not borrow
 // this callback to fake a percentage for work that isn't countable.
 async function applyAvailableUpdates(onProgress) {
-	const candidates = await checkForUpdates();
+	const registry = await fetchRegistry();
+	const candidates = await checkForUpdates(registry);
 
 	const applied = [];
 	const skipped = [];
@@ -542,7 +626,14 @@ async function applyAvailableUpdates(onProgress) {
 			skipped.push({
 				id: candidate.id,
 				kind: candidate.kind,
-				reason: candidate.reason
+				ref: candidate.availableRef,
+				reason: candidate.reason,
+				// Kept apart from the sentence above so a page can say
+				// "needs OmniCore 1.16.1" in its own words -- only when it
+				// really is a version, never whatever an entry put there
+				needsOmniCore: semver.valid(semver.coerce(candidate.entry.minOmniCore || ""))
+					? String(candidate.entry.minOmniCore)
+					: null
 			});
 			continue;
 		}
@@ -561,12 +652,47 @@ async function applyAvailableUpdates(onProgress) {
 			skipped.push({
 				id: candidate.id,
 				kind: candidate.kind,
+				ref: candidate.availableRef,
 				reason: error.message
 			});
 		}
 	}
 
+	await fillMissingCommitDates(registry);
+
 	return { applied, skipped };
+}
+
+// Installs recorded without a commit date -- from before dates were
+// recorded, or when GitHub couldn't be asked -- get one now, if the
+// registry still pins the very commit they're on. A few per check at
+// most, so even a long list never comes near GitHub's hourly limit.
+const DATES_PER_CHECK = 10;
+
+async function fillMissingCommitDates(registry) {
+	// Only those that CAN be dated count toward the few: one no longer in
+	// the registry, or held back on an older commit, would otherwise sit
+	// in those places forever and keep everything after it undated
+	const missing = installStore
+		.listAll()
+		.filter((installed) => !installed.commitDate)
+		.map((installed) => {
+			const list =
+				installed.kind === "theme" ? registry.themes : registry.modules;
+			const entry = list.find((item) => item.id === installed.id);
+
+			return entry && entry.ref === installed.ref ? { installed, entry } : null;
+		})
+		.filter(Boolean)
+		.slice(0, DATES_PER_CHECK);
+
+	for (const { installed, entry } of missing) {
+		const commitDate = await module.exports.fetchCommitDate(entry);
+
+		if (commitDate) {
+			installStore.setCommitDate(installed.kind, installed.id, installed.ref, commitDate);
+		}
+	}
 }
 
 // The registry, with each entry marked according to what's already on
@@ -745,6 +871,9 @@ module.exports = {
 	checkCompatibility,
 	checkForUpdates,
 	applyAvailableUpdates,
+	// Called through module.exports inside this file, so a test can stand
+	// in for GitHub without touching the network
+	fetchCommitDate,
 	addSource,
 	removeSource,
 	fetchDetailExtras,

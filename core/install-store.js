@@ -18,7 +18,11 @@ function storePath() {
 	return path.join(paths.dataDir(), "installed.json");
 }
 
-// { "module:weather": { kind, id, ref, minOmniCore, installedAt, updatedAt } }
+// { "module:weather": { kind, id, ref, commitDate, minOmniCore, installedAt, updatedAt } }
+//
+// `commitDate` is when the installed commit was made -- the closest thing a
+// rolling-update resource has to a version. Null when GitHub couldn't be
+// asked at the time; filled in later by setCommitDate().
 // Keyed by "kind:id" so a module and a theme can never collide even if
 // they happened to share an id.
 function readAll() {
@@ -64,7 +68,7 @@ function listAll() {
 // Called once an install or update actually succeeds — never before, so a
 // failed download can't leave behind a record of something that isn't
 // really there.
-function record(kind, id, { ref, minOmniCore }) {
+function record(kind, id, { ref, minOmniCore, commitDate }) {
 	const all = readAll();
 	const existing = all[key(kind, id)];
 	const now = new Date().toISOString();
@@ -73,6 +77,7 @@ function record(kind, id, { ref, minOmniCore }) {
 		kind,
 		id,
 		ref,
+		commitDate: commitDate || null,
 		minOmniCore: minOmniCore || null,
 		installedAt: existing ? existing.installedAt : now,
 		updatedAt: now
@@ -80,6 +85,23 @@ function record(kind, id, { ref, minOmniCore }) {
 
 	writeAll(all);
 	return all[key(kind, id)];
+}
+
+// Fill in the commit date for a record made without one -- an install from
+// before dates were recorded, or one made while GitHub couldn't be asked.
+// Only if the record is still for that same commit: a date looked up for
+// an older commit must never land on a newer install.
+function setCommitDate(kind, id, ref, commitDate) {
+	const all = readAll();
+	const existing = all[key(kind, id)];
+
+	if (!existing || existing.ref !== ref || !commitDate) {
+		return null;
+	}
+
+	existing.commitDate = commitDate;
+	writeAll(all);
+	return existing;
 }
 
 // Called when something is removed, so a stale record can't outlive the
@@ -90,4 +112,4 @@ function forget(kind, id) {
 	writeAll(all);
 }
 
-module.exports = { get, record, forget, listAll };
+module.exports = { get, record, setCommitDate, forget, listAll };

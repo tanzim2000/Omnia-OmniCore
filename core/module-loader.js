@@ -104,4 +104,33 @@ function loadModule(moduleId) {
 	}
 }
 
-module.exports = { listModules, loadModule };
+// Make the next loadModule() read this module from disk again.
+//
+// Node keeps every file it has loaded and hands back the same copy
+// forever, so without this an update installed while OmniCore is running
+// would sit on disk unused until the next restart. Called once an update
+// has replaced the module's folder. Every file under the folder goes, not
+// just its index.js -- a module split across several files must not end
+// up half new and half old.
+function forgetModule(moduleId) {
+	const folder = path.join(modulesDir(), moduleId);
+
+	// Node files what it loaded under the REAL path, with every symlink
+	// resolved -- and a module folder linked in from elsewhere is the
+	// normal way to develop one. So both spellings are checked.
+	const prefixes = [folder + path.sep];
+
+	try {
+		prefixes.push(fs.realpathSync(folder) + path.sep);
+	} catch (error) {
+		// Gone from disk. Nothing under it can be loaded again anyway.
+	}
+
+	for (const file of Object.keys(require.cache)) {
+		if (prefixes.some((prefix) => file.startsWith(prefix))) {
+			delete require.cache[file];
+		}
+	}
+}
+
+module.exports = { listModules, loadModule, forgetModule };

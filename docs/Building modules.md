@@ -549,14 +549,32 @@ and the instance counts as still starting.
 **The `omni` that `start` gets** has everything your tile function's
 does, plus three things only background work has any use for:
 
-| Member                                     | What it does                                                                                                                                                                           |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `signal`                                   | Aborted the moment this instance stops. Pass it to the plain `fetch(url, { signal: omni.signal })` -- not `omni.fetch`, which is shared and cached -- and that request ends by itself. |
-| `notify({ title, description, priority })` | Shows a notification on any OmniView showing this face. Priority 1 to 5 sets how long it stays up.                                                                                     |
-| `connections.join({ ... })`                | Joins a connection shared with your module's other instances on the same server. See below.                                                                                            |
+| Member                                           | What it does                                                                                                                                                                           |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signal`                                         | Aborted the moment this instance stops. Pass it to the plain `fetch(url, { signal: omni.signal })` -- not `omni.fetch`, which is shared and cached -- and that request ends by itself. |
+| `notify({ title, description, priority, link })` | Shows a notification on any OmniView showing this face. Priority 1 to 5 sets how long it stays up. See below for `description` and `link`.                                             |
+| `connections.join({ ... })`                      | Joins a connection shared with your module's other instances on the same server. See below.                                                                                            |
 
 Your tile function doesn't get `notify`. It runs every time a display
 polls, so anything it raised would be raised again every few seconds.
+
+**What a notification can say.** `title` is plain text and required.
+`description` may use a small Markdown subset: `**bold**`, `*italic*`,
+`` `code` ``, `- lists`, `1. numbered lists`, and `# a subtitle`. That's
+all of it -- no links, images or HTML; anything else shows exactly as you
+wrote it. Nothing on a display can be clicked, so to point somewhere pass
+`link: { url, title }` instead: the overlay shows a QR code for it beside
+the message, with the address printed underneath. Only `http` and `https`
+links are shown, and never one with a username and password in it.
+
+```js
+omni.notify({
+  title: "Build failed",
+  description: "**main** is red after `a1b2c3`",
+  priority: 5,
+  link: { url: "https://github.com/me/app/actions", title: "Open the build" },
+});
+```
 
 **Getting what you heard onto the tile: `omni.memory`.** Your tile
 function and your `start` run separately, so they need somewhere to

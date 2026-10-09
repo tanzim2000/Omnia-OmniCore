@@ -91,4 +91,39 @@ function lastResult(runningVersion) {
 	};
 }
 
-module.exports = { recordCheck, lastResult };
+// ---------------------------------------------------------------------
+// Modules and themes
+//
+// The same idea for the other kind of update: what the last check of
+// installed modules and themes did. Kept in the same file under its own
+// key -- recordCheck above spreads whatever is already there, so neither
+// record ever wipes the other.
+//
+//   checkedAt  when it ran
+//   error      why it couldn't run at all (the registry unreachable), or null
+//   applied    [{ kind, id, ref }] -- installed by this check
+//   skipped    [{ kind, id, ref, reason }] -- found but not installed, and
+//              why: usually "needs a newer OmniCore". `ref` is the commit it
+//              wanted, so a page can tell whether that's since been installed
+//              some other way.
+function recordResourceCheck({ applied, skipped, error }) {
+	const existing = read();
+
+	return write({
+		...existing,
+		resources: {
+			checkedAt: new Date().toISOString(),
+			error: error || null,
+			applied: Array.isArray(applied) ? applied : [],
+			skipped: Array.isArray(skipped) ? skipped : []
+		}
+	});
+}
+
+// The last modules-and-themes check, or null if none has run yet. Read
+// from disk only -- showing it never costs a trip to the registry.
+function lastResourceCheck() {
+	return read().resources || null;
+}
+
+module.exports = { recordCheck, lastResult, recordResourceCheck, lastResourceCheck };

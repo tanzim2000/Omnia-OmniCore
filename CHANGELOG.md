@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.17.0
+
+Richer notifications, and knowing how current everything is
+
+### Added
+
+- **Markdown in notifications.** A notification's description can now use a small Markdown subset: bold, italic, code, bulleted and numbered lists, and a subtitle (`#`). Core renders it (`core/markdown.js`) after escaping everything the module wrote, so no module can put its own HTML on a display. Links are deliberately not part of it, because nothing on a display can be clicked; `[text](url)` shows exactly as typed.
+- **Links as QR codes.** A notification can carry `link: { url, title }`. The overlay then shows the message and, beside it, a pane with a QR code for the link, its title above and the address printed below, for a phone to pick up. On a portrait screen the pane sits underneath. Only `http` and `https` links are shown, and never one with a username and password in it. The code is drawn by Core's own QR engine, the same one behind the `qr` block.
+- **Installed Resources shows how current everything is.** Each module and theme now shows its version (the date of the commit installed, since modules and themes have no version numbers of their own), when it was last updated here, and what the last check found: up to date, an update waiting (with why, usually "needs OmniCore 1.x"), or not from the Marketplace. Commit hashes are deliberately not shown. Dates are shown in the viewer's own time zone.
+- **One "Check now" for every module and theme.** It checks the registry and installs whatever can be installed, then reports what it updated and what is waiting. It's the same check that already runs every six hours; pressing it while one is running joins that one instead of starting a second.
+- **"Get more modules"** on the Add a module page, leading to the Marketplace. Before, there was no way there from the place you'd look for one.
+
+### Fixed
+
+- **A module update didn't take effect until OmniCore restarted.** Node keeps every file it has loaded, so an updated module sat on disk while the old code kept running. Installing an update now makes Node forget the old copy (including when the module's folder is a symlink, the usual way to develop one) and restarts any of the module's background instances onto the new code, old `stop` before new `start`. A new `start` that never finishes can't hold the install, or the checks after it, open: the install waits up to 15 seconds for the restart and then carries on.
+- **The overlay's waiting line had no limit.** Several modules raising notifications at once could keep a display covered for an hour. At most ten now wait their turn; past that the oldest are dropped, and the next one shown says how many were skipped.
+- **Times on the Updates page were in the server's time zone,** usually UTC inside a container. They're now shown in the viewer's own.
+
+### Notes
+
+- A skipped update was only ever written to the log. The last check's result, including what it skipped and why, is now kept in `data/update-checks.json` next to OmniCore's own, so the page can show it.
+- The commit date is asked of GitHub's API at install time, best effort. If GitHub can't be reached the install still goes ahead, and the date is filled in on a later check.
+
 ## v1.16.1
 
 ### Fixed

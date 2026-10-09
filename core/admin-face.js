@@ -42,6 +42,8 @@ const { uiStyles, backButton } = require("./ui-theme");
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const coreUpdater = require("./core-updater");
 const updateStore = require("./update-store");
+const installStore = require("./install-store");
+const resourceScheduler = require("./resource-scheduler");
 const fontService = require("./font-service");
 const { startInputFace, stopInputFace, refreshInputFace } = require("./input-face-loader");
 const background = require("./background");
@@ -364,6 +366,23 @@ const styles = `
 
 	.footer { opacity: 0.4; font-size: 13px; }
 
+	/* Installed Resources: what's installed, and how current it is.
+	   Not clickable, so no hover lift or glow. */
+	.card.resource { cursor: default; }
+	.card.resource:hover,
+	.card.resource:focus-visible { transform: none; box-shadow: none; }
+
+	.resource-facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 14px;
+		font-size: 13px;
+		color: var(--fg-muted);
+	}
+
+	.resource-status.good { color: var(--success); }
+	.resource-status.bad { color: var(--danger); }
+
 	/* Marketplace — wider than a settings panel, since it needs room for
 	   a grid rather than one stacked column. Same tokens as everywhere
 	   else in this file: same border, same radius, same opacity scale
@@ -645,6 +664,54 @@ function renderNotes(markdown) {
 	closeList();
 	return html.join("\n");
 }
+
+// Dates on admin pages are written as <time datetime="..."> and turned
+// into words by the browser, not the server: OmniCore usually runs in a
+// container whose clock is UTC, and a time shown in UTC reads as wrong to
+// anyone who isn't there. The browser knows where its viewer is.
+//
+//   data-local  "Oct 8, 2026, 4:12 PM"
+//   data-ago    "3 hours ago" (the full date on hover)
+//
+// Whatever the server wrote inside the tag stays if this never runs.
+function localTime(iso, style) {
+	if (!iso) {
+		return "";
+	}
+
+	return `<time data-${style === "ago" ? "ago" : "local"} datetime="${escapeHtml(iso)}">${escapeHtml(
+		String(iso).slice(0, 10)
+	)}</time>`;
+}
+
+const localTimeScript = `
+	(function () {
+		function ago(date) {
+			var seconds = Math.round((Date.now() - date.getTime()) / 1000);
+			if (seconds < 60) return "just now";
+			var minutes = Math.round(seconds / 60);
+			if (minutes < 60) return minutes + (minutes === 1 ? " minute ago" : " minutes ago");
+			var hours = Math.round(minutes / 60);
+			if (hours < 24) return hours + (hours === 1 ? " hour ago" : " hours ago");
+			var days = Math.round(hours / 24);
+			return days + (days === 1 ? " day ago" : " days ago");
+		}
+
+		var full = { dateStyle: "medium", timeStyle: "short" };
+
+		document.querySelectorAll("time[data-local], time[data-ago]").forEach(function (element) {
+			var date = new Date(element.getAttribute("datetime"));
+			if (isNaN(date.getTime())) return;
+
+			if (element.hasAttribute("data-ago")) {
+				element.textContent = ago(date);
+				element.title = date.toLocaleString(undefined, full);
+			} else {
+				element.textContent = date.toLocaleString(undefined, full);
+			}
+		});
+	})();
+`;
 
 function page(title, body, script, bodyClass, back, backLabel) {
 	return `<!DOCTYPE html>
@@ -2558,13 +2625,7 @@ function startAdminFace() {
 			coreUpdater.runningSince()
 		]);
 
-		const when = (iso) => {
-			if (!iso) {
-				return "Unknown";
-			}
-
-			return new Date(iso).toLocaleString();
-		};
+		const when = (iso) => (iso ? localTime(iso) : "Unknown");
 
 		const status = !last.lastCheckedAt
 			? `<p class="lede">No check has run yet.</p>`
@@ -2604,8 +2665,8 @@ function startAdminFace() {
 				</div>
 				${status}
 				<div class="field">
-					<span class="hint">Last checked: ${escapeHtml(when(last.lastCheckedAt))}</span>
-					<span class="hint">Running since: ${escapeHtml(when(since))}</span>
+					<span class="hint">Last checked: ${when(last.lastCheckedAt)}</span>
+					<span class="hint">Running since: ${when(since)}</span>
 				</div>
 				<button class="glass glass-block" id="check">Check now</button>
 				<p class="status" id="check-status"></p>
@@ -2629,7 +2690,7 @@ function startAdminFace() {
 			</div>
 			</div>`;
 
-		const script = `
+		const script = localTimeScript + `
 			var button = document.getElementById("check");
 			var status = document.getElementById("check-status");
 
@@ -2693,29 +2754,134 @@ function startAdminFace() {
 	});
 
 	app.get("/installed", (req, res) => {
+		// What the last module-and-theme check found, read from disk --
+		// rendering this page never costs a trip to the registry
+		const lastCheck = updateStore.lastResourceCheck();
+
+		// One card's worth of facts about something installed.
+		//
+		// The version a person sees is the date of the commit installed:
+		// modules and themes have no version numbers, the registry pinning
+		// a newer commit IS the update, so "made on Oct 8, 4:12 PM" is what
+		// tells two installs apart. The commit itself is left out on
+		// purpose -- a string of hex means nothing to most people.
+		function describe(kind, id, name, description) {
+			const recorded = installStore.get(kind, id);
+
+			// Waiting: the last check found an update for this and couldn't
+			// install it. Only while what's installed is still the commit it
+			// had then -- installed since some other way, it isn't waiting.
+			const waiting =
+				recorded && lastCheck
+					? (lastCheck.skipped || []).find(
+							(item) =>
+								item.kind === kind &&
+								item.id === id &&
+								item.ref !== recorded.ref
+					  )
+					: null;
+
+			let status;
+
+			if (!recorded) {
+				// Dropped into the folder by hand, or installed before
+				// OmniCore kept records. Nothing to compare against, so
+				// nothing to say about updates.
+				status = { tone: "", text: "Not from the Marketplace" };
+			} else if (waiting) {
+				status = {
+					tone: "bad",
+					text: waiting.needsOmniCore
+						? `Update waiting: needs OmniCore ${waiting.needsOmniCore}`
+						: `Update failed: ${waiting.reason || "unknown error"}`
+				};
+			} else if (lastCheck && !lastCheck.error) {
+				status = { tone: "good", text: "Up to date" };
+			} else {
+				status = null;
+			}
+
+			const facts = [];
+
+			if (recorded && recorded.commitDate) {
+				facts.push(`Version ${localTime(recorded.commitDate)}`);
+			}
+
+			if (recorded) {
+				const updated = recorded.updatedAt !== recorded.installedAt;
+				facts.push(
+					`${updated ? "Updated" : "Installed"} ${localTime(
+						recorded.updatedAt || recorded.installedAt,
+						"ago"
+					)}`
+				);
+			}
+
+			return `
+			<div class="card resource">
+				<strong>${escapeHtml(name)}</strong>
+				<span class="hint">${escapeHtml(description || "")}</span>
+				<div class="resource-facts">
+					${
+						status
+							? `<span class="resource-status ${status.tone}">${escapeHtml(status.text)}</span>`
+							: ""
+					}
+					${facts.map((fact) => `<span>${fact}</span>`).join("")}
+				</div>
+			</div>`;
+		}
+
 		// listModules() returns ids, so each needs its manifest read.
 		// listThemes() already returns manifests -- reading them again
 		// would pass an object where an id string belongs, which is
 		// exactly the crash this page had.
 		const moduleCards = listModules().map((id) => {
 			const manifest = readManifest(id);
-			return { name: manifest.name || id, description: manifest.description };
+			return describe("module", id, manifest.name || id, manifest.description);
 		});
 
-		const themeCards = themeLoader.listThemes().map((manifest) => ({
-			name: manifest.name || manifest.id,
-			description: manifest.description
-		}));
+		const themeCards = themeLoader
+			.listThemes()
+			.map((manifest) =>
+				describe("theme", manifest.id, manifest.name || manifest.id, manifest.description)
+			);
 
-		const list = [...moduleCards, ...themeCards]
-			.map(
-				(entry) => `
-			<div class="card">
-				<strong>${escapeHtml(entry.name)}</strong>
-				<span class="hint">${escapeHtml(entry.description || "")}</span>
-			</div>`
-			)
-			.join("");
+		const list = [...moduleCards, ...themeCards].join("");
+
+		// The check, in a sentence or two
+		let checkSummary;
+
+		if (!lastCheck) {
+			checkSummary = `<p class="lede">No check has run yet. One runs shortly after OmniCore starts, then every six hours.</p>`;
+		} else if (lastCheck.error) {
+			checkSummary = `
+				<p class="lede">The last check couldn't reach the registry.</p>
+				<span class="hint">${escapeHtml(lastCheck.error)}</span>`;
+		} else {
+			const applied = lastCheck.applied || [];
+			const skipped = lastCheck.skipped || [];
+			const parts = [];
+
+			// By the names on the cards, not the ids behind them
+			const themeNames = new Map(
+				themeLoader.listThemes().map((manifest) => [manifest.id, manifest.name || manifest.id])
+			);
+			const nameOf = (item) =>
+				item.kind === "theme"
+					? themeNames.get(item.id) || item.id
+					: readManifest(item.id).name || item.id;
+
+			if (applied.length) {
+				parts.push(`${applied.length} updated: ${applied.map((item) => escapeHtml(nameOf(item))).join(", ")}.`);
+			}
+
+			if (skipped.length) {
+				parts.push(`${skipped.length} waiting.`);
+			}
+
+			checkSummary = `<p class="lede">${parts.length ? parts.join(" ") : "Everything was up to date."}</p>`;
+		}
 
 		const body = `
 			<div class="settings-head">
@@ -2728,8 +2894,12 @@ function startAdminFace() {
 					</div>
 				</div>
 				<div class="tile">
+					${checkSummary}
+					<span class="hint">Last checked: ${lastCheck ? localTime(lastCheck.checkedAt) : "never"}</span>
+					<button class="glass glass-block" id="check">Check now</button>
+					<p class="status" id="check-status"></p>
 					<a class="glass glass-block" href="/marketplace"
-						style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
+						style="display:block;text-align:center;box-sizing:border-box;text-decoration:none;margin-top:12px">
 						Go to Marketplace
 					</a>
 				</div>
@@ -2745,7 +2915,7 @@ function startAdminFace() {
 		// it has to be included wherever it's used, which is exactly
 		// what this was missing: the handler threw on an undefined
 		// function, so the button did nothing at all.
-		const script =
+		const backToAbout =
 			req.query.from === "about"
 				? portLinkScript + `
 					var back = document.querySelector(".floating");
@@ -2757,7 +2927,57 @@ function startAdminFace() {
 				`
 				: "";
 
-		res.send(page("Installed Resources", body, script, "", "/"));
+		// Check now: looks for updates to everything installed AND installs
+		// them -- unlike OmniCore's own Check now, which only looks. A
+		// module update is a folder swapped on disk, not this whole
+		// program replaced, so there's nothing to be careful of here that
+		// the every-six-hours check doesn't already do unasked.
+		const checkScript = `
+			var button = document.getElementById("check");
+			var status = document.getElementById("check-status");
+
+			button.addEventListener("click", async function () {
+				button.disabled = true;
+				status.className = "status";
+				status.textContent = "Checking and updating...";
+
+				try {
+					const response = await fetch("/installed/check", { method: "POST" });
+					const data = await response.json();
+
+					if (!response.ok || data.error) {
+						status.className = "status bad";
+						status.textContent = data.error || "Couldn't reach the registry.";
+						button.disabled = false;
+						return;
+					}
+
+					location.reload();
+				} catch (error) {
+					status.className = "status bad";
+					status.textContent = "Couldn't reach the registry.";
+					button.disabled = false;
+				}
+			});
+		`;
+
+		res.send(
+			page("Installed Resources", body, localTimeScript + checkScript + backToAbout, "", "/")
+		);
+	});
+
+	// The same check the six-hourly timer runs, on demand. Waits for it to
+	// finish -- a few downloads at most -- so the page can reload onto the
+	// result. A check already under way is joined rather than repeated.
+	app.post("/installed/check", async (req, res) => {
+		const result = await resourceScheduler.runOnce();
+
+		if (result.error) {
+			res.status(502).json({ error: result.error });
+			return;
+		}
+
+		res.json({ ok: true, applied: result.applied, skipped: result.skipped });
 	});
 
 	app.get("/faces", (req, res) => {
@@ -3150,7 +3370,13 @@ function startAdminFace() {
 			<div class="panel list">
 				${modules || '<div class="empty">No modules installed.</div>'}
 			</div>
-			<p class="status" id="status"></p>`;
+			<p class="status" id="status"></p>
+			<div class="panel">
+				<a class="glass glass-block" href="/marketplace"
+					style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
+					Get more modules
+				</a>
+			</div>`;
 
 		const script = `
 			async function addModule(moduleId) {

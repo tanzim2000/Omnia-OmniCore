@@ -5,6 +5,7 @@
 // the part that means nobody has to remember to click it.
 
 const marketplace = require("./marketplace");
+const updateStore = require("./update-store");
 
 // Checked once shortly after startup, then on this interval. Six hours is
 // frequent enough that a new compatible version doesn't sit unapplied for
@@ -128,7 +129,28 @@ function progressReporter() {
 	};
 }
 
-async function runOnce({ interactive } = {}) {
+// The check currently running, if one is. A second request while one is
+// under way -- "Check now" pressed twice, or pressed just as the timer
+// fires -- waits for that one instead of starting another: two checks
+// installing the same update at once would both be replacing the same
+// folder.
+let inFlight = null;
+
+// Check every installed module and theme against the registry, install
+// whatever can be, and record what happened (see update-store.js) so the
+// Installed page can show it. Resolves with { applied, skipped, error };
+// never rejects.
+function runOnce(options) {
+	if (!inFlight) {
+		inFlight = check(options || {}).finally(() => {
+			inFlight = null;
+		});
+	}
+
+	return inFlight;
+}
+
+async function check({ interactive } = {}) {
 	const stopSpinner = interactive
 		? startSpinner("Fetching the registry...")
 		: null;
@@ -144,7 +166,8 @@ async function runOnce({ interactive } = {}) {
 		// A registry that's down or unreachable is not a reason to stop
 		// trying again next interval — it's just this attempt that failed.
 		console.log(`  Resource update check failed: ${error.message}`);
-		return;
+		updateStore.recordResourceCheck({ error: error.message });
+		return { applied: [], skipped: [], error: error.message };
 	}
 
 	if (stopSpinner) stopSpinner();
@@ -162,6 +185,9 @@ async function runOnce({ interactive } = {}) {
 	if (result.applied.length === 0 && result.skipped.length === 0) {
 		console.log("  Resource check: everything installed is current");
 	}
+
+	updateStore.recordResourceCheck(result);
+	return { applied: result.applied, skipped: result.skipped, error: null };
 }
 
 // Called once from start.OmniCore. Fire-and-forget by design — nothing
