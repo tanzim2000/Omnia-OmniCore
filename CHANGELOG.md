@@ -1,5 +1,43 @@
 # Changelog
 
+## v1.19.1
+
+Update now, and every admin page in the same look
+
+### Added
+
+- **Update now.** When a check has found a newer OmniCore, the Updates page offers to install it straight away instead of waiting up to six hours. It asks first, in a pop-up, then follows the whole thing: downloading, restarting, and the new version coming up. It ends with "Updated to 1.19.1" or, if the new version didn't start properly, "went back to 1.19.0", and a Sign in button, since a restart signs everyone out. It's the same install the six-hourly one does, and only one can run at a time: pressing it twice, two tabs, or the timer firing mid-update all just follow the one already running. Without the Docker socket, or on a development build, the button is there but can't be pressed, with the reason under it.
+- **`GET /version`** on the admin face, open without signing in: the version, a new id each time OmniCore starts, and Docker's health verdict. It's how the Updates page tells that OmniCore came back, and as what.
+
+### Changed
+
+- **Every page under a face is tiles now**, like Settings: a module's settings, Add a module, and Change theme were still the old plain blocks. A module's settings page has a tile for the module, one for its settings, one for the theme's settings for it ("In Windows 8"), and Save and Remove side by side. So are sign-in, "not found" and the marketplace's leftovers.
+- **Removing a module from a face asks in OmniCore's own pop-up**, not the browser's grey box.
+- **Room for the back button.** Set to top-left, it no longer sits on the page title: every page starts below it. At bottom-right, the last tile on a page scrolls clear of it.
+- **A button that can't be pressed looks like it**: faded, no glow.
+- **Signing in returns to the page you asked for**, not always to Settings.
+- **A failed update rolls back sooner, and a slow one isn't mistaken for failed.** It used to wait out the full 90 seconds even after Docker had already called the new version unhealthy; it now rolls back as soon as Docker says so. The window itself is now 150 seconds, so a version that takes a little over a minute to come up gets the health checks at 90 and 120 seconds too, and it looks once more before giving up.
+- **Stopping OmniCore is instant.** It ignored Docker's polite "please stop" and sat through the ten-second wait before being killed, on every stop, restart and update. An update now takes about ten seconds less.
+
+### Fixed
+
+- **After a self-update, `docker compose up -d` failed with "container name already in use".** The new container was made without Compose's labels, so Compose couldn't see it as its own. It now gets them, and everything else set for it in `docker-compose.yml` that used to be dropped: environment variables, other labels (a reverse proxy's, say), extra hosts, devices, limits, every network it was on, a changed command or user. The old container is removed once the new one is healthy, so only one is ever left for Compose to find. The update that brings an install _to_ 1.19.1 is still done by the older version, the old way; if `docker compose up -d` complains once after it, the one-time fix is `docker stop omnicore && docker rm omnicore && docker compose up -d` (your data is in the volumes, not the container).
+- **A failed update could leave a second OmniCore container behind**, which Compose would then start in place of the real one. Everything that can fail now happens before the new container is made, and it's removed again if starting the swap fails.
+- **An update failed whenever Docker Hub refused to send the helper image** ("429 Too Many Requests"). The copy already on the machine is used instead.
+- **The security fix from 1.19.0 wasn't in 1.19.0.** Its `package-lock.json` still held the old `qs`, `proxy-addr` and `@grpc/grpc-js`. It's in this one.
+- **The image is built from the lock file exactly** (`npm ci`), and the build fails if any dependency can't load. npm can cut an install short and still report success; that used to mean an image that couldn't start.
+- **If the new version wouldn't even start, OmniCore stayed down.** The swap stopped at the first failing step, leaving the old version stopped (so Docker never restarted it, not even after a reboot). Any failure after the old version stops now puts it back, as far as the swap had got.
+- **A stalled download blocked updates until a restart.** Downloads now give up after 20 minutes; nothing has been swapped by then.
+- **The helper assumed Docker's socket was at `/var/run/docker.sock` on the host.** It now uses whatever OmniCore itself was given (rootless Docker and colima put it elsewhere).
+- **A page on another port could press admin buttons.** The session cookie only keeps other _websites_ out; every face on the same machine counts as the same site, and dashboard faces run a theme's script. The admin face now refuses any POST that isn't sent as JSON, which a page on another port can't send without permission.
+- **The theme page had no back button**, and Change theme went back two steps instead of one.
+
+### Notes
+
+- **When a new version is tagged but its image isn't published yet**, Update now says so instead of claiming you're up to date.
+- The rollback no longer keeps the failed container as `-failed`: its last 200 log lines are copied into the helper container's log (`docker logs omnicore-updater-…`), which is kept until the next update. A successful update no longer keeps `-previous` either; the health check decides, then one container is left.
+- Checked against a real Docker, through the real page in a browser: an update with Compose's labels, a second network, extra hosts and a reverse-proxy label all carried over, and `docker compose up -d` finding nothing to do afterwards; a version that wouldn't start put back in 9 seconds; an unhealthy one in 18; and Docker Hub refusing the helper image.
+
 ## v1.19.0
 
 Notifications say where they're from, and a round of fixes

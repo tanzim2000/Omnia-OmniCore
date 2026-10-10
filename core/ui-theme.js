@@ -285,6 +285,19 @@ function uiStyles(options) {
 
 	.glass:active { transform: scale(0.97); }
 
+	/* A button that can't be pressed right now (Update now without
+	   Docker, Save while saving) has to look like it, or it reads as
+	   broken when nothing happens. Faded, no glow, no press. */
+	.glass:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+		transform: none;
+		box-shadow:
+			inset 0 1px 0 var(--glass-sheen),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+		background: var(--glass-bg);
+	}
+
 	/* The reflection: a light sheen across the upper half, stronger
 	   than a hairline so it reads clearly even with nothing behind the
 	   element for the blur to catch */
@@ -421,6 +434,25 @@ function uiStyles(options) {
 	   can never collide. */
 	.floating.bottom-right { bottom: 1.5em; right: 1.5em; }
 	.floating.top-left { top: 1.5em; left: 1.5em; }
+
+	/* With the button in the top-left corner, every page starts below
+	   it instead of under it -- otherwise it sits on top of the page's
+	   title. Room for the button (1.5em from the top, 3.4em tall) plus a
+	   gap the same size as the one above it.
+
+	   One rule for every page OmniCore draws, whatever each page's own
+	   padding is: :has() asks "does this body contain a top-left back
+	   button?", and that question outranks a plain body { padding }
+	   wherever it's written. A browser too old to know :has() just
+	   doesn't reserve the room -- the page looks exactly as it did
+	   before.
+
+	   Bottom-right gets the same at the bottom. A page scrolled all the
+	   way down would otherwise end with its last tile under the button
+	   -- and the last tile is often the one with a button of its own
+	   (Remove from this face). */
+	body:has(> .floating.top-left) { padding-top: calc(1.5em + 3.4em + 1.5em); }
+	body:has(> .floating.bottom-right) { padding-bottom: calc(1.5em + 3.4em + 1.5em); }
 
 	.muted { color: var(--fg-muted); }
 

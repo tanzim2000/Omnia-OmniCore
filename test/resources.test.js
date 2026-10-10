@@ -310,7 +310,8 @@ test("installed resources: Check now runs the check and reports what it did", as
 	try {
 		const response = await fetch(`http://127.0.0.1:${PORT}/installed/check`, {
 			method: "POST",
-			headers: { cookie }
+			headers: { cookie, "Content-Type": "application/json" },
+			body: "{}"
 		});
 		const data = await response.json();
 
@@ -333,7 +334,8 @@ test("installed resources: a failed Check now says why", async () => {
 	try {
 		const response = await fetch(`http://127.0.0.1:${PORT}/installed/check`, {
 			method: "POST",
-			headers: { cookie }
+			headers: { cookie, "Content-Type": "application/json" },
+			body: "{}"
 		});
 
 		assert.equal(response.status, 502);

@@ -9,9 +9,15 @@
 //   /                                    Settings
 //   /faces                               Every dashboard face
 //   /faces/:id                           One face: name, theme, link to modules
+//   /faces/:id/theme                     The face's theme and its settings
+//   /faces/:id/theme/change              Pick a different theme
 //   /faces/:id/modules                   The module instances on that face
 //   /faces/:id/modules/add               Pick a module to add
 //   /faces/:id/modules/:instanceId       One instance's settings
+//   /updates                             OmniCore's own version, and Update now
+//
+// Every page is built from the Default UI's tiles (.bento, .tile) -- the
+// same look as Settings -- through page() below.
 //
 // Modules sit under a face because a module instance belongs to a face. The
 // same module can appear more than once with different settings — two
@@ -52,6 +58,9 @@ const background = require("./background");
 const auth = require("./admin-auth");
 
 const ADMIN_PORT = 3000;
+
+// A name for this particular start of OmniCore. See GET /version.
+const BOOT_ID = require("crypto").randomBytes(8).toString("hex");
 
 const styles = `
 	/* Layout only — background, colour, and font all come from the
@@ -263,7 +272,65 @@ const styles = `
 		.bento-row.three { grid-template-columns: 1fr 1fr 1fr; }
 	}
 
-	.panel { width: 100%; max-width: 460px; }
+	/* A narrow bento, for a page that is one short form and nothing
+	   else: signing in, "not found". The same tiles, just not stretched
+	   across a wide screen. */
+	.bento.narrow { max-width: 28em; }
+
+	/* Two tiles side by side are as tall as the taller one. Lined up at
+	   the top rather than stretched, a short tile next to a long form
+	   would otherwise be mostly empty space. */
+	.bento-row.top { align-items: start; }
+
+	/* Everything a tile does at the end of a form: Save and its message,
+	   and anything after it, with even space between them */
+	.tile-actions { display: flex; flex-direction: column; gap: 12px; }
+
+	/* A glass button for something that can't be taken back (removing a
+	   module from a face). The same button as everywhere else, in the
+	   danger colour, so it reads as "careful" before anyone reads it. */
+	.glass.glass-danger { color: var(--danger); border-color: var(--danger-border); }
+
+	/* The Updates page while an update is being installed: one line
+	   saying what's happening, one quieter line under it saying what to
+	   expect. The dot pulses while something is still going on. */
+	.update-progress {
+		display: flex;
+		gap: 12px;
+		align-items: flex-start;
+		background: var(--input-bg);
+		border: 1px solid var(--card-border);
+		border-radius: 10px;
+		padding: 14px;
+		margin-top: 14px;
+	}
+
+	.update-progress[hidden] { display: none; }
+
+	.update-progress-dot {
+		flex: none;
+		width: 10px;
+		height: 10px;
+		margin-top: 5px;
+		border-radius: 50%;
+		background: var(--fg-muted);
+	}
+
+	.update-progress.working .update-progress-dot { animation: update-pulse 1.2s ease-in-out infinite; }
+	.update-progress.good .update-progress-dot { background: var(--success); }
+	.update-progress.bad .update-progress-dot { background: var(--danger); }
+
+	@keyframes update-pulse {
+		0%, 100% { opacity: 0.25; }
+		50% { opacity: 1; }
+	}
+
+	.update-progress strong { display: block; font-size: 0.95em; }
+	.update-progress .hint { margin: 4px 0 0 0; }
+	.update-progress .glass { margin-top: 12px; }
+
+	/* Space above the Update now button, matching the gap above Check now */
+	#apply { margin-top: 10px; }
 
 
 	a { color: var(--fg); text-decoration: none; }
@@ -349,7 +416,6 @@ const styles = `
 
 
 
-	.back { font-size: 14px; opacity: 0.6; }
 
 	/* Explanatory text under a control — quieter than the label it
 	   belongs to, for the "why" rather than the "what" */
@@ -366,7 +432,6 @@ const styles = `
 		margin: 4px 0 8px 0;
 	}
 
-	.footer { opacity: 0.4; font-size: 13px; }
 
 	/* Installed Resources: what's installed, and how current it is.
 	   Not clickable, so no hover lift or glow. */
@@ -579,7 +644,6 @@ const styles = `
 		opacity: 0.75;
 		margin: 0 6px 6px 0;
 	}
-	.danger { color: var(--danger); font-size: 14px; cursor: pointer; }
 
 	/* .glass itself is defined once, in core/ui-theme.js. It used to be
 	   redefined here too, from before the shared component library
@@ -924,12 +988,117 @@ const priorityScript = `
 function notFound(heading, backHref, backLabel) {
 	return page(
 		"Not found",
-		`<div class="panel">
-			<h1>${escapeHtml(heading)}</h1>
-			<p><a class="back" href="${backHref}">← ${escapeHtml(backLabel)}</a></p>
-		</div>`
+		`<div class="bento narrow">
+			<div class="tile">
+				<h1 style="margin-bottom:14px">${escapeHtml(heading)}</h1>
+				<a class="row" href="${backHref}">
+					<strong>${escapeHtml(backLabel)}</strong>
+					<span>Go back there</span>
+				</a>
+			</div>
+		</div>`,
+		"",
+		"",
+		backHref
 	);
 }
+
+// The page shown when the registry couldn't be read, on any marketplace
+// page that needs it
+function registryUnreachable(message) {
+	return page(
+		"Marketplace",
+		`<div class="bento narrow">
+			<div class="tile">
+				<h1>Can't reach the registry</h1>
+				<p class="lede">${escapeHtml(message)}</p>
+			</div>
+		</div>`,
+		"",
+		"",
+		"/marketplace"
+	);
+}
+
+// A "are you sure?" pop-up, drawn in the Default UI rather than the
+// browser's own confirm() box -- that one looks like a system warning,
+// can't say which button does what, and on a phone blocks the whole
+// page.
+//
+// Pages that need it include this script, then:
+//
+//     if (!(await confirmDialog({ title, text, confirm: "Remove", danger: true }))) return;
+//
+// Resolves true for the confirm button, false for Cancel, the backdrop,
+// or Escape.
+const confirmScript = `
+	function confirmDialog(options) {
+		return new Promise(function (resolve) {
+			var backdrop = document.createElement("div");
+			backdrop.className = "modal-backdrop";
+
+			var panel = document.createElement("div");
+			panel.className = "modal";
+			panel.setAttribute("role", "dialog");
+			panel.setAttribute("aria-modal", "true");
+
+			var title = document.createElement("h2");
+			title.textContent = options.title;
+
+			var text = document.createElement("p");
+			text.className = "lede";
+			text.style.margin = "0";
+			text.textContent = options.text || "";
+
+			var buttons = document.createElement("div");
+			buttons.style.display = "flex";
+			buttons.style.gap = "10px";
+			buttons.style.marginTop = "6px";
+
+			var cancel = document.createElement("button");
+			cancel.className = "glass";
+			cancel.style.flex = "1";
+			cancel.textContent = options.cancel || "Cancel";
+
+			var confirmButton = document.createElement("button");
+			confirmButton.className = "glass" + (options.danger ? " glass-danger" : "");
+			confirmButton.style.flex = "1";
+			confirmButton.textContent = options.confirm || "OK";
+
+			buttons.appendChild(cancel);
+			buttons.appendChild(confirmButton);
+			panel.appendChild(title);
+			panel.appendChild(text);
+			panel.appendChild(buttons);
+			backdrop.appendChild(panel);
+			document.body.appendChild(backdrop);
+
+			function close(answer) {
+				document.removeEventListener("keydown", onKey);
+				backdrop.remove();
+				resolve(answer);
+			}
+
+			function onKey(event) {
+				if (event.key === "Escape") close(false);
+			}
+
+			cancel.addEventListener("click", function () { close(false); });
+			confirmButton.addEventListener("click", function () { close(true); });
+
+			// A click on the dimmed area outside the panel is a "no"
+			backdrop.addEventListener("click", function (event) {
+				if (event.target === backdrop) close(false);
+			});
+
+			document.addEventListener("keydown", onKey);
+
+			// Cancel gets the focus, not the button that does something:
+			// an Enter pressed out of habit shouldn't be the yes
+			cancel.focus();
+		});
+	}
+`;
 
 // Turn declared settings into form fields.
 //
@@ -1129,22 +1298,24 @@ function renderFields(schema, config, context, scope) {
 // and one button
 function credentialsPage(options) {
 	const body = `
-		<div class="panel">
-			<h1>${escapeHtml(options.heading)}</h1>
-			<p class="lede">${escapeHtml(options.lede)}</p>
-		</div>
-		<div class="panel">
-			<div class="field">
-				<label for="username">Username</label>
-				<input type="text" id="username" autocomplete="username">
+		<div class="bento narrow">
+			<div class="tile">
+				<h1>${escapeHtml(options.heading)}</h1>
+				<p class="lede" style="margin-bottom:20px">${escapeHtml(options.lede)}</p>
+				<div class="field">
+					<label for="username">Username</label>
+					<input type="text" id="username" autocomplete="username">
+				</div>
+				<div class="field">
+					<label for="password">Password</label>
+					<input type="password" id="password"
+						autocomplete="${options.isSetup ? "new-password" : "current-password"}">
+				</div>
+				<div class="tile-actions">
+					<button class="glass glass-block" id="submit">${escapeHtml(options.button)}</button>
+					<p class="status" id="status"></p>
+				</div>
 			</div>
-			<div class="field">
-				<label for="password">Password</label>
-				<input type="password" id="password"
-					autocomplete="${options.isSetup ? "new-password" : "current-password"}">
-			</div>
-			<button class="glass glass-block" id="submit">${escapeHtml(options.button)}</button>
-			<p class="status" id="status"></p>
 		</div>`;
 
 	const script = `
@@ -1176,7 +1347,16 @@ function credentialsPage(options) {
 					return;
 				}
 
-				location.href = "/";
+				// Signing in shows the page that asked for it. This screen
+				// stands in for whatever page was requested while signed
+				// out -- /updates after an update restarted OmniCore, say
+				// -- so reloading the same address is that page. Except
+				// signing out, which would just sign out again.
+				if (location.pathname === "/logout") {
+					location.href = "/";
+				} else {
+					location.reload();
+				}
 			} catch (error) {
 				status.textContent = "Couldn't reach OmniCore.";
 				status.className = "status bad";
@@ -1205,6 +1385,52 @@ function startAdminFace() {
 	// the sign-in screen itself renders in the chosen font, and it is
 	// by definition reached while signed out.
 	fontService.attachFontRoute(app);
+
+	// Which OmniCore is answering: its version, a name for this particular
+	// start of it, and how healthy Docker thinks it is. Open, because the
+	// Updates page asks it while an update restarts OmniCore -- and a
+	// restart signs everyone out (sessions live in memory), so by the
+	// time the new version answers, the page asking isn't signed in any
+	// more. Nothing here is secret: the About face shows the version and
+	// the health to anyone.
+	//
+	//   version  "1.19.1", or "dev"
+	//   bootId   different every time OmniCore starts. A new one is how
+	//            the page knows the restart actually happened, even when
+	//            it never caught OmniCore being down in between.
+	//   health   "starting", "healthy", "unhealthy", or null with no way
+	//            to know (no Docker socket)
+	app.get("/version", async (req, res) => {
+		res.setHeader("Cache-Control", "no-store");
+		res.json({
+			version: (process.env.OMNICORE_VERSION || "dev").replace(/^v/, ""),
+			bootId: BOOT_ID,
+			health: await coreUpdater.selfHealth()
+		});
+	});
+
+	// A POST must be sent as JSON.
+	//
+	// The session cookie is SameSite=Strict, which keeps other WEBSITES
+	// from using it -- but "site" means the host, not the port, so every
+	// other face on this machine counts as the same site. A dashboard
+	// face runs a theme's JavaScript, and themes aren't trusted. A page
+	// there can send a plain form-style POST to this face and the
+	// browser attaches the cookie; what it can't send to another port,
+	// without this face's permission (which it never gives), is a
+	// request marked as JSON. So: no JSON, no change. Every form in the
+	// admin face already sends JSON.
+	app.use((req, res, next) => {
+		// Only POST needs this: it's the one method a page on another
+		// port can send without asking first. DELETE and the rest always
+		// ask, and are refused.
+		if (req.method !== "POST" || req.is("application/json")) {
+			next();
+			return;
+		}
+
+		res.status(415).json({ error: "Send this as JSON." });
+	});
 
 	// Gate everything except the setup and login endpoints
 	app.use((req, res, next) => {
@@ -2036,13 +2262,9 @@ function startAdminFace() {
 			</div>
 
 			${failure ? `
-			<div class="panel">
-				<div class="row">
-					<div>
-						<strong>Can't reach the registry</strong>
-						<div class="help">${escapeHtml(failure)}</div>
-					</div>
-				</div>
+			<div class="tile market-wide">
+				<h2>Can't reach the registry</h2>
+				<p class="lede">${escapeHtml(failure)}</p>
 			</div>` : `
 			<div class="market-wide">
 				<input type="text" class="market-search" data-market-search
@@ -2059,11 +2281,7 @@ function startAdminFace() {
 				<div data-tab-panel="theme" hidden>
 					${marketplaceCards(available.themes, "theme")}
 				</div>
-			</div>`}
-
-			<div class="panel footer">
-				<a href="/">Back</a>
-			</div>`;
+			</div>`}`;
 
 		const script = `
 			const note = document.createElement("div");
@@ -2198,7 +2416,7 @@ function startAdminFace() {
 				${extraRows}
 			</div>
 
-			<div class="panel">
+			<div class="tile market-wide">
 				<label for="newSource">Add a source</label>
 				<input type="url" id="newSource" data-new-source placeholder="https://example.com/registry.json">
 				<button type="button" class="btn" data-reveal-warning style="margin-top: 10px;">Add source</button>
@@ -2227,10 +2445,6 @@ function startAdminFace() {
 					<button type="button" class="btn-glossy btn-glossy-green" data-warning-cancel>Go back</button>
 					<button type="button" class="btn-glossy btn-glossy-neutral" data-warning-confirm>I understand</button>
 				</div>
-			</div>
-
-			<div class="panel footer">
-				<a href="/marketplace">Back</a>
 			</div>`;
 
 		const script = `
@@ -2341,17 +2555,7 @@ function startAdminFace() {
 		try {
 			available = await marketplace.listAvailable();
 		} catch (error) {
-			res.status(502).send(page("Marketplace", `
-				<div class="panel">
-					<div class="row">
-						<div>
-							<strong>Can't reach the registry</strong>
-							<div class="help">${escapeHtml(error.message)}</div>
-						</div>
-					</div>
-				</div>
-				<div class="panel footer"><a href="/marketplace">Back</a></div>
-			`));
+			res.status(502).send(registryUnreachable(error.message));
 			return;
 		}
 
@@ -2359,13 +2563,7 @@ function startAdminFace() {
 		const entry = list.find((item) => item.id === id);
 
 		if (!entry) {
-			res.status(404).send(page("Not found", `
-				<div class="panel">
-					<h1>Not found</h1>
-					<p class="help">Nothing with that id is listed.</p>
-				</div>
-				<div class="panel footer"><a href="/marketplace">Back</a></div>
-			`));
+			res.status(404).send(notFound("Nothing with that id is listed", "/marketplace", "Marketplace"));
 			return;
 		}
 
@@ -2452,10 +2650,6 @@ function startAdminFace() {
 				</p>` : ""}
 
 				<div style="margin-top: 20px;">${action}</div>
-			</div>
-
-			<div class="panel footer">
-				<a href="/marketplace">Back</a>
 			</div>`;
 
 		const script = `
@@ -2550,17 +2744,7 @@ function startAdminFace() {
 		try {
 			available = await marketplace.listAvailable();
 		} catch (error) {
-			res.status(502).send(page("Marketplace", `
-				<div class="panel">
-					<div class="row">
-						<div>
-							<strong>Can't reach the registry</strong>
-							<div class="help">${escapeHtml(error.message)}</div>
-						</div>
-					</div>
-				</div>
-				<div class="panel footer"><a href="/marketplace">Back</a></div>
-			`));
+			res.status(502).send(registryUnreachable(error.message));
 			return;
 		}
 
@@ -2578,10 +2762,6 @@ function startAdminFace() {
 
 				<h2 style="margin-top: 32px;">Themes</h2>
 				${marketplaceCards(themes, "theme")}
-			</div>
-
-			<div class="panel footer">
-				<a href="/marketplace">Back</a>
 			</div>`;
 
 		res.send(page(authorName, body, "", "", "/marketplace"));
@@ -2603,22 +2783,6 @@ function startAdminFace() {
 		}
 	});
 
-	// A catalogue of everything actually installed, across the whole
-	// OmniCore -- not scoped to one face, since something can be
-	// installed without being placed on any face yet.
-	//
-	// A plain disk scan (listModules/listThemes), the same source the
-	// "Add a module" picker already uses -- deliberately NOT
-	// marketplace.listAvailable(), which only lists something if it's
-	// BOTH in the registry AND on disk. A module dropped in locally
-	// during development (the normal workflow for building one against
-	// a separate repo) has no registry entry at all, and would be
-	// silently invisible on a page meant to show what's actually here.
-	//
-	// Deliberately plain for now -- the same simple list-of-cards
-	// pattern used everywhere else. A better-purposed layout for a
-	// catalogue specifically is a real, separate piece of design work,
-	// not something to improvise here.
 	// Updates. Reached by clicking the version tile on the About face,
 	// not from the settings list — deliberately a path you find rather
 	// than one you're shown.
@@ -2626,20 +2790,33 @@ function startAdminFace() {
 	// It lives here rather than on the About face because everything on
 	// it needs the login that already exists on this face. About stays
 	// public and read-only; anything with depth is behind this.
+	//
+	// When a check has found a newer version, the page offers "Update
+	// now" -- the same install the scheduler would do within six hours,
+	// through the same coreUpdater.applyUpdate(), started on purpose. The
+	// page then follows it all the way: downloading, OmniCore restarting,
+	// and the new version coming up healthy (or being rolled back).
 	app.get("/updates", async (req, res) => {
 		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
 		const last = updateStore.lastResult(running);
+		const offered = Boolean(last.updateAvailable && last.latestVersion);
 
 		// Read, never checked live: opening a page should not cost a
 		// call to GitHub. The button below is how a check happens on
 		// purpose.
-		const [currentNotes, upcomingNotes, since] = await Promise.all([
+		const [currentNotes, upcomingNotes, since, readiness] = await Promise.all([
 			coreUpdater.fetchChangelogEntry(`v${running}`),
-			last.updateAvailable && last.latestVersion
+			offered
 				? coreUpdater.fetchChangelogEntry(`v${last.latestVersion}`)
 				: Promise.resolve(null),
-			coreUpdater.runningSince()
+			coreUpdater.runningSince(),
+			offered ? coreUpdater.applyReadiness() : Promise.resolve(null)
 		]);
+
+		// An update already under way when the page opened -- started by
+		// the scheduler, or from another tab. The page picks it up and
+		// follows it rather than offering to start a second one.
+		const underWay = coreUpdater.currentProgress().busy;
 
 		const when = (iso) => (iso ? localTime(iso) : "Unknown");
 
@@ -2649,11 +2826,28 @@ function startAdminFace() {
 			? `<p class="lede">Last check failed: ${escapeHtml(
 					last.lastCheckError || "unknown error"
 			  )}</p>`
-			: last.updateAvailable
+			: offered
 			? `<p class="lede"><strong>Version ${escapeHtml(
 					last.latestVersion
-			  )} is available.</strong> It installs on its own, usually within six hours.</p>`
+			  )} is available.</strong> It installs on its own, usually within six hours, or you can install it now.</p>`
 			: `<p class="lede">This is the newest version.</p>`;
+
+		// Only when there's something to install. Without the Docker
+		// socket, or on a development build, it's there but can't be
+		// pressed, with the reason under it -- so it's clear why the
+		// update hasn't happened rather than looking forgotten.
+		const applyButton = !offered
+			? ""
+			: readiness && readiness.ready
+			? `<button class="glass glass-block" id="apply">Update to ${escapeHtml(
+					last.latestVersion
+			  )} now</button>`
+			: `<button class="glass glass-block" id="apply" disabled>Update to ${escapeHtml(
+					last.latestVersion
+			  )} now</button>
+			  <span class="hint">${escapeHtml(
+					(readiness && readiness.reason) || "This OmniCore can't install updates itself."
+			  )}</span>`;
 
 		const notesSection = (heading, notes, fallback) => `
 			<div class="tile">
@@ -2671,7 +2865,7 @@ function startAdminFace() {
 			</div>
 
 			<div class="bento">
-			<div class="bento-row ${last.updateAvailable && last.latestVersion ? "three" : "two"}">
+			<div class="bento-row ${offered ? "three" : "two"} top">
 			<div class="tile">
 				<div class="field">
 					<strong>Running</strong>
@@ -2685,11 +2879,21 @@ function startAdminFace() {
 					<span class="hint">Running since: ${when(since)}</span>
 				</div>
 				<button class="glass glass-block" id="check">Check now</button>
+				${applyButton}
 				<p class="status" id="check-status"></p>
+
+				<div class="update-progress working" id="progress" hidden aria-live="polite">
+					<span class="update-progress-dot"></span>
+					<div>
+						<strong id="progress-text"></strong>
+						<span class="hint" id="progress-hint"></span>
+						<button class="glass glass-block" id="progress-action" hidden></button>
+					</div>
+				</div>
 			</div>
 
 			${
-				last.updateAvailable && last.latestVersion
+				offered
 					? notesSection(
 							`What's new in ${last.latestVersion}`,
 							upcomingNotes,
@@ -2706,23 +2910,28 @@ function startAdminFace() {
 			</div>
 			</div>`;
 
-		const script = localTimeScript + `
-			var button = document.getElementById("check");
-			var status = document.getElementById("check-status");
+		const script = localTimeScript + confirmScript + `
+			var checkButton = document.getElementById("check");
+			var applyButton = document.getElementById("apply");
+			var checkStatus = document.getElementById("check-status");
 
-			button.addEventListener("click", async function () {
-				button.disabled = true;
-				status.className = "status";
-				status.textContent = "Checking...";
+			checkButton.addEventListener("click", async function () {
+				checkButton.disabled = true;
+				checkStatus.className = "status";
+				checkStatus.textContent = "Checking...";
 
 				try {
-					const response = await fetch("/updates/check", { method: "POST" });
+					const response = await fetch("/updates/check", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: "{}"
+					});
 					const data = await response.json();
 
 					if (!response.ok) {
-						status.className = "status bad";
-						status.textContent = data.error || "Couldn't reach GitHub.";
-						button.disabled = false;
+						checkStatus.className = "status bad";
+						checkStatus.textContent = data.error || "Couldn't reach GitHub.";
+						checkButton.disabled = false;
 						return;
 					}
 
@@ -2732,20 +2941,280 @@ function startAdminFace() {
 					// than keeping four things in sync by hand.
 					location.reload();
 				} catch (error) {
-					status.className = "status bad";
-					status.textContent = "Couldn't reach GitHub.";
-					button.disabled = false;
+					checkStatus.className = "status bad";
+					checkStatus.textContent = "Couldn't reach GitHub.";
+					checkButton.disabled = false;
 				}
 			});
+
+			// -------------------------------------------------------------
+			// Update now
+			//
+			// Three stages, each watched a different way:
+			//
+			//   1. Downloading. This OmniCore is still here and says how
+			//      it's going at /updates/progress.
+			//   2. Restarting. This OmniCore stops answering, or starts
+			//      answering as a different start of OmniCore (bootId).
+			//   3. Coming up. The new version answers /version, but isn't
+			//      kept until Docker calls it healthy -- until then it can
+			//      still be rolled back, and the page waits to see which.
+			//
+			// /version is open on purpose: the restart signs everyone out.
+			// -------------------------------------------------------------
+			var fromVersion = ${JSON.stringify(running)};
+			var target = ${JSON.stringify(last.latestVersion || "")};
+			var bootId = ${JSON.stringify(BOOT_ID)};
+
+			var progressBox = document.getElementById("progress");
+			var progressText = document.getElementById("progress-text");
+			var progressHint = document.getElementById("progress-hint");
+			var progressAction = document.getElementById("progress-action");
+
+			// Longest the page waits for OmniCore to come back before
+			// saying something's off. A restart is normally well under a
+			// minute; a rollback adds at most another ninety seconds.
+			var GIVE_UP_MS = 5 * 60 * 1000;
+
+			function show(kind, text, hint, action) {
+				progressBox.hidden = false;
+				progressBox.className = "update-progress " + kind;
+				progressText.textContent = text;
+				progressHint.textContent = hint || "";
+
+				if (action) {
+					progressAction.hidden = false;
+					progressAction.textContent = action.label;
+					progressAction.onclick = action.run;
+				} else {
+					progressAction.hidden = true;
+					progressAction.onclick = null;
+				}
+			}
+
+			// Both buttons stay off while an update runs -- a check or a
+			// second update in the middle of one would only confuse things
+			function setButtons(enabled) {
+				checkButton.disabled = !enabled;
+				if (applyButton && !applyButton.hasAttribute("data-unready")) {
+					applyButton.disabled = !enabled;
+				}
+			}
+
+			function wait(ms) {
+				return new Promise(function (resolve) { setTimeout(resolve, ms); });
+			}
+
+			// A JSON answer, or a throw for anything else. A signed-out
+			// OmniCore answers a protected address with the sign-in page
+			// (HTML), which counts as "not the OmniCore that was here".
+			async function getJson(url) {
+				const response = await fetch(url, { cache: "no-store" });
+				const type = response.headers.get("content-type") || "";
+
+				if (!response.ok || type.indexOf("application/json") === -1) {
+					throw new Error("Not answering");
+				}
+
+				return response.json();
+			}
+
+			async function follow() {
+				setButtons(false);
+				show(
+					"working",
+					target ? "Downloading " + target + "..." : "Installing the update...",
+					"OmniCore keeps running while it downloads. This can take a few minutes on a slow connection."
+				);
+
+				// 1. Downloading, while this OmniCore is still the one answering.
+				// Not answering counts as "it's restarting" once it said it
+				// was switching -- before that, only after a few misses in a
+				// row, so a dropped request on a busy network isn't mistaken
+				// for the restart.
+				var lastPhase = "downloading";
+				var misses = 0;
+
+				while (true) {
+					var progress;
+
+					try {
+						progress = await getJson("/updates/progress");
+						misses = 0;
+					} catch (error) {
+						misses += 1;
+
+						if (lastPhase === "switching" || misses >= 3) {
+							break; // gone: it's restarting
+						}
+
+						await wait(2000);
+						continue;
+					}
+
+					lastPhase = progress.phase;
+
+					if (progress.phase === "failed") {
+						show("bad", "The update couldn't be installed.", progress.error || "");
+						setButtons(true);
+						return;
+					}
+
+					if (!progress.busy) {
+						// Finished without swapping: there was nothing newer
+						// to download after all
+						show(
+							"bad",
+							"Nothing was installed.",
+							progress.note || "OmniCore is already running the newest version."
+						);
+						setButtons(true);
+						return;
+					}
+
+					if (progress.phase === "switching") {
+						show(
+							"working",
+							"Switching to " + (target || "the new version") + "...",
+							"OmniCore restarts now. Screens go blank for a moment, and this page reconnects on its own."
+						);
+					}
+
+					await wait(2000);
+				}
+
+				// 2 and 3. Restarting, then coming up
+				show(
+					"working",
+					"Restarting...",
+					"Waiting for OmniCore to come back. This usually takes under a minute."
+				);
+
+				var started = Date.now();
+
+				while (Date.now() - started < GIVE_UP_MS) {
+					await wait(3000);
+
+					var answer;
+
+					try {
+						answer = await getJson("/version");
+					} catch (error) {
+						continue; // still down
+					}
+
+					if (answer.bootId === bootId) {
+						// Still the old one. Either it hasn't been stopped yet,
+						// or the swap never started -- which its progress says
+						var still = null;
+
+						try {
+							still = await getJson("/updates/progress");
+						} catch (error) {
+							// Not signed in any more, or just busy: keep waiting
+						}
+
+						if (still && still.phase === "failed") {
+							show("bad", "The update couldn't be installed.", still.error || "");
+							setButtons(true);
+							return;
+						}
+
+						continue;
+					}
+
+					if (answer.version === fromVersion) {
+						show(
+							"bad",
+							(target || "The new version") + " didn't start properly, so OmniCore went back to " + fromVersion + ".",
+							"Nothing was lost. What went wrong is in the log of the omnicore-updater-... container on the server (docker ps -a lists it). You'll need to sign in again.",
+							{ label: "Sign in", run: function () { location.reload(); } }
+						);
+						return;
+					}
+
+					if (answer.health === "healthy" || answer.health === null) {
+						show(
+							"good",
+							"Updated to " + answer.version + ".",
+							"The restart signed you out, so sign in again to carry on.",
+							{ label: "Sign in", run: function () { location.reload(); } }
+						);
+						return;
+					}
+
+					show(
+						"working",
+						"Starting " + answer.version + "...",
+						"Making sure it came up properly. If it didn't, the old version is put back on its own."
+					);
+				}
+
+				show(
+					"bad",
+					"This is taking longer than it should.",
+					"Reload this page in a minute. If OmniCore doesn't come back, check it on the server with: docker ps -a",
+					{ label: "Reload", run: function () { location.reload(); } }
+				);
+			}
+
+			if (applyButton) {
+				if (applyButton.disabled) {
+					applyButton.setAttribute("data-unready", "");
+				}
+
+				applyButton.addEventListener("click", async function () {
+					const go = await confirmDialog({
+						title: "Update to " + target + "?",
+						text:
+							"OmniCore downloads " + target + ", then restarts on it. Screens go blank " +
+							"for about a minute and you'll be signed out. If the new version doesn't " +
+							"start properly, the current one is put back automatically.",
+						confirm: "Update now"
+					});
+
+					if (!go) return;
+
+					setButtons(false);
+					checkStatus.className = "status";
+					checkStatus.textContent = "";
+
+					try {
+						const response = await fetch("/updates/apply", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({ version: target })
+						});
+						const data = await response.json();
+
+						// Another tab or the scheduler got there first: follow
+						// that one instead
+						if (!response.ok && !data.busy) {
+							checkStatus.className = "status bad";
+							checkStatus.textContent = data.error || "Couldn't start the update.";
+							setButtons(true);
+							return;
+						}
+					} catch (error) {
+						checkStatus.className = "status bad";
+						checkStatus.textContent = "Couldn't reach OmniCore.";
+						setButtons(true);
+						return;
+					}
+
+					follow();
+				});
+			}
+
+			${underWay ? "follow();" : ""}
 		`;
 
 		res.send(page("Updates", body, script, "", "/"));
 	});
 
 	// Runs a check on demand and records it, exactly as the scheduled
-	// one does. Never applies anything: applying stays the scheduler's
-	// job, so there's no button anywhere that can swap a container out
-	// from under someone mid-click.
+	// one does. Never applies anything -- that's POST /updates/apply,
+	// a separate button with its own "are you sure?".
 	app.post("/updates/check", async (req, res) => {
 		try {
 			const status = await coreUpdater.checkForUpdate();
@@ -2769,6 +3238,77 @@ function startAdminFace() {
 		}
 	});
 
+	// Update now. Starts the install and answers straight away; the page
+	// then follows it at /updates/progress. Not waited on here: the
+	// download can take minutes, and once the swap starts this process
+	// is stopped -- an answer held until the end would never arrive.
+	//
+	// Refused (409) when this OmniCore can't install updates itself, and
+	// when an update is already running. Signed-in only, like everything
+	// else on this face, and JSON only (see the check near the top of
+	// startAdminFace), so no other page can press it for you.
+	app.post("/updates/apply", async (req, res) => {
+		const readiness = await coreUpdater.applyReadiness();
+
+		if (!readiness.ready) {
+			res.status(409).json({ error: readiness.reason });
+			return;
+		}
+
+		if (coreUpdater.currentProgress().busy) {
+			res.status(409).json({ busy: true, error: "An update is already being installed." });
+			return;
+		}
+
+		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
+		const last = updateStore.lastResult(running);
+
+		if (!last.updateAvailable) {
+			res.status(409).json({ error: "There's no newer version to install. Try Check now first." });
+			return;
+		}
+
+		// applyUpdate() takes the lock before its first await, so a second
+		// request arriving now is already told it's busy
+		coreUpdater
+			.applyUpdate(last.latestVersion)
+			.then((result) => {
+				if (result.updated) {
+					console.log(
+						`  Core update started from the Updates page: ${result.from} → ${result.to}. ` +
+							`What happened next: ${result.log}`
+					);
+				}
+			})
+			.catch((error) => {
+				console.log(`  Core update from the Updates page failed: ${error.message}`);
+			});
+
+		res.status(202).json({ ok: true });
+	});
+
+	// How the update started above is going. See coreUpdater.currentProgress().
+	app.get("/updates/progress", (req, res) => {
+		res.setHeader("Cache-Control", "no-store");
+		res.json(coreUpdater.currentProgress());
+	});
+
+	// A catalogue of everything actually installed, across the whole
+	// OmniCore -- not scoped to one face, since something can be
+	// installed without being placed on any face yet.
+	//
+	// A plain disk scan (listModules/listThemes), the same source the
+	// "Add a module" picker already uses -- deliberately NOT
+	// marketplace.listAvailable(), which only lists something if it's
+	// BOTH in the registry AND on disk. A module dropped in locally
+	// during development (the normal workflow for building one against
+	// a separate repo) has no registry entry at all, and would be
+	// silently invisible on a page meant to show what's actually here.
+	//
+	// Deliberately plain for now -- the same simple list-of-cards
+	// pattern used everywhere else. A better-purposed layout for a
+	// catalogue specifically is a real, separate piece of design work,
+	// not something to improvise here.
 	app.get("/installed", (req, res) => {
 		// What the last module-and-theme check found, read from disk --
 		// rendering this page never costs a trip to the registry
@@ -2958,7 +3498,11 @@ function startAdminFace() {
 				status.textContent = "Checking and updating...";
 
 				try {
-					const response = await fetch("/installed/check", { method: "POST" });
+					const response = await fetch("/installed/check", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: "{}"
+					});
 					const data = await response.json();
 
 					if (!response.ok || data.error) {
@@ -3231,7 +3775,7 @@ function startAdminFace() {
 		`
 			: "";
 
-		res.send(page(manifest.name, body, script));
+		res.send(page(manifest.name, body, script, "", `/faces/${face.id}`));
 	});
 
 	app.post("/faces/:id/theme", (req, res) => {
@@ -3276,17 +3820,25 @@ function startAdminFace() {
 			.join("");
 
 		const body = `
-			<div class="panel">
-				<h1 style="margin-top:12px">Change theme</h1>
-				<p class="lede">
-					Settings you've already made are kept per theme, so
-					switching back later restores them.
-				</p>
-			</div>
-			<div class="panel">
-				${themes || '<div class="empty">No themes installed.</div>'}
-			</div>
-			<p class="status" id="status"></p>`;
+			<div class="bento">
+				<div class="tile">
+					<h1>Change theme</h1>
+					<p class="lede" style="margin-bottom:14px">
+						Settings you've already made are kept per theme, so
+						switching back later restores them.
+					</p>
+					<div class="list">
+						${themes || '<div class="empty">No themes installed.</div>'}
+					</div>
+					<p class="status" id="status" style="margin-top:12px"></p>
+				</div>
+				<div class="tile">
+					<a class="glass glass-block" href="/marketplace"
+						style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
+						Get more themes
+					</a>
+				</div>
+			</div>`;
 
 		const script = `
 			for (const row of document.querySelectorAll("[data-theme]")) {
@@ -3312,7 +3864,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page("Change theme", body, script, "", `/faces/${req.params.id}`));
+		res.send(page("Change theme", body, script, "", `/faces/${face.id}/theme`));
 	});
 
 	// The module instances on a face. The same module may appear more than
@@ -3391,19 +3943,21 @@ function startAdminFace() {
 			.join("");
 
 		const body = `
-			<div class="panel">
-				<h1 style="margin-top:12px">Add a module</h1>
-				<p class="lede">You can add the same module more than once.</p>
-			</div>
-			<div class="panel list">
-				${modules || '<div class="empty">No modules installed.</div>'}
-			</div>
-			<p class="status" id="status"></p>
-			<div class="panel">
-				<a class="glass glass-block" href="/marketplace"
-					style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
-					Get more modules
-				</a>
+			<div class="bento">
+				<div class="tile">
+					<h1>Add a module</h1>
+					<p class="lede" style="margin-bottom:14px">You can add the same module more than once.</p>
+					<div class="list">
+						${modules || '<div class="empty">No modules installed.</div>'}
+					</div>
+					<p class="status" id="status" style="margin-top:12px"></p>
+				</div>
+				<div class="tile">
+					<a class="glass glass-block" href="/marketplace"
+						style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
+						Get more modules
+					</a>
+				</div>
 			</div>`;
 
 		const script = `
@@ -3537,47 +4091,67 @@ function startAdminFace() {
 		);
 		const themeName = themeLoader.readManifest(face.theme).name;
 
+		// Laid out as tiles like every other admin page:
+		//
+		//   [ name, what the module is, and its widget type picker ]
+		//   [ the module's settings ]  [ the theme's settings for it ]
+		//   [ Save                     |  Remove from this face      ]
+		//
+		// The theme's tile only when the theme has anything to set; the
+		// module's settings then take the whole row.
+		const themeTile = themeSchema.length
+			? `<div class="tile">
+					<h2>In ${escapeHtml(themeName)}</h2>
+					<p class="lede">How the face's theme shows this module.</p>
+					${renderFields(
+						themeSchema,
+						themeConfig,
+						{ instances: face.instances },
+						"theme"
+					)}
+				</div>`
+			: "";
+
 		const body = `
-			<div class="panel">
-				<h1 style="margin-top:12px">${escapeHtml(instance.label || manifest.name)}</h1>
-				<p class="lede">${escapeHtml(manifest.description || manifest.name)}</p>
-			</div>
-			<div class="panel">
-				${picker}
-				<div class="field">
-					<label for="label">Label</label>
-					<input type="text" id="label" value="${escapeHtml(instance.label)}">
-					<div class="help">
-						Shown as the tile's title. Useful when the same module
-						appears more than once.
-					</div>
+			<div class="bento">
+				<div class="tile">
+					<h1>${escapeHtml(instance.label || manifest.name)}</h1>
+					<p class="lede"${picker ? ' style="margin-bottom:14px"' : ""}>${escapeHtml(
+						manifest.description || manifest.name
+					)}</p>
+					${picker}
 				</div>
 
-				${
-					schema.length
-						? renderFields(schema, config, null, "module")
-						: '<div class="empty">This module has nothing else to configure.</div>'
-				}
-			</div>
-			${
-				themeSchema.length
-					? `<div class="panel">
-							<h2>In ${escapeHtml(themeName)}</h2>
-							${renderFields(
-								themeSchema,
-								themeConfig,
-								{ instances: face.instances },
-								"theme"
-							)}
-						</div>`
-					: ""
-			}
-			<div class="panel">
-				<button class="glass glass-block" id="save">Save</button>
-				<p class="status" id="status"></p>
-			</div>
-			<div class="panel footer">
-				<span class="danger" id="remove">Remove from this face</span>
+				<div class="bento-row${themeTile ? " two" : ""} top">
+					<div class="tile">
+						<h2 style="margin-bottom:14px">Settings</h2>
+						<div class="field">
+							<label for="label">Label</label>
+							<input type="text" id="label" value="${escapeHtml(instance.label)}">
+							<div class="help">
+								Shown as the tile's title. Useful when the same module
+								appears more than once.
+							</div>
+						</div>
+
+						${
+							schema.length
+								? renderFields(schema, config, null, "module")
+								: '<div class="empty">This module has nothing else to configure.</div>'
+						}
+					</div>
+					${themeTile}
+				</div>
+
+				<div class="bento-row two">
+					<div class="tile tile-actions">
+						<button class="glass glass-block" id="save">Save</button>
+						<p class="status" id="status"></p>
+					</div>
+					<div class="tile tile-actions">
+						<button class="glass glass-block glass-danger" id="remove">Remove from this face</button>
+					</div>
+				</div>
 			</div>`;
 
 		const script = `
@@ -3585,6 +4159,7 @@ function startAdminFace() {
 			${priorityScript}
 			${locationScript}
 			${widgetTypes.pickerScript}
+			${confirmScript}
 
 			applyWidgetFilter();
 
@@ -3638,7 +4213,16 @@ function startAdminFace() {
 			});
 
 			document.getElementById("remove").addEventListener("click", async function () {
-				if (!confirm("Remove this module from the face?")) return;
+				const sure = await confirmDialog({
+					title: "Remove this module?",
+					text:
+						"It comes off this face along with its settings. The module itself " +
+						"stays installed, so you can add it again later.",
+					confirm: "Remove",
+					danger: true
+				});
+
+				if (!sure) return;
 
 				await fetch(base, { method: "DELETE" });
 				location.href = "/faces/${face.id}/modules";

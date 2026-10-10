@@ -40,6 +40,24 @@ process.on("unhandledRejection", (reason) => {
 	);
 });
 
+// Stop straight away when asked to. Inside a container OmniCore is the
+// first and only process, and Node gives that process no default
+// answer to "please stop" (SIGTERM) -- so `docker stop`, a restart, and
+// every self-update used to sit through Docker's full ten-second wait
+// before it gave up and killed OmniCore outright. Ten extra seconds of
+// blank screens on every update, for nothing.
+//
+// Nothing needs saving first: settings, faces and module memory are
+// written to disk the moment they change, never held back for later. A
+// download that happens to be under way (a font, a module install) is
+// cut off -- exactly as it was by the kill ten seconds later.
+for (const signal of ["SIGTERM", "SIGINT"]) {
+	process.on(signal, () => {
+		console.log(`Stopping (${signal})`);
+		process.exit(0);
+	});
+}
+
 // Bring back every dashboard face that was previously created
 const faces = readFaces();
 for (const face of faces) {

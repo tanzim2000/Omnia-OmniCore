@@ -23,8 +23,20 @@ WORKDIR /app
 
 # Dependencies first, so a rebuild after only changing core/ doesn't
 # reinstall express and tar every time
+#
+# `npm ci` rather than `npm install`: it installs exactly what
+# package-lock.json says, and fails if the lock file and package.json
+# disagree, instead of quietly settling on something else. The lock file
+# is where security fixes to libraries live, so the image has to be
+# built from it, not merely near it.
+#
+# The second line loads every dependency once. npm has a known fault
+# where a dropped download ends the install early while still reporting
+# success ("Exit handler never called"), which would publish an image
+# that can't start. This makes that fail the build instead.
 COPY package.json package-lock.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev \
+	&& node -e "for (const name of Object.keys(require('./package.json').dependencies)) require(name)"
 
 COPY core/ ./core/
 COPY start.OmniCore ./

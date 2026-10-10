@@ -72,7 +72,7 @@ administrative label; `title` is decoration on the screen itself.
 
 | Port    | Purpose                                                                                                                                             |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `1303`  | The About face. What OmniCore is, real system facts, and the Updates page. Unauthenticated, same trust model as the welcome face.                   |
+| `1303`  | The About face. What OmniCore is and real system facts; its version tile leads to the Updates page on 3000. Unauthenticated.                        |
 | `3000`  | The admin face. Settings, faces, installed resources. OmniCore's own UI; no third-party code ever runs here.                                        |
 | `3999`  | The setup wizard, on its own port since v1.12.0.                                                                                                    |
 | `4000`  | The control face. Face creation, and the registry OmniView will read.                                                                               |
@@ -141,51 +141,51 @@ until the Marketplace puts something in them.
 
 ### `core/` file by file
 
-| File                       | Responsibility                                                                                                                                                   |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `face-store.js`            | Reads/writes `data/faces.json`. Creating faces, instances, port assignment. The only thing that touches face data on disk.                                       |
-| `face-loader.js`           | Starts a face as an Express server on its port. Owns `/identity`, `/api/:instanceId`, theme serving, client-script injection.                                    |
-| `face-events.js`           | Server-Sent Events. Pushes `face-changed` to displays. Holds the client script that gets injected into theme pages.                                              |
-| `notifications.js`         | Notifications: who receives one, how long it stays, and the overlay that draws it (source box, Markdown body, QR pane for a link, a capped waiting line).        |
-| `markdown.js`              | The small Markdown subset a notification's description is rendered from, tables included. Escapes everything first; no links.                                    |
-| `schema-fields.js`         | Cleans a list of fields read from a module's or theme's JSON: drops a `null`, a field with no key, a choice that isn't text. Used wherever those files are read. |
-| `qr.js`                    | Turns a string into a QR code SVG. Used for `qr` content blocks and for a notification's link.                                                                   |
-| `fallback-page.js`         | The built-in "pick a theme" screen shown when a face has no usable theme. Not part of any theme.                                                                 |
-| `control-face.js`          | Port 4000. Face registry API, and the face setup wizard.                                                                                                         |
-| `admin-face.js`            | Port 3000. All settings UI. Renders every settings form from declared schemas.                                                                                   |
-| `admin-auth.js`            | Admin account and sessions. scrypt hashing, constant-time comparison, in-memory sessions.                                                                        |
-| `module-loader.js`         | Finds modules, loads their function. **The module contract is documented here.**                                                                                 |
-| `module-config.js`         | Reads a module's `module.json` and `settings.json` (through `schema-fields.js`). Applies defaults, cleans submitted values.                                      |
-| `module-fetch.js`          | Shared HTTP helper for modules: caching, timeouts, stale fallback, in-flight deduplication.                                                                      |
-| `module-api.js`            | Builds the object a module actually receives: `fetch`/`visible`/`share`/`storage`/`time`/`memory`. The one seam a module reaches OmniCore through.               |
-| `background.js`            | Starts and stops the modules that keep running between requests, one run per instance, kept in line with the faces on disk. See §5d.                             |
-| `shared-connections.js`    | One live connection per server, shared by every instance of a module that needs it. Owns opening, closing and reconnecting; knows no protocol. §5d.              |
-| `module-storage.js`        | Read/write for one module instance's own persisted data. See §5c.                                                                                                |
-| `input-face-loader.js`     | Starts/stops one server per instance that declares an `input.json` -- one instance, one port, unlike `face-loader.js`. See §5c.                                  |
-| `input-face-page.js`       | Renders an Inport's default page. Not a theme, and not meant to be one -- OmniCore's own UI, same as `fallback-page.js`.                                         |
-| `marketplace.js`           | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                                                   |
-| `priority.js`              | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                                                    |
-| `widget-types.js`          | Widget types: a module offering more than one shape for its data. Reads and checks the declarations, the `widgets` tags, and draws the picker.                   |
-| `theme-loader.js`          | Finds themes, reads their manifest and both settings schemas.                                                                                                    |
-| `envelope.js`              | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                                                     |
-| `image-proxy.js`           | Fetches images on the display's behalf so a display only ever talks to your server.                                                                              |
-| `location-service.js`      | One place that knows where OmniCore is. Resolves `location` settings before a module sees them. City search.                                                     |
-| `time-service.js`          | One place that knows what time OmniCore thinks it is. Read-only; reachable by a module through `omni.time()` and by a theme directly at `GET /time`.             |
-| `settings-store.js`        | OmniCore's own install-wide settings (`data/settings.json`).                                                                                                     |
-| `paths.js`                 | Resolves where `data/`, `modules/` and `themes/` actually live. Honours `OMNICORE_*_DIR` overrides, which is what lets the test suite use a sandbox.             |
-| `content-tag.js`           | Builds the `ETag` standing for a tile's content, so a theme can tell new data from the same data again. See Content tagging in §8.                               |
-| `about-face.js`            | Port 1303. What OmniCore is, real system facts, and the Updates page. Unauthenticated by design.                                                                 |
-| `system-info.js`           | Reads the real facts the About face reports: host OS, container runtime, resource counts. Every one fails soft rather than showing a blank.                      |
-| `wizard-face.js`           | Port 3999. The setup wizard, on its own port since v1.12.0.                                                                                                      |
-| `face-links.js`            | The cross-port link helper. A face on one port cannot assume the host name another is reached on, so links are resolved in the browser.                          |
-| `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces. OmniCore's own look; never a dashboard theme.                         |
-| `font-service.js`          | The UI font setting. Searches Google Fonts, downloads the chosen one once, then serves it locally so it works with no internet.                                  |
-| `install-store.js`         | What is installed, at which pinned commit, and when that commit was made (`data/installed.json`).                                                                |
-| `update-store.js`          | The record of update checks (`data/update-checks.json`): when last checked, what was offered.                                                                    |
-| `version.js`               | The running version, read from `package.json`. One place, so nothing has to guess.                                                                               |
-| `resource-scheduler.js`    | Checks the registry for newer versions of installed modules and themes, and installs compatible ones. Also behind "Check now" on Installed Resources.            |
-| `core-update-scheduler.js` | The same job for OmniCore itself, every six hours.                                                                                                               |
-| `core-updater.js`          | Performs a core self-update: pulls the new image, swaps the container, and rolls back automatically if the new version never reports healthy.                    |
+| File                       | Responsibility                                                                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `face-store.js`            | Reads/writes `data/faces.json`. Creating faces, instances, port assignment. The only thing that touches face data on disk.                                           |
+| `face-loader.js`           | Starts a face as an Express server on its port. Owns `/identity`, `/api/:instanceId`, theme serving, client-script injection.                                        |
+| `face-events.js`           | Server-Sent Events. Pushes `face-changed` to displays. Holds the client script that gets injected into theme pages.                                                  |
+| `notifications.js`         | Notifications: who receives one, how long it stays, and the overlay that draws it (source box, Markdown body, QR pane for a link, a capped waiting line).            |
+| `markdown.js`              | The small Markdown subset a notification's description is rendered from, tables included. Escapes everything first; no links.                                        |
+| `schema-fields.js`         | Cleans a list of fields read from a module's or theme's JSON: drops a `null`, a field with no key, a choice that isn't text. Used wherever those files are read.     |
+| `qr.js`                    | Turns a string into a QR code SVG. Used for `qr` content blocks and for a notification's link.                                                                       |
+| `fallback-page.js`         | The built-in "pick a theme" screen shown when a face has no usable theme. Not part of any theme.                                                                     |
+| `control-face.js`          | Port 4000. Face registry API, and the face setup wizard.                                                                                                             |
+| `admin-face.js`            | Port 3000. All settings UI, built from the Default UI's tiles. Renders every settings form from declared schemas. The Updates page and its Update now button.        |
+| `admin-auth.js`            | Admin account and sessions. scrypt hashing, constant-time comparison, in-memory sessions.                                                                            |
+| `module-loader.js`         | Finds modules, loads their function. **The module contract is documented here.**                                                                                     |
+| `module-config.js`         | Reads a module's `module.json` and `settings.json` (through `schema-fields.js`). Applies defaults, cleans submitted values.                                          |
+| `module-fetch.js`          | Shared HTTP helper for modules: caching, timeouts, stale fallback, in-flight deduplication.                                                                          |
+| `module-api.js`            | Builds the object a module actually receives: `fetch`/`visible`/`share`/`storage`/`time`/`memory`. The one seam a module reaches OmniCore through.                   |
+| `background.js`            | Starts and stops the modules that keep running between requests, one run per instance, kept in line with the faces on disk. See §5d.                                 |
+| `shared-connections.js`    | One live connection per server, shared by every instance of a module that needs it. Owns opening, closing and reconnecting; knows no protocol. §5d.                  |
+| `module-storage.js`        | Read/write for one module instance's own persisted data. See §5c.                                                                                                    |
+| `input-face-loader.js`     | Starts/stops one server per instance that declares an `input.json` -- one instance, one port, unlike `face-loader.js`. See §5c.                                      |
+| `input-face-page.js`       | Renders an Inport's default page. Not a theme, and not meant to be one -- OmniCore's own UI, same as `fallback-page.js`.                                             |
+| `marketplace.js`           | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                                                       |
+| `priority.js`              | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                                                        |
+| `widget-types.js`          | Widget types: a module offering more than one shape for its data. Reads and checks the declarations, the `widgets` tags, and draws the picker.                       |
+| `theme-loader.js`          | Finds themes, reads their manifest and both settings schemas.                                                                                                        |
+| `envelope.js`              | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                                                         |
+| `image-proxy.js`           | Fetches images on the display's behalf so a display only ever talks to your server.                                                                                  |
+| `location-service.js`      | One place that knows where OmniCore is. Resolves `location` settings before a module sees them. City search.                                                         |
+| `time-service.js`          | One place that knows what time OmniCore thinks it is. Read-only; reachable by a module through `omni.time()` and by a theme directly at `GET /time`.                 |
+| `settings-store.js`        | OmniCore's own install-wide settings (`data/settings.json`).                                                                                                         |
+| `paths.js`                 | Resolves where `data/`, `modules/` and `themes/` actually live. Honours `OMNICORE_*_DIR` overrides, which is what lets the test suite use a sandbox.                 |
+| `content-tag.js`           | Builds the `ETag` standing for a tile's content, so a theme can tell new data from the same data again. See Content tagging in §8.                                   |
+| `about-face.js`            | Port 1303. What OmniCore is and real system facts. Its version tile links to the Updates page. Unauthenticated by design.                                            |
+| `system-info.js`           | Reads the real facts the About face reports: host OS, container runtime, resource counts. Every one fails soft rather than showing a blank.                          |
+| `wizard-face.js`           | Port 3999. The setup wizard, on its own port since v1.12.0.                                                                                                          |
+| `face-links.js`            | The cross-port link helper. A face on one port cannot assume the host name another is reached on, so links are resolved in the browser.                              |
+| `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces. OmniCore's own look; never a dashboard theme.                             |
+| `font-service.js`          | The UI font setting. Searches Google Fonts, downloads the chosen one once, then serves it locally so it works with no internet.                                      |
+| `install-store.js`         | What is installed, at which pinned commit, and when that commit was made (`data/installed.json`).                                                                    |
+| `update-store.js`          | The record of update checks (`data/update-checks.json`): when last checked, what was offered.                                                                        |
+| `version.js`               | The running version, read from `package.json`. One place, so nothing has to guess.                                                                                   |
+| `resource-scheduler.js`    | Checks the registry for newer versions of installed modules and themes, and installs compatible ones. Also behind "Check now" on Installed Resources.                |
+| `core-update-scheduler.js` | The same job for OmniCore itself, every six hours.                                                                                                                   |
+| `core-updater.js`          | Performs a core self-update: pulls the new image, swaps the container, and rolls back automatically if the new version isn't healthy. One update at a time. See §10. |
 
 ### `data/` -- never committed
 
@@ -1361,14 +1361,14 @@ result, including what it skipped and why, is kept in
 Worth being explicit, because several decisions only make sense in this
 light.
 
-| Surface                     | Trust                                                                                                                                                                                                                                                                                                        |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                                                                                                                                                                         |
-| **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install -- full Node access, narrowed only by what `omni` actually hands over (§5a).                                                                                                                                                   |
-| **Admin face (3xxx)**       | Behind login. Where essentially everything is written.                                                                                                                                                                                                                                                       |
-| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                                                                                                                                                                                  |
-| **Dashboard faces (4001+)** | Unauthenticated. Serves data, `GET /time`, and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                                                                                                                                                     |
-| **Inports (2001+)**         | Unauthenticated. One write: `POST /<instance-id>/input`, reaching a module's `onInput`. Not yet solved -- see §5c; planned to be covered by the same future auth work as the control face. Because an Inport belongs to a face rather than an instance, that auth will cover every module behind it at once. |
+| Surface                     | Trust                                                                                                                                                                                                                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                                                                                                                                                                                |
+| **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install -- full Node access, narrowed only by what `omni` actually hands over (§5a).                                                                                                                                                          |
+| **Admin face (3xxx)**       | Behind login. Where essentially everything is written; a POST must be JSON, so a page on another port (a theme's script) can't send one. One read is open: `GET /version` (version, a per-start id, Docker's health verdict), so the Updates page can follow an update through the restart that signs everyone out. |
+| **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                                                                                                                                                                                         |
+| **Dashboard faces (4001+)** | Unauthenticated. Serves data, `GET /time`, and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                                                                                                                                                            |
+| **Inports (2001+)**         | Unauthenticated. One write: `POST /<instance-id>/input`, reaching a module's `onInput`. Not yet solved -- see §5c; planned to be covered by the same future auth work as the control face. Because an Inport belongs to a face rather than an instance, that auth will cover every module behind it at once.        |
 
 Passwords are salted scrypt hashes compared in constant time. Sessions are
 random tokens in an `HttpOnly`, `SameSite=Strict` cookie, held in memory so
@@ -1395,6 +1395,50 @@ node start.OmniCore
 
 The wizard is for **setting a face up**; the admin face is for **changing
 one thing afterwards**. A wizard is the wrong shape for editing.
+
+### Updating OmniCore itself
+
+Two ways in, one way through. Every six hours `core-update-scheduler.js`
+checks GitHub's release tags for a newer version of the same major and
+installs it. The Updates page (admin face, `/updates`) offers **Update
+now** for the same install, started on purpose; the button appears only
+once a check has found something, and asks first. Both call
+`coreUpdater.applyUpdate()`, which lets one update run at a time: a second
+request -- the other path, a double-click, another tab -- is told one is
+already under way.
+
+The swap needs the Docker socket. Without it (or on a development build)
+the button is shown but can't be pressed, with the reason and the manual
+command under it.
+
+What happens:
+
+1. Pull the image the container was started from (`:1`). Same image ID as
+   the one running means nothing to do -- including a release that's been
+   tagged but whose image hasn't been published yet, which the page says.
+2. Make the helper image (`docker:cli`) ready -- the copy already on the
+   machine will do if Docker Hub refuses the download.
+3. Create `<name>-incoming` from the new image as a copy of the old
+   container: the whole host side (volumes, ports, restart policy, extra
+   hosts, limits...), every network, and whatever someone set by hand --
+   environment variables, labels, command, user -- told apart from what
+   the old image set by comparing with it. Never `OMNICORE_VERSION`,
+   which belongs to the image. **Compose's own labels** come along too;
+   without them `docker compose up -d` can't see the container as its own
+   and fails with "container name already in use".
+4. A helper container stops the old one, renames, starts the new one, and
+   watches Docker's health verdict. Healthy: the old container is
+   removed. Anything else -- a failed step, unhealthy, not healthy within
+   150 seconds -- puts the old one back as far as the swap had got, copies
+   the new one's last log lines into the helper's log, and removes the new
+   one. Either way exactly one OmniCore container is left -- two carrying
+   Compose's labels confuse Compose. The helper container and its log are
+   kept until the next update.
+
+The page follows along: `/updates/progress` while this OmniCore is still
+answering, then the open `GET /version` until a different start of
+OmniCore (`bootId`) answers -- the new version once Docker calls it
+healthy, or the old one back after a rollback.
 
 ---
 
@@ -1517,6 +1561,17 @@ Things that cost real debugging time in this project:
 - **Half-applying a 3D setup is worse than not touching it.** Neutralising
   a container's transform while leaving `perspective` and child
   `translateZ` in place magnified everything.
+- **A container Compose didn't create is invisible to Compose.** Compose
+  finds its containers by their `com.docker.compose.*` labels, not by
+  name. The self-updater made replacements without them, so the next
+  `docker compose up -d` tried to create a second `omnicore` and failed on
+  the name. And the reverse: two containers carrying the labels (a
+  leftover `-incoming`) and Compose picks one and deletes the other.
+- **npm can fail and still say it succeeded.** A dropped connection during
+  `npm install` can end with "Exit handler never called" and exit code 0,
+  leaving `node_modules` half empty. The image build loads every
+  dependency right after installing, so that fails the build instead of
+  publishing an image that can't start.
 - **`scrollHeight` only measures overflow past the _bottom_ edge.**
   Centred flex content overflows both ends, so overflow detection
   under-measured by roughly half.

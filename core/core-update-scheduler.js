@@ -5,6 +5,11 @@
 // different things through completely different mechanisms, and mixing
 // them into one file would make it harder to reason about which failure
 // belongs to which.
+//
+// The "Update now" button on the Updates page applies an update the same
+// way, through the same coreUpdater.applyUpdate(). That function lets
+// only one update run at a time, so the button and this timer can never
+// both be swapping the container at once.
 
 const coreUpdater = require("./core-updater");
 const updateStore = require("./update-store");
@@ -53,9 +58,11 @@ async function runOnce() {
 	);
 
 	try {
-		const result = await coreUpdater.applyUpdate();
+		const result = await coreUpdater.applyUpdate(status.latestVersion);
 
 		if (!result.updated) {
+			// Includes "someone pressed Update now a moment ago and it's
+			// still going" -- nothing for the timer to do then either.
 			console.log(`  Core update: ${result.reason}`);
 			return;
 		}
@@ -66,7 +73,7 @@ async function runOnce() {
 		// log line is best-effort, not load-bearing.
 		console.log(
 			`  Core update applied: ${result.from} → ${result.to}. ` +
-				`Roll back with: ${result.rollback}`
+				`What happened next: ${result.log}`
 		);
 	} catch (error) {
 		// No socket mounted, or a Docker API error — either way, this is
