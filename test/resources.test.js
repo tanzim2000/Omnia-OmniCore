@@ -274,7 +274,7 @@ test("installed resources: up to date, waiting on OmniCore, and dropped in by ha
 
 	const html = await getPage("/installed");
 
-	// Each card, cut out on its own, so a status can't be credited to the
+	// Each segment, cut out on its own, so a status can't be credited to the
 	// wrong one
 	const card = (name) => {
 		const start = html.indexOf(`<strong>${name} module</strong>`);

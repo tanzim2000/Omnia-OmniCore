@@ -16,7 +16,7 @@
 //   /faces/:id/modules/:instanceId       One instance's settings
 //   /updates                             OmniCore's own version, and Update now
 //
-// Every page is built from the Default UI's tiles (.bento, .tile) -- the
+// Every page is built from the Default UI's segments (.bento, .segment) -- the
 // same look as Settings -- through page() below.
 //
 // Modules sit under a face because a module instance belongs to a face. The
@@ -67,7 +67,7 @@ const styles = `
 	   shared Default UI stylesheet prepended in page() below. */
 	body {
 		min-height: 100vh;
-		padding: 48px 24px;
+		padding: 3em 1.5em;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -89,30 +89,22 @@ const styles = `
 	   currently have. If Settings ever outgrows one screen, tabs layer
 	   on top of this without rebuilding it.
 
-	   Portrait is the same tiles in one column -- not a second design.
+	   Portrait is the same segments in one column -- not a second design.
 	   --------------------------------------------------------------- */
 	/* Scales with the viewport rather than a single fixed number, so a
 	   wide window doesn't leave a large stripe of unused space either
 	   side -- but still capped, so a genuinely ultrawide monitor
-	   doesn't stretch a description line edge-to-edge or leave a stat
-	   tile looking like mostly empty space. */
+	   doesn't stretch a description line edge-to-edge or leave a
+	   segment looking like mostly empty space. */
 	.bento { width: 100%; max-width: clamp(62em, 70vw, 90em); display: flex; flex-direction: column; gap: 14px; }
 
 	.bento-row { display: grid; gap: 14px; grid-template-columns: 1fr; }
 
-	.tile {
-		background: var(--card-bg);
-		border: 1px solid var(--card-border);
-		border-radius: var(--radius);
-		padding: 20px;
-		cursor: default;
-	}
-
-	/* A tile is a container, not a clickable card */
-	.tile:hover { transform: none; box-shadow: none; }
-
-	.tile h2 { margin: 0 0 4px 0; font-size: 1.05em; font-weight: 600; }
-	.tile .lede { margin: 0 0 14px 0; }
+	/* The boxes themselves are .segment, from ui-theme.js. Only how a
+	   heading and its description sit inside one is particular to the
+	   settings pages. */
+	.segment h2 { margin: 0 0 4px 0; font-size: 1.05em; font-weight: 600; }
+	.segment .lede { margin: 0 0 14px 0; }
 
 	.settings-head {
 		width: 100%;
@@ -134,8 +126,8 @@ const styles = `
 		font-size: 0.78em;
 		background: var(--glass-bg);
 		border: 1px solid var(--glass-border);
-		border-radius: 999px;
-		padding: 6px 14px;
+		border-radius: 999em;
+		padding: 0.4808em 1.1218em;
 		color: var(--fg);
 		cursor: pointer;
 		transition: background 0.2s ease;
@@ -158,19 +150,19 @@ const styles = `
 	.mode-preview {
 		flex: 1;
 		cursor: pointer;
-		border-radius: 10px;
-		border: 1px solid var(--card-border);
-		padding: 8px;
+		border-radius: 0.625em;
+		border: 1px solid var(--segment-border);
+		padding: 0.5em;
 		text-align: center;
 		transition: border-color 0.2s ease;
 	}
 
-	.mode-preview.active { border: 2px solid var(--fg-muted); padding: 7px; }
+	.mode-preview.active { border: 2px solid var(--fg-muted); padding: 0.4375em; }
 	.mode-preview-label { font-size: 0.78em; color: var(--fg-muted); margin-top: 8px; }
 	.mode-preview.active .mode-preview-label { color: var(--fg); font-weight: 600; }
 
-	.mode-screen { border-radius: 5px; height: 64px; padding: 8px; text-align: left; }
-	.mode-screen span { display: block; border-radius: 2px; margin-bottom: 5px; }
+	.mode-screen { border-radius: 0.3125em; height: 64px; padding: 0.5em; text-align: left; }
+	.mode-screen span { display: block; border-radius: 0.125em; margin-bottom: 5px; }
 
 	/* Corner map: the buttons sit where the thing they choose would
 	   actually sit, so the choice is spatial rather than a list of
@@ -178,10 +170,10 @@ const styles = `
 	.corner-map {
 		position: relative;
 		background: var(--well-bg);
-		border: 1px solid var(--card-border);
-		border-radius: 10px;
+		border: 1px solid var(--segment-border);
+		border-radius: 0.625em;
 		height: 118px;
-		padding: 8px;
+		padding: 0.5em;
 	}
 
 	.corner-map button {
@@ -191,8 +183,8 @@ const styles = `
 		background: transparent;
 		border: 1px solid var(--glass-border);
 		color: var(--fg-muted);
-		border-radius: 6px;
-		padding: 6px 10px;
+		border-radius: 0.5357em;
+		padding: 0.5357em 0.8929em;
 		font-family: inherit;
 		font-size: 0.7em;
 		cursor: pointer;
@@ -206,7 +198,7 @@ const styles = `
 
 	.corner-map button:disabled {
 		color: var(--disabled-text);
-		border-color: var(--card-border);
+		border-color: var(--segment-border);
 		cursor: not-allowed;
 	}
 
@@ -215,7 +207,7 @@ const styles = `
 	.corner-bl { bottom: 8px; left: 8px; }
 	.corner-br { bottom: 8px; right: 8px; }
 
-	/* An inset strip inside a tile: the detected location, the current
+	/* An inset strip inside a segment: the detected location, the current
 	   font. Reads as "this is a value, not a control". */
 	.inset {
 		display: flex;
@@ -223,9 +215,9 @@ const styles = `
 		justify-content: space-between;
 		gap: 10px;
 		background: var(--input-bg);
-		border: 1px solid var(--card-border);
-		border-radius: 10px;
-		padding: 11px 14px;
+		border: 1px solid var(--segment-border);
+		border-radius: 0.625em;
+		padding: 0.6875em 0.875em;
 	}
 
 	/* Without flex-basis a flex item won't shrink past its own content's
@@ -241,14 +233,14 @@ const styles = `
 	.inset-label { font-size: 0.7em; color: var(--fg-muted); }
 	.inset-value { font-size: 0.85em; margin-top: 2px; }
 
-	.link-tile { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+	.link-segment { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
 
 	.link-row {
 		display: block;
 		background: var(--glass-bg);
 		border: 1px solid var(--glass-border);
-		border-radius: 10px;
-		padding: 12px 14px;
+		border-radius: 0.625em;
+		padding: 0.75em 0.875em;
 		text-decoration: none;
 		color: var(--fg);
 		transition: background 0.2s ease, box-shadow 0.2s ease;
@@ -273,18 +265,18 @@ const styles = `
 	}
 
 	/* A narrow bento, for a page that is one short form and nothing
-	   else: signing in, "not found". The same tiles, just not stretched
+	   else: signing in, "not found". The same segments, just not stretched
 	   across a wide screen. */
 	.bento.narrow { max-width: 28em; }
 
-	/* Two tiles side by side are as tall as the taller one. Lined up at
-	   the top rather than stretched, a short tile next to a long form
+	/* Two segments side by side are as tall as the taller one. Lined up at
+	   the top rather than stretched, a short segment next to a long form
 	   would otherwise be mostly empty space. */
 	.bento-row.top { align-items: start; }
 
-	/* Everything a tile does at the end of a form: Save and its message,
+	/* Everything a segment does at the end of a form: Save and its message,
 	   and anything after it, with even space between them */
-	.tile-actions { display: flex; flex-direction: column; gap: 12px; }
+	.segment-actions { display: flex; flex-direction: column; gap: 12px; }
 
 	/* A glass button for something that can't be taken back (removing a
 	   module from a face). The same button as everywhere else, in the
@@ -299,9 +291,9 @@ const styles = `
 		gap: 12px;
 		align-items: flex-start;
 		background: var(--input-bg);
-		border: 1px solid var(--card-border);
-		border-radius: 10px;
-		padding: 14px;
+		border: 1px solid var(--segment-border);
+		border-radius: 0.625em;
+		padding: 0.875em;
 		margin-top: 14px;
 	}
 
@@ -339,9 +331,9 @@ const styles = `
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		padding: 14px 20px;
+		padding: 0.875em 1.25em;
 		border: 1px solid var(--border);
-		border-radius: 12px;
+		border-radius: 0.75em;
 		margin-bottom: 10px;
 	}
 
@@ -377,9 +369,9 @@ const styles = `
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 10px 12px;
+		padding: 0.6667em 0.8em;
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: 0.6667em;
 		margin-bottom: 8px;
 		font-size: 15px;
 	}
@@ -403,7 +395,7 @@ const styles = `
 		line-height: 1;
 		cursor: pointer;
 		color: inherit;
-		border-radius: 8px;
+		border-radius: 0.6154em;
 		border: 1px solid var(--border);
 		background: var(--glass-bg);
 	}
@@ -420,7 +412,7 @@ const styles = `
 	/* Explanatory text under a control — quieter than the label it
 	   belongs to, for the "why" rather than the "what" */
 	.changelog h3 { font-size: 14px; margin: 16px 0 6px 0; opacity: 0.75; }
-	.changelog ul { margin: 0; padding-left: 20px; }
+	.changelog ul { margin: 0; padding-left: 1.25em; }
 	.changelog li { font-size: 14px; line-height: 1.65; margin-bottom: 8px; }
 	.changelog p { font-size: 14px; line-height: 1.65; }
 	.changelog strong { font-weight: 600; }
@@ -434,10 +426,7 @@ const styles = `
 
 
 	/* Installed Resources: what's installed, and how current it is.
-	   Not clickable, so no hover lift or glow. */
-	.card.resource { cursor: default; }
-	.card.resource:hover,
-	.card.resource:focus-visible { transform: none; box-shadow: none; }
+	   Each one is a plain .segment -- not clickable, so no hover glow. */
 
 	.resource-facts {
 		display: flex;
@@ -450,17 +439,186 @@ const styles = `
 	.resource-status.good { color: var(--success); }
 	.resource-status.bad { color: var(--danger); }
 
-	/* Marketplace — wider than a settings panel, since it needs room for
-	   a grid rather than one stacked column. Same tokens as everywhere
-	   else in this file: same border, same radius, same opacity scale
-	   for secondary text. Tidier, not a different design language. */
-	.market-wide { width: 100%; max-width: 900px; }
+	/* ---------------------------------------------------------------
+	   Marketplace.
 
-	.market-search {
+	   Every Marketplace page is a column of segments, like Settings, only
+	   wider: the home page needs room for up to three columns of listings
+	   on a big screen. The page itself scrolls. Nothing scrolls inside a
+	   box any more -- that clipped the hover glow, and on a phone it meant
+	   scrolling inside a scroll.
+	   --------------------------------------------------------------- */
+	.market {
 		width: 100%;
-		padding: 12px 16px;
+		max-width: 100em;
+		display: flex;
+		flex-direction: column;
+		gap: 1em;
+	}
+
+	/* Pages that are mostly reading (a listing's own page, Sources): a
+	   line of text much wider than this gets hard to follow */
+	.market.reading { max-width: 62em; }
+
+	/* The header: title and a line or two under it on the left, the
+	   page's one button on the right. On a phone the button drops under
+	   the text rather than squeezing it. */
+	.market-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 1em;
+	}
+
+	.market-head > div { flex: 1 1 20em; min-width: 0; }
+	.market-head .lede { max-width: 40em; margin-top: 0.4em; }
+
+	/* The last line in a box needs no space under it -- the box's own
+	   padding already gives it room */
+	.market .segment .lede:last-child { margin-bottom: 0; }
+
+	/* Search, Modules / Themes and the count stay pinned at the top while
+	   the listings scroll under them. Frosted, not solid: the rows passing
+	   underneath are blurred out, so they never collide with the search
+	   text. The tint is the page's own background colour mixed in, so it
+	   works in light and dark without a colour of its own. */
+	.market-toolbar {
+		position: sticky;
+		top: 1em;
+		z-index: 5;
+		background:
+			linear-gradient(
+				color-mix(in srgb, var(--bg) 55%, transparent),
+				color-mix(in srgb, var(--bg) 55%, transparent)
+			),
+			var(--segment-bg);
+		backdrop-filter: blur(0.75em);
+		-webkit-backdrop-filter: blur(0.75em);
+	}
+
+	/* As many columns as fit, each at least 30em wide: one on a phone, two
+	   on a laptop, three on a wide screen. .market's max-width is what
+	   stops a fourth. min() keeps one column from being wider than a
+	   narrow phone screen. Measured in em, so a bigger text size in
+	   Settings means fewer, wider columns. */
+	.market-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(30em, 100%), 1fr));
+		gap: 1em;
+	}
+
+	/* One listing: name, author and description on the left, its button
+	   on the right. The box is a .segment.clickable. */
+	.market-item {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+	}
+
+	/* Hidden by the search box, not removed, so nothing reflows
+	   unexpectedly while typing */
+	.market-item[hidden] { display: none; }
+
+	.market-item-text { min-width: 0; }
+	.market-item h3 { margin: 0; font-size: 1.05em; font-weight: 600; }
+	.market-by { color: var(--fg-muted); font-size: 0.8em; margin: 0.15em 0 0.5em 0; }
+	.market-desc { color: var(--fg-muted); font-size: 0.9em; line-height: 1.4; }
+
+	/* The whole listing is a link to its own page, EXCEPT the Install
+	   button, which needs its own click. The link is stretched over the
+	   listing; the button sits above it. "Installed" isn't a button, so a
+	   click on it goes through to the link underneath. */
+	.market-link {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		border-radius: inherit;
+	}
+
+	.market-link:focus-visible {
+		outline: 2px solid var(--glow-strong);
+		outline-offset: 2px;
+	}
+
+	/* A listing's button, and the one in each header. Smaller than a
+	   full-size glass button, the same size whichever kind it is. */
+	.market-action {
+		position: relative;
+		z-index: 2;
+		flex: none;
+		padding: 0.6em 1.1em;
+		font-size: 0.95em;
+		white-space: nowrap;
+	}
+
+	span.market-action { pointer-events: none; cursor: default; }
+
+	/* The registry couldn't be read: what went wrong, and a way to try
+	   again, in a box edged in the danger colour */
+	.market-error {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 1em;
+		border-color: var(--danger-border);
+	}
+
+	.market-error h2 { color: var(--danger); }
+	.market-error .lede { margin: 0; }
+
+	/* A heading between groups of listings (an author's modules, then
+	   their themes) */
+	.market-section { margin: 0.75em 0 0 0.25em; font-size: 1.05em; font-weight: 600; }
+
+	/* A listing's own page */
+	.market-about p { margin: 0 0 0.9em 0; line-height: 1.55; }
+	.market-about p:last-child { margin-bottom: 0; }
+
+	.market-shots {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(18em, 100%), 1fr));
+		gap: 1em;
+		margin-top: 0.75em;
+	}
+
+	.market-shots figure { margin: 0; }
+
+	.market-shots img {
+		width: 100%;
+		display: block;
+		border-radius: 0.5em;
+		border: 1px solid var(--segment-border);
+	}
+
+	.market-shots figcaption { color: var(--fg-muted); font-size: 0.85em; margin-top: 0.5em; }
+
+	/* A web address that has to wrap somewhere on a phone */
+	.market-url { overflow-wrap: anywhere; }
+
+	/* Sources: one line per registry, divided by a thin rule */
+	.market-source {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+		padding: 0.875em 0;
+		border-top: 1px solid var(--border);
+	}
+
+	.market-source:first-child { border-top: none; padding-top: 0; }
+	.market-source:last-child { padding-bottom: 0; }
+	.market-source > div { min-width: 0; }
+
+	/* The search box in the font picker */
+	.font-search {
+		width: 100%;
+		padding: 0.8571em 1.1429em;
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: 0.7143em;
 		background: transparent;
 		color: var(--fg);
 		font-size: 14px;
@@ -468,158 +626,8 @@ const styles = `
 		box-sizing: border-box;
 	}
 
-	.market-search::placeholder { color: var(--fg-muted); }
-	.market-search:focus { outline: none; border-color: var(--glass-border); }
-
-	.market-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-		gap: 14px;
-		margin-top: 16px;
-		/* Same reasoning as .list, just as a grid instead of a stack:
-		   the results scroll, the page around them holds still */
-		max-height: 60vh;
-		overflow-y: auto;
-		padding-right: 4px;
-		scrollbar-width: thin;
-		scrollbar-color: var(--scroll-thumb) transparent;
-	}
-
-	.market-grid::-webkit-scrollbar { width: 8px; }
-	.market-grid::-webkit-scrollbar-track { background: transparent; }
-	.market-grid::-webkit-scrollbar-thumb {
-		background: var(--scroll-thumb);
-		border-radius: 4px;
-	}
-
-	.market-card {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-		padding: 16px;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-	}
-
-	.market-card h3 { margin: 0; font-size: 16px; font-weight: 500; }
-	.market-card .desc { opacity: 0.6; font-size: 13px; flex: 1; line-height: 1.4; }
-	.market-card .author { opacity: 0.45; font-size: 12px; }
-	.market-card .installed { opacity: 0.5; font-size: 13px; }
-
-	/* Hidden by search filtering, not removed — keeps the grid's DOM
-	   order stable so nothing reflows unexpectedly as you type */
-	.market-card[hidden] { display: none; }
-
-	.market-empty { opacity: 0.45; font-size: 14px; padding: 8px 0 20px; }
-
-	/* The one button style in this file. Everything else here is either
-	   unstyled (system default) or its own narrow-purpose class like
-	   .priority-move — this is deliberately the first general one,
-	   scoped so it doesn't change anything that already exists. */
-	.btn {
-		padding: 9px 16px;
-		border: 1px solid var(--glass-border);
-		border-radius: 8px;
-		background: var(--glass-bg);
-		color: var(--fg);
-		font-size: 13px;
-		font-family: inherit;
-		cursor: pointer;
-	}
-
-	.btn:hover:not(:disabled) { background: var(--border); }
-	.btn:disabled { opacity: 0.5; cursor: default; }
-
-	/* A real focus ring, scoped tightly to the button itself — never the
-	   browser's default, which on some renders looks like it's glowing
-	   out around whatever contains the button (a card, here) rather than
-	   the button. Still genuinely visible, which keyboard use needs. */
-	.btn:focus { outline: none; }
-	.btn:focus-visible {
-		outline: none;
-		box-shadow: 0 0 0 2px var(--fg-muted);
-	}
-
-	/* Header row: title on the left, a way to reach settings on the
-	   right, without disturbing every other page's centred single
-	   column. */
-	.market-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 16px;
-	}
-
-	/* Modules / Themes. A search box above them stays visible across
-	   both — only which cards it can see changes. */
-	.market-tabs { display: flex; gap: 6px; margin: 24px 0 4px; }
-
-	.tab-btn {
-		padding: 8px 16px;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: transparent;
-		color: var(--fg-muted);
-		font-size: 14px;
-		font-family: inherit;
-		cursor: pointer;
-	}
-
-	.tab-btn:hover:not(.active) { background: var(--hover-subtle); }
-
-	.tab-btn.active {
-		background: var(--card-border);
-		color: var(--fg);
-		border-color: var(--glass-sheen);
-	}
-
-	/* A card is a link to its detail page, EXCEPT the Install button,
-	   which needs its own click. The link is stretched to the card's
-	   full size via inset:0; the button sits above it on the stacking
-	   order, so a click there hits the button, not the link beneath. */
-	.market-card { position: relative; }
-
-	.market-card .card-link {
-		position: absolute;
-		inset: 0;
-		z-index: 1;
-	}
-
-	.market-card .btn, .market-card .installed {
-		position: relative;
-		z-index: 2;
-		align-self: flex-start;
-	}
-
-	/* The one place this file deliberately breaks from flat, minimal
-	   buttons — a source you're about to trust with full server access
-	   is exactly the moment a slicker, more consequential-feeling
-	   control earns its keep. */
-	.btn-glossy {
-		padding: 11px 22px;
-		border-radius: 8px;
-		font-size: 14px;
-		font-family: inherit;
-		font-weight: 500;
-		cursor: pointer;
-		border: 1px solid var(--glass-border);
-		box-shadow: inset 0 1px 0 var(--glass-sheen), 0 2px 6px rgba(0, 0, 0, 0.35);
-	}
-
-	.btn-glossy-green {
-		color: var(--success-text);
-		background: linear-gradient(to bottom, var(--success), var(--success-hover));
-		border-color: var(--success-hover);
-	}
-
-	.btn-glossy-green:hover { background: linear-gradient(to bottom, var(--success), var(--success-hover)); }
-
-	.btn-glossy-neutral {
-		color: var(--fg);
-		background: linear-gradient(to bottom, var(--disabled-text), var(--disabled));
-	}
-
-	.btn-glossy-neutral:hover { background: linear-gradient(to bottom, var(--disabled-text), var(--border)); }
+	.font-search::placeholder { color: var(--fg-muted); }
+	.font-search:focus { outline: none; border-color: var(--glass-border); }
 
 	/* Shown once, right before a third-party source is actually added.
 	   Deliberately not styled like anything else on this page — this is
@@ -627,22 +635,24 @@ const styles = `
 	.market-warning {
 		background: linear-gradient(165deg, var(--danger-bg), var(--danger-bg));
 		border: 1px solid var(--danger-border);
-		border-radius: 12px;
-		padding: 22px;
+		border-radius: 0.75em;
+		padding: 1.375em;
 	}
 
 	.market-warning h3 { color: var(--danger); margin: 0 0 12px 0; font-size: 17px; }
 	.market-warning p { color: var(--danger-text); font-size: 14px; line-height: 1.6; margin: 0 0 12px 0; }
 	.market-warning p:last-of-type { margin-bottom: 0; }
 
+	.market-warning-actions { display: flex; flex-wrap: wrap; gap: 0.75em; margin-top: 1.25em; }
+
 	.provides-tag {
 		display: inline-block;
-		padding: 4px 10px;
+		padding: 0.3333em 0.8333em;
 		border: 1px solid var(--glass-border);
-		border-radius: 999px;
-		font-size: 12px;
+		border-radius: 999em;
+		font-size: 0.75em;
 		opacity: 0.75;
-		margin: 0 6px 6px 0;
+		margin: 0.5em 0.5em 0 0;
 	}
 
 	/* .glass itself is defined once, in core/ui-theme.js. It used to be
@@ -989,7 +999,7 @@ function notFound(heading, backHref, backLabel) {
 	return page(
 		"Not found",
 		`<div class="bento narrow">
-			<div class="tile">
+			<div class="segment">
 				<h1 style="margin-bottom:14px">${escapeHtml(heading)}</h1>
 				<a class="row" href="${backHref}">
 					<strong>${escapeHtml(backLabel)}</strong>
@@ -1003,17 +1013,27 @@ function notFound(heading, backHref, backLabel) {
 	);
 }
 
+// The red-edged box shown when the registry can't be read: what went
+// wrong, and a way to try again. The Marketplace home shows it under its
+// header; every other Marketplace page that needs the registry shows it
+// on its own, through registryUnreachable below.
+function marketErrorBanner(message) {
+	return `
+		<div class="segment market-error">
+			<div>
+				<h2>Can't reach the registry</h2>
+				<p class="lede">${escapeHtml(message)}</p>
+			</div>
+			<button type="button" class="glass market-action" onclick="location.reload()">Retry</button>
+		</div>`;
+}
+
 // The page shown when the registry couldn't be read, on any marketplace
 // page that needs it
 function registryUnreachable(message) {
 	return page(
 		"Marketplace",
-		`<div class="bento narrow">
-			<div class="tile">
-				<h1>Can't reach the registry</h1>
-				<p class="lede">${escapeHtml(message)}</p>
-			</div>
-		</div>`,
+		`<div class="market reading">${marketErrorBanner(message)}</div>`,
 		"",
 		"",
 		"/marketplace"
@@ -1182,7 +1202,7 @@ function renderFields(schema, config, context, scope) {
 							<div class="search-row">
 								<input type="text" data-loc-query="${escapeHtml(field.key)}"
 									placeholder="Regina">
-								<button class="glass" style="width:auto;padding:12px 20px"
+								<button class="glass" style="width:auto;padding:0.75em 1.25em"
 									onclick="searchCity('${escapeHtml(field.key)}')">Search</button>
 							</div>
 							<div data-loc-results="${escapeHtml(field.key)}"></div>
@@ -1299,7 +1319,7 @@ function renderFields(schema, config, context, scope) {
 function credentialsPage(options) {
 	const body = `
 		<div class="bento narrow">
-			<div class="tile">
+			<div class="segment">
 				<h1>${escapeHtml(options.heading)}</h1>
 				<p class="lede" style="margin-bottom:20px">${escapeHtml(options.lede)}</p>
 				<div class="field">
@@ -1311,7 +1331,7 @@ function credentialsPage(options) {
 					<input type="password" id="password"
 						autocomplete="${options.isSetup ? "new-password" : "current-password"}">
 				</div>
-				<div class="tile-actions">
+				<div class="segment-actions">
 					<button class="glass glass-block" id="submit">${escapeHtml(options.button)}</button>
 					<p class="status" id="status"></p>
 				</div>
@@ -1541,7 +1561,7 @@ function startAdminFace() {
 
 			<div class="bento">
 				<div class="bento-row two">
-					<div class="tile">
+					<div class="segment">
 						<h2>Location Service</h2>
 						<p class="lede">
 							Used by weather and prayer-time modules to know where
@@ -1577,14 +1597,14 @@ function startAdminFace() {
 									)}</div>
 								</div>
 								<button class="glass" id="location-action"
-									style="flex-shrink:0;padding:8px 14px;font-size:0.78em">
+									style="flex-shrink:0;padding:0.641em 1.1218em;font-size:0.78em">
 									${manualLocation ? "Change" : "Refresh"}
 								</button>
 							</div>
 						</div>
 					</div>
 
-					<div class="tile">
+					<div class="segment">
 						<h2>Appearance Mode</h2>
 						<p class="lede">
 							Dashboards are unaffected — how they look belongs to
@@ -1618,7 +1638,7 @@ function startAdminFace() {
 				</div>
 
 				<div class="bento-row three">
-					<div class="tile">
+					<div class="segment">
 						<h2>Back Button Position</h2>
 						<div class="corner-map" id="corner-map">
 							<button type="button" class="corner-tl ${
@@ -1635,7 +1655,7 @@ function startAdminFace() {
 						</p>
 					</div>
 
-					<div class="tile">
+					<div class="segment">
 						<h2>Text Size &amp; Typography</h2>
 						<div class="stepper" style="margin-bottom:10px">
 							<button type="button" class="glass" id="size-down"
@@ -1659,13 +1679,13 @@ function startAdminFace() {
 								}</div>
 							</div>
 							<button class="glass" id="change-font"
-								style="flex-shrink:0;padding:8px 14px;font-size:0.78em">
+								style="flex-shrink:0;padding:0.641em 1.1218em;font-size:0.78em">
 								Change
 							</button>
 						</div>
 					</div>
 
-					<div class="tile link-tile">
+					<div class="segment link-segment">
 						<a class="link-row" href="/faces">
 							<strong>Manage Faces (Dashboards)</strong>
 							<span>Create, edit and remove dashboards</span>
@@ -1689,7 +1709,7 @@ function startAdminFace() {
 						Downloaded once and served by OmniCore itself, so it keeps
 						working with no internet.
 					</p>
-					<input class="market-search" id="font-q"
+					<input class="font-search" id="font-q"
 						placeholder="Search Google Fonts...">
 					<div class="list" id="font-results"></div>
 					${
@@ -1712,7 +1732,7 @@ function startAdminFace() {
 						<label for="city">Search for a city</label>
 						<div class="search-row">
 							<input type="text" id="city" placeholder="Regina">
-							<button class="glass" style="width:auto;padding:12px 20px"
+							<button class="glass" style="width:auto;padding:0.75em 1.25em"
 								id="search">Search</button>
 						</div>
 						<div id="results"></div>
@@ -1991,7 +2011,7 @@ function startAdminFace() {
 
 				fontResults.innerHTML = fonts.map(function (font) {
 					const safe = font.family.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-					return '<div class="card font-row" onclick="pickFont(' +
+					return '<div class="segment clickable font-row" onclick="pickFont(' +
 						JSON.stringify(font.family).replace(/"/g, "&quot;") +
 						')"><strong style="font-family:' +
 						JSON.stringify(font.family).replace(/"/g, "&quot;") +
@@ -2185,20 +2205,86 @@ function startAdminFace() {
 	// Installed code starts running the same way built-in code does, when
 	// module-loader or theme-loader require() it.
 
-	// One card per entry, all in a single grid the search box filters
-	// client-side. `data-search` holds the text a match is judged against —
-	// built once here rather than recomputed by the filter on every
-	// keystroke. The whole card links to its detail page except the
-	// Install button, which needs its own click — see .card-link in the
-	// stylesheet for how that's kept from conflicting.
-	function marketplaceCards(entries, kind) {
+	// Install buttons, on every Marketplace page that shows one: the home
+	// page, a listing's own page and an author's page. One copy, so they
+	// can't drift apart. The author page used to have none at all, which
+	// left its Install buttons doing nothing when clicked.
+	//
+	// post() puts any failure on the button itself -- there's no other
+	// obvious place on these pages for it to go.
+	const marketPostScript = `
+		async function post(url, payload, button, working, done) {
+			const was = button.textContent;
+			button.disabled = true;
+			button.textContent = working;
+
+			try {
+				const response = await fetch(url, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(payload)
+				});
+
+				const result = await response.json();
+
+				if (!response.ok) {
+					throw new Error(result.error || "Failed");
+				}
+
+				button.textContent = done;
+				return true;
+			} catch (error) {
+				button.disabled = false;
+				button.textContent = error.message.slice(0, 60);
+				setTimeout(function () { button.textContent = was; }, 4000);
+				return false;
+			}
+		}
+	`;
+
+	const marketInstallScript = marketPostScript + `
+		for (const button of document.querySelectorAll("[data-install]")) {
+			button.addEventListener("click", async function () {
+				const ok = await post(
+					"/marketplace/install",
+					{ id: button.dataset.install, kind: button.dataset.kind },
+					button,
+					"Installing...",
+					"Installed"
+				);
+
+				if (ok) {
+					setTimeout(function () { location.reload(); }, 800);
+				}
+			});
+		}
+	`;
+
+	// The button for one listing: Install, or a green "Installed" once
+	// it's here. "Installed" is a label shaped like a button, not a
+	// button -- there's nothing to press.
+	function marketAction(entry, kind) {
+		return entry.installed
+			? '<span class="btn-glossy btn-glossy-green market-action">&#10003; Installed</span>'
+			: `<button type="button" class="glass market-action" data-install="${escapeHtml(entry.id)}" ` +
+			  `data-kind="${kind}">Install</button>`;
+	}
+
+	// One row per entry, in a grid the search box filters client-side.
+	// `data-search` holds the text a match is judged against -- built once
+	// here rather than recomputed on every keystroke. The whole row links
+	// to its own page except the Install button, which needs its own
+	// click -- see .market-link in the stylesheet.
+	//
+	// Under the grid sits a "nothing matches" line, hidden until a search
+	// hides every row.
+	function marketplaceListings(entries, kind) {
 		if (!entries.length) {
-			return '<p class="market-empty">Nothing listed yet.</p>';
+			return '<div class="segment"><span class="empty">Nothing listed yet.</span></div>';
 		}
 
-		const cards = entries
+		const listings = entries
 			.map((entry) => {
-				const id = escapeHtml(entry.id);
 				const name = entry.name || entry.id;
 				const author = entry.author || "";
 				const description = entry.description || "";
@@ -2208,23 +2294,29 @@ function startAdminFace() {
 					[name, description, author].join(" ").toLowerCase()
 				);
 
-				const action = entry.installed
-					? '<span class="installed">Installed</span>'
-					: `<button type="button" class="btn" data-install="${id}" ` +
-					  `data-kind="${kind}">Install</button>`;
-
 				return `
-					<div class="market-card" data-search="${searchText}">
-						<a class="card-link" href="${escapeHtml(detailUrl)}" aria-label="${escapeHtml(name)}"></a>
-						<h3>${escapeHtml(name)}</h3>
-						${description ? `<div class="desc">${escapeHtml(description)}</div>` : ""}
-						${author ? `<div class="author">${escapeHtml(author)}</div>` : ""}
-						${action}
+					<div class="segment clickable market-item" data-search="${searchText}">
+						<a class="market-link" href="${escapeHtml(detailUrl)}" aria-label="${escapeHtml(name)}"></a>
+						<div class="market-item-text">
+							<h3>${escapeHtml(name)}</h3>
+							${author ? `<div class="market-by">by ${escapeHtml(author)}</div>` : ""}
+							${description ? `<div class="market-desc">${escapeHtml(description)}</div>` : ""}
+						</div>
+						${marketAction(entry, kind)}
 					</div>`;
 			})
 			.join("");
 
-		return `<div class="market-grid">${cards}</div>`;
+		return `
+			<div class="market-list">${listings}</div>
+			<div class="segment" data-no-match hidden>
+				<span class="empty">Nothing matches that search.</span>
+			</div>`;
+	}
+
+	// "9 items available", or "1 item available"
+	function itemsAvailable(count) {
+		return `${count} ${count === 1 ? "item" : "items"} available`;
 	}
 
 	app.get("/marketplace", async (req, res) => {
@@ -2244,99 +2336,92 @@ function startAdminFace() {
 			? `<p class="help">
 				Couldn't reach ${available.sourceFailures.length === 1 ? "an additional source" : "some additional sources"}:
 				${available.sourceFailures.map((f) => escapeHtml(f.url)).join(", ")}.
-				The built-in registry above is unaffected.
+				The built-in registry is unaffected.
 			</p>`
 			: "";
 
-		const body = `
-			<div class="market-wide market-header">
-				<div>
-					<h1>Marketplace</h1>
-					<p class="help">
-						Modules and themes reviewed into the registry. Installing
-						downloads the exact reviewed version.
-					</p>
-					${failedSources}
-				</div>
-				<a class="btn" href="/marketplace/sources">Sources</a>
-			</div>
-
-			${failure ? `
-			<div class="tile market-wide">
-				<h2>Can't reach the registry</h2>
-				<p class="lede">${escapeHtml(failure)}</p>
-			</div>` : `
-			<div class="market-wide">
-				<input type="text" class="market-search" data-market-search
-					placeholder="Search by name, author, or description">
-
-				<div class="market-tabs">
-					<button type="button" class="tab-btn active" data-tab-btn="module">Modules</button>
-					<button type="button" class="tab-btn" data-tab-btn="theme">Themes</button>
+		// Search, the Modules / Themes switch and the count, pinned at the
+		// top as the list scrolls. Then one panel of listings per tab.
+		const listings = failure
+			? marketErrorBanner(failure)
+			: `
+				<div class="segment toolbar market-toolbar">
+					<input type="text" data-market-search
+						placeholder="Search by name, author, or description"
+						aria-label="Search the Marketplace">
+					<div class="tabs">
+						<button type="button" class="tab-btn active" data-tab-btn="module">Modules</button>
+						<button type="button" class="tab-btn" data-tab-btn="theme">Themes</button>
+					</div>
+					<span class="toolbar-note" data-market-count>${itemsAvailable(available.modules.length)}</span>
 				</div>
 
 				<div data-tab-panel="module">
-					${marketplaceCards(available.modules, "module")}
+					${marketplaceListings(available.modules, "module")}
 				</div>
 				<div data-tab-panel="theme" hidden>
-					${marketplaceCards(available.themes, "theme")}
+					${marketplaceListings(available.themes, "theme")}
+				</div>`;
+
+		const body = `
+			<div class="market">
+				<div class="segment market-head">
+					<div>
+						<h1>Marketplace</h1>
+						<p class="lede">
+							Modules and themes reviewed into the registry. Installing
+							downloads the exact reviewed version.
+						</p>
+						${failedSources}
+					</div>
+					<a class="glass market-action" href="/marketplace/sources">Sources</a>
 				</div>
-			</div>`}`;
 
-		const script = `
-			const note = document.createElement("div");
+				${listings}
+			</div>`;
 
-			async function post(url, payload, button, working, done) {
-				const was = button.textContent;
-				button.disabled = true;
-				button.textContent = working;
+		const script = marketInstallScript + `
+			var search = document.querySelector("[data-market-search]");
+			var count = document.querySelector("[data-market-count]");
 
-				try {
-					const response = await fetch(url, {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(payload)
-					});
+			// The panel for whichever tab is showing
+			function activePanel() {
+				return document.querySelector("[data-tab-panel]:not([hidden])");
+			}
 
-					const result = await response.json();
+			// Hides the rows that don't match what's typed, then says how
+			// many are left: "9 items available" with nothing typed, "2 of
+			// 9 shown" while searching, and "Nothing matches" under the
+			// grid when the search hides every row.
+			function applySearch() {
+				var panel = activePanel();
+				if (!panel) return;
 
-					if (!response.ok) {
-						throw new Error(result.error || "Failed");
-					}
+				var query = search ? search.value.trim().toLowerCase() : "";
+				var items = panel.querySelectorAll(".market-item");
+				var shown = 0;
 
-					button.textContent = done;
-					return true;
-				} catch (error) {
-					// Put the reason on the button itself — there is no
-					// other obvious place on this page for it to go
-					button.disabled = false;
-					button.textContent = error.message.slice(0, 60);
-					setTimeout(function () { button.textContent = was; }, 4000);
-					return false;
+				for (var i = 0; i < items.length; i++) {
+					var matches = items[i].dataset.search.indexOf(query) !== -1;
+					items[i].hidden = query !== "" && !matches;
+					if (!items[i].hidden) shown++;
+				}
+
+				var none = panel.querySelector("[data-no-match]");
+				if (none) none.hidden = !(items.length && shown === 0);
+
+				if (count) {
+					count.textContent = query
+						? shown + " of " + items.length + " shown"
+						: items.length + (items.length === 1 ? " item" : " items") + " available";
 				}
 			}
 
-			for (const button of document.querySelectorAll("[data-install]")) {
-				button.addEventListener("click", async function () {
-					const ok = await post(
-						"/marketplace/install",
-						{ id: button.dataset.install, kind: button.dataset.kind },
-						button,
-						"Installing...",
-						"Installed"
-					);
-
-					if (ok) {
-						setTimeout(function () { location.reload(); }, 800);
-					}
-				});
-			}
-
-			// Modules / Themes. Switching resets the search — starting
+			// Modules / Themes. Switching clears the search -- starting
 			// fresh in the new tab is less surprising than carrying a
 			// filter across to content it was never typed against.
-			const tabButtons = Array.from(document.querySelectorAll("[data-tab-btn]"));
-			const tabPanels = Array.from(document.querySelectorAll("[data-tab-panel]"));
+			var tabButtons = Array.from(document.querySelectorAll("[data-tab-btn]"));
+			var tabPanels = Array.from(document.querySelectorAll("[data-tab-panel]"));
 
 			for (const button of tabButtons) {
 				button.addEventListener("click", function () {
@@ -2348,35 +2433,17 @@ function startAdminFace() {
 						panel.hidden = panel.dataset.tabPanel !== button.dataset.tabBtn;
 					}
 
-					if (search) {
-						search.value = "";
-						for (const card of document.querySelectorAll(".market-card")) {
-							card.hidden = false;
-						}
-					}
+					if (search) search.value = "";
+					applySearch();
 				});
 			}
 
-			// Filters client-side rather than round-tripping to the server —
-			// a personal registry is small enough that there's nothing to
-			// gain from a network request on every keystroke. Scoped to
-			// whichever tab is currently showing, not every card on the
-			// page — searching Modules shouldn't surface a Theme.
-			var search = document.querySelector("[data-market-search]");
-
+			// Filters in the browser rather than asking the server on
+			// every keystroke -- a registry is small enough that there's
+			// nothing to gain from it. Only the tab that's showing is
+			// searched: searching Modules shouldn't surface a Theme.
 			if (search) {
-				search.addEventListener("input", function () {
-					const query = search.value.trim().toLowerCase();
-					const activePanel = document.querySelector("[data-tab-panel]:not([hidden])");
-					const cards = activePanel
-						? activePanel.querySelectorAll(".market-card")
-						: [];
-
-					for (const card of cards) {
-						const matches = card.dataset.search.indexOf(query) !== -1;
-						card.hidden = query !== "" && !matches;
-					}
-				});
+				search.addEventListener("input", applySearch);
 			}
 		`;
 
@@ -2389,93 +2456,73 @@ function startAdminFace() {
 			? settings.registrySources
 			: [];
 
+		// One line per registry: the built-in one first, which can't be
+		// removed, then any the admin added
 		const extraRows = sources
 			.map(
 				(url) => `
-				<div class="row">
-					<div><strong>${escapeHtml(url)}</strong></div>
-					<button type="button" class="btn" data-remove-source="${escapeHtml(url)}">Remove</button>
+				<div class="market-source">
+					<div class="market-url"><strong>${escapeHtml(url)}</strong></div>
+					<button type="button" class="glass market-action" data-remove-source="${escapeHtml(url)}">Remove</button>
 				</div>`
 			)
 			.join("");
 
 		const body = `
-			<div class="market-wide">
-				<h1>Registry sources</h1>
-				<p class="help">Where OmniCore looks for modules and themes to install.</p>
-			</div>
-
-			<div class="market-wide">
-				<div class="row">
+			<div class="market reading">
+				<div class="segment market-head">
 					<div>
-						<strong>Omnia-Registry</strong>
-						<div class="help">Built-in. Reviewed, and always included.</div>
+						<h1>Registry sources</h1>
+						<p class="lede">Where OmniCore looks for modules and themes to install.</p>
 					</div>
-					<span class="installed">Built-in</span>
 				</div>
-				${extraRows}
-			</div>
 
-			<div class="tile market-wide">
-				<label for="newSource">Add a source</label>
-				<input type="url" id="newSource" data-new-source placeholder="https://example.com/registry.json">
-				<button type="button" class="btn" data-reveal-warning style="margin-top: 10px;">Add source</button>
-			</div>
+				<div class="segment">
+					<div class="market-source">
+						<div>
+							<strong>Omnia-Registry</strong>
+							<div class="help">Built-in. Reviewed, and always included.</div>
+						</div>
+						<span class="toolbar-note">Built-in</span>
+					</div>
+					${extraRows}
+				</div>
 
-			<div class="market-wide market-warning" data-warning hidden>
-				<h3>This adds a source OmniCore hasn't reviewed</h3>
-				<p>
-					Everything in the built-in registry is reviewed before anyone
-					can install it — someone actually read the code before it was
-					listed. A third-party source has no such review. Anything
-					listed there could be anything.
-				</p>
-				<p>
-					A module is a full, unrestricted Node program. It can read
-					every file this server can read — including your admin
-					credentials — and reach the network however it likes. None
-					of that is sandboxed, checked, or undone automatically once
-					something is installed from it.
-				</p>
-				<p>
-					<strong>If you don't personally, actually trust whoever runs
-					this source — not "it looked fine" — don't add it.</strong>
-				</p>
-				<div style="display: flex; gap: 10px; margin-top: 18px;">
-					<button type="button" class="btn-glossy btn-glossy-green" data-warning-cancel>Go back</button>
-					<button type="button" class="btn-glossy btn-glossy-neutral" data-warning-confirm>I understand</button>
+				<div class="segment">
+					<label for="newSource">Add a source</label>
+					<div class="toolbar">
+						<input type="url" id="newSource" data-new-source placeholder="https://example.com/registry.json">
+						<button type="button" class="glass market-action" data-reveal-warning>Add source</button>
+					</div>
+				</div>
+
+				<div class="market-warning" data-warning hidden>
+					<h3>This adds a source OmniCore hasn't reviewed</h3>
+					<p>
+						Everything in the built-in registry is reviewed before anyone
+						can install it — someone actually read the code before it was
+						listed. A third-party source has no such review. Anything
+						listed there could be anything.
+					</p>
+					<p>
+						A module is a full, unrestricted Node program. It can read
+						every file this server can read — including your admin
+						credentials — and reach the network however it likes. None
+						of that is sandboxed, checked, or undone automatically once
+						something is installed from it.
+					</p>
+					<p>
+						<strong>If you don't personally, actually trust whoever runs
+						this source — not "it looked fine" — don't add it.</strong>
+					</p>
+					<div class="market-warning-actions">
+						<button type="button" class="btn-glossy btn-glossy-green" data-warning-cancel>Go back</button>
+						<button type="button" class="btn-glossy btn-glossy-neutral" data-warning-confirm>I understand</button>
+					</div>
 				</div>
 			</div>`;
 
-		const script = `
-			async function post(url, payload, button, working, done) {
-				const was = button.textContent;
-				button.disabled = true;
-				button.textContent = working;
-
-				try {
-					const response = await fetch(url, {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(payload)
-					});
-
-					const result = await response.json();
-
-					if (!response.ok) {
-						throw new Error(result.error || "Failed");
-					}
-
-					button.textContent = done;
-					return true;
-				} catch (error) {
-					button.disabled = false;
-					button.textContent = error.message.slice(0, 60);
-					setTimeout(function () { button.textContent = was; }, 4000);
-					return false;
-				}
-			}
-
+		const script = marketPostScript + `
 			const newSource = document.querySelector("[data-new-source]");
 			const warning = document.querySelector("[data-warning]");
 			const reveal = document.querySelector("[data-reveal-warning]");
@@ -2545,7 +2592,7 @@ function startAdminFace() {
 		res.json({ ok: true });
 	});
 
-	// A module's or theme's own page — everything the browse cards don't
+	// A module's or theme's own page — everything the browse listings don't
 	// have room for. Shared by both kinds since the layout only differs
 	// by a couple of conditional pieces (provides, only meaningful for a
 	// module; a theme has nothing analogous to show there).
@@ -2577,11 +2624,47 @@ function startAdminFace() {
 		// supplies the two things registry.json never had a place for.
 		const extras = await marketplace.fetchDetailExtras(kind, entry);
 
+		// The longer description, if module.json has one, one paragraph
+		// per blank-line-separated block. The short one is already in the
+		// header.
+		const paragraphs = extras.completeDescription
+			? extras.completeDescription
+				.split(/\n{2,}/)
+				.map((para) => para.trim())
+				.filter(Boolean)
+			: [];
+
+		const aboutSection = paragraphs.length
+			? `
+				<div class="segment market-about">
+					${paragraphs.map((para) => `<p>${escapeHtml(para)}</p>`).join("")}
+				</div>`
+			: "";
+
 		const emitsSection = kind === "module" && emits.length
 			? `
-				<h2>Emits</h2>
-				<div>${emits.map((e) => `<span class="provides-tag">${escapeHtml(e)}</span>`).join("")}</div>`
+				<div class="segment">
+					<h2>Emits</h2>
+					<div>${emits.map((e) => `<span class="provides-tag">${escapeHtml(e)}</span>`).join("")}</div>
+				</div>`
 			: "";
+
+		const sourceSection = entry.repo
+			? `
+				<div class="segment">
+					<h2>Source</h2>
+					<p class="lede market-url">
+						<a href="${escapeHtml(entry.repo)}">${escapeHtml(entry.repo)}</a>
+						${entry.ref ? ` — pinned at <code>${escapeHtml(String(entry.ref).slice(0, 10))}</code>` : ""}
+					</p>
+				</div>`
+			: "";
+
+		// Emits and Source side by side when there are both, on their own
+		// otherwise
+		const factsRow = emitsSection && sourceSection
+			? `<div class="bento-row two top">${emitsSection}${sourceSection}</div>`
+			: emitsSection + sourceSection;
 
 		// Every screenshot's actual URL is remembered server-side and handed
 		// a short opaque key — the browser never sees or requests the real
@@ -2591,113 +2674,54 @@ function startAdminFace() {
 		// an unreviewed module.json chose.
 		const screenshotsSection = extras.screenshots.length
 			? `
-				<h2>Screenshots</h2>
-				<div class="market-grid">
-					${extras.screenshots
-						.map((shot, index) => {
-							const key = `${kind}:${entry.id}:${index}`;
-							imageProxy.remember(key, shot.image);
+				<div class="segment">
+					<h2>Screenshots</h2>
+					<div class="market-shots">
+						${extras.screenshots
+							.map((shot, index) => {
+								const key = `${kind}:${entry.id}:${index}`;
+								imageProxy.remember(key, shot.image);
 
-							const themeLink = shot.theme
-								? `<div class="help">Shown in <a href="/marketplace/themes/${escapeHtml(shot.theme)}">${escapeHtml(shot.theme)}</a></div>`
-								: "";
+								const themeLink = shot.theme
+									? ` Shown in <a href="/marketplace/themes/${escapeHtml(shot.theme)}">${escapeHtml(shot.theme)}</a>.`
+									: "";
 
-							return `
-								<div class="market-card">
-									<img src="/marketplace/screenshot/${encodeURIComponent(key)}"
-										alt="${escapeHtml(shot.description || name)}"
-										style="width: 100%; border-radius: 8px; display: block;">
-									${shot.description ? `<div class="desc">${escapeHtml(shot.description)}</div>` : ""}
-									${themeLink}
-								</div>`;
-						})
-						.join("")}
+								const caption = (shot.description ? escapeHtml(shot.description) : "") + themeLink;
+
+								return `
+									<figure>
+										<img src="/marketplace/screenshot/${encodeURIComponent(key)}"
+											alt="${escapeHtml(shot.description || name)}">
+										${caption ? `<figcaption>${caption}</figcaption>` : ""}
+									</figure>`;
+							})
+							.join("")}
+					</div>
 				</div>`
 			: "";
 
-		const action = entry.installed
-			? '<span class="installed">Installed</span>'
-			: `<button type="button" class="btn" data-install="${escapeHtml(entry.id)}" ` +
-			  `data-kind="${kind}">Install</button>`;
-
+		// No "← Marketplace" link at the top: the floating back button
+		// already goes there, the same as on every other page
 		const body = `
-			<div class="market-wide">
-				<a href="/marketplace" class="help">&larr; Marketplace</a>
-				<h1 style="margin-top: 10px;">${escapeHtml(name)}</h1>
-				<p class="help">
-					${kind === "theme" ? "Theme" : "Module"}
-					${author ? ` by <a href="/marketplace/authors/${encodeURIComponent(author)}">${escapeHtml(author)}</a>` : ""}
-				</p>
+			<div class="market reading">
+				<div class="segment market-head">
+					<div>
+						<h1>${escapeHtml(name)}</h1>
+						<div class="market-by">
+							${kind === "theme" ? "Theme" : "Module"}
+							${author ? ` by <a href="/marketplace/authors/${encodeURIComponent(author)}">${escapeHtml(author)}</a>` : ""}
+						</div>
+						${entry.description ? `<p class="lede">${escapeHtml(entry.description)}</p>` : ""}
+					</div>
+					${marketAction(entry, kind)}
+				</div>
 
-				${entry.description ? `<p>${escapeHtml(entry.description)}</p>` : ""}
-				${extras.completeDescription
-					? extras.completeDescription
-						.split(/\n{2,}/)
-						.map((para) => para.trim())
-						.filter(Boolean)
-						.map((para) => `<p>${escapeHtml(para)}</p>`)
-						.join("")
-					: ""}
-
-				${emitsSection}
+				${aboutSection}
+				${factsRow}
 				${screenshotsSection}
-
-				${entry.repo ? `
-				<h2>Source</h2>
-				<p class="help">
-					<a href="${escapeHtml(entry.repo)}">${escapeHtml(entry.repo)}</a>
-					${entry.ref ? ` — pinned at <code>${escapeHtml(String(entry.ref).slice(0, 10))}</code>` : ""}
-				</p>` : ""}
-
-				<div style="margin-top: 20px;">${action}</div>
 			</div>`;
 
-		const script = `
-			async function post(url, payload, button, working, done) {
-				const was = button.textContent;
-				button.disabled = true;
-				button.textContent = working;
-
-				try {
-					const response = await fetch(url, {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(payload)
-					});
-
-					const result = await response.json();
-
-					if (!response.ok) {
-						throw new Error(result.error || "Failed");
-					}
-
-					button.textContent = done;
-					return true;
-				} catch (error) {
-					button.disabled = false;
-					button.textContent = error.message.slice(0, 60);
-					setTimeout(function () { button.textContent = was; }, 4000);
-					return false;
-				}
-			}
-
-			for (const button of document.querySelectorAll("[data-install]")) {
-				button.addEventListener("click", async function () {
-					const ok = await post(
-						"/marketplace/install",
-						{ id: button.dataset.install, kind: button.dataset.kind },
-						button,
-						"Installing...",
-						"Installed"
-					);
-					if (ok) {
-						setTimeout(function () { location.reload(); }, 800);
-					}
-				});
-			}
-		`;
-
-		res.send(page(name, body, script, "", "/marketplace"));
+		res.send(page(name, body, marketInstallScript, "", "/marketplace"));
 	}
 
 	// A screenshot's real URL is never sent to the browser — only this
@@ -2750,21 +2774,34 @@ function startAdminFace() {
 
 		const modules = available.modules.filter((e) => e.author === authorName);
 		const themes = available.themes.filter((e) => e.author === authorName);
+		const total = modules.length + themes.length;
 
+		// Only the groups this author actually has. Someone with themes
+		// and no modules doesn't need an empty "Modules" heading.
 		const body = `
-			<div class="market-wide">
-				<a href="/marketplace" class="help">&larr; Marketplace</a>
-				<h1 style="margin-top: 10px;">${escapeHtml(authorName)}</h1>
-				<p class="help">${modules.length + themes.length} listed</p>
+			<div class="market">
+				<div class="segment market-head">
+					<div>
+						<h1>${escapeHtml(authorName)}</h1>
+						<p class="lede">${total} listed</p>
+					</div>
+				</div>
 
-				<h2 style="margin-top: 24px;">Modules</h2>
-				${marketplaceCards(modules, "module")}
+				${modules.length ? `
+				<h2 class="market-section">Modules</h2>
+				${marketplaceListings(modules, "module")}` : ""}
 
-				<h2 style="margin-top: 32px;">Themes</h2>
-				${marketplaceCards(themes, "theme")}
+				${themes.length ? `
+				<h2 class="market-section">Themes</h2>
+				${marketplaceListings(themes, "theme")}` : ""}
+
+				${total ? "" : `
+				<div class="segment">
+					<span class="empty">Nothing listed by ${escapeHtml(authorName)}.</span>
+				</div>`}
 			</div>`;
 
-		res.send(page(authorName, body, "", "", "/marketplace"));
+		res.send(page(authorName, body, marketInstallScript, "", "/marketplace"));
 	});
 
 	app.post("/marketplace/install", async (req, res) => {
@@ -2783,7 +2820,7 @@ function startAdminFace() {
 		}
 	});
 
-	// Updates. Reached by clicking the version tile on the About face,
+	// Updates. Reached by clicking the version card on the About face,
 	// not from the settings list — deliberately a path you find rather
 	// than one you're shown.
 	//
@@ -2850,7 +2887,7 @@ function startAdminFace() {
 			  )}</span>`;
 
 		const notesSection = (heading, notes, fallback) => `
-			<div class="tile">
+			<div class="segment">
 				<h2>${escapeHtml(heading)}</h2>
 				${
 					notes
@@ -2866,7 +2903,7 @@ function startAdminFace() {
 
 			<div class="bento">
 			<div class="bento-row ${offered ? "three" : "two"} top">
-			<div class="tile">
+			<div class="segment">
 				<div class="field">
 					<strong>Running</strong>
 					<div class="stat-value" style="font-size:1.4em;margin-top:4px">
@@ -3305,7 +3342,7 @@ function startAdminFace() {
 	// a separate repo) has no registry entry at all, and would be
 	// silently invisible on a page meant to show what's actually here.
 	//
-	// Deliberately plain for now -- the same simple list-of-cards
+	// Deliberately plain for now -- the same simple list-of-segments
 	// pattern used everywhere else. A better-purposed layout for a
 	// catalogue specifically is a real, separate piece of design work,
 	// not something to improvise here.
@@ -3314,7 +3351,7 @@ function startAdminFace() {
 		// rendering this page never costs a trip to the registry
 		const lastCheck = updateStore.lastResourceCheck();
 
-		// One card's worth of facts about something installed.
+		// One segment's worth of facts about something installed.
 		//
 		// The version a person sees is the date of the commit installed:
 		// modules and themes have no version numbers, the registry pinning
@@ -3374,7 +3411,7 @@ function startAdminFace() {
 			}
 
 			return `
-			<div class="card resource">
+			<div class="segment resource">
 				<strong>${escapeHtml(name)}</strong>
 				<span class="hint">${escapeHtml(description || "")}</span>
 				<div class="resource-facts">
@@ -3392,18 +3429,18 @@ function startAdminFace() {
 		// listThemes() already returns manifests -- reading them again
 		// would pass an object where an id string belongs, which is
 		// exactly the crash this page had.
-		const moduleCards = listModules().map((id) => {
+		const moduleSegments = listModules().map((id) => {
 			const manifest = readManifest(id);
 			return describe("module", id, manifest.name || id, manifest.description);
 		});
 
-		const themeCards = themeLoader
+		const themeSegments = themeLoader
 			.listThemes()
 			.map((manifest) =>
 				describe("theme", manifest.id, manifest.name || manifest.id, manifest.description)
 			);
 
-		const list = [...moduleCards, ...themeCards].join("");
+		const list = [...moduleSegments, ...themeSegments].join("");
 
 		// The check, in a sentence or two
 		let checkSummary;
@@ -3419,7 +3456,7 @@ function startAdminFace() {
 			const skipped = lastCheck.skipped || [];
 			const parts = [];
 
-			// By the names on the cards, not the ids behind them
+			// By the names on the segments, not the ids behind them
 			const themeNames = new Map(
 				themeLoader.listThemes().map((manifest) => [manifest.id, manifest.name || manifest.id])
 			);
@@ -3444,12 +3481,12 @@ function startAdminFace() {
 				<h1>Installed Resources</h1>
 			</div>
 			<div class="bento">
-				<div class="tile">
+				<div class="segment">
 					<div class="list">
 						${list || '<div class="empty">Nothing installed yet.</div>'}
 					</div>
 				</div>
-				<div class="tile">
+				<div class="segment">
 					${checkSummary}
 					<span class="hint">Last checked: ${lastCheck ? localTime(lastCheck.checkedAt) : "never"}</span>
 					<button class="glass glass-block" id="check">Check now</button>
@@ -3558,13 +3595,13 @@ function startAdminFace() {
 
 		const body = `
 			<div class="bento">
-				<div class="tile">
+				<div class="segment">
 					<h1 style="margin-bottom:14px">Faces</h1>
 					<div class="list">
 						${faces || '<div class="empty">No faces yet.</div>'}
 					</div>
 				</div>
-				<div class="tile">
+				<div class="segment">
 					<button class="glass glass-block" onclick="goToWizard()">
 						Create a new face
 					</button>
@@ -3601,7 +3638,7 @@ function startAdminFace() {
 		const body = `
 			<div class="bento">
 			<div class="bento-row two">
-				<div class="tile">
+				<div class="segment">
 					<h1>${escapeHtml(face.name)}</h1>
 					<p class="lede" style="margin-bottom:14px">Running on port ${face.id}</p>
 					<a class="row" href="/faces/${face.id}/modules">
@@ -3613,7 +3650,7 @@ function startAdminFace() {
 						<span>${escapeHtml(themeName)}</span>
 					</a>
 				</div>
-				<div class="tile">
+				<div class="segment">
 					<div class="field">
 						<label for="name">Name</label>
 					<input type="text" id="name" value="${escapeHtml(face.name)}">
@@ -3711,7 +3748,7 @@ function startAdminFace() {
 
 		const body = `
 			<div class="bento">
-				<div class="tile">
+				<div class="segment">
 					<h1>${escapeHtml(manifest.name)}</h1>
 					<p class="lede" style="margin-bottom:14px">${escapeHtml(
 						manifest.description || "The theme this face is using"
@@ -3721,7 +3758,7 @@ function startAdminFace() {
 						<span>Use a different theme on this face</span>
 					</a>
 				</div>
-				<div class="tile">
+				<div class="segment">
 					${
 						schema.length
 							? renderFields(schema, config, { instances: face.instances }) +
@@ -3821,7 +3858,7 @@ function startAdminFace() {
 
 		const body = `
 			<div class="bento">
-				<div class="tile">
+				<div class="segment">
 					<h1>Change theme</h1>
 					<p class="lede" style="margin-bottom:14px">
 						Settings you've already made are kept per theme, so
@@ -3832,7 +3869,7 @@ function startAdminFace() {
 					</div>
 					<p class="status" id="status" style="margin-top:12px"></p>
 				</div>
-				<div class="tile">
+				<div class="segment">
 					<a class="glass glass-block" href="/marketplace"
 						style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
 						Get more themes
@@ -3903,13 +3940,13 @@ function startAdminFace() {
 
 		const body = `
 			<div class="bento">
-				<div class="tile">
+				<div class="segment">
 					<h1 style="margin-bottom:14px">Modules</h1>
 					<div class="list">
 						${instances || '<div class="empty">No modules on this face yet.</div>'}
 					</div>
 				</div>
-				<div class="tile">
+				<div class="segment">
 					<a class="glass glass-block" href="/faces/${face.id}/modules/add"
 						style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
 						Add a module
@@ -3944,7 +3981,7 @@ function startAdminFace() {
 
 		const body = `
 			<div class="bento">
-				<div class="tile">
+				<div class="segment">
 					<h1>Add a module</h1>
 					<p class="lede" style="margin-bottom:14px">You can add the same module more than once.</p>
 					<div class="list">
@@ -3952,7 +3989,7 @@ function startAdminFace() {
 					</div>
 					<p class="status" id="status" style="margin-top:12px"></p>
 				</div>
-				<div class="tile">
+				<div class="segment">
 					<a class="glass glass-block" href="/marketplace"
 						style="display:block;text-align:center;box-sizing:border-box;text-decoration:none">
 						Get more modules
@@ -4091,16 +4128,16 @@ function startAdminFace() {
 		);
 		const themeName = themeLoader.readManifest(face.theme).name;
 
-		// Laid out as tiles like every other admin page:
+		// Laid out as segments like every other admin page:
 		//
 		//   [ name, what the module is, and its widget type picker ]
 		//   [ the module's settings ]  [ the theme's settings for it ]
 		//   [ Save                     |  Remove from this face      ]
 		//
-		// The theme's tile only when the theme has anything to set; the
+		// The theme's segment only when the theme has anything to set; the
 		// module's settings then take the whole row.
-		const themeTile = themeSchema.length
-			? `<div class="tile">
+		const themeSegment = themeSchema.length
+			? `<div class="segment">
 					<h2>In ${escapeHtml(themeName)}</h2>
 					<p class="lede">How the face's theme shows this module.</p>
 					${renderFields(
@@ -4114,7 +4151,7 @@ function startAdminFace() {
 
 		const body = `
 			<div class="bento">
-				<div class="tile">
+				<div class="segment">
 					<h1>${escapeHtml(instance.label || manifest.name)}</h1>
 					<p class="lede"${picker ? ' style="margin-bottom:14px"' : ""}>${escapeHtml(
 						manifest.description || manifest.name
@@ -4122,8 +4159,8 @@ function startAdminFace() {
 					${picker}
 				</div>
 
-				<div class="bento-row${themeTile ? " two" : ""} top">
-					<div class="tile">
+				<div class="bento-row${themeSegment ? " two" : ""} top">
+					<div class="segment">
 						<h2 style="margin-bottom:14px">Settings</h2>
 						<div class="field">
 							<label for="label">Label</label>
@@ -4140,15 +4177,15 @@ function startAdminFace() {
 								: '<div class="empty">This module has nothing else to configure.</div>'
 						}
 					</div>
-					${themeTile}
+					${themeSegment}
 				</div>
 
 				<div class="bento-row two">
-					<div class="tile tile-actions">
+					<div class="segment segment-actions">
 						<button class="glass glass-block" id="save">Save</button>
 						<p class="status" id="status"></p>
 					</div>
-					<div class="tile tile-actions">
+					<div class="segment segment-actions">
 						<button class="glass glass-block glass-danger" id="remove">Remove from this face</button>
 					</div>
 				</div>

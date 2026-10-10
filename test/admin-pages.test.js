@@ -1,10 +1,11 @@
 // test/admin-pages.test.js
-// Every page under a face, as tiles in the Default UI's look, with a
+// Every page under a face, as segments in the Default UI's look, with a
 // working way back.
 //
 // Before v1.19.1 the pages one click deep under a face (a module's
 // settings, Add a module, Change theme) were still built from the old
-// plain blocks while the pages above them were tiles, and the theme page
+// plain blocks while the pages above them were tiles (segments since
+// v1.19.2), and the theme page
 // had no back button at all. These check the whole branch, so a page
 // added later in the old style shows up here.
 
@@ -72,7 +73,7 @@ function backTarget(page) {
 	return match ? match[1] : null;
 }
 
-test("every page under a face is tiles, with a way back up", async () => {
+test("every page under a face is segments, with a way back up", async () => {
 	const base = `/faces/${face.id}`;
 	const instance = `${base}/modules/${encodeURIComponent(instanceId)}`;
 
@@ -89,17 +90,19 @@ test("every page under a face is tiles, with a way back up", async () => {
 		const page = await html(url);
 
 		assert.equal(page.status, 200, `${url} answered ${page.status}`);
-		assert.ok(page.text.includes('class="bento'), `${url} isn't tiles`);
+		assert.ok(page.text.includes('class="bento'), `${url} isn't a bento`);
+		assert.ok(page.text.includes('class="segment'), `${url} isn't segments`);
+		assert.ok(!page.text.includes('class="tile'), `${url} still has the old box name`);
 		assert.ok(!page.text.includes('class="panel'), `${url} still has old plain blocks`);
 		assert.equal(backTarget(page.text), back, `${url} should lead back to ${back}`);
 	}
 });
 
-test("a module's settings page: its own tile, the theme's tile, Save, and Remove", async () => {
+test("a module's settings page: its own segment, the theme's segment, Save, and Remove", async () => {
 	const page = (await html(`/faces/${face.id}/modules/${encodeURIComponent(instanceId)}`)).text;
 
 	assert.ok(page.includes("<h2 style=\"margin-bottom:14px\">Settings</h2>"));
-	assert.ok(page.includes("In Tiles Theme"), "the theme's own tile");
+	assert.ok(page.includes("In Tiles Theme"), "the theme's own segment");
 	assert.ok(page.includes('data-key="city"'), "the module's field");
 	assert.ok(page.includes('data-key="size"') && page.includes('data-scope="theme"'), "the theme's field");
 	assert.ok(page.includes('id="save"'));
@@ -110,16 +113,16 @@ test("a module's settings page: its own tile, the theme's tile, Save, and Remove
 	assert.ok(!page.includes('confirm("Remove'), "not the browser's confirm box");
 });
 
-test("a theme without per-module settings leaves the module's tile the whole row", async () => {
+test("a theme without per-module settings leaves the module's segment the whole row", async () => {
 	fs.unlinkSync(path.join(themesDir, "tiles", "instance-settings.json"));
 
 	const page = (await html(`/faces/${face.id}/modules/${encodeURIComponent(instanceId)}`)).text;
 
 	assert.ok(!page.includes("In Tiles Theme"));
-	assert.ok(page.includes('class="bento-row top"'), "one tile, no two-column row");
+	assert.ok(page.includes('class="bento-row top"'), "one segment, no two-column row");
 });
 
-test("not found: a tile with a way back", async () => {
+test("not found: a segment with a way back", async () => {
 	const page = await html(`/faces/${face.id}/modules/no-such-instance`);
 
 	assert.equal(page.status, 404);
@@ -127,7 +130,7 @@ test("not found: a tile with a way back", async () => {
 	assert.equal(backTarget(page.text), `/faces/${face.id}/modules`);
 });
 
-test("signed out: the sign-in page is a tile, and signing in returns to the page asked for", async () => {
+test("signed out: the sign-in page is a segment, and signing in returns to the page asked for", async () => {
 	const response = await fetch(`http://127.0.0.1:${PORT}/updates`);
 	const page = await response.text();
 

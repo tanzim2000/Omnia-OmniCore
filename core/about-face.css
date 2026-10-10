@@ -5,7 +5,7 @@
  * A real file rather than a template string inside about-face.js, so
  * this page's look can be edited without touching any JavaScript. It
  * layers on top of the shared Default UI (core/ui-theme.js) rather
- * than replacing it -- the glass buttons, cards and colour variables
+ * than replacing it -- the glass buttons, segments and colour variables
  * all come from there, and everything below is only what's specific
  * to this one page.
  */
@@ -78,7 +78,7 @@ body > * { position: relative; z-index: 1; }
 	align-items: center;
 	gap: 0.5em;
 	font-size: 0.85rem;
-	border-radius: 999px;
+	border-radius: 999em;
 	padding: 0.35em 1em 0.35em 0.55em;
 }
 
@@ -96,9 +96,16 @@ body > * { position: relative; z-index: 1; }
 
 .health svg { flex-shrink: 0; }
 
-/* Stat row ----------------------------------------------------------- */
+/* Card row ----------------------------------------------------------- */
 
-.stats {
+/* A card is one small fact: a label above, a value below (version,
+   resources, dashboards). This page's own element -- not the boxes the
+   rest of OmniCore is built from (those are .segment, in ui-theme.js) --
+   so this page can change how they look without touching anything
+   else. It still takes its colours from the shared variables, so a
+   change of colour or frosted glass there reaches here too. */
+
+.cards {
 	display: grid;
 	grid-template-columns: repeat(3, 1fr);
 	gap: 10px;
@@ -106,46 +113,30 @@ body > * { position: relative; z-index: 1; }
 	max-width: 460px;
 }
 
-.stat {
-	background: var(--card-bg);
-	border: 1px solid var(--card-border);
+.card {
+	background: var(--segment-bg);
+	border: 1px solid var(--segment-border);
 	border-radius: var(--radius);
 	padding: 0.75em 0.65em;
 	text-align: center;
-	cursor: default;
+	backdrop-filter: var(--segment-blur);
+	-webkit-backdrop-filter: var(--segment-blur);
 }
 
-/* A stat isn't clickable, so it shouldn't do the hover thing a real
-   card does */
-.stat:hover { transform: none; box-shadow: none; }
-
-.stat-label {
+.card-label {
 	font-size: 0.7rem;
 	color: var(--fg-muted);
 }
 
-.stat-value {
+.card-value {
 	font-size: 1.05rem;
 	font-weight: 600;
 	margin-top: 0.25em;
 }
 
 
-/* The version tile doubles as the way through to the updates page.
-   Deliberately identical to the tiles beside it -- someone who isn't
-   looking for it shouldn't notice it's different. */
-.stat-link {
-	display: block;
-	text-decoration: none;
-	color: inherit;
-	cursor: pointer;
-	transition: background 0.2s ease;
-}
-
-.stat-link:hover { background: var(--glass-bg); }
-
 /* The one tell: a small dot, only when an update is actually waiting.
-   No text, no colour change to the tile itself. */
+   No text, no colour change to the card itself. */
 .update-dot {
 	display: inline-block;
 	width: 6px;
@@ -162,8 +153,8 @@ body > * { position: relative; z-index: 1; }
 .system {
 	width: 100%;
 	max-width: 460px;
-	background: var(--card-bg);
-	border: 1px solid var(--card-border);
+	background: var(--segment-bg);
+	border: 1px solid var(--segment-border);
 	border-radius: var(--radius);
 	overflow: hidden;
 }
@@ -175,7 +166,7 @@ body > * { position: relative; z-index: 1; }
 	padding: 0.85em 1em;
 }
 
-.system-row + .system-row { border-top: 1px solid var(--card-border); }
+.system-row + .system-row { border-top: 1px solid var(--segment-border); }
 
 .system-label { font-size: 0.75rem; color: var(--fg-muted); }
 .system-value { font-size: 0.875rem; font-weight: 500; }
@@ -227,16 +218,16 @@ body > * { position: relative; z-index: 1; }
    once there is any. Below this width everything stacks, which is the
    phone layout by default rather than as a special case. */
 @media (min-width: 720px) {
-	.stats { max-width: 640px; }
+	.cards { max-width: 640px; }
 	.system { max-width: 640px; }
 	.actions { max-width: 640px; flex-direction: row; }
 	.omnia-title { font-size: 3.25rem; }
 }
-/* The one stat that leads somewhere. A button rather than a div, so it
+/* The one card that leads somewhere. A button rather than a div, so it
    is reachable by keyboard and announced as clickable -- styled back to
-   match the plain stats beside it, since it should look like one of
+   match the plain cards beside it, since it should look like one of
    them, just live. */
-.stat-button {
+.card-button {
 	appearance: none;
 	-webkit-appearance: none;
 	width: 100%;
@@ -246,8 +237,8 @@ body > * { position: relative; z-index: 1; }
 	transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.stat-button:hover,
-.stat-button:focus-visible {
+.card-button:hover,
+.card-button:focus-visible {
 	outline: none;
 	background: var(--glass-bg-hover);
 	box-shadow: 0 0 14px var(--glow-strong);

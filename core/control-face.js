@@ -53,8 +53,8 @@ const styles = `
 	   Content sits centered within it; only becomes actually
 	   scrollable once it genuinely overflows.
 
-	   Generously padded on the sides on purpose: a card's hover glow
-	   paints outside the card's own box, and this container clips
+	   Generously padded on the sides on purpose: a clickable segment's hover
+	   glow paints outside its own box, and this container clips
 	   anything crossing its edge the moment overflow-y is set at
 	   all -- not enough horizontal room here and the glow gets cut
 	   off exactly where it should be brightest.
@@ -63,7 +63,7 @@ const styles = `
 		width: 100%;
 		max-width: 640px;
 		height: min(620px, 62vh);
-		border: 1px solid var(--card-border);
+		border: 1px solid var(--segment-border);
 		border-radius: var(--radius);
 		overflow-y: auto;
 		display: flex;
@@ -81,7 +81,7 @@ const styles = `
 	.face-list::-webkit-scrollbar-track { background: transparent; }
 	.face-list::-webkit-scrollbar-thumb {
 		background: var(--scroll-thumb);
-		border-radius: 4px;
+		border-radius: 0.25em;
 	}
 
 	/* ---------------------------------------------------------------
@@ -102,7 +102,7 @@ const styles = `
 		height: 3.2em;
 		border-radius: 50%;
 		border: 1px solid var(--glass-border);
-		background: var(--card-bg);
+		background: var(--segment-bg);
 		backdrop-filter: blur(12px);
 		overflow: hidden;
 		z-index: 50;
@@ -142,8 +142,8 @@ const styles = `
 		display: flex;
 		flex-direction: column;
 		gap: 0.25em;
-		/* Spacing between cards comes from .face-list's own gap now,
-		   not a margin on each card -- otherwise the last card would
+		/* Spacing between faces comes from .face-list's own gap now,
+		   not a margin on each one -- otherwise the last one would
 		   carry unwanted space below it too */
 		width: 100%;
 	}
@@ -240,7 +240,7 @@ function startControlFace() {
 		const list = faces
 			.map(
 				(face) => `
-			<div class="card face" onclick="goToFace(${face.id})">
+			<div class="segment clickable face" onclick="goToFace(${face.id})">
 				<strong>${escapeHtml(face.name)}</strong>
 				<span>port ${face.id} · ${escapeHtml(face.theme || "no theme")}</span>
 			</div>`

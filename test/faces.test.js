@@ -357,7 +357,7 @@ test("notifications: the overlay carries Core's look and the emoji fonts onto an
 
 	// Its own colours and size, so a theme's page (which has none of the
 	// Default UI's) still gets them
-	assert.match(css, /--omni-note-card:/);
+	assert.match(css, /--omni-note-segment:/);
 	assert.match(css, /--omni-note-size: \d+px/);
 
 	// The emoji fonts, always, at the end of both font lists

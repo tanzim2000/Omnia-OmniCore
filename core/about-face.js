@@ -59,35 +59,35 @@ const RUNTIME_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none
 	<path d="M7 9V6a2 2 0 012-2h6a2 2 0 012 2v3"/>
 </svg>`;
 
-// A stat only appears if OmniCore could actually answer it. A blank
-// where a number should be says nothing useful; leaving the tile out
+// A card only appears if OmniCore could actually answer it. A blank
+// where a number should be says nothing useful; leaving the card out
 // says "this isn't available here", which is true.
-function stat(label, value) {
+function card(label, value) {
 	if (value === null || value === undefined) {
 		return "";
 	}
 
 	return `
-		<div class="stat">
-			<div class="stat-label">${escapeHtml(label)}</div>
-			<div class="stat-value">${escapeHtml(String(value))}</div>
+		<div class="card">
+			<div class="card-label">${escapeHtml(label)}</div>
+			<div class="card-value">${escapeHtml(String(value))}</div>
 		</div>`;
 }
 
-// The same tile, but it goes somewhere. Used for Resources, where the
+// The same card, but it goes somewhere. Used for Resources, where the
 // number is a count of a list worth actually seeing -- the list lives on
 // the admin face, since its Marketplace button needs that session
 // anyway. ?from=about is what lets its back button return here rather
 // than to Settings.
-function linkStat(label, value, id) {
+function linkCard(label, value, id) {
 	if (value === null || value === undefined) {
 		return "";
 	}
 
 	return `
-		<button class="stat stat-button" id="${id}">
-			<div class="stat-label">${escapeHtml(label)}</div>
-			<div class="stat-value">${escapeHtml(String(value))}</div>
+		<button class="card card-button" id="${id}">
+			<div class="card-label">${escapeHtml(label)}</div>
+			<div class="card-value">${escapeHtml(String(value))}</div>
 		</button>`;
 }
 
@@ -106,8 +106,8 @@ function systemRow(icon, label, value) {
 		</div>`;
 }
 
-// The version tile, which is also the way through to the updates page
-// on the admin face. Deliberately looks identical to the tiles beside
+// The version card, which is also the way through to the updates page
+// on the admin face. Deliberately looks identical to the cards beside
 // it whether or not there's anything to find -- the only tell is a
 // small dot when an update is genuinely waiting.
 //
@@ -118,16 +118,16 @@ function systemRow(icon, label, value) {
 // Not a link. Managing updates lives in Settings, behind the login
 // that already exists there — this face stays public and read-only,
 // and a dot is as much as a public page should say about it.
-function versionStat(info) {
+function versionCard(info) {
 	const update = updateStore.lastResult(info.version);
 	const dot = update.updateAvailable
 		? '<span class="update-dot" title="An update is available"></span>'
 		: "";
 
 	return `
-		<div class="stat">
-			<div class="stat-label">OmniCore${dot}</div>
-			<div class="stat-value">${escapeHtml(info.version.replace(/^v/, ""))}</div>
+		<div class="card">
+			<div class="card-label">OmniCore${dot}</div>
+			<div class="card-value">${escapeHtml(info.version.replace(/^v/, ""))}</div>
 		</div>`;
 }
 
@@ -154,10 +154,10 @@ function renderPage(info) {
 
 	${health}
 
-	<div class="stats">
-		${versionStat(info)}
-		${linkStat("Resources", info.resources, "resources-stat")}
-		${stat("Dashboards", info.dashboards)}
+	<div class="cards">
+		${versionCard(info)}
+		${linkCard("Resources", info.resources, "resources-card")}
+		${card("Dashboards", info.dashboards)}
 	</div>
 
 	<div class="system">
@@ -197,7 +197,7 @@ function renderPage(info) {
 
 		// The list this number counts. from=about tells that page to
 		// send its own back button here rather than to Settings.
-		var resources = document.getElementById("resources-stat");
+		var resources = document.getElementById("resources-card");
 		if (resources) {
 			resources.addEventListener("click", function () {
 				location.href = faceUrl(${ADMIN_PORT}) + "/installed?from=about";

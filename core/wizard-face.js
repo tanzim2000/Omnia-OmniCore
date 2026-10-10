@@ -42,7 +42,7 @@ const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
 const { uiStyles } = require("./ui-theme");
 
 // Only what's specific to the wizard. Everything else — glass buttons,
-// cards, inputs, the colour variables, the dock, the lists — comes from
+// segments, inputs, the colour variables, the dock, the lists — comes from
 // the shared Default UI in ui-theme.js, which this is layered on top of.
 //
 // This file used to carry its own complete stylesheet, a copy made back
@@ -93,7 +93,7 @@ const styles = `
 	   
 	   The two kinds of step want opposite things here, so they say so
 	   individually below rather than sharing one compromise: a split
-	   step is a workspace and should fill the screen, a single tile is
+	   step is a workspace and should fill the screen, a single segment is
 	   a form and should be only as tall as it needs. */
 	#content {
 		flex: 1 1 auto;
@@ -105,17 +105,17 @@ const styles = `
 	}
 
 	/* A split step needs #content to claim all the leftover space, since
-	   that's where its real height comes from. A single tile opting out
+	   that's where its real height comes from. A single segment opting out
 	   of the stretch above wasn't enough on its own -- #content itself
 	   was still claiming that space regardless, just leaving the dead
-	   gap below the tile instead of inside it. This makes #content
+	   gap below the segment instead of inside it. This makes #content
 	   itself stop claiming space it has nothing to fill it with,
-	   whenever what's actually inside it is a single tile. */
+	   whenever what's actually inside it is a single segment. */
 	#content:has(> .wizard-single) {
 		flex: 0 1 auto;
 	}
 
-	/* One tile, for the steps that only have one thing to show. It
+	/* One segment, for the steps that only have one thing to show. It
 	   scrolls inside itself rather than growing the page, the same as
 	   the split steps do -- a long theme form or review list was
 	   previously the one thing that could still push the whole page
@@ -139,13 +139,13 @@ const styles = `
 	.wizard-single::-webkit-scrollbar-track { background: transparent; }
 	.wizard-single::-webkit-scrollbar-thumb {
 		background: var(--scroll-thumb);
-		border-radius: 4px;
+		border-radius: 0.25em;
 	}
 
 	/* ---------------------------------------------------------------
-	   The two-tile steps.
+	   The two-segment steps.
 
-	   Unlike the settings bento, where tiles size to their own content
+	   Unlike the settings bento, where segments size to their own content
 	   and the page scrolls past them, these fill the screen: a wizard
 	   step is one task to focus on now, not a page to scan. Each half
 	   takes an equal share of whatever space there is and stretches to
@@ -156,7 +156,7 @@ const styles = `
 	   phone can report more CSS pixels than an older monitor, so any
 	   fixed number misjudges real devices in both directions.
 	   --------------------------------------------------------------- */
-	/* Stays stretched by #content, which is what gives the tiles and
+	/* Stays stretched by #content, which is what gives the segments and
 	   the lists inside them a real height to divide. */
 	.wizard-split {
 		width: 100%;
@@ -174,30 +174,26 @@ const styles = `
 		.wizard-split { flex-direction: row; }
 	}
 
-	.wizard-split > .tile {
+	.wizard-split > .segment {
 		flex: 1 1 0;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
 	}
 
-	.tile {
-		background: var(--card-bg);
-		border: 1px solid var(--card-border);
-		border-radius: var(--radius);
-		padding: 20px;
-	}
-
-	.tile h2 {
+	/* The boxes themselves are .segment, from ui-theme.js -- the same
+	   ones Settings uses. Only the wizard's quieter headings are its
+	   own. */
+	.segment h2 {
 		margin: 0 0 14px 0;
 		font-weight: 400;
 		font-size: 0.95em;
 		color: var(--fg-muted);
 	}
 
-	/* A tile heading with an action beside it. The heading keeps its own
-	   bottom margin so a tile without an action looks no different. */
-	.tile-head {
+	/* A segment heading with an action beside it. The heading keeps its own
+	   bottom margin so a segment without an action looks no different. */
+	.segment-head {
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
@@ -215,11 +211,11 @@ const styles = `
 		margin-bottom: 14px;
 		background: var(--glass-bg);
 		border: 1px solid var(--glass-border);
-		border-radius: 999px;
+		border-radius: 999em;
 		color: var(--fg);
 		font-family: inherit;
 		font-size: 0.8em;
-		padding: 5px 12px;
+		padding: 0.3906em 0.9375em;
 		cursor: pointer;
 		transition: background 0.15s ease, box-shadow 0.15s ease;
 	}
@@ -232,8 +228,8 @@ const styles = `
 	}
 
 	/* The settings form inside a split step scrolls on its own too,
-	   rather than growing its tile past the screen */
-	.tile-scroll {
+	   rather than growing its segment past the screen */
+	.segment-scroll {
 		flex: 1 1 0;
 		min-height: 0;
 		overflow-y: auto;
@@ -242,11 +238,11 @@ const styles = `
 		scrollbar-color: var(--scroll-thumb) transparent;
 	}
 
-	.tile-scroll::-webkit-scrollbar { width: 8px; }
-	.tile-scroll::-webkit-scrollbar-track { background: transparent; }
-	.tile-scroll::-webkit-scrollbar-thumb {
+	.segment-scroll::-webkit-scrollbar { width: 8px; }
+	.segment-scroll::-webkit-scrollbar-track { background: transparent; }
+	.segment-scroll::-webkit-scrollbar-thumb {
 		background: var(--scroll-thumb);
-		border-radius: 4px;
+		border-radius: 0.25em;
 	}
 
 	/* A module in the picker, and a module already added. Same shape on
@@ -256,13 +252,13 @@ const styles = `
 		display: block;
 		width: 100%;
 		text-align: left;
-		background: var(--card-bg);
-		border: 1px solid var(--card-border);
-		border-radius: 8px;
+		background: var(--segment-bg);
+		border: 1px solid var(--segment-border);
+		border-radius: 0.5263em;
 		color: var(--fg);
 		font-size: 0.95em;
 		font-family: inherit;
-		padding: 12px 16px;
+		padding: 0.7895em 1.0526em;
 		flex-shrink: 0;
 	}
 
@@ -310,8 +306,8 @@ const styles = `
 		display: flex;
 		justify-content: space-between;
 		gap: 16px;
-		padding: 11px 0;
-		border-bottom: 1px solid var(--card-border);
+		padding: 0.7237em 0;
+		border-bottom: 1px solid var(--segment-border);
 		font-size: 0.95em;
 	}
 
@@ -322,9 +318,9 @@ const styles = `
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 10px 12px;
-		border: 1px solid var(--card-border);
-		border-radius: 10px;
+		padding: 0.6579em 0.7895em;
+		border: 1px solid var(--segment-border);
+		border-radius: 0.6579em;
 		margin-bottom: 8px;
 		font-size: 0.95em;
 	}
@@ -349,8 +345,8 @@ const styles = `
 		line-height: 1;
 		cursor: pointer;
 		color: inherit;
-		border-radius: 8px;
-		border: 1px solid var(--card-border);
+		border-radius: 0.5882em;
+		border: 1px solid var(--segment-border);
 		background: var(--glass-bg);
 	}
 
@@ -720,14 +716,14 @@ function renderWizard(data) {
 				"</label>";
 			}).join("");
 
-			// Two tiles rather than one: naming and theme-picking are
+			// Two segments rather than one: naming and theme-picking are
 			// separate jobs, and splitting them gives the theme list its
 			// own room to scroll instead of pushing the name fields
 			// around. Uses the same split as the picker steps, so it
 			// divides by orientation for free.
 			return '<div class="wizard-split">' +
-				'<div class="tile">' +
-					'<div class="tile-scroll">' +
+				'<div class="segment">' +
+					'<div class="segment-scroll">' +
 						'<div class="field">' +
 							'<label for="name">Name</label>' +
 							'<input type="text" id="name" value="' + escapeHtml(face.name) +
@@ -745,8 +741,8 @@ function renderWizard(data) {
 						"</div>" +
 					"</div>" +
 				"</div>" +
-				'<div class="tile">' +
-					'<div class="tile-head">' +
+				'<div class="segment">' +
+					'<div class="segment-head">' +
 						"<h2>Theme</h2>" +
 						'<button class="mini" onclick="toMarketplace()">Download themes</button>' +
 					"</div>" +
@@ -781,12 +777,12 @@ function renderWizard(data) {
 			}).join("");
 
 			// Each list gets .list-fill so it grows into whatever height
-			// its tile was given and only scrolls once it genuinely runs
+			// its segment was given and only scrolls once it genuinely runs
 			// out -- rather than the old .square, which had no bound at
 			// all and simply grew the page instead.
 			return '<div class="wizard-split">' +
-				'<div class="tile">' +
-					'<div class="tile-head">' +
+				'<div class="segment">' +
+					'<div class="segment-head">' +
 						"<h2>Available modules</h2>" +
 						'<button class="mini" onclick="toMarketplace()">Download modules</button>' +
 					"</div>" +
@@ -794,7 +790,7 @@ function renderWizard(data) {
 						(available || '<div class="empty">No modules installed.</div>') +
 					"</div>" +
 				"</div>" +
-				'<div class="tile">' +
+				'<div class="segment">' +
 					"<h2>On this face</h2>" +
 					'<div class="list-fill">' +
 						(picked || '<div class="empty">Nothing added yet.</div>') +
@@ -848,16 +844,16 @@ function renderWizard(data) {
 			}).join("");
 
 			return '<div class="wizard-split">' +
-				'<div class="tile">' +
+				'<div class="segment">' +
 					"<h2>On this face</h2>" +
 					'<div class="list-fill">' + bucket + "</div>" +
 				"</div>" +
-				'<div class="tile">' +
+				'<div class="segment">' +
 					"<h2>" + escapeHtml(module.name) + "</h2>" +
-					// The form scrolls inside its own tile rather than
+					// The form scrolls inside its own segment rather than
 					// growing it past the bottom of the screen, the same
 					// way the list opposite does.
-					'<div class="tile-scroll">' +
+					'<div class="segment-scroll">' +
 						picker +
 						'<div class="field">' +
 							'<label for="label">Label</label>' +
@@ -1044,7 +1040,7 @@ function renderWizard(data) {
 								'<div class="search-row">' +
 									'<input type="text" data-loc-query="' + key +
 										'" placeholder="Regina">' +
-									'<button class="glass" style="padding:12px 20px" ' +
+									'<button class="glass" style="padding:0.75em 1.25em" ' +
 										'data-loc-search="' + key + '">Search</button>' +
 								"</div>" +
 								'<div data-loc-results="' + key + '"></div>' +
@@ -1161,7 +1157,7 @@ function renderWizard(data) {
 				return renderField(field, face.themeConfig[field.key]);
 			}).join("");
 
-			return '<div class="tile wizard-single">' +
+			return '<div class="segment wizard-single">' +
 				"<h2>" + escapeHtml(theme.name) + "</h2>" +
 				fields +
 			"</div>";
@@ -1177,7 +1173,7 @@ function renderWizard(data) {
 
 			const theme = THEMES.find(function (t) { return t.id === face.theme; });
 
-			return '<div class="tile wizard-single">' +
+			return '<div class="segment wizard-single">' +
 				'<div class="review-row"><strong>Name</strong><span>' +
 					escapeHtml(face.name || "Face " + NEXT_PORT) + "</span></div>" +
 				'<div class="review-row"><strong>Title</strong><span>' +

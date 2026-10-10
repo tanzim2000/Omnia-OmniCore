@@ -56,7 +56,7 @@ function renderControl(control) {
 			: "";
 
 		return `
-		<div class="field card">
+		<div class="field segment">
 			${label}
 			<input
 				id="field-${key}"
@@ -118,9 +118,8 @@ ${uiStyles()}
 		   not clicked with a mouse */
 		.glass.big { padding: 1.5em 2.5em; font-size: 1.15em; }
 
-		/* A card here isn't a clickable showcase card — it's a
-		   container for a control, so the hover behaviour and pointer
-		   don't apply. */
+		/* A plain .segment holding one control -- a box, not a button,
+		   so no hover glow. */
 		.field {
 			display: flex;
 			flex-direction: column;
@@ -129,14 +128,12 @@ ${uiStyles()}
 			cursor: default;
 		}
 
-		.field:hover { transform: none; box-shadow: none; }
-
 		.field label { font-size: 0.85em; opacity: 0.7; }
 
 		.field input {
 			background: var(--bg);
 			border: 1px solid var(--glass-border);
-			border-radius: 8px;
+			border-radius: 0.3333em;
 			color: var(--fg);
 			font-family: inherit;
 			font-size: 1.5em;
@@ -219,7 +216,7 @@ function renderInputPickerPage(faceName, entries) {
 	const rows = entries
 		.map(
 			(entry) =>
-				`<a class="card" href="${escapeHtml(entry.path)}">` +
+				`<a class="segment clickable" href="${escapeHtml(entry.path)}">` +
 				`<strong>${escapeHtml(entry.label)}</strong>` +
 				`</a>`
 		)
@@ -255,7 +252,7 @@ ${uiStyles()}
 		}
 
 		.list { width: 100%; max-width: 24em; }
-		.card { text-decoration: none; color: var(--fg); }
+		.segment.clickable { text-decoration: none; color: var(--fg); }
 	</style>
 </head>
 <body>

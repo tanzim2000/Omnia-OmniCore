@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.19.2
+
+One box for every page, and a new Marketplace
+
+### Changed
+
+- **The Marketplace is redesigned.** A header with the title and Sources, then a bar with the search box, the Modules / Themes switch and how many items there are ("9 items available", or "2 of 9 shown" while searching). That bar stays pinned at the top as you scroll, frosted so the listings passing under it are blurred out. Each listing is now one row: its name, "by" its author and what it does on the left, its button on the right. As many columns as fit: one on a phone, two on a laptop, three on a wide screen. The page scrolls as a whole, instead of the list scrolling inside a box. A search that matches nothing says so.
+- **Installed is a green button-shaped label** ("✓ Installed"), next to the plain glass Install buttons. In dark mode it's a calmer green than before; in light mode it's flat, a lighter green with white text, instead of a heavy dark green that was hard to read. The green "Go back" when adding a source follows it. Green status text and switches that are turned on keep their brighter green.
+- **When the registry can't be reached**, the Marketplace says so in a red-edged box with a **Retry** button, under its usual header. A listing's own page and an author's page show the same box.
+- **A listing's own page, an author's page and Sources use the same boxes as everything else.** A listing's page has the name, author and short description at the top with its button, then the longer description, then what it emits and its source side by side, then any screenshots. The small "← Marketplace" link at the top is gone; the floating back button already goes there. An author's page shows only the groups they have, with the same rows as the Marketplace. On Sources, each registry is one line, and the address box and Add source share a row.
+- **The Modules / Themes switch and the location switch on Settings look the same**: the shared switch, without the separate outlined buttons the admin pages used to draw over it.
+
+- **Every box on OmniCore's own pages is now one thing: a segment.** The same box used to be written three times under two names: `.card` in the shared theme, `.tile` in the admin pages, and another `.tile` in the wizard, each with the same colour, border and corners but slightly different padding. It's one `.segment` now, in `core/ui-theme.js`, so changing how every box looks (its colour, its corners) is one change in one file. A segment is either plain (a container) or `.segment.clickable` (the whole box is a link or button, and glows or lifts on hover).
+- **Frosted glass is one setting**: `--segment-blur` in `core/ui-theme.js`. It's `none`, flat as before; set it to a blur such as `blur(0.75em)` and every segment frosts over the background. The About page's own boxes follow it too.
+- **The About page's small fact boxes are called `.card`** (they were `.stat`, which sounded like a statistic). They stay in the About page's own stylesheet, so that page can still change its look on its own.
+- **Padding and corner rounding are in `em`, not pixels**, everywhere in OmniCore's own pages. At the default text size nothing moves; with a larger text size set, the space around the text grows with it instead of staying the same.
+- **List items have the same padding as every other box**: the faces on the welcome screen, Installed Resources, an input face's list, and the font picker's results are a few pixels taller. Marketplace listings have the same background as the other boxes now, where they used to be outlines only.
+
+### Fixed
+
+- **Install did nothing on an author's page.** The page had the buttons but not the script behind them. It now uses the same one as the Marketplace and a listing's own page.
+
+### Notes
+
+- **Two pieces moved into the shared theme, `core/ui-theme.js`**, so a later change of colours or style reaches every page at once: the coloured buttons (`.btn-glossy`, `-green`, `-neutral`), which lived in the admin pages, and a `.toolbar` row (a search box, a switch, a count) for any list that needs one. The green button reads its own colours (`--success-button-*`), separate from `--success`.
+
 ## v1.19.1
 
 Update now, and every admin page in the same look

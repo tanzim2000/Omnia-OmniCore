@@ -302,7 +302,7 @@ function releaseHeld(faceId) {
 // ---------------------------------------------------------------------
 // The overlay itself
 //
-// Built out of the Default UI's look -- its glass cards, its colours, its
+// Built out of the Default UI's look -- its segments, its colours, its
 // font, the timer lamp -- so a notification reads as part of OmniCore
 // rather than something bolted on. See
 // docs/planning/default-ui-architecture.md.
@@ -340,12 +340,12 @@ function overlayStyles() {
 	.omni-note-layer {
 		--omni-note-fg: ${palette.fg};
 		--omni-note-muted: ${palette.fgMuted};
-		--omni-note-card: ${palette.cardBg};
+		--omni-note-segment: ${palette.segmentBg};
 		--omni-note-base: color-mix(in srgb, ${palette.bg} 72%, transparent);
 		--omni-note-border: ${palette.glassBorder};
 		--omni-note-sheen: ${palette.glassSheen};
 		--omni-note-glow: ${palette.glow};
-		--omni-note-radius: 12px;
+		--omni-note-radius: 0.75em;
 		--omni-note-size: ${size}px;
 
 		position: fixed;
@@ -423,14 +423,14 @@ function overlayStyles() {
 		box-sizing: border-box;
 		border-radius: var(--omni-note-radius);
 		border: 1px solid var(--omni-note-border);
-		/* The Default UI's glass card, laid over a darker (or, in light
+		/* The Default UI's segment, laid over a darker (or, in light
 		   mode, lighter) base. The glass alone is almost see-through,
 		   which is fine on OmniCore's plain pages but leaves text hard to
 		   read over a bright wallpaper. A browser too old to mix colours
 		   keeps just the glass. */
-		background: var(--omni-note-card);
+		background: var(--omni-note-segment);
 		background:
-			linear-gradient(var(--omni-note-card), var(--omni-note-card)),
+			linear-gradient(var(--omni-note-segment), var(--omni-note-segment)),
 			var(--omni-note-base);
 		backdrop-filter: blur(14px);
 		box-shadow: 0 0 2.5em var(--omni-note-glow);
@@ -660,9 +660,9 @@ function overlayStyles() {
 		height: 3.2em;
 		border-radius: 50%;
 		border: 1px solid var(--omni-note-border);
-		background: var(--omni-note-card);
+		background: var(--omni-note-segment);
 		background:
-			linear-gradient(var(--omni-note-card), var(--omni-note-card)),
+			linear-gradient(var(--omni-note-segment), var(--omni-note-segment)),
 			var(--omni-note-base);
 		backdrop-filter: blur(12px);
 		overflow: hidden;

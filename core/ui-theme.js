@@ -46,8 +46,8 @@ const PALETTES = {
 		glowStrong: "rgba(255, 255, 255, 0.55)",
 		ambientA: "rgba(255, 255, 255, 0.05)",
 		ambientB: "rgba(120, 160, 255, 0.05)",
-		cardBg: "rgba(255, 255, 255, 0.04)",
-		cardBorder: "rgba(255, 255, 255, 0.1)",
+		segmentBg: "rgba(255, 255, 255, 0.04)",
+		segmentBorder: "rgba(255, 255, 255, 0.1)",
 		flash: "rgba(255, 255, 255, 0.35)",
 		scrollThumb: "rgba(255, 255, 255, 0.2)",
 
@@ -76,6 +76,21 @@ const PALETTES = {
 		success: "#3ed67a",
 		successHover: "#2ab264",
 		successText: "#eafff2",
+
+		// The green BUTTON ("Installed", "Go back") has its own colours,
+		// separate from `success` above. `success` is also the colour of
+		// "good" status text and of a switch that's turned on, and those
+		// need to stay bright to read against black. The button sits a
+		// couple of steps darker so a row of them doesn't shout louder
+		// than the buttons you can still press. Glossy here, like every
+		// other button in dark mode.
+		successButton: "linear-gradient(to bottom, #1f9a53, #177a41)",
+		successButtonHover: "linear-gradient(to bottom, #23a85b, #1a8549)",
+		successButtonBorder: "#177a41",
+		successButtonText: "#eafff2",
+		successButtonShadow:
+			"inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 6px rgba(0, 0, 0, 0.35)",
+
 		disabled: "#2c2c2c",
 		disabledText: "#545454"
 	},
@@ -89,15 +104,15 @@ const PALETTES = {
 		glassSheen: "rgba(255, 255, 255, 0.9)",
 		glassSheenStrong: "rgba(255, 255, 255, 1)",
 		// A plain white glow disappears against a pale page the same
-		// way it did on cards before that got fixed -- tinted dark/blue
+		// way it did on clickable boxes before that got fixed -- tinted dark/blue
 		// instead, so it reads the same way a glow should: visible
 		// against whatever's behind it.
 		glow: "rgba(50, 60, 100, 0.22)",
 		glowStrong: "rgba(50, 60, 100, 0.4)",
 		ambientA: "rgba(120, 140, 255, 0.06)",
 		ambientB: "rgba(255, 190, 120, 0.06)",
-		cardBg: "rgba(255, 255, 255, 0.7)",
-		cardBorder: "rgba(0, 0, 0, 0.08)",
+		segmentBg: "rgba(255, 255, 255, 0.7)",
+		segmentBorder: "rgba(0, 0, 0, 0.08)",
 		flash: "rgba(0, 0, 0, 0.15)",
 		scrollThumb: "rgba(0, 0, 0, 0.25)",
 
@@ -121,6 +136,16 @@ const PALETTES = {
 		success: "#1f9a53",
 		successHover: "#177a41",
 		successText: "#0c3d22",
+
+		// The green button in light mode is flat: one lighter green, white
+		// text, no bevel and no shadow. The glossy dark-mode version went
+		// a heavy dark green here, with dark text that was hard to read.
+		successButton: "#2fae63",
+		successButtonHover: "#28a35c",
+		successButtonBorder: "#2fae63",
+		successButtonText: "#fff",
+		successButtonShadow: "none",
+
 		disabled: "#d6d6d8",
 		disabledText: "#9a9a9e"
 	}
@@ -184,8 +209,12 @@ function uiStyles(options) {
 		--glow: ${active.glow};
 		--glow-strong: ${active.glowStrong};
 
-		--card-bg: ${active.cardBg};
-		--card-border: ${active.cardBorder};
+		/* Segments: the boxes every page is built from. See .segment
+		   below. --segment-blur is "none" (flat, as now) or a blur such
+		   as "blur(0.75em)" for frosted glass over the background. */
+		--segment-bg: ${active.segmentBg};
+		--segment-border: ${active.segmentBorder};
+		--segment-blur: none;
 
 		--flash: ${active.flash};
 		--scroll-thumb: ${active.scrollThumb};
@@ -204,13 +233,18 @@ function uiStyles(options) {
 		--success: ${active.success};
 		--success-hover: ${active.successHover};
 		--success-text: ${active.successText};
+		--success-button: ${active.successButton};
+		--success-button-hover: ${active.successButtonHover};
+		--success-button-border: ${active.successButtonBorder};
+		--success-button-text: ${active.successButtonText};
+		--success-button-shadow: ${active.successButtonShadow};
 		--disabled: ${active.disabled};
 		--disabled-text: ${active.disabledText};
 
 		--font: ${fontStack(settings)};
 		--font-size: ${Number(settings.uiFontSize) || 16}px;
 
-		--radius: 12px;
+		--radius: 0.75em;
 	}
 
 	* { box-sizing: border-box; }
@@ -315,14 +349,131 @@ function uiStyles(options) {
 	}
 
 	/* ---------------------------------------------------------------
-	   Card — flat and transparent, for showcasing things: marketplace
-	   listings, lists of installed resources.
+	   Coloured buttons — for the few moments that should stand out from
+	   the plain glass buttons: "Installed" in the Marketplace, and "Go
+	   back" / "I understand" before a third-party source is added.
+
+	     .btn-glossy .btn-glossy-green     the safe or finished choice
+	     .btn-glossy .btn-glossy-neutral   the grey, second choice
+
+	   These lived in admin-face.js until the Marketplace started using
+	   them too. A basic button belongs with the other basic buttons, so
+	   a later change of colours or style reaches every page at once.
+
+	   The green reads its own set of variables (--success-button-*),
+	   not --success, so making the button calmer never dims "good"
+	   status text or a switch that's turned on.
 	   --------------------------------------------------------------- */
-	.card {
-		background: var(--card-bg);
-		border: 1px solid var(--card-border);
+	.btn-glossy {
+		appearance: none;
+		-webkit-appearance: none;
+		display: inline-block;
+		padding: 0.7857em 1.5714em;
+		border-radius: 0.5714em;
+		font-size: 0.875em;
+		font-family: inherit;
+		font-weight: 500;
+		text-align: center;
+		text-decoration: none;
+		cursor: pointer;
+		border: 1px solid var(--glass-border);
+		box-shadow: inset 0 1px 0 var(--glass-sheen), 0 2px 6px rgba(0, 0, 0, 0.35);
+	}
+
+	/* A plain ring for the keyboard, like every other button */
+	.btn-glossy:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px var(--glow-strong);
+	}
+
+	.btn-glossy:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	.btn-glossy-green {
+		color: var(--success-button-text);
+		background: var(--success-button);
+		border-color: var(--success-button-border);
+		box-shadow: var(--success-button-shadow);
+	}
+
+	.btn-glossy-green:hover:not(:disabled) { background: var(--success-button-hover); }
+
+	.btn-glossy-neutral {
+		color: var(--fg);
+		background: linear-gradient(to bottom, var(--disabled-text), var(--disabled));
+	}
+
+	.btn-glossy-neutral:hover:not(:disabled) {
+		background: linear-gradient(to bottom, var(--disabled-text), var(--border));
+	}
+
+	/* ---------------------------------------------------------------
+	   Toolbar — one row of controls for a list: a search box, a
+	   Modules / Themes switch, a quiet count. The search box takes the
+	   room that's left; everything else keeps its own size. On a narrow
+	   screen the row wraps rather than squeezing the search box.
+
+	   Only the layout. Put it on a .segment to get the box:
+
+	     <div class="segment toolbar">
+	       <input type="text" placeholder="Search">
+	       <div class="tabs">...</div>
+	       <span class="toolbar-note">9 items</span>
+	     </div>
+	   --------------------------------------------------------------- */
+	.toolbar {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 1em;
+	}
+
+	.toolbar > input {
+		flex: 1 1 14em;
+		width: auto;
+		min-width: 0;
+		margin: 0;
+	}
+
+	.toolbar-note {
+		color: var(--fg-muted);
+		font-size: 0.85em;
+		white-space: nowrap;
+	}
+
+	/* ---------------------------------------------------------------
+	   Segment — the box every page is built from: each box in the bento of
+	   Settings, the wizard's halves, a face in the welcome list, a
+	   marketplace listing, a row in the font picker.
+
+	   This used to be three near-identical rules with three names:
+	   .card here, .tile in admin-face.js, and another .tile in
+	   wizard-face.js, each with the same colour, border and corners
+	   and slightly different padding. One rule now, so changing how a
+	   box looks -- its colour, its corners, frosted glass -- is a change
+	   in this one place.
+
+	   Two kinds:
+	     .segment             a container. Nothing happens on hover.
+	     .segment.clickable   the whole box is a link or button. Glows
+	                          (dark) or lifts (light) on hover, like
+	                          every other clickable thing.
+
+	   Frosted glass is --segment-blur, set with the other variables at
+	   the top. A word of warning for when it's turned on: a blurred box
+	   becomes the frame for anything inside it with position: fixed.
+	   A pop-up (.modal-backdrop) has to sit outside every segment, or
+	   it would cover only its own box instead of the whole screen.
+	   --------------------------------------------------------------- */
+	.segment {
+		background: var(--segment-bg);
+		border: 1px solid var(--segment-border);
 		border-radius: var(--radius);
-		padding: 1em 1.2em;
+		padding: 1.25em;
+		backdrop-filter: var(--segment-blur);
+		-webkit-backdrop-filter: var(--segment-blur);
+	}
+
+	.segment.clickable {
 		cursor: pointer;
 		transition: box-shadow 0.25s ease, transform 0.25s ease,
 			background 0.25s ease;
@@ -330,20 +481,20 @@ function uiStyles(options) {
 
 	${
 		lightMode
-			? `/* Light mode: a card lifts slightly rather than glowing —
-	   a glow reads as nothing against a pale background. */
-	.card:hover,
-	.card:focus-visible {
+			? `/* Light mode: a clickable segment lifts slightly rather than
+	   glowing — a glow reads as nothing against a pale background. */
+	.segment.clickable:hover,
+	.segment.clickable:focus-visible {
 		transform: scale(1.02);
 		background: var(--glass-bg-hover);
 	}`
-			: `/* Dark mode: a card glows rather than moving — motion is
-	   unnecessary when light alone reads clearly against black.
-	   Values taken from working reference examples rather than a
-	   first guess: a visible glow sits close to 0.5 alpha at its
+			: `/* Dark mode: a clickable segment glows rather than moving —
+	   motion is unnecessary when light alone reads clearly against
+	   black. Values taken from working reference examples rather than
+	   a first guess: a visible glow sits close to 0.5 alpha at its
 	   core, not 0.1-0.25. */
-	.card:hover,
-	.card:focus-visible {
+	.segment.clickable:hover,
+	.segment.clickable:focus-visible {
 		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55),
 			0 0 32px rgba(255, 255, 255, 0.45),
 			0 0 70px rgba(255, 255, 255, 0.2);
@@ -362,7 +513,7 @@ function uiStyles(options) {
 		gap: 0.6em;
 		overflow-y: auto;
 		max-height: 60vh;
-		border: 1px solid var(--card-border);
+		border: 1px solid var(--segment-border);
 		border-radius: var(--radius);
 		padding: 1em 2em;
 		box-sizing: border-box;
@@ -380,10 +531,10 @@ function uiStyles(options) {
 	.list::-webkit-scrollbar-track { background: transparent; }
 	.list::-webkit-scrollbar-thumb {
 		background: var(--scroll-thumb);
-		border-radius: 4px;
+		border-radius: 0.25em;
 	}
 
-	/* A .card used as a single-line row inside a .list -- name on
+	/* A clickable .segment used as a single-line row inside a .list -- name on
 	   the left, a secondary label pinned to the right on the same
 	   line, rather than stacked underneath. Used for the font
 	   picker's results, and anything else where a long list reads
@@ -415,7 +566,7 @@ function uiStyles(options) {
 		height: 3.4em;
 		border-radius: 50%;
 		border: 1px solid var(--glass-border);
-		background: var(--card-bg);
+		background: var(--segment-bg);
 		color: var(--fg);
 		font-family: inherit;
 		font-size: 1em;
@@ -448,8 +599,8 @@ function uiStyles(options) {
 	   before.
 
 	   Bottom-right gets the same at the bottom. A page scrolled all the
-	   way down would otherwise end with its last tile under the button
-	   -- and the last tile is often the one with a button of its own
+	   way down would otherwise end with its last segment under the button
+	   -- and the last segment is often the one with a button of its own
 	   (Remove from this face). */
 	body:has(> .floating.top-left) { padding-top: calc(1.5em + 3.4em + 1.5em); }
 	body:has(> .floating.bottom-right) { padding-bottom: calc(1.5em + 3.4em + 1.5em); }
@@ -476,8 +627,8 @@ function uiStyles(options) {
 		position: relative;
 		width: 2.6em;
 		height: 1.5em;
-		border-radius: 999px;
-		background: var(--card-border);
+		border-radius: 999em;
+		background: var(--segment-border);
 		border: 1px solid var(--glass-border);
 		transition: background 0.2s ease;
 		flex-shrink: 0;
@@ -514,10 +665,10 @@ function uiStyles(options) {
 	   --------------------------------------------------------------- */
 	.tabs {
 		display: inline-flex;
-		background: var(--card-bg);
-		border: 1px solid var(--card-border);
+		background: var(--segment-bg);
+		border: 1px solid var(--segment-border);
 		border-radius: var(--radius);
-		padding: 3px;
+		padding: 0.1875em;
 		gap: 3px;
 	}
 
@@ -526,7 +677,7 @@ function uiStyles(options) {
 		-webkit-appearance: none;
 		background: transparent;
 		border: none;
-		border-radius: calc(var(--radius) - 3px);
+		border-radius: calc(var(--radius) - 0.1974em);
 		color: var(--fg-muted);
 		font-family: inherit;
 		font-size: 0.95em;
@@ -554,11 +705,11 @@ function uiStyles(options) {
 	/* ---------------------------------------------------------------
 	   Modal — a floating panel over a dimmed backdrop.
 
-	   Used where a control needs more room than its tile can give it
-	   without the tile growing and shoving the rest of the layout
+	   Used where a control needs more room than its segment can give it
+	   without the segment growing and shoving the rest of the layout
 	   around: the font picker's results list, the location search.
 	   Centred rather than anchored under whatever opened it, since a
-	   tile's position varies with the layout and an anchored panel
+	   segment's position varies with the layout and an anchored panel
 	   would clip at the screen edge.
 	   --------------------------------------------------------------- */
 	/* ---------------------------------------------------------------
@@ -595,11 +746,11 @@ function uiStyles(options) {
 		box-sizing: border-box;
 		background: var(--glass-bg);
 		border: 1px solid var(--glass-border);
-		border-radius: 10px;
+		border-radius: 0.625em;
 		color: var(--fg);
 		font-family: inherit;
 		font-size: 1em;
-		padding: 12px 16px;
+		padding: 0.75em 1em;
 	}
 
 	input[type="checkbox"] { width: 18px; height: 18px; }
@@ -609,8 +760,8 @@ function uiStyles(options) {
 		height: 46px;
 		background: var(--glass-bg);
 		border: 1px solid var(--glass-border);
-		border-radius: 10px;
-		padding: 4px;
+		border-radius: 0.625em;
+		padding: 0.25em;
 		cursor: pointer;
 	}
 
@@ -625,9 +776,9 @@ function uiStyles(options) {
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		padding: 10px 16px;
+		padding: 0.6579em 1.0526em;
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: 0.6579em;
 		margin-bottom: 8px;
 		cursor: pointer;
 		font-size: 0.95em;
@@ -657,10 +808,10 @@ function uiStyles(options) {
 		font-family: inherit;
 		font-size: 0.95em;
 		color: var(--fg);
-		background: var(--card-bg);
-		border: 1px solid var(--card-border);
-		border-radius: 10px;
-		padding: 12px 14px;
+		background: var(--segment-bg);
+		border: 1px solid var(--segment-border);
+		border-radius: 0.6579em;
+		padding: 0.7895em 0.9211em;
 		cursor: pointer;
 		transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 	}
@@ -700,17 +851,17 @@ function uiStyles(options) {
 		width: 100%;
 		text-align: left;
 		background: var(--input-bg);
-		border: 1px solid var(--card-border);
-		border-radius: 8px;
+		border: 1px solid var(--segment-border);
+		border-radius: 0.5714em;
 		color: var(--fg);
 		font-size: 0.875em;
 		font-family: inherit;
-		padding: 10px 14px;
+		padding: 0.7143em 1em;
 		margin-top: 8px;
 		cursor: pointer;
 	}
 
-	.result:hover { background: var(--card-border); }
+	.result:hover { background: var(--segment-border); }
 
 	/* No min-height and no margin-top of its own -- the body's flex
 	   gap between its children already provides spacing here. This is
@@ -731,9 +882,9 @@ function uiStyles(options) {
 	   ever filled in or marked active the way a tab would be. The only
 	   separation is a thin rule between labels.
 
-	   The capsule's width doesn't change with how many segments are in
+	   The capsule's width doesn't change with how many sections are in
 	   it -- two or three, the outer shape is identical and the
-	   segments inside redistribute. A control that resizes depending
+	   sections inside redistribute. A control that resizes depending
 	   on which step you're on would make the whole page feel like it's
 	   shifting underfoot while moving through a wizard.
 	   --------------------------------------------------------------- */
@@ -748,7 +899,7 @@ function uiStyles(options) {
 		align-items: stretch;
 		background: var(--glass-bg);
 		border: 1px solid var(--glass-border);
-		border-radius: 999px;
+		border-radius: 999em;
 		box-shadow:
 			inset 0 1px 0 var(--glass-sheen),
 			0 4px 20px rgba(0, 0, 0, 0.4);
@@ -756,9 +907,9 @@ function uiStyles(options) {
 		-webkit-backdrop-filter: blur(12px);
 
 		/* Deliberately NOT overflow: hidden. That would clip each
-		   segment neatly to the pill, but it clips the hover glow too,
+		   section neatly to the pill, but it clips the hover glow too,
 		   cutting off the very thing that makes these read as the same
-		   buttons used everywhere else. The end segments carry the
+		   buttons used everywhere else. The end sections carry the
 		   radius themselves instead, below. */
 
 		/* Portrait: spans the screen with a comfortable margin either
@@ -788,11 +939,11 @@ function uiStyles(options) {
 		transition: background 0.15s ease, box-shadow 0.2s ease;
 	}
 
-	/* The same light sheen across the top that .glass has. A segment
+	/* The same light sheen across the top that .glass has. A section
 	   can't use .glass itself -- that carries its own border, radius
 	   and background, which would draw a separate button inside the
 	   capsule rather than a section of it -- so the glass treatment is
-	   applied to the segment directly. */
+	   applied to the section directly. */
 	.dock button::before {
 		content: "";
 		position: absolute;
@@ -806,7 +957,7 @@ function uiStyles(options) {
 		pointer-events: none;
 	}
 
-	/* The same three-layer treatment .glass uses, so a dock segment
+	/* The same three-layer treatment .glass uses, so a dock section
 	   glows exactly like every other button in OmniCore rather than
 	   approximating it. The last layer is the halo -- outward, not
 	   inset: an inset shadow of the same size reads as a dark vignette,
@@ -820,9 +971,9 @@ function uiStyles(options) {
 			0 0 30px var(--glow-strong);
 	}
 
-	/* The divider, drawn as a left border on every segment after the
+	/* The divider, drawn as a left border on every section after the
 	   first -- so it only ever appears BETWEEN labels, and a capsule
-	   with two segments gets exactly one, with no extra work. */
+	   with two sections gets exactly one, with no extra work. */
 	.dock button + button { border-left: 1px solid var(--glass-border); }
 
 	/* What overflow: hidden used to do, without clipping the glow. The
@@ -834,14 +985,14 @@ function uiStyles(options) {
 	   exactly the odd bright patch this was producing. */
 	.dock button:first-child,
 	.dock button:first-child::before {
-		border-top-left-radius: 999px;
-		border-bottom-left-radius: 999px;
+		border-top-left-radius: 999em;
+		border-bottom-left-radius: 999em;
 	}
 
 	.dock button:last-child,
 	.dock button:last-child::before {
-		border-top-right-radius: 999px;
-		border-bottom-right-radius: 999px;
+		border-top-right-radius: 999em;
+		border-bottom-right-radius: 999em;
 	}
 
 	.dock button:focus-visible { outline: none; }
@@ -851,8 +1002,8 @@ function uiStyles(options) {
 	   a fixed one.
 
 	   The plain .list above caps at 60vh, which is right when a list
-	   sits inside a tile that's only as tall as its own content. In a
-	   tile that's been stretched to fill the screen, that same cap
+	   sits inside a segment that's only as tall as its own content. In a
+	   segment that's been stretched to fill the screen, that same cap
 	   would leave a short scrolling list marooned in a tall empty box.
 	   This one grows to whatever its parent gives it and only starts
 	   scrolling once it genuinely runs out.
@@ -864,7 +1015,7 @@ function uiStyles(options) {
 		display: flex;
 		flex-direction: column;
 		gap: 0.6em;
-		border: 1px solid var(--card-border);
+		border: 1px solid var(--segment-border);
 		border-radius: var(--radius);
 		padding: 1em;
 		box-sizing: border-box;
@@ -876,7 +1027,7 @@ function uiStyles(options) {
 	.list-fill::-webkit-scrollbar-track { background: transparent; }
 	.list-fill::-webkit-scrollbar-thumb {
 		background: var(--scroll-thumb);
-		border-radius: 4px;
+		border-radius: 0.25em;
 	}
 
 	.modal-backdrop {
@@ -930,7 +1081,7 @@ function uiStyles(options) {
 		line-height: 1;
 		padding: 0.2em 0.4em;
 		cursor: pointer;
-		border-radius: 6px;
+		border-radius: 0.2885em;
 	}
 
 	.modal-close:hover { color: var(--fg); background: var(--glass-bg); }
@@ -952,7 +1103,7 @@ function uiStyles(options) {
 		text-align: center;
 		background: var(--input-bg);
 		border: 1px solid var(--glass-border);
-		border-radius: 8px;
+		border-radius: 0.5em;
 		color: var(--fg);
 		font-family: inherit;
 		font-size: 1em;
