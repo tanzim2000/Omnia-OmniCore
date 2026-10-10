@@ -1,5 +1,60 @@
 # OmniCore, packaged so nobody running it needs Node, npm, or a terminal
 # beyond one docker compose command.
+#
+# Built in two stages, so that nothing ever has to RUN under emulation:
+#
+#   dependencies   installs the libraries, on the machine doing the build
+#                  (GitHub's x86 runners), whatever image is being built
+#   final          the image itself: a Node base for the target machine
+#                  (x86 or ARM) with those libraries and OmniCore's own
+#                  files copied in. Only COPY steps, no RUN.
+#
+# Why that matters: the ARM image is built on an x86 machine. Any RUN step
+# for it runs through QEMU, an emulator, and Node under QEMU can simply
+# crash ("Illegal instruction"), which is exactly what failed the v1.19.1
+# build. Copying files needs no emulation, so there's nothing to crash.
+#
+# Keep it that way: a RUN step added to the final stage brings emulation
+# back, and the ARM build then needs QEMU set up in the publish workflow
+# again.
+
+# ---------------------------------------------------------------------
+# Stage 1: the libraries
+#
+# $BUILDPLATFORM is the machine doing the build, so this stage always runs
+# natively, never emulated.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS dependencies
+
+WORKDIR /app
+
+# `npm ci` rather than `npm install`: it installs exactly what
+# package-lock.json says, and fails if the lock file and package.json
+# disagree, instead of quietly settling on something else. The lock file
+# is where security fixes to libraries live, so the image has to be built
+# from it, not merely near it.
+#
+# --ignore-scripts: no library gets to run its own install step. Here that
+# means nothing gets compiled: the only ones that try are optional speed-ups
+# for SSH (which OmniCore doesn't use -- it talks to Docker over a local
+# socket), and anything compiled here would be compiled for the build
+# machine, wrong for an ARM image anyway. Every library OmniCore uses is
+# plain JavaScript and works the same on any machine.
+#
+# The second line loads every dependency once. npm has a known fault
+# where a dropped download ends the install early while still reporting
+# success ("Exit handler never called"), which would publish an image that
+# can't start. This makes that fail the build instead.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts \
+	&& node -e "for (const name of Object.keys(require('./package.json').dependencies)) require(name)"
+
+# modules/, themes/ and data/ ship empty and are filled once OmniCore is
+# running -- but the folders have to exist before anything can write into
+# them. Made here and copied across empty, since the final stage can't RUN.
+RUN mkdir -p /folders/modules /folders/themes /folders/data
+
+# ---------------------------------------------------------------------
+# Stage 2: the image itself, for whichever machine it's built for
 FROM node:20-alpine
 
 # Which version this image is. The publish workflow passes the git tag in
@@ -21,30 +76,13 @@ LABEL org.opencontainers.image.version=$OMNICORE_VERSION
 
 WORKDIR /app
 
-# Dependencies first, so a rebuild after only changing core/ doesn't
-# reinstall express and tar every time
-#
-# `npm ci` rather than `npm install`: it installs exactly what
-# package-lock.json says, and fails if the lock file and package.json
-# disagree, instead of quietly settling on something else. The lock file
-# is where security fixes to libraries live, so the image has to be
-# built from it, not merely near it.
-#
-# The second line loads every dependency once. npm has a known fault
-# where a dropped download ends the install early while still reporting
-# success ("Exit handler never called"), which would publish an image
-# that can't start. This makes that fail the build instead.
+# Libraries first, so a rebuild after only changing core/ reuses them
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY --from=dependencies /folders/ ./
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev \
-	&& node -e "for (const name of Object.keys(require('./package.json').dependencies)) require(name)"
 
 COPY core/ ./core/
 COPY start.OmniCore ./
-
-# modules/ and themes/ ship empty and are filled by the Marketplace once
-# running — but the folders themselves have to exist before an install can
-# write into them, so they're created here rather than left to chance
-RUN mkdir -p modules themes data
 
 # 3000 admin, 3999 setup wizard, 4000 welcome face. Dashboard faces
 # (4001+) and input faces (5001+) are published by docker-compose.yml,

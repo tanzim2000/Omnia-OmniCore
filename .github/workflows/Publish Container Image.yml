@@ -70,11 +70,14 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v7
 
-      - name: Set up QEMU
-        # QEMU emulates other CPU architectures, which is what makes it
-        # possible to build an ARM image on GitHub's x86 runners. Needed
-        # for the linux/arm64 build below (Raspberry Pi, ARM mini PCs).
-        uses: docker/setup-qemu-action@v4
+      # No QEMU step. QEMU emulates another CPU, and used to be how the ARM
+      # image got built on these x86 runners -- until Node crashed under it
+      # ("Illegal instruction") and failed the v1.19.1 build. The
+      # Dockerfile now does all its RUN steps on the runner's own CPU and
+      # only copies files into the ARM image, which needs no emulation.
+      # (Setting QEMU up also meant downloading its image from Docker Hub,
+      # which is what failed the v1.19.0 build: Docker Hub's limit on
+      # anonymous downloads.) See the comment at the top of the Dockerfile.
 
       - name: Set up Docker Buildx
         # Buildx is the modern Docker builder. Plain "docker build" cannot
