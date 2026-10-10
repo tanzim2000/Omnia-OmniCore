@@ -39,7 +39,7 @@ const {
 const widgetTypes = require("./widget-types");
 const { searchCities } = require("./location-service");
 const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
-const { uiStyles } = require("./ui-theme");
+const { uiStyles, rememberUiMode } = require("./ui-theme");
 
 // Only what's specific to the wizard. Everything else — glass buttons,
 // segments, inputs, the colour variables, the dock, the lists — comes from
@@ -374,6 +374,9 @@ function page(title, body, script) {
 function startWizardFace() {
 	const app = express();
 	app.use(express.json());
+
+	// Light or dark for whichever browser is asking. See ui-theme.js.
+	app.use(rememberUiMode);
 
 	app.post("/faces", async (req, res) => {
 		const { name, title, theme, instances, themeConfig } = req.body;

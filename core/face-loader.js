@@ -18,6 +18,7 @@ const { resolveLocations } = require("./location-service");
 const { readSystemTime } = require("./time-service");
 const themeLoader = require("./theme-loader");
 const faceStore = require("./face-store");
+const { rememberUiMode } = require("./ui-theme");
 const renderFallbackPage = require("./fallback-page");
 const {
 	attachEvents,
@@ -105,6 +106,9 @@ function startFace(face) {
 
 		const app = express();
 		app.use(express.json());
+
+		// Light or dark for whichever browser is asking. See ui-theme.js.
+		app.use(rememberUiMode);
 
 		console.log(`Starting face "${face.name}" on port ${face.id}`);
 
@@ -400,7 +404,7 @@ function startFace(face) {
 
 			if (!themeIsValid) {
 				// No usable theme — show OmniCore's built-in fallback screen
-				res.send(renderFallbackPage(themes));
+				res.send(renderFallbackPage(themes, face));
 				return;
 			}
 
@@ -413,7 +417,7 @@ function startFace(face) {
 			if (filePath && filePath.endsWith(".html") && fs.existsSync(filePath)) {
 				let html = fs.readFileSync(filePath, "utf-8");
 
-				const injected = clientBundle();
+				const injected = clientBundle(face);
 
 				if (html.includes("</body>")) {
 					html = html.replace("</body>", injected + "\n</body>");

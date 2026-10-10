@@ -2,9 +2,14 @@
 
 ## v1.19.2
 
-One box for every page, and a new Marketplace
+One box for every page, a new Marketplace, and light or dark per browser
 
 ### Changed
+
+- **Light or dark is chosen per browser now, not for the whole server.** Picking light on your phone no longer turns the TV's input face light too. Each browser keeps its own choice in a small cookie, and a browser that hasn't chosen follows its device's own light/dark setting. The Appearance tile on Settings has a third choice, **Device**, to go back to following the device. The choice covers every OmniCore page that browser opens on this server; dashboards still look however their theme draws them.
+- **The sign-in page has a small round light/dark switch** in its top-right corner, so the page can be read in the light you want before you've signed in. The first-run setup screen has it too, since it's the same page.
+- **Password boxes have a Show / Hide button** inside their right end: on the sign-in and setup pages, and on any password setting a module or theme asks for.
+- **Each face has its own look for notifications**, light or dark, on the face's page in a new Notifications box. It's saved as soon as you pick one, and the face's screen redraws itself. Dark unless changed, including for faces made before this version. Per face rather than per browser because a face's screen is usually a TV or a tablet on the wall that nobody signs in on.
 
 - **The Marketplace is redesigned.** A header with the title and Sources, then a bar with the search box, the Modules / Themes switch and how many items there are ("9 items available", or "2 of 9 shown" while searching). That bar stays pinned at the top as you scroll, frosted so the listings passing under it are blurred out. Each listing is now one row: its name, "by" its author and what it does on the left, its button on the right. As many columns as fit: one on a phone, two on a laptop, three on a wide screen. The page scrolls as a whole, instead of the list scrolling inside a box. A search that matches nothing says so.
 - **Installed is a green button-shaped label** ("✓ Installed"), next to the plain glass Install buttons. In dark mode it's a calmer green than before; in light mode it's flat, a lighter green with white text, instead of a heavy dark green that was hard to read. The green "Go back" when adding a source follows it. Green status text and switches that are turned on keep their brighter green.
@@ -22,8 +27,14 @@ One box for every page, and a new Marketplace
 
 - **Install did nothing on an author's page.** The page had the buttons but not the script behind them. It now uses the same one as the Marketplace and a listing's own page.
 
+### Upgrading
+
+- **If your server was set to light, each browser starts on its device's setting once.** The old server-wide setting (`uiMode` in `data/settings.json`) isn't read any more, so every browser starts by following its device. Pick Light on Settings in each browser you want light; it stays that way from then on. An old `uiMode` left in `data/settings.json` does nothing and can stay.
+- **A screen with no light/dark setting of its own follows its device too**: OmniCore's no-theme screen and input faces on a TV or tablet. Most kiosk browsers are dark or light by their system setting; if one comes up in the wrong one, open Settings in that browser once and pick it.
+
 ### Notes
 
+- **New pieces in the shared theme, `core/ui-theme.js`**: the round light/dark switch (`.mode-switch`), the password box with its Show / Hide button (`passwordField()`), and the stylesheet carrying both palettes when a browser follows its device (dark first, light inside a `prefers-color-scheme` query, so nothing flashes on load). Every OmniCore web server reads the browser's choice once per request with `rememberUiMode`.
 - **Two pieces moved into the shared theme, `core/ui-theme.js`**, so a later change of colours or style reaches every page at once: the coloured buttons (`.btn-glossy`, `-green`, `-neutral`), which lived in the admin pages, and a `.toolbar` row (a search box, a switch, a count) for any list that needs one. The green button reads its own colours (`--success-button-*`), separate from `--success`.
 
 ## v1.19.1

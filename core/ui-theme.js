@@ -18,7 +18,79 @@
 // different padding, different font sizes, one with a transition the
 // others lacked. Everything here exists so that never happens again.
 
+const { AsyncLocalStorage } = require("node:async_hooks");
 const { readSettings } = require("./settings-store");
+
+// ---------------------------------------------------------------------
+// Light or dark: chosen per BROWSER, not per install
+//
+// Before v1.19.2 this was one setting for the whole server, so picking
+// light on a phone turned the TV's input face light too. Now each
+// browser keeps its own choice in a small cookie, and a browser that
+// has never chosen follows its device (the system's own light/dark
+// setting). Cookies belong to the address, not the port, so the one
+// cookie covers every OmniCore page this browser opens on this server.
+//
+// The cookie is set by the page itself (see UI_MODE_SCRIPT below) and
+// only read here. Anything other than exactly "light" or "dark" is
+// treated as no choice at all, so a hand-edited cookie can't put
+// arbitrary text into the stylesheet.
+const UI_MODE_COOKIE = "omnicore_ui_mode";
+
+function uiModeFromRequest(req) {
+	const header = (req && req.headers && req.headers.cookie) || "";
+
+	for (const part of header.split(";")) {
+		const [name, value] = part.trim().split("=");
+
+		if (name === UI_MODE_COOKIE && (value === "light" || value === "dark")) {
+			return value;
+		}
+	}
+
+	return null;
+}
+
+// Every page calls uiStyles() deep inside its own rendering code, far
+// from the request that asked for it. Rather than pass the request down
+// through every one of those calls, each web server runs this once per
+// request (app.use(rememberUiMode)), and uiStyles() asks for "the mode
+// of whichever request I'm being drawn for". AsyncLocalStorage is
+// Node's own tool for exactly that: a value that follows one request
+// through all the code it runs, including across awaits, without
+// leaking into any other request running at the same time.
+const requestMode = new AsyncLocalStorage();
+
+function rememberUiMode(req, res, next) {
+	requestMode.run(uiModeFromRequest(req), next);
+}
+
+// "light", "dark", or null for "follow the device". Outside a request
+// (tests, mostly) it's null.
+function currentUiMode() {
+	const mode = requestMode.getStore();
+	return mode === "light" || mode === "dark" ? mode : null;
+}
+
+// Sets this browser's choice and reloads so the page redraws in it.
+// Shared by the Appearance tile and the switch on the sign-in page.
+// "device" forgets the choice, so the device decides again.
+const UI_MODE_SCRIPT = `
+	function setUiMode(mode) {
+		const name = ${JSON.stringify(UI_MODE_COOKIE)};
+
+		if (mode === "light" || mode === "dark") {
+			// A year; a browser that's still in use renews it each time
+			// the mode is changed
+			document.cookie = name + "=" + mode +
+				"; Path=/; Max-Age=31536000; SameSite=Lax";
+		} else {
+			document.cookie = name + "=; Path=/; Max-Age=0; SameSite=Lax";
+		}
+
+		location.reload();
+	}
+`;
 
 // The system stack a fresh install uses, and the fallback behind any
 // downloaded font — if a chosen font ever fails to load, the UI stays
@@ -179,24 +251,10 @@ function fontFace(settings) {
 	}`;
 }
 
-// Everything above, plus the components, as one stylesheet. Pages drop
-// this into a <style> tag rather than each writing their own CSS.
-function uiStyles(options) {
-	const settings = readSettings();
-	const palette = PALETTES[settings.uiMode] || PALETTES.dark;
-	const isLight = settings.uiMode === "light";
-
-	// A page can force dark regardless of the setting — used by nothing
-	// today, but it's the seam an input face would use once input faces
-	// can pick their own theme.
-	const forced = options && options.forceMode;
-	const active = forced ? PALETTES[forced] || palette : palette;
-	const lightMode = forced ? forced === "light" : isLight;
-
+// One palette as CSS variables. Written once here so the light and dark
+// copies can't drift apart when a colour is added.
+function paletteVariables(active) {
 	return `
-	${fontFace(settings)}
-
-	:root {
 		--bg: ${active.bg};
 		--fg: ${active.fg};
 		--fg-muted: ${active.fgMuted};
@@ -241,11 +299,90 @@ function uiStyles(options) {
 		--disabled: ${active.disabled};
 		--disabled-text: ${active.disabledText};
 
+		--ambient-a: ${active.ambientA};
+		--ambient-b: ${active.ambientB};
+	`;
+}
+
+// The few rules that differ between light and dark beyond their colours.
+// `light` picks which set.
+function modeRules(light) {
+	if (light) {
+		return `
+	/* Light mode: a clickable segment lifts slightly rather than
+	   glowing — a glow reads as nothing against a pale background. */
+	.segment.clickable:hover,
+	.segment.clickable:focus-visible {
+		transform: scale(1.02);
+		background: var(--glass-bg-hover);
+		box-shadow: none;
+	}
+
+	/* The sign-in page's switch shows where it would take you: a moon
+	   on a light page */
+	.mode-switch .icon-sun { display: none; }
+	.mode-switch .icon-moon { display: block; }`;
+	}
+
+	return `
+	/* Dark mode: a clickable segment glows rather than moving —
+	   motion is unnecessary when light alone reads clearly against
+	   black. Values taken from working reference examples rather than
+	   a first guess: a visible glow sits close to 0.5 alpha at its
+	   core, not 0.1-0.25. */
+	.segment.clickable:hover,
+	.segment.clickable:focus-visible {
+		transform: none;
+		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55),
+			0 0 32px rgba(255, 255, 255, 0.45),
+			0 0 70px rgba(255, 255, 255, 0.2);
+		background: var(--glass-bg-hover);
+	}
+
+	/* ...and a sun on a dark one */
+	.mode-switch .icon-sun { display: block; }
+	.mode-switch .icon-moon { display: none; }`;
+}
+
+// Everything above, plus the components, as one stylesheet. Pages drop
+// this into a <style> tag rather than each writing their own CSS.
+//
+// Which colours it carries:
+//   - options.forceMode ("light" / "dark") wins over everything. Used
+//     for mockups, and the seam an input face would use once input
+//     faces can pick their own look.
+//   - otherwise this browser's own choice, from its cookie.
+//   - otherwise BOTH, dark first and light inside a
+//     prefers-color-scheme query, so the browser picks by itself with
+//     no script and no flash of the wrong colours on load.
+function uiStyles(options) {
+	const settings = readSettings();
+	const forced = options && options.forceMode;
+	const mode = forced === "light" || forced === "dark" ? forced : currentUiMode();
+
+	const colours = mode
+		? `
+	:root {${paletteVariables(PALETTES[mode])}}
+	${modeRules(mode === "light")}`
+		: `
+	:root {${paletteVariables(PALETTES.dark)}}
+	${modeRules(false)}
+
+	@media (prefers-color-scheme: light) {
+		:root {${paletteVariables(PALETTES.light)}}
+		${modeRules(true)}
+	}`;
+
+	return `
+	${fontFace(settings)}
+
+	:root {
 		--font: ${fontStack(settings)};
 		--font-size: ${Number(settings.uiFontSize) || 16}px;
 
 		--radius: 0.75em;
 	}
+	${colours}
 
 	* { box-sizing: border-box; }
 
@@ -258,8 +395,8 @@ function uiStyles(options) {
 		   whole "frosted glass" effect below contributes nothing at all
 		   -- exactly what was happening before this existed. */
 		background-image:
-			radial-gradient(circle at 15% 20%, ${active.ambientA}, transparent 42%),
-			radial-gradient(circle at 85% 75%, ${active.ambientB}, transparent 46%);
+			radial-gradient(circle at 15% 20%, var(--ambient-a), transparent 42%),
+			radial-gradient(circle at 85% 75%, var(--ambient-b), transparent 46%);
 		background-attachment: fixed;
 		color: var(--fg);
 		font-family: var(--font);
@@ -479,28 +616,9 @@ function uiStyles(options) {
 			background 0.25s ease;
 	}
 
-	${
-		lightMode
-			? `/* Light mode: a clickable segment lifts slightly rather than
-	   glowing — a glow reads as nothing against a pale background. */
-	.segment.clickable:hover,
-	.segment.clickable:focus-visible {
-		transform: scale(1.02);
-		background: var(--glass-bg-hover);
-	}`
-			: `/* Dark mode: a clickable segment glows rather than moving —
-	   motion is unnecessary when light alone reads clearly against
-	   black. Values taken from working reference examples rather than
-	   a first guess: a visible glow sits close to 0.5 alpha at its
-	   core, not 0.1-0.25. */
-	.segment.clickable:hover,
-	.segment.clickable:focus-visible {
-		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55),
-			0 0 32px rgba(255, 255, 255, 0.45),
-			0 0 70px rgba(255, 255, 255, 0.2);
-		background: var(--glass-bg-hover);
-	}`
-	}
+	/* How a clickable segment answers a hover differs between light
+	   and dark; those rules are in modeRules() near the top of this
+	   file, with the colours. */
 
 	/* ---------------------------------------------------------------
 	   Scrollable list — the list scrolls, the page doesn't. Nothing
@@ -585,6 +703,27 @@ function uiStyles(options) {
 	   can never collide. */
 	.floating.bottom-right { bottom: 1.5em; right: 1.5em; }
 	.floating.top-left { top: 1.5em; left: 1.5em; }
+
+	/* ---------------------------------------------------------------
+	   Light/dark switch — the same round floating button, a size
+	   smaller, top-right. Only the sign-in page has one: everywhere
+	   else the choice lives in Settings, but someone who can't sign in
+	   yet still deserves to read the page in the light they want. It
+	   shows where it would take you (a sun on a dark page, a moon on a
+	   light one); which icon shows is decided with the colours, in
+	   modeRules().
+	   --------------------------------------------------------------- */
+	.floating.top-right { top: 1.5em; right: 1.5em; }
+
+	.mode-switch {
+		width: 2.75em;
+		height: 2.75em;
+	}
+
+	.mode-switch svg {
+		width: 1.25em;
+		height: 1.25em;
+	}
 
 	/* With the button in the top-left corner, every page starts below
 	   it instead of under it -- otherwise it sits on top of the page's
@@ -751,6 +890,41 @@ function uiStyles(options) {
 		font-family: inherit;
 		font-size: 1em;
 		padding: 0.75em 1em;
+	}
+
+	/* ---------------------------------------------------------------
+	   Password box with a Show / Hide button inside its right end, so a
+	   typo can be checked before it's sent. The button only swaps the
+	   box between a password box and a plain text box; what's typed
+	   never leaves the page because of it. Wired up by
+	   PASSWORD_TOGGLE_SCRIPT.
+	   --------------------------------------------------------------- */
+	.password-field { position: relative; }
+
+	/* Room on the right so typed text never runs under the button */
+	.password-field > input { padding-right: 4.5em; }
+
+	.password-toggle {
+		appearance: none;
+		-webkit-appearance: none;
+		position: absolute;
+		top: 50%;
+		right: 0.5em;
+		transform: translateY(-50%);
+		background: none;
+		border: 0;
+		border-radius: 0.5em;
+		color: var(--fg-muted);
+		font-family: inherit;
+		font-size: 0.8em;
+		padding: 0.4em 0.7em;
+		cursor: pointer;
+	}
+
+	.password-toggle:hover,
+	.password-toggle:focus-visible {
+		color: var(--fg);
+		background: var(--hover-subtle);
 	}
 
 	input[type="checkbox"] { width: 18px; height: 18px; }
@@ -1142,4 +1316,91 @@ function backButton(href) {
 		aria-label="Back">&#8592;</button>`;
 }
 
-module.exports = { uiStyles, backButton, fontStack, fontFace, PALETTES, SYSTEM_FONT };
+// A password box with its Show / Hide button. `inputHtml` is the
+// <input type="password" ...> itself, so each page keeps its own id,
+// data attributes and autocomplete hint.
+function passwordField(inputHtml) {
+	return `<div class="password-field">${inputHtml}<button type="button" ` +
+		`class="password-toggle" data-password-toggle aria-pressed="false" ` +
+		`aria-label="Show password">Show</button></div>`;
+}
+
+// One listener for the whole page rather than one per box, so a box
+// added after the page loads works too.
+const PASSWORD_TOGGLE_SCRIPT = `
+	document.addEventListener("click", function (event) {
+		const toggle = event.target.closest("[data-password-toggle]");
+
+		if (!toggle) return;
+
+		const input = toggle.parentElement.querySelector("input");
+		const show = input.type === "password";
+
+		input.type = show ? "text" : "password";
+		toggle.textContent = show ? "Hide" : "Show";
+		toggle.setAttribute("aria-pressed", String(show));
+		toggle.setAttribute("aria-label", show ? "Hide password" : "Show password");
+	});
+`;
+
+// The sign-in page's light/dark switch. Both icons are always in the
+// markup; the stylesheet shows the right one.
+function modeSwitch() {
+	return `
+	<button type="button" class="floating top-right mode-switch"
+		data-mode-switch aria-label="Switch between light and dark">
+		<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+			stroke-width="2" stroke-linecap="round" aria-hidden="true">
+			<circle cx="12" cy="12" r="4"></circle>
+			<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+		</svg>
+		<svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+			stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+		</svg>
+	</button>`;
+}
+
+// Flips to whichever mode the page isn't showing right now: this
+// browser's saved choice if it has one, otherwise what the device is
+// set to. Needs UI_MODE_SCRIPT on the page too, for setUiMode().
+const MODE_SWITCH_SCRIPT = `
+	(function () {
+		const button = document.querySelector("[data-mode-switch]");
+
+		if (!button) return;
+
+		button.addEventListener("click", function () {
+			const saved = document.cookie
+				.split(";")
+				.map(function (part) { return part.trim(); })
+				.find(function (part) {
+					return part.indexOf(${JSON.stringify(UI_MODE_COOKIE + "=")}) === 0;
+				});
+
+			const now = saved
+				? saved.split("=")[1]
+				: matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+
+			setUiMode(now === "light" ? "dark" : "light");
+		});
+	})();
+`;
+
+module.exports = {
+	uiStyles,
+	backButton,
+	fontStack,
+	fontFace,
+	PALETTES,
+	SYSTEM_FONT,
+	UI_MODE_COOKIE,
+	UI_MODE_SCRIPT,
+	uiModeFromRequest,
+	rememberUiMode,
+	currentUiMode,
+	passwordField,
+	PASSWORD_TOGGLE_SCRIPT,
+	modeSwitch,
+	MODE_SWITCH_SCRIPT
+};

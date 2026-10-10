@@ -27,6 +27,7 @@ const { makeModuleApi } = require("./module-api");
 const renderInputFacePage = require("./input-face-page");
 const { renderInputPickerPage } = require("./input-face-page");
 const { attachFontRoute } = require("./font-service");
+const { rememberUiMode } = require("./ui-theme");
 const { inportFor, faceTakesInput } = require("./face-store");
 
 // Running Inports, keyed by port: { server }
@@ -66,6 +67,9 @@ function startInputFace(faceOrId, maybeFace) {
 
 		const app = express();
 		app.use(express.json());
+
+		// Light or dark for whichever browser is asking. See ui-theme.js.
+		app.use(rememberUiMode);
 
 		// Serves the chosen UI font from this face's own origin
 		attachFontRoute(app);

@@ -134,6 +134,9 @@ function createFace(name, title, theme, instances) {
 		// anything else it decides. Kept apart from themeConfigs, which the
 		// admin owns and OmniCore validates against a schema.
 		themeStates: {},
+		// Light or dark for notifications shown on this face's screen.
+		// A face made before v1.19.2 has none, which counts as dark.
+		notificationMode: "dark",
 		instances: buildInstances(instances)
 	};
 
@@ -157,6 +160,11 @@ function updateFace(id, changes) {
 	}
 	if (changes.title !== undefined) face.title = changes.title;
 	if (changes.theme !== undefined) face.theme = changes.theme;
+
+	// Only the two real choices are kept; anything else is ignored
+	if (changes.notificationMode === "light" || changes.notificationMode === "dark") {
+		face.notificationMode = changes.notificationMode;
+	}
 
 	writeFaces(faces);
 	return face;

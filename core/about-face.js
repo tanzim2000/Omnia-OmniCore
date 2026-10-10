@@ -23,7 +23,7 @@ const fs = require("fs");
 const path = require("path");
 const paths = require("./paths");
 
-const { uiStyles } = require("./ui-theme");
+const { uiStyles, rememberUiMode } = require("./ui-theme");
 const { portLinkScript, escapeHtml } = require("./face-links");
 const systemInfo = require("./system-info");
 const updateStore = require("./update-store");
@@ -210,6 +210,9 @@ function renderPage(info) {
 
 function startAboutFace() {
 	const app = express();
+
+	// Light or dark for whichever browser is asking. See ui-theme.js.
+	app.use(rememberUiMode);
 
 	// Served from a real file rather than inlined, so the stylesheet
 	// stays editable on its own.

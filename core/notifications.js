@@ -310,10 +310,13 @@ function releaseHeld(faceId) {
 // It carries that look with it. The overlay is drawn on top of a theme's
 // page as often as on OmniCore's own, and a theme's page has none of the
 // Default UI's colours or font in it. So the overlay sets its own copies
-// on itself (the --omni-note-* values below), taken from the install's
-// settings each time a page is served: the same light or dark, and the
-// same font and size, as the admin pages. Whatever theme is underneath,
-// a notification looks the same.
+// on itself (the --omni-note-* values below), each time a page is
+// served: the install's font and size, and the light or dark chosen for
+// that FACE (its notificationMode, set on the face's page in the admin
+// face; dark unless changed). Per face rather than per browser because
+// a face's screen is usually a TV or a wall tablet nobody signs in on,
+// so there's no browser choice there to follow. Whatever theme is
+// underneath, a notification looks the same.
 //
 // Three boxes, a bento:
 //
@@ -326,9 +329,11 @@ function releaseHeld(faceId) {
 //
 // On a screen taller than it is wide, the QR box goes under the message.
 
-function overlayStyles() {
+// `mode` is the face's notificationMode: "light", or anything else for
+// dark.
+function overlayStyles(mode) {
 	const settings = readSettings();
-	const palette = PALETTES[settings.uiMode] || PALETTES.dark;
+	const palette = mode === "light" ? PALETTES.light : PALETTES.dark;
 	const size = Number(settings.uiFontSize) || 16;
 
 	return `

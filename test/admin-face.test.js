@@ -91,27 +91,26 @@ test("admin face: every remaining page renders", async () => {
 	}
 });
 
-test("admin face: appearance settings save and take effect", async () => {
+test("admin face: light or dark comes from this browser's cookie, not a setting", async () => {
+	// Since v1.19.2 /appearance no longer takes uiMode at all: asking it
+	// to go light changes nothing for anyone
 	const save = await fetch(`http://127.0.0.1:${PORT}/appearance`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json", cookie },
 		body: JSON.stringify({ uiMode: "light" })
 	});
 
-	assert.equal(save.status, 200);
+	assert.equal(save.status, 400, "nothing there it recognises");
 
-	const html = await (
-		await fetch(`http://127.0.0.1:${PORT}/`, { headers: { cookie } })
+	// The browser's own cookie is what turns a page light
+	const light = await (
+		await fetch(`http://127.0.0.1:${PORT}/`, {
+			headers: { cookie: cookie + "; omnicore_ui_mode=light" }
+		})
 	).text();
 
-	assert.ok(html.includes("--bg: #f2f2f4"), "light mode did not take effect");
-
-	// Put it back, so a later test reading the page isn't surprised
-	await fetch(`http://127.0.0.1:${PORT}/appearance`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json", cookie },
-		body: JSON.stringify({ uiMode: "dark" })
-	});
+	assert.ok(light.includes("--bg: #f2f2f4"), "light mode did not take effect");
+	assert.ok(!light.includes("prefers-color-scheme"), "only the chosen palette");
 });
 
 test("admin face: an absurd text size is clamped, not stored", async () => {

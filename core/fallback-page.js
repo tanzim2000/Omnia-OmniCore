@@ -15,7 +15,9 @@
 const { uiStyles } = require("./ui-theme");
 const notifications = require("./notifications");
 
-function renderFallbackPage(themes) {
+// `face` is the face this screen stands in for, so its notifications
+// come out in that face's light or dark.
+function renderFallbackPage(themes, face) {
 	const hasThemes = themes.length > 0;
 
 	// One glass button per available theme
@@ -40,7 +42,7 @@ function renderFallbackPage(themes) {
 	<title>OmniCore</title>
 	<style>
 ${uiStyles()}
-${notifications.overlayStyles()}
+${notifications.overlayStyles(face && face.notificationMode)}
 
 		body {
 			height: 100vh;

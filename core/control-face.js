@@ -16,7 +16,7 @@
 
 const express = require("express");
 const faceStore = require("./face-store");
-const { uiStyles } = require("./ui-theme");
+const { uiStyles, rememberUiMode } = require("./ui-theme");
 const { attachFontRoute } = require("./font-service");
 const {
 	portLinkScript,
@@ -170,6 +170,9 @@ function page(title, body, script) {
 function startControlFace() {
 	const app = express();
 	app.use(express.json());
+
+	// Light or dark for whichever browser is asking. See ui-theme.js.
+	app.use(rememberUiMode);
 
 	// Serves the chosen UI font from this face's own origin
 	attachFontRoute(app);

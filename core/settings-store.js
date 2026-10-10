@@ -43,8 +43,10 @@ const DEFAULTS = {
 	// this — their appearance belongs entirely to whichever theme
 	// they're running. See docs/planning/default-ui-architecture.md.
 
-	// "dark" | "light". One universal toggle for every face above.
-	uiMode: "dark",
+	// Light or dark is NOT here any more (it was `uiMode` until
+	// v1.19.2). Each browser keeps its own choice in a cookie; see
+	// ui-theme.js. An old settings file that still has uiMode in it is
+	// harmless: nothing reads it.
 
 	// Font family for those same pages. Empty means the system's own
 	// font, which is what a fresh install uses — nothing is downloaded

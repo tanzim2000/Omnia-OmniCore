@@ -1,10 +1,10 @@
 {
   "name": "omnia-omnicore",
-  "version": "1.19.1",
+  "version": "1.19.2",
   "description": "Modular, config-driven backend for the Omnia home dashboard ecosystem.",
   "main": "start.OmniCore",
   "scripts": {
-    "test": "node --test --test-force-exit test/qr.test.js && node --test --test-force-exit test/notifications.test.js && node --test --test-force-exit test/resources.test.js && node --test --test-force-exit test/widgets.test.js && node --test --test-force-exit test/settings-files.test.js && node --test --test-force-exit test/background.test.js && node --test --test-force-exit test/marketplace.test.js && node --test --test-force-exit test/marketplace-pages.test.js && node --test --test-force-exit test/admin-face.test.js && node --test --test-force-exit test/admin-pages.test.js && node --test --test-force-exit test/core-update.test.js && node --test --test-force-exit test/segments.test.js && node --test --test-force-exit test/faces.test.js",
+    "test": "node --test --test-force-exit test/qr.test.js && node --test --test-force-exit test/notifications.test.js && node --test --test-force-exit test/resources.test.js && node --test --test-force-exit test/widgets.test.js && node --test --test-force-exit test/settings-files.test.js && node --test --test-force-exit test/background.test.js && node --test --test-force-exit test/marketplace.test.js && node --test --test-force-exit test/marketplace-pages.test.js && node --test --test-force-exit test/admin-face.test.js && node --test --test-force-exit test/admin-pages.test.js && node --test --test-force-exit test/core-update.test.js && node --test --test-force-exit test/segments.test.js && node --test --test-force-exit test/ui-mode.test.js && node --test --test-force-exit test/faces.test.js",
     "start": "node start.OmniCore"
   },
   "keywords": [],

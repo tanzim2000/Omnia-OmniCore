@@ -46,7 +46,17 @@ const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
 const { refresh } = require("./face-loader");
-const { uiStyles, backButton } = require("./ui-theme");
+const {
+	uiStyles,
+	backButton,
+	rememberUiMode,
+	currentUiMode,
+	UI_MODE_SCRIPT,
+	passwordField,
+	PASSWORD_TOGGLE_SCRIPT,
+	modeSwitch,
+	MODE_SWITCH_SCRIPT
+} = require("./ui-theme");
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const coreUpdater = require("./core-updater");
 const updateStore = require("./update-store");
@@ -163,6 +173,15 @@ const styles = `
 
 	.mode-screen { border-radius: 0.3125em; height: 64px; padding: 0.5em; text-align: left; }
 	.mode-screen span { display: block; border-radius: 0.125em; margin-bottom: 5px; }
+
+	/* Device: half dark, half light, since it's whichever the device
+	   is set to */
+	.mode-screen-split { display: flex; padding: 0; overflow: hidden; }
+	.mode-screen-split > div { flex: 1; padding: 0.5em; }
+
+	/* On a full-width row two previews would stretch into long strips;
+	   kept to the size they are in a half-width box */
+	.narrow-previews { max-width: 24em; }
 
 	/* Corner map: the buttons sit where the thing they choose would
 	   actually sit, so the choice is spatial rather than a list of
@@ -801,7 +820,7 @@ function page(title, body, script, bodyClass, back, backLabel) {
 <body class="${bodyClass || ""}">
 	${body}
 	${backButton(back, backLabel)}
-	<script>${script || ""}</script>
+	<script>${UI_MODE_SCRIPT}${PASSWORD_TOGGLE_SCRIPT}${script || ""}</script>
 </body>
 </html>`;
 }
@@ -1288,6 +1307,11 @@ function renderFields(schema, config, context, scope) {
 					`data-scope="${owner}" ` +
 					`data-type="${escapeHtml(field.type)}" ` +
 					`value="${escapeHtml(value === undefined ? "" : value)}">`;
+
+				// A password gets the Show / Hide button inside its box
+				if (type === "password") {
+					input = passwordField(input);
+				}
 			}
 
 			// A field can depend on another one — no point showing a
@@ -1328,17 +1352,23 @@ function credentialsPage(options) {
 				</div>
 				<div class="field">
 					<label for="password">Password</label>
-					<input type="password" id="password"
-						autocomplete="${options.isSetup ? "new-password" : "current-password"}">
+					${passwordField(
+						`<input type="password" id="password" autocomplete="${
+							options.isSetup ? "new-password" : "current-password"
+						}">`
+					)}
 				</div>
 				<div class="segment-actions">
 					<button class="glass glass-block" id="submit">${escapeHtml(options.button)}</button>
 					<p class="status" id="status"></p>
 				</div>
 			</div>
-		</div>`;
+		</div>
+		${modeSwitch()}`;
 
 	const script = `
+		${MODE_SWITCH_SCRIPT}
+
 		const endpoint = ${JSON.stringify(options.endpoint)};
 		const status = document.getElementById("status");
 		const button = document.getElementById("submit");
@@ -1400,6 +1430,9 @@ function credentialsPage(options) {
 function startAdminFace() {
 	const app = express();
 	app.use(express.json());
+
+	// Light or dark for whichever browser is asking. See ui-theme.js.
+	app.use(rememberUiMode);
 
 	// Serves the chosen UI font. Mounted before the auth gate below:
 	// the sign-in screen itself renders in the chosen font, and it is
@@ -1544,7 +1577,11 @@ function startAdminFace() {
 			: "No location available. Detection may have failed.";
 
 		const manualLocation = settings.locationMode === "manual";
-		const lightMode = settings.uiMode === "light";
+		// This browser's own choice: "light", "dark", or null when it
+		// follows the device
+		const uiMode = currentUiMode();
+		const modeLabel = (mode, name) =>
+			name + (uiMode === mode ? " (Active)" : "");
 		const bottomRight = settings.backButtonCorner !== "top-left";
 
 		const body = `
@@ -1607,31 +1644,43 @@ function startAdminFace() {
 					<div class="segment">
 						<h2>Appearance Mode</h2>
 						<p class="lede">
+							Saved in this browser only, so each screen can have
+							its own. Device follows this device's own setting.
 							Dashboards are unaffected — how they look belongs to
 							whichever theme they run.
 						</p>
 						<div class="mode-previews">
-							<div class="mode-preview ${lightMode ? "" : "active"}"
+							<div class="mode-preview ${uiMode === "dark" ? "active" : ""}"
 								data-mode="dark" role="button" tabindex="0">
 								<div class="mode-screen" style="background:#0c0d10">
 									<span style="width:40%;height:5px;background:rgba(255,255,255,0.8)"></span>
 									<span style="width:70%;height:4px;background:rgba(255,255,255,0.3)"></span>
 									<span style="width:55%;height:4px;background:rgba(255,255,255,0.3)"></span>
 								</div>
-								<div class="mode-preview-label">Dark${
-									lightMode ? "" : " (Active)"
-								}</div>
+								<div class="mode-preview-label">${modeLabel("dark", "Dark")}</div>
 							</div>
-							<div class="mode-preview ${lightMode ? "active" : ""}"
+							<div class="mode-preview ${uiMode === "light" ? "active" : ""}"
 								data-mode="light" role="button" tabindex="0">
 								<div class="mode-screen" style="background:#e5e7eb">
 									<span style="width:40%;height:5px;background:#4b5563"></span>
 									<span style="width:70%;height:4px;background:#9ca3af"></span>
 									<span style="width:55%;height:4px;background:#9ca3af"></span>
 								</div>
-								<div class="mode-preview-label">Light${
-									lightMode ? " (Active)" : ""
-								}</div>
+								<div class="mode-preview-label">${modeLabel("light", "Light")}</div>
+							</div>
+							<div class="mode-preview ${uiMode ? "" : "active"}"
+								data-mode="device" role="button" tabindex="0">
+								<div class="mode-screen mode-screen-split">
+									<div style="background:#0c0d10">
+										<span style="width:60%;height:5px;background:rgba(255,255,255,0.8)"></span>
+										<span style="width:90%;height:4px;background:rgba(255,255,255,0.3)"></span>
+									</div>
+									<div style="background:#e5e7eb">
+										<span style="width:60%;height:5px;background:#4b5563"></span>
+										<span style="width:90%;height:4px;background:#9ca3af"></span>
+									</div>
+								</div>
+								<div class="mode-preview-label">${modeLabel(null, "Device")}</div>
 							</div>
 						</div>
 					</div>
@@ -1951,9 +2000,11 @@ function startAdminFace() {
 				}
 			}
 
+			// Light, Dark or Device is this browser's own, so it's kept
+			// in a cookie here rather than saved on the server
 			for (const preview of document.querySelectorAll(".mode-preview")) {
 				const choose = function () {
-					saveAppearance({ uiMode: preview.dataset.mode });
+					setUiMode(preview.dataset.mode);
 				};
 
 				preview.addEventListener("click", choose);
@@ -2115,10 +2166,6 @@ function startAdminFace() {
 	app.post("/appearance", (req, res) => {
 		const body = req.body || {};
 		const patch = {};
-
-		if (body.uiMode === "dark" || body.uiMode === "light") {
-			patch.uiMode = body.uiMode;
-		}
 
 		if (
 			body.backButtonCorner === "bottom-right" ||
@@ -3635,6 +3682,9 @@ function startAdminFace() {
 		const count = face.instances.length;
 		const themeName = themeLoader.readManifest(face.theme).name;
 
+		// A face made before v1.19.2 has no notificationMode: dark
+		const noteLight = face.notificationMode === "light";
+
 		const body = `
 			<div class="bento">
 			<div class="bento-row two">
@@ -3674,6 +3724,35 @@ function startAdminFace() {
 					<p class="status" id="status"></p>
 				</div>
 			</div>
+
+			<div class="segment">
+				<h2>Notifications</h2>
+				<p class="lede">
+					How a notification looks on this face's screen, whatever
+					theme it's running. Saved as soon as you pick one.
+				</p>
+				<div class="mode-previews narrow-previews">
+					<div class="mode-preview note-mode ${noteLight ? "" : "active"}"
+						data-note-mode="dark" role="button" tabindex="0">
+						<div class="mode-screen" style="background:#0c0d10">
+							<span style="width:40%;height:5px;background:rgba(255,255,255,0.8)"></span>
+							<span style="width:70%;height:4px;background:rgba(255,255,255,0.3)"></span>
+							<span style="width:55%;height:4px;background:rgba(255,255,255,0.3)"></span>
+						</div>
+						<div class="mode-preview-label">Dark${noteLight ? "" : " (Active)"}</div>
+					</div>
+					<div class="mode-preview note-mode ${noteLight ? "active" : ""}"
+						data-note-mode="light" role="button" tabindex="0">
+						<div class="mode-screen" style="background:#e5e7eb">
+							<span style="width:40%;height:5px;background:#4b5563"></span>
+							<span style="width:70%;height:4px;background:#9ca3af"></span>
+							<span style="width:55%;height:4px;background:#9ca3af"></span>
+						</div>
+						<div class="mode-preview-label">Light${noteLight ? " (Active)" : ""}</div>
+					</div>
+				</div>
+				<p class="status" id="note-status"></p>
+			</div>
 			</div>`;
 
 		const script = `
@@ -3706,6 +3785,49 @@ function startAdminFace() {
 
 				button.disabled = false;
 			});
+
+			// Notifications: light or dark, saved on click. The face's
+			// screen redraws itself, so the next notification there is
+			// already in the new look.
+			async function chooseNoteMode(preview) {
+				const status = document.getElementById("note-status");
+				status.textContent = "";
+				status.className = "status";
+
+				try {
+					const response = await fetch("/faces/${face.id}", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ notificationMode: preview.dataset.noteMode })
+					});
+
+					if (!response.ok) throw new Error();
+
+					for (const other of document.querySelectorAll(".note-mode")) {
+						const chosen = other === preview;
+						const label = other.querySelector(".mode-preview-label");
+						const name = other.dataset.noteMode === "light" ? "Light" : "Dark";
+
+						other.classList.toggle("active", chosen);
+						label.textContent = name + (chosen ? " (Active)" : "");
+					}
+				} catch (error) {
+					status.textContent = "Couldn't save. Check OmniCore is still running.";
+					status.className = "status bad";
+				}
+			}
+
+			for (const preview of document.querySelectorAll(".note-mode")) {
+				preview.addEventListener("click", function () {
+					chooseNoteMode(preview);
+				});
+				preview.addEventListener("keydown", function (event) {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						chooseNoteMode(preview);
+					}
+				});
+			}
 		`;
 
 		res.send(page(face.name, body, script, "", "/faces"));
@@ -3717,7 +3839,8 @@ function startAdminFace() {
 		if (!faceStore.updateFace(id, {
 			name: req.body.name,
 			title: req.body.title,
-			theme: req.body.theme
+			theme: req.body.theme,
+			notificationMode: req.body.notificationMode
 		})) {
 			res.status(404).json({ error: "No such face" });
 			return;

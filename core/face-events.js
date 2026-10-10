@@ -145,13 +145,13 @@ function pushToFace(faceId, eventName, data, options) {
 // CLIENT_SCRIPT gets notifications without having to know they exist,
 // which is the same reason themes never implement the reload behaviour
 // themselves.
-function clientBundle() {
+function clientBundle(face) {
 	// Required here rather than at the top of the file: notifications.js
 	// requires this module, so importing it up there would be circular.
 	const notifications = require("./notifications");
 
 	return (
-		`<style>${notifications.overlayStyles()}</style>\n` +
+		`<style>${notifications.overlayStyles(face && face.notificationMode)}</style>\n` +
 		`<script>${notifications.OVERLAY_SCRIPT}</script>\n` +
 		CLIENT_SCRIPT
 	);
