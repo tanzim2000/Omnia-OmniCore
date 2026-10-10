@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.19.3
+
+A chosen font now shows on the page
+
+### Fixed
+
+- **A font picked in Settings almost never showed.** Google sends a font as several files, one per alphabet, with the accented-letters file (`latin-ext`) first and the one with the ordinary letters (`latin`) second. OmniCore saved the first, which holds a handful of accented letters (Ł, Š, Ž and a few more) and no a to z, A to Z or 0 to 9. The browser used the chosen font for those few characters and its normal font for everything else, which is why a font looked like it had changed two letters, and why words had odd gaps. OmniCore now saves the `latin` file: English, French, Spanish, German and the other languages that fit in Latin-1. A font made only for another alphabet still installs, as before, from its first file.
+- **Upgrading: pick your font again.** A font saved by an earlier version is the wrong file, and OmniCore doesn't replace it by itself. On Settings, choose the font again (or Reset, then choose it). Nothing else needs doing.
+
+### Notes
+
+- **The About page's "Omnia" wordmark was never affected.** Its font (Adamina) is sent as a single file, so the first file was the right one.
+- Letters outside Latin-1 (Polish, Turkish, Vietnamese) and other alphabets (Bangla, Cyrillic, Arabic) still use the browser's normal font, as they did before. Saving more than one file per font is a bigger change, left for if it's wanted.
+
 ## v1.19.2
 
 One box for every page, a new Marketplace, and light or dark per browser

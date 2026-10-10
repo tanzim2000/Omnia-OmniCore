@@ -143,6 +143,30 @@ function firstWoff2Url(css) {
 	return match ? match[1] : null;
 }
 
+// Pull the URL of the "latin" file out of a Google Fonts CSS response.
+//
+// Google doesn't give a font as one file. It splits it by alphabet, with
+// one @font-face block per alphabet and a comment naming it:
+//
+//   /* latin-ext */  accented letters (Ł, Š, Ž...), listed FIRST
+//   /* latin */      a-z, A-Z, 0-9, punctuation, and French/Spanish/
+//                    German accents (U+0000-00FF), listed second
+//
+// Until v1.19.3 this took the first file, which is latin-ext: a file
+// with a handful of accented letters and none of the ordinary ones, so
+// a chosen font showed almost nowhere. The "latin" block is what a page
+// of English or French needs.
+//
+// A font with no "latin" block (one made only for another alphabet)
+// falls back to its first file, as before, so it still installs.
+function latinWoff2Url(css) {
+	const latin = css.match(
+		/\/\*\s*latin\s*\*\/\s*@font-face\s*\{[^}]*?url\((https:\/\/[^)]+\.woff2)\)/
+	);
+
+	return latin ? latin[1] : firstWoff2Url(css);
+}
+
 // Download one family's regular weight and keep it. Returns the family
 // name on success so the caller can record it in settings.
 //
@@ -173,7 +197,7 @@ async function installFont(family) {
 		":wght@400&display=swap";
 
 	const css = (await get(cssUrl)).toString("utf-8");
-	const woff2Url = firstWoff2Url(css);
+	const woff2Url = latinWoff2Url(css);
 
 	if (!woff2Url) {
 		throw new Error(`Google returned no woff2 for "${known.family}"`);
@@ -315,5 +339,6 @@ module.exports = {
 	// Exported for tests: parsing shouldn't only be reachable through a
 	// network call.
 	parseCatalogue,
-	firstWoff2Url
+	firstWoff2Url,
+	latinWoff2Url
 };
