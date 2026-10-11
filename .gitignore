@@ -19,3 +19,7 @@ modules/*
 themes/*
 !modules/.gitkeep
 !themes/.gitkeep
+# The docs website, built by `npm run docs` (scripts/build-docs.js).
+# Built output, never committed: the "Publish docs site" workflow builds
+# it fresh from the docs on GitHub's side.
+_site/

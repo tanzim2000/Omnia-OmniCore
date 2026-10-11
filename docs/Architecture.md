@@ -132,6 +132,9 @@ core/            OmniCore itself
 modules/         installed modules (gitignored see §5b)
 themes/          installed themes (gitignored see §5b)
 data/            per-install data (gitignored)
+docs/            these docs, and the words behind the Default UI page
+scripts/         tools for working on OmniCore, not part of it (the docs site builder)
+test/            the test suite (npm test)
 start.OmniCore   entry point
 ```
 
@@ -186,6 +189,27 @@ until the Marketplace puts something in them.
 | `resource-scheduler.js`    | Checks the registry for newer versions of installed modules and themes, and installs compatible ones. Also behind "Check now" on Installed Resources.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `core-update-scheduler.js` | The same job for OmniCore itself, every six hours.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `core-updater.js`          | Performs a core self-update: pulls the new image, swaps the container, and rolls back automatically if the new version isn't healthy. One update at a time. See §10.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+
+### The docs site
+
+The docs are also published as a website, on GitHub Pages: every `.md` in
+`docs/` (and `README.md`, `BACKLOG.md`), a Default UI page with a live
+sample of every element in `core/ui-theme.js`, and `CHANGELOG.md` drawn as
+a timeline, with search across all of it. `scripts/build-docs.js` builds
+it (`npm run docs`, into `_site/`, which is never committed), and the
+"Publish docs site" workflow rebuilds and publishes it on every push to
+`main` that touches a doc. None of it is part of OmniCore: nothing in
+`scripts/` or `docs/` is in the image, and publishing the site never
+changes the version.
+
+| File                        | Responsibility                                                                                                                                                                                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/build-docs.js`     | Finds every page, builds the side nav, and writes the site and its search index. A new `.md` in `docs/` gets a page by itself.                                                                                                                          |
+| `scripts/docs/markdown.js`  | One Markdown file to a page: heading links named the way GitHub names them, links between docs pointed at their pages, and a file name written as code linked to its page or to the file on GitHub.                                                     |
+| `scripts/docs/layout.js`    | The frame every page shares: the top bar, Dark / Light / Device, search, the side nav. Drawn with `ui-theme.js` itself.                                                                                                                                 |
+| `scripts/docs/catalogue.js` | The Default UI page.                                                                                                                                                                                                                                    |
+| `scripts/docs/changelog.js` | The changelog timeline. A release is dated by its git tag, or by the day it was added to `CHANGELOG.md` before it's tagged.                                                                                                                             |
+| `docs/ui-elements.js`       | The words behind the Default UI page: a name, a description, a sample and the markup for every element, and what every colour is for. **Add an entry here whenever an element is added to `ui-theme.js`:** `test/docs-site.test.js` fails until you do. |
 
 ### `data/` -- never committed
 

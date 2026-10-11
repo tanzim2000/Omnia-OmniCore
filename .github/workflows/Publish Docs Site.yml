@@ -1,0 +1,112 @@
+# Builds the docs website and publishes it on GitHub Pages, at
+# https://tanzim2000.github.io/Omnia-OmniCore/
+#
+# Why this exists: the docs are Markdown, which GitHub shows nicely one
+# file at a time but can't search across, and the Default UI page and the
+# changelog timeline aren't Markdown at all. scripts/build-docs.js turns
+# all of it into one site, with search and a side nav, drawn in OmniCore's
+# own look. This runs it on GitHub's machines so the site is never out of
+# date: nobody has to remember to rebuild it.
+#
+# When it runs:
+#   - on a push to main that touches anything the site is built from
+#   - by hand, from the Actions tab
+#
+# Not on version tags. GitHub only lets the main branch publish to Pages
+# unless told otherwise, so a run started by a tag would be turned away.
+# It isn't needed anyway: the changelog dates a release by its tag when
+# there is one, and by the day it was added to CHANGELOG.md when there
+# isn't one yet.
+#
+# One-time setup, in the repo on GitHub: Settings -> Pages -> Build and
+# deployment -> Source: "GitHub Actions". Until that's set, the deploy
+# step below fails with a message saying Pages isn't enabled.
+#
+# This publishes nothing but the website. It never builds or publishes a
+# container image and never changes the OmniCore version: the container
+# image has its own workflow, "Publish OmniCore image".
+
+name: Publish docs site
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "scripts/**"
+      - "README.md"
+      - "BACKLOG.md"
+      - "CHANGELOG.md"
+      - "core/ui-theme.js"
+      - "package.json"
+      - "package-lock.json"
+      - "test/docs-site.test.js"
+      - ".github/workflows/Publish Docs Site.yml"
+  workflow_dispatch:
+
+# What this workflow's token is allowed to do, and nothing more: read the
+# repo, publish to Pages, and prove to Pages that it really is this
+# repo's workflow asking (id-token)
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Two pushes close together would otherwise race to publish. This lines
+# them up instead, and lets a publish that's already started finish
+# rather than cutting it off halfway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v7
+        with:
+          # The whole history and every tag, not just the latest commit:
+          # the changelog's dates are read from them
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Dev dependencies included: the Markdown library the site builder
+      # uses is one, and isn't part of the OmniCore image
+      - name: Install dependencies
+        run: npm ci
+
+      # The same check npm test runs: every element in the stylesheet is
+      # described in docs/ui-elements.js, and the site builds. A site with
+      # a stale Default UI page doesn't get published.
+      - name: Check the docs
+        run: node --test --test-force-exit test/docs-site.test.js
+
+      - name: Build the site
+        run: npm run docs
+
+      - name: Hand the site to Pages
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    # Shows the site's address on the workflow run, and on the repo's
+    # front page under "Deployments"
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
