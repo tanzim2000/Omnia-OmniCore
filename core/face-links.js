@@ -42,4 +42,7 @@ function escapeHtml(text) {
 const WELCOME_PORT = 4000;
 const WIZARD_PORT = 3999;
 
-module.exports = { portLinkScript, escapeHtml, WELCOME_PORT, WIZARD_PORT };
+// The admin face: OmniCore's settings. The welcome face links to it.
+const ADMIN_PORT = 3000;
+
+module.exports = { portLinkScript, escapeHtml, WELCOME_PORT, WIZARD_PORT, ADMIN_PORT };

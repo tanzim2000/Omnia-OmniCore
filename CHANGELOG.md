@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.19.8
+
+Widgets that name themselves, a Refresh box of their own, and Light / Dark / Device on the welcome face
+
+### Added
+
+- **A Light / Dark / Device button.** The round button in the top-right of the sign-in page used to flip between light and dark only. It now steps through three choices, Light, then Dark, then Device, and shows the one in force: a sun, a moon or a monitor. Device forgets this browser's choice, so it follows the system's own setting again.
+- **The welcome face has it too**, in its top-right corner, with a round **Settings** button (a gear) beside it that opens OmniCore's settings, asking you to sign in first if you haven't. Pressing either one stops the countdown to the only face, like any other touch.
+- **A widget can be named by its settings.** A module can suggest a label worked out from a widget's settings, so a weather widget is called "Regina" instead of "Weather" and is renamed when its city changes. The label you type on the widget's page still wins; clear it and the widget follows its settings again. A module that suggests nothing is called by its name, as before. Documented for module authors in `docs/Building modules.md`.
+- **A number setting can show its unit beside the box**, on one line: "Distance [ 5 ] km".
+
+### Changed
+
+- **"Refresh every" has a box of its own** on a widget's page, titled Refresh, under the theme's box (or under the module's settings when the theme has nothing to set). It reads "Refresh every [ 15 ] minutes" for every module, on one line, whatever the module called it. OmniCore finds it by itself: any module whose setting is called `refreshMinutes` gets this, with nothing for its author to do.
+- **A refresh can't go under a minute.** 0, a negative number or an empty box isn't saved, and the widget uses its module's default instead. One already saved under a minute is treated the same way, so a typo can't make a widget call its service on every screen refresh.
+- **A new widget starts with no label of its own**, on a face's page and in the setup wizard, so it can follow its settings. It still shows the module's name until a module suggests something better. The wizard numbers two of the same module ("Weather 2") in its own lists, so they can be told apart while you set them up.
+
 ## v1.19.7
 
 Notifications in frosted glass, with room for two links, and a tidier face page

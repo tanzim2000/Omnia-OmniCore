@@ -36,7 +36,9 @@ const {
 	applyDefaults,
 	cleanConfig,
 	widgetTypeOf,
-	readInputSchema
+	readInputSchema,
+	isRefreshField,
+	REFRESH_FLOOR
 } = require("./module-config");
 const themeLoader = require("./theme-loader");
 const priority = require("./priority");
@@ -45,6 +47,7 @@ const marketplace = require("./marketplace");
 const imageProxy = require("./image-proxy");
 const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation, searchCities } = require("./location-service");
+const { ownLabel, suggestedLabel, labelsFor } = require("./instance-label");
 const faceStore = require("./face-store");
 const omnicoreVersion = require("./version");
 const { refresh } = require("./face-loader");
@@ -1297,7 +1300,9 @@ const confirmScript = `
 //
 // `context` carries anything a field type needs that the schema can't know
 // on its own — right now that's the face's instances, so a theme can ask
-// which module should feed something like a wallpaper.
+// which module should feed something like a wallpaper, and `labels`, what
+// each of them is called (see instance-label.js), so the list names them
+// the way every other page does.
 function renderFields(schema, config, context, scope) {
 	const owner = scope || "module";
 
@@ -1338,7 +1343,11 @@ function renderFields(schema, config, context, scope) {
 						(instance) =>
 							`<option value="${escapeHtml(instance.id)}" ` +
 							`${instance.id === value ? "selected" : ""}>` +
-							`${escapeHtml(instance.label || instance.module)}</option>`
+							`${escapeHtml(
+								(context.labels && context.labels[instance.id]) ||
+									instance.label ||
+									instance.module
+							)}</option>`
 					)
 					.join("");
 
@@ -1456,15 +1465,35 @@ function renderFields(schema, config, context, scope) {
 					? field.type
 					: "text";
 
+				// A module's refresh setting can't go under a minute (see
+				// module-config.js); the box says so too, so the browser's
+				// own arrows stop there
+				const refresh = owner === "module" && isRefreshField(field);
+				const min = refresh ? ` min="${REFRESH_FLOOR}"` : "";
+
 				input =
 					`<input type="${type}" data-key="${escapeHtml(field.key)}" ` +
 					`data-scope="${owner}" ` +
-					`data-type="${escapeHtml(field.type)}" ` +
+					`data-type="${escapeHtml(field.type)}"${min} ` +
 					`value="${escapeHtml(value === undefined ? "" : value)}">`;
 
 				// A password gets the Show / Hide button inside its box
 				if (type === "password") {
 					input = passwordField(input);
+				}
+
+				// A number with a unit gets it beside the box, on one line.
+				// The refresh setting's unit is always minutes.
+				const unit = refresh
+					? "minutes"
+					: type === "number" && typeof field.unit === "string"
+					? field.unit.trim()
+					: "";
+
+				if (unit) {
+					input =
+						`<div class="unit-row">${input}` +
+						`<span class="unit">${escapeHtml(unit)}</span></div>`;
 				}
 			}
 
@@ -1482,9 +1511,16 @@ function renderFields(schema, config, context, scope) {
 			// type is picked. See widget-types.js.
 			const widgets = widgetTypes.widgetsAttribute(field);
 
+			// The refresh setting is worded by Core, the same for every
+			// module: "Refresh every [ 10 ] minutes"
+			const label =
+				owner === "module" && isRefreshField(field)
+					? "Refresh every"
+					: field.label || field.key;
+
 			return `
 				<div class="field"${condition}${widgets}>
-					<label>${escapeHtml(field.label || field.key)}</label>
+					<label>${escapeHtml(label)}</label>
 					${input}
 					${help}
 				</div>`;
@@ -4191,7 +4227,7 @@ function startAdminFace() {
 	// Changing the theme is a separate page. It replaces the entire
 	// dashboard, so it shouldn't sit one stray click away from a settings
 	// form you haven't saved yet.
-	app.get("/faces/:id/theme", (req, res) => {
+	app.get("/faces/:id/theme", async (req, res) => {
 		const face = faceStore.findFace(Number(req.params.id));
 
 		if (!face) {
@@ -4223,7 +4259,10 @@ function startAdminFace() {
 				<div class="segment">
 					${
 						schema.length
-							? renderFields(schema, config, { instances: face.instances }) +
+							? renderFields(schema, config, {
+									instances: face.instances,
+									labels: await labelsFor(face.instances)
+							  }) +
 							  '<button class="glass glass-block" id="save">Save</button>' +
 							  '<p class="status" id="status"></p>'
 							: '<div class="empty">This theme has nothing to configure.</div>'
@@ -4375,13 +4414,15 @@ function startAdminFace() {
 
 	// The module instances on a face. The same module may appear more than
 	// once, each with its own settings.
-	app.get("/faces/:id/modules", (req, res) => {
+	app.get("/faces/:id/modules", async (req, res) => {
 		const face = faceStore.findFace(Number(req.params.id));
 
 		if (!face) {
 			res.status(404).send(notFound("No such face", "/faces", "Faces"));
 			return;
 		}
+
+		const labels = await labelsFor(face.instances);
 
 		const instances = face.instances
 			.map((instance) => {
@@ -4401,7 +4442,7 @@ function startAdminFace() {
 
 				return `
 				<a class="row" href="/faces/${face.id}/modules/${encodeURIComponent(instance.id)}">
-					<strong>${escapeHtml(instance.label || manifest.name)}</strong>
+					<strong>${escapeHtml(labels[instance.id])}</strong>
 					<span>${escapeHtml(kind)}</span>
 				</a>`;
 			})
@@ -4515,7 +4556,10 @@ function startAdminFace() {
 		const instance = faceStore.addInstance(
 			id,
 			moduleId,
-			manifest.name,
+			// No label of its own: it follows its settings, or is called
+			// by the module's name, until somebody types one (see
+			// instance-label.js)
+			"",
 			{},
 			// Start from the theme's defaults for an instance. A module that
 			// works behind the scenes gets whatever that theme calls hidden.
@@ -4549,7 +4593,7 @@ function startAdminFace() {
 	});
 
 	// One instance's settings: its label, plus whatever its module declared
-	app.get("/faces/:id/modules/:instanceId", (req, res) => {
+	app.get("/faces/:id/modules/:instanceId", async (req, res) => {
 		const face = faceStore.findFace(Number(req.params.id));
 
 		if (!face) {
@@ -4597,17 +4641,34 @@ function startAdminFace() {
 		);
 		const themeName = themeLoader.readManifest(face.theme).name;
 
+		// What this widget is called (instance-label.js), and what it would
+		// be called with the Label box empty: the module's suggestion from
+		// its settings, or the module's name. The second is shown greyed
+		// in the empty box, so it's clear what clearing it gives.
+		const suggestion = await suggestedLabel(instance);
+		const following = suggestion || manifest.name;
+		const shownName = ownLabel(instance) || following;
+		const labels = await labelsFor(face.instances);
+
 		// Laid out as segments like every other admin page:
 		//
 		//   [ name, what the module is, and its widget type picker ]
 		//   [ the module's settings ]  [ the theme's settings for it ]
+		//                              [ Refresh                     ]
 		//                  ( Save  |  Remove )
 		//
 		// Save and Remove are one capsule under the segments (the wizard's
 		// .dock), Remove in red. Remove still asks before doing anything.
 		//
 		// The theme's segment only when the theme has anything to set; the
-		// module's settings then take the whole row.
+		// module's settings then take the whole row, with Refresh under
+		// them. The two columns end level, like a face's page.
+		//
+		// Refresh is the module's refreshMinutes setting, drawn by Core in
+		// a box of its own rather than among the module's settings: it
+		// decides how often OmniCore calls out to the internet for this
+		// widget, so it looks the same for every module and authors don't
+		// have to do anything to get it. See module-config.js.
 		const themeSegment = themeSchema.length
 			? `<div class="segment">
 					<h2>In ${escapeHtml(themeName)}</h2>
@@ -4615,42 +4676,67 @@ function startAdminFace() {
 					${renderFields(
 						themeSchema,
 						themeConfig,
-						{ instances: face.instances },
+						{ instances: face.instances, labels: labels },
 						"theme"
 					)}
 				</div>`
 			: "";
 
+		const refreshFields = schema.filter(isRefreshField);
+		const moduleFields = schema.filter((field) => !isRefreshField(field));
+
+		const refreshSegment = refreshFields.length
+			? `<div class="segment refresh-segment">
+					<h2>Refresh</h2>
+					<p class="lede">How often this widget gets new data. Never less than a minute.</p>
+					${renderFields(refreshFields, config, null, "module")}
+				</div>`
+			: "";
+
+		const settingsSegment = `
+					<div class="segment">
+						<h2 style="margin-bottom:14px">Settings</h2>
+						<div class="field">
+							<label for="label">Label</label>
+							<input type="text" id="label" value="${escapeHtml(ownLabel(instance))}"
+								placeholder="${escapeHtml(following)}">
+							<div class="help">
+								Shown as the tile's title. Leave it empty to use
+								&ldquo;${escapeHtml(following)}&rdquo;${
+									suggestion ? ", which follows this widget's settings" : ""
+								}.
+							</div>
+						</div>
+
+						${
+							moduleFields.length
+								? renderFields(moduleFields, config, null, "module")
+								: '<div class="empty">This module has nothing else to configure.</div>'
+						}
+					</div>`;
+
+		// With the theme's box on the right, Refresh goes under it;
+		// without one, under the module's settings
+		const columns = themeSegment
+			? `<div class="bento-row two face-columns">
+					<div class="bento-column">${settingsSegment}</div>
+					<div class="bento-column">${themeSegment}${refreshSegment}</div>
+				</div>`
+			: `<div class="bento-row top">
+					<div class="bento-column">${settingsSegment}${refreshSegment}</div>
+				</div>`;
+
 		const body = `
 			<div class="bento">
 				<div class="segment">
-					<h1>${escapeHtml(instance.label || manifest.name)}</h1>
+					<h1>${escapeHtml(shownName)}</h1>
 					<p class="lede"${picker ? ' style="margin-bottom:14px"' : ""}>${escapeHtml(
 						manifest.description || manifest.name
 					)}</p>
 					${picker}
 				</div>
 
-				<div class="bento-row${themeSegment ? " two" : ""} top">
-					<div class="segment">
-						<h2 style="margin-bottom:14px">Settings</h2>
-						<div class="field">
-							<label for="label">Label</label>
-							<input type="text" id="label" value="${escapeHtml(instance.label)}">
-							<div class="help">
-								Shown as the tile's title. Useful when the same module
-								appears more than once.
-							</div>
-						</div>
-
-						${
-							schema.length
-								? renderFields(schema, config, null, "module")
-								: '<div class="empty">This module has nothing else to configure.</div>'
-						}
-					</div>
-					${themeSegment}
-				</div>
+				${columns}
 			</div>
 
 			<div class="page-dock">
@@ -4736,7 +4822,7 @@ function startAdminFace() {
 			});
 		`;
 
-		res.send(page(instance.label || manifest.name, body, script, "", `/faces/${req.params.id}/modules`));
+		res.send(page(shownName, body, script, "", `/faces/${req.params.id}/modules`));
 	});
 
 	app.post("/faces/:id/modules/:instanceId", (req, res) => {

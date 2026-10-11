@@ -349,6 +349,32 @@ opening.
 Your function receives the resolved values as `config[key]`, with defaults
 already filled in for anything unset.
 
+A `number` field can also carry `unit`, a word to show beside the box:
+`"unit": "km"` draws it as a short box with "km" after it, on one line,
+instead of a box the full width of the page. It needs OmniCore 1.19.8; an
+older one just leaves the word off.
+
+### The refresh setting -- call it `refreshMinutes`
+
+Most modules that fetch something let the user say how often: pass it to
+`omni.fetch` as `cacheSeconds: config.refreshMinutes * 60` (see section 7).
+Call that setting `refreshMinutes`, a `number`, and OmniCore takes it from
+there:
+
+- It's drawn in a box of its own on the widget's page, titled **Refresh**,
+  worded the same for every module: **Refresh every [ 15 ] minutes**. You
+  don't add a `unit` or worry about the wording; your `label` is replaced,
+  and your `help` line is kept under it, so use that to say something
+  useful ("the picture only changes once a day").
+- It's never under a minute. A box left empty, or 0, or a negative number
+  isn't saved, and your module gets your `default` instead (or 1, if your
+  default is under a minute). It decides how often OmniCore calls out to
+  the internet for your widget, so a typo mustn't be able to make it call
+  on every screen refresh.
+
+Any other name is an ordinary number setting with none of this. Since
+OmniCore 1.19.8; older versions show it among your other settings.
+
 ### The `priority` type -- letting the user order your content
 
 If your module has several distinct facts rather than a list of like rows,
@@ -527,6 +553,37 @@ Widget types need **OmniCore 1.18.0** or later. On anything older the
 picker never appears and `config.widgetType` is never set, so either set
 `minOmniCore` to at least `1.18.0` in the registry, or treat a missing
 value as your first type (the example above already does).
+
+### What a widget is called -- suggesting a label
+
+Every widget has a Label, its tile's title. The user can type one on the
+widget's page. Until they do, it's your module's name ("Weather"), which
+is a poor name for two weather widgets showing two cities.
+
+Hang a `label` function on your main one to suggest a better name, worked
+out from the widget's settings:
+
+```js
+module.exports = async function (config, richness, omni) { ... };
+
+// "Regina", or nothing (and then the module's name is used)
+module.exports.label = function (config) {
+  return config.location ? config.location.label : "";
+};
+```
+
+It gets the same `config` your tile function gets: defaults filled in, and
+a `location` field already turned into `{ latitude, longitude, label }`
+(or `null`). Return a short line of text, or `""` to suggest nothing. It's
+called whenever OmniCore shows the widget's name, so keep it quick and
+don't fetch anything in it: anything slower than a moment is ignored.
+
+The label the user types always wins. When they clear it, the widget goes
+back to your suggestion, so a weather widget whose city changes is renamed
+with it. A function that throws, or returns something that isn't text,
+costs only its suggestion: the module's name is used. A suggestion is kept
+to one line of at most 60 characters. Needs OmniCore 1.19.8; older versions
+ignore it and use the module's name.
 
 ---
 
@@ -1067,7 +1124,10 @@ the pattern applied.
 - [ ] Every path returns a valid envelope, including failure cases --
       nothing relies on throwing
 - [ ] Outbound HTTP goes through `omni.fetch`, with a `cacheSeconds` that
-      matches how often your data actually changes
+      matches how often your data actually changes; if the user chooses it,
+      the setting is called `refreshMinutes`
+- [ ] If two of your widgets would look the same, a `label` function
+      names them from their settings (a city, a topic)
 - [ ] No HTML, no styling, no layout decisions anywhere in your output
 - [ ] No label folded into a value string -- anything with a name and a
       value goes out as a `pair`, both halves separate

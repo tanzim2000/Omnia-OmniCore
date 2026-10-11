@@ -22,7 +22,8 @@
 
 const express = require("express");
 const { loadModule } = require("./module-loader");
-const { readManifest, readInputSchema } = require("./module-config");
+const { readInputSchema } = require("./module-config");
+const { labelFor, labelsFor } = require("./instance-label");
 const { makeModuleApi } = require("./module-api");
 const renderInputFacePage = require("./input-face-page");
 const { renderInputPickerPage } = require("./input-face-page");
@@ -78,16 +79,15 @@ function startInputFace(faceOrId, maybeFace) {
 		// instance's page directly; with several it offers the choice.
 		// A picker holding a single option is just a tap someone has to
 		// make for no reason.
-		app.get("/", (req, res) => {
+		app.get("/", async (req, res) => {
 			const instances = inputCapableInstances(face);
 
 			if (instances.length === 1) {
 				const instance = instances[0];
-				const manifest = readManifest(instance.module);
 
 				res.send(
 					renderInputFacePage(
-						instance.label || manifest.name,
+						await labelFor(instance),
 						readInputSchema(instance.module),
 						`/${instance.id}/input`
 					)
@@ -95,11 +95,13 @@ function startInputFace(faceOrId, maybeFace) {
 				return;
 			}
 
+			const labels = await labelsFor(instances);
+
 			res.send(
 				renderInputPickerPage(
 					faceLabel(face),
 					instances.map((instance) => ({
-						label: instance.label || readManifest(instance.module).name,
+						label: labels[instance.id],
 						path: `/${instance.id}`
 					}))
 				)
@@ -107,7 +109,7 @@ function startInputFace(faceOrId, maybeFace) {
 		});
 
 		// One instance's own page, reached from the picker.
-		app.get("/:instanceId", (req, res) => {
+		app.get("/:instanceId", async (req, res) => {
 			const instance = face.instances.find(
 				(candidate) => candidate.id === req.params.instanceId
 			);
@@ -124,11 +126,9 @@ function startInputFace(faceOrId, maybeFace) {
 				return;
 			}
 
-			const manifest = readManifest(instance.module);
-
 			res.send(
 				renderInputFacePage(
-					instance.label || manifest.name,
+					await labelFor(instance),
 					controls,
 					`/${instance.id}/input`
 				)

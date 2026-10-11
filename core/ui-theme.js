@@ -322,12 +322,7 @@ function modeRules(light) {
 		transform: scale(1.02);
 		background: var(--glass-bg-hover);
 		box-shadow: none;
-	}
-
-	/* The sign-in page's switch shows where it would take you: a moon
-	   on a light page */
-	.mode-switch .icon-sun { display: none; }
-	.mode-switch .icon-moon { display: block; }`;
+	}`;
 	}
 
 	return `
@@ -343,11 +338,7 @@ function modeRules(light) {
 			0 0 32px rgba(255, 255, 255, 0.45),
 			0 0 70px rgba(255, 255, 255, 0.2);
 		background: var(--glass-bg-hover);
-	}
-
-	/* ...and a sun on a dark one */
-	.mode-switch .icon-sun { display: block; }
-	.mode-switch .icon-moon { display: none; }`;
+	}`;
 }
 
 // Everything above, plus the components, as one stylesheet. Pages drop
@@ -711,15 +702,28 @@ function uiStyles(options) {
 	.floating.top-left { top: 1.5em; left: 1.5em; }
 
 	/* ---------------------------------------------------------------
-	   Light/dark switch — the same round floating button, a size
-	   smaller, top-right. Only the sign-in page has one: everywhere
-	   else the choice lives in Settings, but someone who can't sign in
-	   yet still deserves to read the page in the light they want. It
-	   shows where it would take you (a sun on a dark page, a moon on a
-	   light one); which icon shows is decided with the colours, in
-	   modeRules().
+	   Corner buttons — the same round floating button, a size smaller,
+	   top-right. The Light / Dark / Device switch sits in the corner, on
+	   the sign-in page and the welcome face: someone who can't sign in
+	   yet, or is just picking a dashboard, still deserves to read the
+	   page in the light they want. The welcome face puts its Settings
+	   button beside it (.top-right-second).
+
+	   The switch shows the choice in force -- a sun for Light, a moon
+	   for Dark, a monitor for Device -- and each tap moves to the next.
+	   All three icons are in the markup; data-mode-current, written by
+	   the server, picks the one that shows.
 	   --------------------------------------------------------------- */
 	.floating.top-right { top: 1.5em; right: 1.5em; }
+
+	/* One button's width (2.75em) and a small gap to the left of the
+	   corner one */
+	.floating.top-right-second { top: 1.5em; right: calc(1.5em + 2.75em + 0.75em); }
+
+	.mode-switch svg { display: none; }
+	.mode-switch[data-mode-current="light"] .icon-sun,
+	.mode-switch[data-mode-current="dark"] .icon-moon,
+	.mode-switch[data-mode-current="device"] .icon-device { display: block; }
 
 	/* ---------------------------------------------------------------
 	   Badge — a small outlined label that sits beside a word, such as
@@ -741,12 +745,14 @@ function uiStyles(options) {
 		vertical-align: middle;
 	}
 
-	.mode-switch {
+	.mode-switch,
+	.corner-button {
 		width: 2.75em;
 		height: 2.75em;
 	}
 
-	.mode-switch svg {
+	.mode-switch svg,
+	.corner-button svg {
 		width: 1.25em;
 		height: 1.25em;
 	}
@@ -917,6 +923,16 @@ function uiStyles(options) {
 		font-size: 1em;
 		padding: 0.75em 1em;
 	}
+
+	/* ---------------------------------------------------------------
+	   A number with its unit beside it, on one line: "Refresh every
+	   [ 10 ] minutes". The box is only as wide as a number needs, so
+	   the unit reads as part of the same sentence. A setting asks for
+	   it with "unit"; the refresh setting always has "minutes".
+	   --------------------------------------------------------------- */
+	.unit-row { display: flex; align-items: center; gap: 0.75em; }
+	.unit-row input[type="number"] { width: 7em; flex: none; }
+	.unit-row .unit { color: var(--fg-muted); }
 
 	/* ---------------------------------------------------------------
 	   Password box with a Show / Hide button inside its right end, so a
@@ -1405,12 +1421,24 @@ const PASSWORD_TOGGLE_SCRIPT = `
 	});
 `;
 
-// The sign-in page's light/dark switch. Both icons are always in the
-// markup; the stylesheet shows the right one.
+// The three choices, in the order a tap moves through them, and what
+// each is called where a person reads it
+const MODE_CHOICES = ["light", "dark", "device"];
+const MODE_NAMES = { light: "Light", dark: "Dark", device: "Device" };
+
+// The Light / Dark / Device switch, for the sign-in page and the welcome
+// face. All three icons are in the markup; the stylesheet shows the one
+// for the choice in force, which this reads from the request (the
+// browser's cookie). No cookie means "Device": follow the system.
 function modeSwitch() {
+	const current = currentUiMode() || "device";
+	const next = MODE_CHOICES[(MODE_CHOICES.indexOf(current) + 1) % MODE_CHOICES.length];
+	const label = `Appearance: ${MODE_NAMES[current]}. Tap for ${MODE_NAMES[next]}.`;
+
 	return `
 	<button type="button" class="floating top-right mode-switch"
-		data-mode-switch aria-label="Switch between light and dark">
+		data-mode-switch data-mode-current="${current}"
+		aria-label="${label}" title="${label}">
 		<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
 			stroke-width="2" stroke-linecap="round" aria-hidden="true">
 			<circle cx="12" cy="12" r="4"></circle>
@@ -1420,12 +1448,17 @@ function modeSwitch() {
 			stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
 			<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
 		</svg>
+		<svg class="icon-device" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+			stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<rect x="3" y="4" width="18" height="12" rx="2"></rect>
+			<path d="M8 20h8M12 16v4"></path>
+		</svg>
 	</button>`;
 }
 
-// Flips to whichever mode the page isn't showing right now: this
-// browser's saved choice if it has one, otherwise what the device is
-// set to. Needs UI_MODE_SCRIPT on the page too, for setUiMode().
+// Moves to the next choice: Light, then Dark, then Device, then Light
+// again. Device forgets this browser's choice (see setUiMode), so the
+// system decides once more. Needs UI_MODE_SCRIPT on the page too.
 const MODE_SWITCH_SCRIPT = `
 	(function () {
 		const button = document.querySelector("[data-mode-switch]");
@@ -1433,23 +1466,17 @@ const MODE_SWITCH_SCRIPT = `
 		if (!button) return;
 
 		button.addEventListener("click", function () {
-			const saved = document.cookie
-				.split(";")
-				.map(function (part) { return part.trim(); })
-				.find(function (part) {
-					return part.indexOf(${JSON.stringify(UI_MODE_COOKIE + "=")}) === 0;
-				});
+			const order = ${JSON.stringify(MODE_CHOICES)};
+			const current = button.getAttribute("data-mode-current");
+			const at = order.indexOf(current);
 
-			const now = saved
-				? saved.split("=")[1]
-				: matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-
-			setUiMode(now === "light" ? "dark" : "light");
+			setUiMode(order[(at + 1) % order.length]);
 		});
 	})();
 `;
 
 module.exports = {
+	MODE_CHOICES,
 	uiStyles,
 	backButton,
 	fontStack,

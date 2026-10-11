@@ -15,6 +15,7 @@ const { loadModule } = require("./module-loader");
 const { makeModuleApi } = require("./module-api");
 const { applyDefaults } = require("./module-config");
 const { resolveLocations } = require("./location-service");
+const { ownLabel, suggestedLabel } = require("./instance-label");
 const { readSystemTime } = require("./time-service");
 const themeLoader = require("./theme-loader");
 const faceStore = require("./face-store");
@@ -256,7 +257,7 @@ function startFace(face) {
 				return;
 			}
 
-			const label = instance.label || instance.module;
+			const label = ownLabel(instance) || instance.module;
 			const moduleFn = loadModule(instance.module);
 
 			if (!moduleFn) {
@@ -313,10 +314,15 @@ function startFace(face) {
 					req,
 					res,
 					{
-						// The instance's label wins over whatever the module
-						// called itself — that's how two weather tiles get told
-						// apart
-						title: instance.label || envelope.title || instance.module,
+						// The label the user typed wins; then what the module
+						// suggests from its settings (see instance-label.js);
+						// then whatever title the tile itself returned. That's
+						// how two weather tiles get told apart.
+						title:
+							ownLabel(instance) ||
+							(await suggestedLabel(instance)) ||
+							envelope.title ||
+							instance.module,
 						content: blocks,
 						updated: envelope.updated || new Date().toISOString()
 					},

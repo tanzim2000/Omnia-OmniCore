@@ -16,14 +16,36 @@
 
 const express = require("express");
 const faceStore = require("./face-store");
-const { uiStyles, rememberUiMode } = require("./ui-theme");
+const {
+	uiStyles,
+	rememberUiMode,
+	modeSwitch,
+	MODE_SWITCH_SCRIPT,
+	UI_MODE_SCRIPT
+} = require("./ui-theme");
 const { attachFontRoute } = require("./font-service");
 const {
 	portLinkScript,
 	escapeHtml,
 	WELCOME_PORT,
-	WIZARD_PORT
+	WIZARD_PORT,
+	ADMIN_PORT
 } = require("./face-links");
+
+// The round Settings button in the top-right, beside the Light / Dark /
+// Device switch. A gear, the same size and look as the switch. It opens
+// the admin face, which asks to sign in first if this browser hasn't.
+function settingsButton() {
+	return `
+	<button type="button" class="floating top-right-second corner-button"
+		onclick="goToSettings()" aria-label="Settings" title="Settings">
+		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+			stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+			<circle cx="12" cy="12" r="3"></circle>
+			<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+		</svg>
+	</button>`;
+}
 
 // How long the single-face case waits before going there on its own.
 const AUTO_ADVANCE_SECONDS = 30;
@@ -274,6 +296,8 @@ function startControlFace() {
 					Create a new face
 				</button>
 			</div>
+			${settingsButton()}
+			${modeSwitch()}
 			${
 				single
 					? `<div class="timer" id="timer" title="Opening ${escapeHtml(
@@ -291,6 +315,13 @@ function startControlFace() {
 			function goToWizard() {
 				location.href = faceUrl(${WIZARD_PORT}) + "/faces/new";
 			}
+			function goToSettings() { location.href = faceUrl(${ADMIN_PORT}); }
+
+			// The Light / Dark / Device switch (see ui-theme.js). Pressing
+			// it, or Settings, cancels the auto-advance below like any
+			// other touch does.
+			${UI_MODE_SCRIPT}
+			${MODE_SWITCH_SCRIPT}
 		` +
 			(single
 				? `

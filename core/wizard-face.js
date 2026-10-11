@@ -34,7 +34,9 @@ const {
 	readManifest,
 	readSchema,
 	applyDefaults,
-	cleanConfig
+	cleanConfig,
+	REFRESH_KEY,
+	REFRESH_FLOOR
 } = require("./module-config");
 const widgetTypes = require("./widget-types");
 const { searchCities } = require("./location-service");
@@ -779,7 +781,7 @@ function renderWizard(data) {
 			const picked = face.instances.map(function (instance, index) {
 				return '<div class="picked removable" onclick="removeInstance(' +
 					index + ')">' +
-					escapeHtml(instance.label) +
+					escapeHtml(shownLabel(instance)) +
 					"<small>" + escapeHtml(moduleById(instance.module).name) +
 						" · click to remove</small>" +
 				"</div>";
@@ -867,8 +869,12 @@ function renderWizard(data) {
 						'<div class="field">' +
 							'<label for="label">Label</label>' +
 							'<input type="text" id="label" value="' +
-								escapeHtml(instance.label) + '">' +
-							'<div class="help">Shown as the tile title.</div>' +
+								escapeHtml(instance.label) + '" placeholder="' +
+								escapeHtml(module.name) + '">' +
+							'<div class="help">Shown as the tile title. Leave it empty ' +
+								"and it follows this widget's settings where the module " +
+								"offers that (a weather widget is called by its city), or " +
+								"uses the module's name.</div>" +
 						"</div>" +
 						(fields || '<div class="empty">Nothing to configure.</div>') +
 						(themeFields
@@ -980,6 +986,17 @@ function renderWizard(data) {
 		// rather than shipping a form.
 		function renderField(field, value, scope) {
 			const owner = scope || "module";
+
+			// A module's refresh setting is worded by Core, the same for
+			// every module, with its unit beside the box and a floor of
+			// a minute. See core/module-config.js.
+			const refresh = owner === "module" &&
+				field.key === ${JSON.stringify(REFRESH_KEY)} && field.type === "number";
+
+			if (refresh) {
+				field = Object.assign({}, field, { label: "Refresh every", unit: "minutes" });
+			}
+
 			{
 				// A theme naming an instance is a placement decision — which
 				// module should feed something like a wallpaper
@@ -1006,7 +1023,7 @@ function renderWizard(data) {
 						const id = "wizard-instance-" + index;
 						return '<option value="' + escapeHtml(id) + '"' +
 							(id === value ? " selected" : "") + ">" +
-							escapeHtml(instance.label || instance.module) + "</option>";
+							escapeHtml(shownLabel(instance)) + "</option>";
 					}).join("");
 
 					return wrapField(field,
@@ -1113,8 +1130,15 @@ function renderWizard(data) {
 					input = '<input type="' + type + '" data-key="' +
 						escapeHtml(field.key) + '" data-scope="' + owner +
 						'" data-type="' +
-						escapeHtml(field.type) + '" value="' +
+						escapeHtml(field.type) + '"' +
+						(refresh ? ' min="${REFRESH_FLOOR}"' : "") + ' value="' +
 						escapeHtml(value === undefined ? "" : value) + '">';
+
+					// A number with a unit gets it beside the box, on one line
+					if (type === "number" && typeof field.unit === "string" && field.unit.trim()) {
+						input = '<div class="unit-row">' + input +
+							'<span class="unit">' + escapeHtml(field.unit.trim()) + "</span></div>";
+					}
 				}
 
 				return wrapField(field, input + help);
@@ -1172,10 +1196,25 @@ function renderWizard(data) {
 			"</div>";
 		}
 
+		// What to call a widget in the wizard's own lists: the label typed
+		// for it, or else the module's name, numbered when the face has
+		// more than one of it ("Weather 2") so the two can be told apart
+		// here. The number is only for these lists; nothing is stored.
+		function shownLabel(instance) {
+			if (instance.label) return instance.label;
+
+			const name = moduleById(instance.module).name;
+			const same = face.instances.filter(function (other) {
+				return other.module === instance.module;
+			});
+
+			return same.length > 1 ? name + " " + (same.indexOf(instance) + 1) : name;
+		}
+
 		function renderReviewStep() {
 			const rows = face.instances.map(function (instance) {
 				return '<div class="review-row">' +
-					"<strong>" + escapeHtml(instance.label) + "</strong>" +
+					"<strong>" + escapeHtml(shownLabel(instance)) + "</strong>" +
 					"<span>" + escapeHtml(moduleLine(instance)) + "</span>" +
 				"</div>";
 			}).join("");
@@ -1362,7 +1401,10 @@ function renderWizard(data) {
 
 			face.instances.push({
 				module: moduleId,
-				label: sameModule ? module.name + " " + (sameModule + 1) : module.name,
+				// Empty: once saved, it follows its settings (a weather
+				// widget becomes its city) or is called by the module's
+				// name. See core/instance-label.js. Typing one sticks.
+				label: "",
 				themeConfig: Object.assign({}, themeStart),
 				// Start from the module's own defaults
 				config: Object.assign({}, module.defaults)

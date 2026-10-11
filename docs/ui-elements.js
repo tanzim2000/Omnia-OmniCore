@@ -94,10 +94,14 @@ const paletteGroups = [
 ];
 
 // The sun and moon drawn inside the light/dark switch, shared by its
-// sample below
+// sample below (and by the docs site's own switch, in layout.js)
 const SUN_AND_MOON =
 	'<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>' +
 	'<svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>';
+
+// The monitor: the switch's third icon, for Device
+const MONITOR =
+	'<svg class="icon-device" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>';
 
 // A password box with its Show button, as passwordField() writes it.
 // Shared by two samples below.
@@ -204,13 +208,23 @@ const sections = [
 			},
 			{
 				id: "mode-switch",
-				title: "Light / dark switch",
-				sel: ".floating.top-right.mode-switch (.icon-sun, .icon-moon)",
-				desc: "A smaller round floating button, top-right, and only on the sign-in and setup page: everywhere else the choice is in Settings → Appearance. It shows where it would take you: a sun on a dark page, a moon on a light one. Both icons are always in the markup; the stylesheet shows the right one.",
+				title: "Light / Dark / Device switch",
+				sel: ".floating.top-right.mode-switch (.icon-sun, .icon-moon, .icon-device), .corner-button",
+				desc: "A smaller round floating button, top-right, on the sign-in and setup page and on the welcome face: everywhere else the choice is in Settings → Appearance. It shows the choice in force (a sun for Light, a moon for Dark, a monitor for Device) and each tap moves to the next: Light, Dark, Device, Light again. Device forgets the browser's choice, so the system decides. All three icons are in the markup; data-mode-current, written by the server, picks the one that shows. .corner-button gives any other round button in that corner the same size.",
 				stage: 110,
-				demo: `<div class="floating top-right mode-switch" style="cursor:default">${SUN_AND_MOON}</div>`,
-				code: "modeSwitch()\t// writes the button with both icons\n// MODE_SWITCH_SCRIPT makes the click work",
-				note: "Switch this site between Dark and Light at the top of the page to watch the icon change."
+				demo: `<div class="floating top-left mode-switch" data-mode-current="light" style="cursor:default">${SUN_AND_MOON}${MONITOR}</div><div class="floating top-right mode-switch" data-mode-current="device" style="cursor:default">${SUN_AND_MOON}${MONITOR}</div><span class="muted stage-caption">Light and Device</span>`,
+				code: "modeSwitch()\t// writes the button with all three icons\n// MODE_SWITCH_SCRIPT makes a tap move to the next choice",
+				note: "On a real page it sits in the top-right corner of the window."
+			},
+			{
+				id: "corner-second",
+				title: "Second corner button",
+				sel: ".floating.top-right-second",
+				desc: "A round button just to the left of the switch, the same size (.corner-button). The welcome face's Settings button, a gear, sits here and opens the admin face.",
+				stage: 110,
+				demo: '<div class="floating top-left corner-button" style="cursor:default" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1l2.1-2.1M17 7l2.1-2.1"></path></svg></div>',
+				code: '<button class="floating top-right-second corner-button"\n\taria-label="Settings">…</button>',
+				note: "Here it's kept inside its box. On the welcome face it's pinned beside the switch."
 			},
 			{
 				id: "password-toggle",
@@ -367,6 +381,14 @@ const sections = [
 				code: '<input type="text">\n<input type="url">\n<input type="number">\n<input type="password">\n<select><option>…</option></select>'
 			},
 			{
+				id: "unit-row",
+				title: "Number with its unit",
+				sel: ".unit-row, .unit",
+				desc: "A number box only as wide as a number needs, with its unit beside it on the same line: “Refresh every [ 10 ] minutes”. A setting asks for it with \"unit\"; a module's refreshMinutes always gets “minutes”.",
+				demo: '<div class="field"><label>Refresh every</label><div class="unit-row"><input type="number" value="10" min="1" aria-label="Minutes"><span class="unit">minutes</span></div></div>',
+				code: '<div class="unit-row">\n\t<input type="number" min="1">\n\t<span class="unit">minutes</span>\n</div>'
+			},
+			{
 				id: "password-field",
 				title: "Password box",
 				sel: ".password-field",
@@ -421,12 +443,12 @@ const sections = [
 const helpers = [
 	["uiStyles({ forceMode })", "The whole stylesheet as text, for a page's <style> tag. forceMode \"light\" or \"dark\" wins; otherwise this browser's choice from its cookie; otherwise both, and the device decides."],
 	["backButton(href)", "The floating Back button, in the corner chosen in Settings. Nothing at all when href is empty: the welcome face, input faces and the wizard have nowhere to go back to."],
-	["modeSwitch()", "The sign-in page's round sun/moon button, with both icons."],
+	["modeSwitch()", "The round Light / Dark / Device button for the sign-in page and the welcome face, with all three icons and the choice in force in data-mode-current."],
 	["passwordField(inputHtml)", "Wraps a password box with its Show / Hide button."],
 	["versionHtml()", "The version as a page shows it: “1.19.4”, with a dev badge after it on a development build."],
 	["fontStack(settings) · fontFace(settings)", "The font list for CSS, and the @font-face rule for a downloaded font (served at /ui-font.woff2?v=…). Nothing for the system font."],
-	["UI_MODE_SCRIPT", "Gives the page setUiMode(mode): saves or forgets the omnicore_ui_mode cookie and reloads. Used by the Appearance tile and the sign-in switch."],
-	["MODE_SWITCH_SCRIPT", "Makes the sign-in switch work: it flips to whichever mode isn't showing."],
+	["UI_MODE_SCRIPT", "Gives the page setUiMode(mode): saves or forgets the omnicore_ui_mode cookie and reloads. Used by the Appearance tile and the switch."],
+	["MODE_SWITCH_SCRIPT", "Makes the switch work: each tap moves to the next of Light, Dark and Device (MODE_CHOICES)."],
 	["PASSWORD_TOGGLE_SCRIPT", "One listener for the whole page that makes every Show / Hide button work."],
 	["rememberUiMode · uiModeFromRequest · currentUiMode", "Server side: read the cookie (only exactly \"light\" or \"dark\" counts) and hand it to uiStyles() for the request being answered."],
 	["PALETTES · SYSTEM_FONT · UI_MODE_COOKIE", "The two colour tables, the system font list, and the cookie's name."]

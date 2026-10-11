@@ -12,6 +12,50 @@ const priority = require("./priority");
 const widgetTypes = require("./widget-types");
 const { usableFields } = require("./schema-fields");
 
+// THE REFRESH SETTING
+//
+// A module's `refreshMinutes` is how long its fetches are cached for
+// (modules pass it straight to omni.fetch as cacheSeconds), so it decides
+// how often OmniCore calls out to the internet for it. That makes it
+// Core's to present: Core spots it by this key and draws it in a box of
+// its own, with the unit beside it, rather than the author choosing how
+// it looks. See refreshField() and the widget's page in admin-face.js.
+const REFRESH_KEY = "refreshMinutes";
+
+// The least it can be. Anything under a minute -- 0, a negative number,
+// a box left empty -- would have a widget call its service on every
+// screen refresh, so it becomes the module's default instead.
+const REFRESH_FLOOR = 1;
+
+// The setting itself, when a module declares one: a number field called
+// refreshMinutes. Anything else by that name isn't treated specially.
+function isRefreshField(field) {
+	return Boolean(field) && field.key === REFRESH_KEY && field.type === "number";
+}
+
+// A refresh value that's allowed, or null for one that isn't
+function usableRefresh(value) {
+	if (value === "" || value === null || value === undefined) {
+		return null;
+	}
+
+	const minutes = Number(value);
+	return Number.isFinite(minutes) && minutes >= REFRESH_FLOOR ? minutes : null;
+}
+
+// What a widget's refresh comes out as: its own value if that's allowed,
+// else the module's default if that is, else the floor
+function refreshValue(field, value) {
+	const own = usableRefresh(value);
+
+	if (own !== null) {
+		return own;
+	}
+
+	const fallback = usableRefresh(field.default);
+	return fallback !== null ? fallback : REFRESH_FLOOR;
+}
+
 function modulesDir() {
 	return paths.modulesDir();
 }
@@ -169,11 +213,16 @@ function applyDefaults(moduleId, stored) {
 
 		// A priority field is reconciled against what the module declares
 		// right now, so a module that has since gained or lost an item
-		// still receives a complete, current list
-		config[field.key] =
-			field.type === "priority"
-				? priority.normalize(value, field.options)
-				: value;
+		// still receives a complete, current list. The refresh setting is
+		// held to its floor, so one saved as 0 before v1.19.8 (or a module
+		// whose own default is 0) can't hammer a service.
+		if (field.type === "priority") {
+			config[field.key] = priority.normalize(value, field.options);
+		} else if (isRefreshField(field) && (value !== undefined || field.default !== undefined)) {
+			config[field.key] = refreshValue(field, value);
+		} else {
+			config[field.key] = value;
+		}
 	}
 
 	return config;
@@ -213,6 +262,9 @@ function cleanConfig(moduleId, values) {
 
 			value = Number(value);
 			if (Number.isNaN(value)) continue;
+
+			// Under a minute isn't kept: the module's default applies
+			if (isRefreshField(field) && usableRefresh(value) === null) continue;
 		}
 
 		if (field.type === "boolean") {
@@ -264,6 +316,9 @@ function cleanConfig(moduleId, values) {
 }
 
 module.exports = {
+	REFRESH_KEY,
+	REFRESH_FLOOR,
+	isRefreshField,
 	readManifest,
 	readSchema,
 	readInputSchema,
