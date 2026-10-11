@@ -25,6 +25,7 @@ const sourceVersion = require("../package.json").version;
 
 const ADMIN = 3000;
 const ABOUT = 1303;
+const WELCOME = 4000;
 let cookie;
 
 // Runs with OMNICORE_VERSION set to `version`, or unset for undefined
@@ -89,8 +90,10 @@ test("boots signed in, with a face that has no theme and one that takes input", 
 
 	require("../core/admin-face")();
 	require("../core/about-face")();
+	require("../core/control-face")();
 	await waitForPort(ADMIN);
 	await waitForPort(ABOUT);
+	await waitForPort(WELCOME);
 	cookie = await signIn(ADMIN);
 });
 
@@ -261,3 +264,43 @@ test("about: a release still says All systems healthy", () =>
 		assert.ok(!html.includes("Development build"));
 		assert.ok(html.includes('<div class="card-value">1.19.3</div>'));
 	}));
+
+// --- The Welcome page's face list (v1.19.6) --------------------------------
+
+// The page's own CSS rule for one selector, comments taken out. The last
+// one on the page: the shared stylesheet comes first and has its own
+// `body` rule, which isn't the one being tested.
+function ruleFor(html, selector) {
+	const css = html.replace(/\/\*[\s\S]*?\*\//g, "");
+	const at = css.lastIndexOf(selector + " {");
+	return at === -1 ? null : css.slice(at, css.indexOf("}", at));
+}
+
+test("welcome: the face list never cuts off its first face when it's full", async () => {
+	// Enough faces to overflow the list's box
+	for (let i = 0; i < 8; i++) faceStore.createFace("", "", null, []);
+
+	const { html } = await get(WELCOME, "/");
+	const list = ruleFor(html, ".face-list");
+
+	// Centring a scrolling column with justify-content: center pushes
+	// the overflow out of the top too, where scrolling can't reach it.
+	// The list is centred with auto margins instead, which give way to
+	// zero when there's no room left.
+	assert.ok(list, "the list has its rule");
+	assert.match(list, /overflow-y: auto/);
+	assert.doesNotMatch(list, /justify-content:\s*center/);
+	assert.match(html, /\.face-list > :first-child \{ margin-top: auto; \}/);
+	assert.match(html, /\.face-list > :last-child \{ margin-bottom: auto; \}/);
+});
+
+test("pick-a-theme screen: grows with its themes instead of cutting them off", async () => {
+	const html = require("../core/fallback-page")(
+		Array.from({ length: 30 }, (_, i) => ({ id: "t" + i, name: "Theme " + i })),
+		{ id: 4001 }
+	);
+	const body = ruleFor(html, "body");
+
+	assert.match(body, /min-height: 100vh/);
+	assert.doesNotMatch(body, /(^|[^-])height: 100vh/);
+});

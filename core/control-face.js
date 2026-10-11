@@ -53,6 +53,15 @@ const styles = `
 	   Content sits centered within it; only becomes actually
 	   scrollable once it genuinely overflows.
 
+	   Centred with auto margins on the first and last face, NOT with
+	   justify-content: center. When the faces are taller than the box,
+	   justify-content: center pushes the overflow out of the top as well
+	   as the bottom, and the top part is above where a scroll bar can
+	   ever reach: the first face was cut off and couldn't be scrolled
+	   to (v1.19.5 and earlier). An auto margin shares out only the
+	   space that's actually left, so when there's none it's zero and
+	   the list starts at the top.
+
 	   Generously padded on the sides on purpose: a clickable segment's hover
 	   glow paints outside its own box, and this container clips
 	   anything crossing its edge the moment overflow-y is set at
@@ -69,13 +78,15 @@ const styles = `
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		justify-content: center;
 		gap: 0.75em;
 		padding: 2em 3em;
 		box-sizing: border-box;
 		scrollbar-width: thin;
 		scrollbar-color: var(--scroll-thumb) transparent;
 	}
+
+	.face-list > :first-child { margin-top: auto; }
+	.face-list > :last-child { margin-bottom: auto; }
 
 	.face-list::-webkit-scrollbar { width: 8px; }
 	.face-list::-webkit-scrollbar-track { background: transparent; }

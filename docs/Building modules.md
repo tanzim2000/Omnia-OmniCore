@@ -844,6 +844,25 @@ Neither field is a substitute for `minOmniCore` in the registry. If you
 use an RCB that an older OmniCore has never heard of, the version is what
 stops that install taking the update; `emits` only describes it.
 
+### What the Marketplace tells people before they install
+
+Besides `emits`, your registry entry can carry three facts the listing
+shows as tags, with a sentence each on its own page. Each is `true` or
+left out (only an exact `true` counts):
+
+| Registry field | Set it when your module...                                                     | The listing says         |
+| -------------- | ------------------------------------------------------------------------------ | ------------------------ |
+| `background`   | keeps running while OmniCore is on (`"background": true` in your module.json)  | Runs in the background   |
+| `inport`       | takes input (it has an `input.json`)                                           | Takes input              |
+| `notifies`     | can raise notifications on its face's screens                                  | Sends notifications      |
+
+`minOmniCore` is shown on every listing as well ("OmniCore 1.19.0 or
+newer"), in red when the OmniCore looking at it is too old to install it.
+
+These are in the registry rather than your `module.json` because the
+registry entry is what gets reviewed: a module can't hide that it runs in
+the background by leaving it unsaid. Shown from OmniCore 1.19.6.
+
 ---
 
 ## 7. Calling the network

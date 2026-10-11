@@ -46,7 +46,10 @@ ${uiStyles()}
 ${notifications.overlayStyles(face && face.notificationMode)}
 
 		body {
-			height: 100vh;
+			/* min-height, not height: with more themes than fit, a fixed
+			   height plus centring cuts the top off where it can't be
+			   scrolled to */
+			min-height: 100vh;
 			display: flex;
 			flex-direction: column;
 			align-items: center;

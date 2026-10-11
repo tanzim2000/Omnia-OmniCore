@@ -30,6 +30,7 @@ const REGISTRY = {
 			emits: ["pair", "text"],
 			repo: "https://github.com/tanzim2000/Omnia-Essentials",
 			ref: "fab9118965abcdef",
+			minOmniCore: "1.0.0",
 			installed: true
 		},
 		{
@@ -37,6 +38,12 @@ const REGISTRY = {
 			name: "World Clock",
 			author: "tanzim2000",
 			description: "The current time, here or somewhere else",
+			// Not true of the real world-clock: here to see each fact drawn.
+			// notifies is "yes", not true, so it must NOT count.
+			background: true,
+			inport: true,
+			notifies: "yes",
+			minOmniCore: "1.19.0",
 			installed: false
 		}
 	],
@@ -46,6 +53,9 @@ const REGISTRY = {
 			name: "Windows 8",
 			author: "tanzim2000",
 			description: "Asymmetric tile grid",
+			// A theme doesn't run in the background; the field is ignored
+			background: true,
+			minOmniCore: "1.0.0",
 			installed: false
 		}
 	],
@@ -210,4 +220,91 @@ test("marketplace sources: segments, the shared toolbar row, and the warning", a
 	assert.ok(html.includes('class="btn-glossy btn-glossy-green" data-warning-cancel'));
 	assert.ok(html.includes('class="market-warning-actions"'));
 	assert.doesNotMatch(html, /class="btn"|market-wide|style="display: flex/);
+});
+// --- What a listing does, and the OmniCore it needs (v1.19.6) ---------------
+
+// Runs with OMNICORE_VERSION set to `version`, or unset for undefined (a
+// development build, which every minOmniCore fits), and puts it back
+async function withVersion(version, run) {
+	const original = process.env.OMNICORE_VERSION;
+
+	if (version === undefined) delete process.env.OMNICORE_VERSION;
+	else process.env.OMNICORE_VERSION = version;
+
+	try {
+		await run();
+	} finally {
+		if (original === undefined) delete process.env.OMNICORE_VERSION;
+		else process.env.OMNICORE_VERSION = original;
+	}
+}
+
+// The tags under one listing's description on the Marketplace home
+function tagsOf(html, id) {
+	const row = html.split('class="segment clickable market-item"').find((part) => part.includes(`/${id}"`)) || "";
+	const tags = row.split('class="market-tags">')[1] || "";
+	return [...tags.split("</div>")[0].matchAll(/<span class="provides-tag( warn)?">([^<]*)<\/span>/g)].map((m) => (m[1] ? "!" : "") + m[2]);
+}
+
+test("marketplace traits: the listing row shows what a module does beyond its tile", () =>
+	withVersion("v1.19.6", async () => {
+		const { html } = await get("/marketplace");
+
+		assert.deepEqual(tagsOf(html, "world-clock"), [
+			"Runs in the background",
+			"Takes input",
+			"OmniCore 1.19.0 or newer"
+		], "notifies: \"yes\" isn't true, so no Sends notifications");
+		assert.deepEqual(tagsOf(html, "weather"), ["OmniCore 1.0.0 or newer"]);
+		assert.deepEqual(tagsOf(html, "windows8"), ["OmniCore 1.0.0 or newer"], "a theme never runs in the background");
+
+		// The tags are part of what search matches on
+		assert.match(html, /data-search="world clock [^"]*runs in the background[^"]*"/);
+	}));
+
+test("marketplace traits: a listing's own page says the same, one sentence each", () =>
+	withVersion("v1.19.6", async () => {
+		const { html } = await get("/marketplace/modules/world-clock");
+
+		assert.ok(html.includes("<h2>Good to know</h2>"));
+		assert.ok(html.includes("Keeps running the whole time OmniCore is on"));
+		assert.ok(html.includes("through its face&#39;s Inport") || html.includes("through its face's Inport"));
+		assert.ok(html.includes("Works on OmniCore 1.19.0 or newer."));
+		assert.ok(!html.includes("Can pop up notifications"));
+	}));
+
+test("marketplace traits: a module this OmniCore is too old for says so, in red", () =>
+	withVersion("v1.18.0", async () => {
+		const home = await get("/marketplace");
+		assert.deepEqual(tagsOf(home.html, "world-clock"), ["Runs in the background", "Takes input", "!Needs OmniCore 1.19.0"]);
+
+		const page = await get("/marketplace/modules/world-clock");
+		assert.ok(page.html.includes('<li class="warn">Needs OmniCore 1.19.0 or newer. This one is 1.18.0, so it can'));
+
+		// Its Install button can't be pressed: installing would be refused
+		assert.ok(page.html.includes('<button type="button" class="glass market-action" disabled>Install</button>'));
+		assert.ok(!page.html.includes('data-install="world-clock"'));
+	}));
+
+test("marketplace traits: a listing with none of it has no tags and no Good to know", async () => {
+	const realList = marketplace.listAvailable;
+	marketplace.listAvailable = async () => ({
+		modules: [{ id: "plain", name: "Plain", description: "Nothing special", repo: "https://github.com/x/y", ref: "abc", installed: false }],
+		themes: [],
+		sourceFailures: []
+	});
+
+	try {
+		const home = await get("/marketplace");
+		assert.ok(!home.html.includes('class="market-tags"'));
+
+		const page = await get("/marketplace/modules/plain");
+		assert.ok(!page.html.includes("Good to know"));
+
+		// The source line has no long dash in it
+		assert.ok(page.html.includes('github.com/x/y</a>, pinned at <code>abc</code>'));
+		assert.ok(!page.html.includes("\u2014 pinned"));
+	} finally {
+		marketplace.listAvailable = realList;
+	}
 });

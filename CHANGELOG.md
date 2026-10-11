@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.19.6
+
+The Welcome page shows every face, and the Marketplace says what a module does before you install it
+
+### Fixed
+
+- **The Welcome page cut off the first face.** With more faces than fit in its list, the top of the list was pushed out of the box where it couldn't be scrolled to, so Face 001 was half hidden and couldn't be reached. The list now starts at the top when it's full, and still sits in the middle when there are only a few.
+- **The "pick a theme" screen could do the same** with more themes than fit on the screen. It now grows and scrolls instead.
+
+### Changed
+
+- **The Marketplace says what a module does beyond its tile.** Under a listing's description, small tags say whether it **runs in the background**, **takes input** (so its face gets an Inport) or **sends notifications**, and which **OmniCore** it needs ("OmniCore 1.19.0 or newer"). A listing's own page says the same in a **Good to know** box, one sentence each. When the OmniCore you're running is too old for something, its tag says "Needs OmniCore 1.19.0" in red, its Install button can't be pressed (installing it would only be refused), and its page says why. Searching the Marketplace for "background" or "notifications" finds the listings that do that.
+- **A listing's Source line** reads "pinned at ..." after a comma instead of a long dash.
+
+### Notes
+
+- **The new facts come from the registry**, not from the module's own files: three new optional fields on a registry entry, `background`, `inport` and `notifies`, each `true` or left out. The registry entry is the part that gets reviewed, so a module can't hide that it runs in the background by not mentioning it. Documented in `docs/Building modules.md` and the Omnia-Registry README. An older OmniCore ignores them.
+
 ## v1.19.5
 
 A face's page that says what the face is, tidier Faces and Updates pages, and a face with no theme that opens

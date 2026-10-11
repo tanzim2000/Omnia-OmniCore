@@ -615,6 +615,19 @@ const styles = `
 	.market-by { color: var(--fg-muted); font-size: 0.8em; margin: 0.15em 0 0.5em 0; }
 	.market-desc { color: var(--fg-muted); font-size: 0.9em; line-height: 1.4; }
 
+	/* What a listing does beyond its tile (runs in the background, takes
+	   input, sends notifications) and the OmniCore it needs, as small
+	   tags under its description. A requirement this OmniCore doesn't
+	   meet is drawn in the danger colour. */
+	.market-tags { display: flex; flex-wrap: wrap; gap: 0.4em; margin-top: 0.6em; }
+	.market-tags .provides-tag { margin: 0; }
+	.provides-tag.warn { color: var(--danger); border-color: var(--danger-border); opacity: 1; }
+
+	/* The same facts on a listing's own page, one plain sentence each */
+	.market-traits { margin: 0; padding-left: 1.2em; }
+	.market-traits li { margin: 0.35em 0; line-height: 1.5; }
+	.market-traits li.warn { color: var(--danger); }
+
 	/* The whole listing is a link to its own page, EXCEPT the Install
 	   button, which needs its own click. The link is stretched over the
 	   listing; the button sits above it. "Installed" isn't a button, so a
@@ -2433,11 +2446,81 @@ function startAdminFace() {
 	// The button for one listing: Install, or a green "Installed" once
 	// it's here. "Installed" is a label shaped like a button, not a
 	// button -- there's nothing to press.
+	//
+	// Something this OmniCore is too old for gets a button that can't be
+	// pressed: installing it would only be refused. Its tag and its page
+	// say why (see listingTraits).
 	function marketAction(entry, kind) {
-		return entry.installed
-			? '<span class="btn-glossy btn-glossy-green market-action">&#10003; Installed</span>'
-			: `<button type="button" class="glass market-action" data-install="${escapeHtml(entry.id)}" ` +
-			  `data-kind="${kind}">Install</button>`;
+		if (entry.installed) {
+			return '<span class="btn-glossy btn-glossy-green market-action">&#10003; Installed</span>';
+		}
+
+		if (!marketplace.checkCompatibility(entry).compatible) {
+			return '<button type="button" class="glass market-action" disabled>Install</button>';
+		}
+
+		return `<button type="button" class="glass market-action" data-install="${escapeHtml(entry.id)}" ` +
+			`data-kind="${kind}">Install</button>`;
+	}
+
+	// What a listing tells you before you install it, beyond what it shows
+	// on a tile. All of it comes from the listing's registry.json entry,
+	// which is the part that gets reviewed, never from the module's own
+	// files: a module can't hide that it runs in the background by simply
+	// not saying so.
+	//
+	//   background: true   it keeps running while OmniCore is on
+	//   inport: true       it takes input, so its face gets an Inport
+	//   notifies: true     it can raise notifications on its face's screens
+	//   minOmniCore        the oldest OmniCore it works on
+	//
+	// Only an exact `true` counts, the same rule module.json's own
+	// `background` follows. Returns { tag, text, warn } for each: `tag` for
+	// the listing row, `text` for the listing's own page.
+	function listingTraits(entry, kind) {
+		const traits = [];
+
+		if (kind === "module" && entry.background === true) {
+			traits.push({
+				tag: "Runs in the background",
+				text: "Keeps running the whole time OmniCore is on, not only while a screen is showing it."
+			});
+		}
+
+		if (kind === "module" && entry.inport === true) {
+			traits.push({
+				tag: "Takes input",
+				text: "Has controls you can use from a phone or tablet, through its face's Inport."
+			});
+		}
+
+		if (kind === "module" && entry.notifies === true) {
+			traits.push({
+				tag: "Sends notifications",
+				text: "Can pop up notifications on the screens showing its face."
+			});
+		}
+
+		if (entry.minOmniCore) {
+			const required = String(entry.minOmniCore).replace(/^v/, "");
+			const fits = marketplace.checkCompatibility(entry).compatible;
+			const running = omnicoreVersion.displayVersion().number;
+
+			traits.push(
+				fits
+					? {
+							tag: `OmniCore ${required} or newer`,
+							text: `Works on OmniCore ${required} or newer.`
+					  }
+					: {
+							tag: `Needs OmniCore ${required}`,
+							text: `Needs OmniCore ${required} or newer. This one is ${running || "older"}, so it can't be installed until OmniCore is updated.`,
+							warn: true
+					  }
+			);
+		}
+
+		return traits;
 	}
 
 	// One row per entry, in a grid the search box filters client-side.
@@ -2460,9 +2543,19 @@ function startAdminFace() {
 				const description = entry.description || "";
 				const detailUrl = `/marketplace/${kind}s/${encodeURIComponent(entry.id)}`;
 
+				const traits = listingTraits(entry, kind);
+
+				// The tags are searchable too: typing "background" or
+				// "notifications" finds the listings that do that
 				const searchText = escapeHtml(
-					[name, description, author].join(" ").toLowerCase()
+					[name, description, author, ...traits.map((t) => t.tag)].join(" ").toLowerCase()
 				);
+
+				const tags = traits.length
+					? `<div class="market-tags">${traits
+							.map((t) => `<span class="provides-tag${t.warn ? " warn" : ""}">${escapeHtml(t.tag)}</span>`)
+							.join("")}</div>`
+					: "";
 
 				return `
 					<div class="segment clickable market-item" data-search="${searchText}">
@@ -2471,6 +2564,7 @@ function startAdminFace() {
 							<h3>${escapeHtml(name)}</h3>
 							${author ? `<div class="market-by">by ${escapeHtml(author)}</div>` : ""}
 							${description ? `<div class="market-desc">${escapeHtml(description)}</div>` : ""}
+							${tags}
 						</div>
 						${marketAction(entry, kind)}
 					</div>`;
@@ -2811,6 +2905,19 @@ function startAdminFace() {
 				</div>`
 			: "";
 
+		// "Good to know": the same facts as the listing's tags, one sentence
+		// each (see listingTraits)
+		const traits = listingTraits(entry, kind);
+		const traitsSection = traits.length
+			? `
+				<div class="segment">
+					<h2>Good to know</h2>
+					<ul class="market-traits">
+						${traits.map((t) => `<li${t.warn ? ' class="warn"' : ""}>${escapeHtml(t.text)}</li>`).join("")}
+					</ul>
+				</div>`
+			: "";
+
 		const emitsSection = kind === "module" && emits.length
 			? `
 				<div class="segment">
@@ -2824,8 +2931,7 @@ function startAdminFace() {
 				<div class="segment">
 					<h2>Source</h2>
 					<p class="lede market-url">
-						<a href="${escapeHtml(entry.repo)}">${escapeHtml(entry.repo)}</a>
-						${entry.ref ? ` — pinned at <code>${escapeHtml(String(entry.ref).slice(0, 10))}</code>` : ""}
+						<a href="${escapeHtml(entry.repo)}">${escapeHtml(entry.repo)}</a>${entry.ref ? `, pinned at <code>${escapeHtml(String(entry.ref).slice(0, 10))}</code>` : ""}
 					</p>
 				</div>`
 			: "";
@@ -2887,6 +2993,7 @@ function startAdminFace() {
 				</div>
 
 				${aboutSection}
+				${traitsSection}
 				${factsRow}
 				${screenshotsSection}
 			</div>`;
