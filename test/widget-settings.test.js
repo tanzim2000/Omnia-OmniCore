@@ -1,5 +1,5 @@
 // test/widget-settings.test.js
-// A widget's page, as v1.19.8 draws it.
+// A widget's page, as v1.19.7 draws it.
 //
 //   - Labels that follow the widget's settings: a module can suggest one
 //     (module.exports.label), the label the user types wins, and clearing
@@ -281,7 +281,7 @@ test("refresh: under a minute isn't saved, and isn't handed to the module", () =
 	assert.equal(moduleConfig.cleanConfig(SUGGESTS, { refreshMinutes: "5" }).refreshMinutes, 5);
 	assert.equal(moduleConfig.cleanConfig(SUGGESTS, { refreshMinutes: "1" }).refreshMinutes, 1);
 
-	// Running: a value saved before v1.19.8 becomes the default...
+	// Running: a value saved before v1.19.7 becomes the default...
 	assert.equal(moduleConfig.applyDefaults(SUGGESTS, { refreshMinutes: 0 }).refreshMinutes, 15);
 	// ...and a module whose own default is under a minute gets the floor
 	assert.equal(moduleConfig.applyDefaults(PLAIN, {}).refreshMinutes, moduleConfig.REFRESH_FLOOR);

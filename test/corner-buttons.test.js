@@ -1,5 +1,5 @@
 // test/corner-buttons.test.js
-// The round buttons in the top-right corner, since v1.19.8.
+// The round buttons in the top-right corner, since v1.19.7.
 //
 //   - The Light / Dark / Device switch, on the sign-in page and the
 //     welcome face: it shows the choice in force and each tap moves to

@@ -19,7 +19,7 @@
 //      "Regina" until somebody types something else, and goes on
 //      following the location when it changes.
 //   3. The module's name, from its module.json. What every widget was
-//      called before v1.19.8, and still what one is called when its
+//      called before v1.19.7, and still what one is called when its
 //      module doesn't suggest anything.
 //
 // Clearing the Label box puts a widget back on 2: it follows its

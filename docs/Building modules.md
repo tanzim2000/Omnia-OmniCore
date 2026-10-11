@@ -351,7 +351,7 @@ already filled in for anything unset.
 
 A `number` field can also carry `unit`, a word to show beside the box:
 `"unit": "km"` draws it as a short box with "km" after it, on one line,
-instead of a box the full width of the page. It needs OmniCore 1.19.8; an
+instead of a box the full width of the page. It needs OmniCore 1.19.7; an
 older one just leaves the word off.
 
 ### The refresh setting -- call it `refreshMinutes`
@@ -373,7 +373,7 @@ there:
   on every screen refresh.
 
 Any other name is an ordinary number setting with none of this. Since
-OmniCore 1.19.8; older versions show it among your other settings.
+OmniCore 1.19.7; older versions show it among your other settings.
 
 ### The `priority` type -- letting the user order your content
 
@@ -582,7 +582,7 @@ The label the user types always wins. When they clear it, the widget goes
 back to your suggestion, so a weather widget whose city changes is renamed
 with it. A function that throws, or returns something that isn't text,
 costs only its suggestion: the module's name is used. A suggestion is kept
-to one line of at most 60 characters. Needs OmniCore 1.19.8; older versions
+to one line of at most 60 characters. Needs OmniCore 1.19.7; older versions
 ignore it and use the module's name.
 
 ---

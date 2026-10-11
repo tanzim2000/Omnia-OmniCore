@@ -214,7 +214,7 @@ function applyDefaults(moduleId, stored) {
 		// A priority field is reconciled against what the module declares
 		// right now, so a module that has since gained or lost an item
 		// still receives a complete, current list. The refresh setting is
-		// held to its floor, so one saved as 0 before v1.19.8 (or a module
+		// held to its floor, so one saved as 0 before v1.19.7 (or a module
 		// whose own default is 0) can't hammer a service.
 		if (field.type === "priority") {
 			config[field.key] = priority.normalize(value, field.options);
