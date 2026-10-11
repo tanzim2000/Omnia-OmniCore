@@ -243,10 +243,16 @@ function fontFace(settings) {
 		return "";
 	}
 
+	// The address carries a number that changes with every font saved, so
+	// picking another font is a new address and a browser can't keep
+	// drawing the old one. Required here, not at the top, so this file
+	// stays free of the font service until a font is actually in use.
+	const version = require("./font-service").installedFontVersion();
+
 	return `
 	@font-face {
 		font-family: "${settings.uiFontFamily}";
-		src: url("/ui-font.woff2") format("woff2");
+		src: url("/ui-font.woff2?v=${version}") format("woff2");
 		font-display: swap;
 	}`;
 }
@@ -715,6 +721,26 @@ function uiStyles(options) {
 	   --------------------------------------------------------------- */
 	.floating.top-right { top: 1.5em; right: 1.5em; }
 
+	/* ---------------------------------------------------------------
+	   Badge — a small outlined label that sits beside a word, such as
+	   "dev" next to a development build's version. Says something about
+	   the thing it's next to; it isn't a button and doesn't react.
+	   --------------------------------------------------------------- */
+	.badge {
+		display: inline-block;
+		margin-left: 0.5em;
+		padding: 0.2em 0.55em;
+		border: 1px solid var(--glass-border);
+		border-radius: 0.5em;
+		background: var(--hover-subtle);
+		color: var(--fg-muted);
+		font-size: 0.7em;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		line-height: 1.2;
+		vertical-align: middle;
+	}
+
 	.mode-switch {
 		width: 2.75em;
 		height: 2.75em;
@@ -739,8 +765,8 @@ function uiStyles(options) {
 
 	   Bottom-right gets the same at the bottom. A page scrolled all the
 	   way down would otherwise end with its last segment under the button
-	   -- and the last segment is often the one with a button of its own
-	   (Remove from this face). */
+	   -- and the last thing on a page is often a button of its own
+	   (a module's Save | Remove). */
 	body:has(> .floating.top-left) { padding-top: calc(1.5em + 3.4em + 1.5em); }
 	body:has(> .floating.bottom-right) { padding-bottom: calc(1.5em + 3.4em + 1.5em); }
 
@@ -1171,6 +1197,30 @@ function uiStyles(options) {
 
 	.dock button:focus-visible { outline: none; }
 
+	/* A section that can't be pressed right now (Save while saving):
+	   faded, no glow, the same as a disabled .glass button. */
+	.dock button:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+		box-shadow: none;
+		background: transparent;
+	}
+
+	/* A section that destroys something (Remove): red label, and a red
+	   halo in place of the white one on hover, so it reads as different
+	   from the safe action beside it before it's pressed. Whatever it
+	   does should still ask first; the colour is a warning, not the
+	   safeguard. */
+	.dock button.danger { color: var(--danger); }
+
+	.dock button.danger:hover,
+	.dock button.danger:focus-visible {
+		box-shadow:
+			inset 0 1px 0 var(--glass-sheen),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+			0 0 30px color-mix(in srgb, var(--danger) 55%, transparent);
+	}
+
 	/* ---------------------------------------------------------------
 	   A list that fills the height it's given rather than stopping at
 	   a fixed one.
@@ -1316,6 +1366,18 @@ function backButton(href) {
 		aria-label="Back">&#8592;</button>`;
 }
 
+// The version as it's written on a page: "1.19.4", and for a development
+// build a `dev` badge after it ("1.19.4 dev"). See displayVersion() in
+// version.js for where the number comes from.
+function versionHtml() {
+	const { number, dev } = require("./version").displayVersion();
+	const text = number
+		? String(number).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]))
+		: "";
+
+	return text + (dev ? (text ? " " : "") + '<span class="badge">dev</span>' : "");
+}
+
 // A password box with its Show / Hide button. `inputHtml` is the
 // <input type="password" ...> itself, so each page keeps its own id,
 // data attributes and autocomplete hint.
@@ -1399,6 +1461,7 @@ module.exports = {
 	uiModeFromRequest,
 	rememberUiMode,
 	currentUiMode,
+	versionHtml,
 	passwordField,
 	PASSWORD_TOGGLE_SCRIPT,
 	modeSwitch,

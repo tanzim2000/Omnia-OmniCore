@@ -244,8 +244,8 @@ function startControlFace() {
 			.map(
 				(face) => `
 			<div class="segment clickable face" onclick="goToFace(${face.id})">
-				<strong>${escapeHtml(face.name)}</strong>
-				<span>port ${face.id} · ${escapeHtml(face.theme || "no theme")}</span>
+				<strong>${escapeHtml(faceStore.faceLabel(face))}</strong>
+				<span>Outport ${face.id} · ${escapeHtml(face.theme || "no theme")}</span>
 			</div>`
 			)
 			.join("");

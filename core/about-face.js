@@ -23,7 +23,7 @@ const fs = require("fs");
 const path = require("path");
 const paths = require("./paths");
 
-const { uiStyles, rememberUiMode } = require("./ui-theme");
+const { uiStyles, rememberUiMode, versionHtml } = require("./ui-theme");
 const { portLinkScript, escapeHtml } = require("./face-links");
 const systemInfo = require("./system-info");
 const updateStore = require("./update-store");
@@ -127,7 +127,7 @@ function versionCard(info) {
 	return `
 		<div class="card">
 			<div class="card-label">OmniCore${dot}</div>
-			<div class="card-value">${escapeHtml(info.version.replace(/^v/, ""))}</div>
+			<div class="card-value">${versionHtml()}</div>
 		</div>`;
 }
 

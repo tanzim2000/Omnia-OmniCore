@@ -241,6 +241,22 @@ function installedFontPath() {
 	return fs.existsSync(fontFile()) ? fontFile() : null;
 }
 
+// A number that changes whenever a different font file is saved: when
+// the file was last written. The Default UI's stylesheet puts it on the
+// font's address (/ui-font.woff2?v=...), so a new font is a new address.
+//
+// Without it every font lived at the same address, and a browser that
+// had already loaded one kept drawing it after another was saved -- the
+// new file was downloaded and the old typeface still showed. 0 when no
+// font is installed.
+function installedFontVersion() {
+	try {
+		return Math.floor(fs.statSync(fontFile()).mtimeMs);
+	} catch (error) {
+		return 0;
+	}
+}
+
 function installedFont() {
 	if (!fs.existsSync(metaFile())) {
 		return null;
@@ -332,6 +348,7 @@ module.exports = {
 	installFont,
 	removeFont,
 	installedFontPath,
+	installedFontVersion,
 	installedFont,
 	attachFontRoute,
 	ensureTitleFont,

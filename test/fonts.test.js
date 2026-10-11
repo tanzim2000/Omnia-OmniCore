@@ -94,3 +94,47 @@ test("fonts: nothing to download is nothing, not a crash", () => {
 	assert.equal(fontService.latinWoff2Url(""), null);
 	assert.equal(fontService.latinWoff2Url("no fonts here"), null);
 });
+
+// --- The address a saved font is served from -----------------------------
+//
+// Every font used to be served at the same address, /ui-font.woff2, and a
+// browser that had loaded one kept drawing it after a different one was
+// saved. The address now carries a number that changes with the file.
+
+test("fonts: saving a different font gives the stylesheet a different address", () => {
+	const helpers = require("./helpers");
+	const fs = require("fs");
+	const path = require("path");
+	const { writeSettings } = require("../core/settings-store");
+	const { uiStyles, fontFace } = require("../core/ui-theme");
+
+	helpers.resetState();
+	fs.mkdirSync(helpers.dataDir, { recursive: true });
+
+	const file = path.join(helpers.dataDir, "ui-font.woff2");
+	const addressOf = (css) => css.match(/url\("(\/ui-font\.woff2\?v=\d+)"\)/)[1];
+
+	writeSettings({ uiFontFamily: "Sample" });
+
+	// First font, saved at one moment...
+	fs.writeFileSync(file, "first font");
+	fs.utimesSync(file, new Date(2026, 0, 1), new Date(2026, 0, 1));
+	const first = addressOf(uiStyles());
+
+	// ...and another saved later, under the same file name
+	fs.writeFileSync(file, "second font");
+	fs.utimesSync(file, new Date(2026, 5, 1), new Date(2026, 5, 1));
+	const second = addressOf(uiStyles());
+
+	assert.notEqual(first, second, "a new font is a new address");
+	assert.equal(addressOf(uiStyles()), second, "and it holds still until the next change");
+
+	// The overlay on a theme's page builds its font from the same code
+	assert.ok(fontFace({ uiFontFamily: "Sample" }).includes(second));
+
+	// No font chosen: no font rule at all, as before
+	writeSettings({ uiFontFamily: "" });
+	assert.ok(!uiStyles().includes("ui-font.woff2"));
+
+	helpers.resetState();
+});

@@ -98,15 +98,22 @@ test("every page under a face is segments, with a way back up", async () => {
 	}
 });
 
-test("a module's settings page: its own segment, the theme's segment, Save, and Remove", async () => {
+test("a module's settings page: its own segment, the theme's segment, and Save | Remove", async () => {
 	const page = (await html(`/faces/${face.id}/modules/${encodeURIComponent(instanceId)}`)).text;
 
 	assert.ok(page.includes("<h2 style=\"margin-bottom:14px\">Settings</h2>"));
 	assert.ok(page.includes("In Tiles Theme"), "the theme's own segment");
 	assert.ok(page.includes('data-key="city"'), "the module's field");
 	assert.ok(page.includes('data-key="size"') && page.includes('data-scope="theme"'), "the theme's field");
-	assert.ok(page.includes('id="save"'));
-	assert.match(page, /<button class="glass glass-block glass-danger" id="remove">/);
+
+	// Save | Remove in one capsule (the wizard's .dock) under the
+	// segments, Remove in red (v1.19.4)
+	assert.match(
+		page,
+		/<div class="page-dock">\s*<div class="dock">\s*<button type="button" id="save">Save<\/button>\s*<button type="button" class="danger" id="remove">Remove<\/button>/
+	);
+	assert.ok(!page.includes("Remove from this face"));
+	assert.ok(!page.includes("glass-danger\" id=\"remove"), "not the old red button");
 
 	// Removing asks first, in the Default UI's own pop-up
 	assert.ok(page.includes("confirmDialog({"));

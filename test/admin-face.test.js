@@ -125,17 +125,39 @@ test("admin face: an absurd text size is clamped, not stored", async () => {
 	const body = await response.json();
 	assert.equal(body.uiFontSize, 24, "expected clamping to the maximum");
 });
+// The Updates page is about a release, so these tests say they're
+// running one. With no OMNICORE_VERSION the tests themselves are a
+// development build, which has a page of its own (see dev-build.test.js).
+async function asRelease(version, run) {
+	const original = process.env.OMNICORE_VERSION;
+	process.env.OMNICORE_VERSION = version;
+
+	try {
+		await run();
+	} finally {
+		// Assigning undefined to an environment variable stores the TEXT
+		// "undefined", so a variable that wasn't set has to be deleted
+		if (original === undefined) {
+			delete process.env.OMNICORE_VERSION;
+		} else {
+			process.env.OMNICORE_VERSION = original;
+		}
+	}
+}
+
 test("updates: the page renders and reports never having checked", async () => {
-	const response = await fetch(`http://127.0.0.1:${PORT}/updates`, {
-		headers: { cookie }
+	await asRelease("v1.0.0", async () => {
+		const response = await fetch(`http://127.0.0.1:${PORT}/updates`, {
+			headers: { cookie }
+		});
+
+		assert.equal(response.status, 200);
+
+		const html = await response.text();
+		assert.ok(html.includes("Updates"), "missing heading");
+		assert.ok(html.includes("Last checked:"), "should say when it last checked");
+		assert.ok(html.includes('id="check"'), "should offer a manual check");
 	});
-
-	assert.equal(response.status, 200);
-
-	const html = await response.text();
-	assert.ok(html.includes("Updates"), "missing heading");
-	assert.ok(html.includes("Last checked:"), "should say when it last checked");
-	assert.ok(html.includes('id="check"'), "should offer a manual check");
 });
 
 test("updates: a failed check is reported, not hidden", async () => {
@@ -146,15 +168,17 @@ test("updates: a failed check is reported, not hidden", async () => {
 	// "you're up to date" when nobody actually knows.
 	updateStore.recordCheck({ error: "simulated network failure" });
 
-	const html = await (
-		await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
-	).text();
+	await asRelease("v1.0.0", async () => {
+		const html = await (
+			await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
+		).text();
 
-	assert.ok(html.includes("Last check failed"), "a failure must be visible");
-	assert.ok(
-		!html.includes("This is the newest version"),
-		"a failed check must never claim the install is up to date"
-	);
+		assert.ok(html.includes("Last check failed"), "a failure must be visible");
+		assert.ok(
+			!html.includes("This is the newest version"),
+			"a failed check must never claim the install is up to date"
+		);
+	});
 });
 
 test("updates: an available version is announced with its notes", async () => {
@@ -177,7 +201,11 @@ test("updates: an available version is announced with its notes", async () => {
 			"should offer the upcoming version's notes section"
 		);
 	} finally {
-		process.env.OMNICORE_VERSION = originalVersion;
+		if (originalVersion === undefined) {
+			delete process.env.OMNICORE_VERSION;
+		} else {
+			process.env.OMNICORE_VERSION = originalVersion;
+		}
 	}
 });
 

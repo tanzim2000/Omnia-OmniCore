@@ -493,6 +493,10 @@ function startWizardFace() {
 			};
 		});
 
+		// The port this face WOULD get. Accurate unless two faces are being
+		// created at the same moment.
+		const nextPort = faceStore.nextDashboardPort();
+
 		res.send(
 			renderWizard({
 				modules: modules,
@@ -513,9 +517,10 @@ function startWizardFace() {
 					instanceDefaults: themeLoader.instanceDefaults(theme.id, true),
 					hiddenDefaults: themeLoader.instanceDefaults(theme.id, false)
 				})),
-				// What port this face WOULD get. Accurate unless two faces
-				// are being created at the same moment.
-				nextPort: faceStore.nextDashboardPort()
+				// What that face would be called and numbered, as people
+				// see it ("Face 001" and "001"), never as its port
+				nextName: faceStore.defaultFaceName(nextPort),
+				nextNumber: faceStore.faceNumber(nextPort)
 			})
 		);
 	});
@@ -555,7 +560,8 @@ function renderWizard(data) {
 
 		const MODULES = ${scriptJson(data.modules)};
 		const THEMES = ${scriptJson(data.themes)};
-		const NEXT_PORT = ${data.nextPort};
+		const NEXT_NAME = ${JSON.stringify(data.nextName)};
+		const NEXT_NUMBER = ${JSON.stringify(data.nextNumber)};
 
 		// Everything the wizard is building, held here and only sent to the
 		// server at Finish. Cancel simply throws this away.
@@ -730,9 +736,9 @@ function renderWizard(data) {
 						'<div class="field">' +
 							'<label for="name">Name</label>' +
 							'<input type="text" id="name" value="' + escapeHtml(face.name) +
-								'" placeholder="Face ' + NEXT_PORT + '">' +
+								'" placeholder="' + NEXT_NAME + '">' +
 							'<div class="help">How you recognise this face in settings. ' +
-								'Leave it blank and it will be called Face ' + NEXT_PORT +
+								'Leave it blank and it will be called ' + NEXT_NAME +
 								".</div>" +
 						"</div>" +
 						'<div class="field">' +
@@ -1178,13 +1184,13 @@ function renderWizard(data) {
 
 			return '<div class="segment wizard-single">' +
 				'<div class="review-row"><strong>Name</strong><span>' +
-					escapeHtml(face.name || "Face " + NEXT_PORT) + "</span></div>" +
+					escapeHtml(face.name || NEXT_NAME) + "</span></div>" +
 				'<div class="review-row"><strong>Title</strong><span>' +
 					escapeHtml(face.title || "none") + "</span></div>" +
 				'<div class="review-row"><strong>Theme</strong><span>' +
 					escapeHtml(theme ? theme.name : "none") + "</span></div>" +
 				'<div class="review-row"><strong>ID</strong><span>' +
-					NEXT_PORT + "</span></div>" +
+					NEXT_NUMBER + "</span></div>" +
 				'<div style="margin-top:22px"><h2>Modules</h2>' +
 					(rows || '<div class="empty">No modules on this face.</div>') +
 				"</div>" +

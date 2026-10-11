@@ -196,6 +196,8 @@ function startFace(face) {
 
 			res.json({
 				...rest,
+				// Never "Face 4001": see faceLabel() in face-store.js
+				name: faceStore.faceLabel(face),
 				themeConfig: themeLoader.applyDefaults(
 					face.theme,
 					(themeConfigs || {})[face.theme]

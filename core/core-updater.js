@@ -15,8 +15,10 @@
 // through applyUpdate(), and applyUpdate() lets only one run at a time
 // -- see "One update at a time" below.
 
+const fs = require("fs");
 const https = require("https");
 const os = require("os");
+const path = require("path");
 const semver = require("semver");
 const Docker = require("dockerode");
 
@@ -855,15 +857,44 @@ async function fetchChangelogEntry(tag) {
 		return null;
 	}
 
-	// Everything between this version's heading and the next one.
+	return changelogEntry(raw, tag);
+}
+
+// Everything between one version's heading ("## v1.19.4") and the next
+// one, or the end of the file for the oldest entry. Null if there's no
+// such heading.
+//
+// "(?![\s\S])" is how JavaScript says "the very end of the text": there's
+// no character left to see. Before v1.19.4 this used "\Z", which other
+// languages read that way but JavaScript reads as a plain capital Z, so
+// notes were cut off at the first capital Z in them, and the oldest
+// entry, with no heading after it, never matched at all.
+function changelogEntry(raw, tag) {
 	const bare = String(tag).replace(/^v/, "");
 	const pattern = new RegExp(
-		`^## v?${bare.replace(/\./g, "\\.")}\\s*$([\\s\\S]*?)(?=^## |\\Z)`,
+		`^## v?${bare.replace(/\./g, "\\.")}\\s*$([\\s\\S]*?)(?=^## |(?![\\s\\S]))`,
 		"m"
 	);
-	const match = raw.match(pattern);
+	const match = String(raw).match(pattern);
 
 	return match ? match[1].trim() : null;
+}
+
+// The same notes read from the CHANGELOG.md next to this code, for a
+// development build: it has no release to fetch from GitHub, but its
+// own source says what it holds. Null when the file or the version's
+// entry isn't there.
+function localChangelogEntry(version) {
+	try {
+		const raw = fs.readFileSync(
+			path.join(__dirname, "..", "CHANGELOG.md"),
+			"utf-8"
+		);
+
+		return changelogEntry(raw, version);
+	} catch (error) {
+		return null;
+	}
 }
 
 // When the running container was created. This is "last updated"
@@ -887,6 +918,8 @@ async function runningSince() {
 module.exports = {
 	checkForUpdate,
 	fetchChangelogEntry,
+	changelogEntry,
+	localChangelogEntry,
 	runningSince,
 	fetchLatestCompatibleTag,
 	applyUpdate,

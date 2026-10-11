@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.19.4
+
+Faces by their number, a dev build that says what it is, and fonts that change when you pick them
+
+### Changed
+
+- **A face is called by its number, not its port.** A face nobody has named is "Face 001", not "Face 4001": 4001 is its Outport, and 001 is the face. A face's page says "Outport 4001", and "Inport 2001" after it when the face has something taking input, where it used to say "Running on port 4001". The faces list, the welcome page, the setup wizard (its suggested name and its ID line), an Inport's page and what a theme is told the face is called all follow. A face saved as "Face 4001" by an earlier version is shown as "Face 001" without anything being rewritten; a name you chose yourself is left as it is.
+- **A module's Save and Remove are one capsule**, the same as the wizard's Cancel | Back | Next, under the settings: **Save | Remove**. Remove is red and glows red when you point at it, and still asks before removing anything. It used to be two separate full-width buttons, the second one saying "Remove from this face".
+- **A development build says which version it is.** Run from the source rather than from a release image, OmniCore used to call itself "OmniCore dev". It now shows the version the source says it is, "OmniCore 1.19.4", with a small `dev` label after it: on Settings, on the Updates page, and on the About page. Its Updates page leaves out everything about checking for updates (the last check, how long it's been running, Check now), since a dev build has nothing to compare with, and shows what's in it from its own CHANGELOG.md instead of saying release notes couldn't be fetched.
+
+### Fixed
+
+- **A new font didn't show until the browser was closed.** Every font was served from the same address, and a browser that had already loaded one kept drawing it after another was picked, even though the new file had been downloaded. The address now changes with each font saved, so a new font shows as soon as the page reloads. On every page, on dashboards' notifications too.
+- **Release notes on the Updates page could be cut short.** They were read up to the first capital letter Z, and the oldest version's notes couldn't be found at all.
+
+### Notes
+
+- **New in the shared theme, `core/ui-theme.js`**: `.badge`, a small outlined label (the `dev` one); and on the capsule, `.dock button.danger` for a red section with a red glow, and a faded look for a section that can't be pressed (Save while it's saving).
+
 ## v1.19.3
 
 A chosen font now shows on the page

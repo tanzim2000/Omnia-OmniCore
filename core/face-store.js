@@ -57,6 +57,42 @@ function inportFor(faceId) {
 	return INPORT_PREFIX + faceIdFromPort(faceId);
 }
 
+// A face's number as people see it: its ID, three digits ("001"), never
+// the port ("4001"). Outports run 4001 to 4999, so 001 to 999.
+function faceNumber(faceId) {
+	return String(faceIdFromPort(faceId)).padStart(3, "0");
+}
+
+// What a face is called until someone names it
+function defaultFaceName(faceId) {
+	return "Face " + faceNumber(faceId);
+}
+
+// The name to show for a face. Before v1.19.4 a face nobody had named
+// was saved as "Face 4001", which is its Outport rather than its ID. A
+// name that is exactly that is shown as the default ("Face 001") without
+// rewriting anything on disk, so a name someone chose is never touched.
+function faceLabel(face) {
+	const name = (face.name || "").trim();
+
+	if (!name || name === "Face " + face.id) {
+		return defaultFaceName(face.id);
+	}
+
+	return name;
+}
+
+// The ports a face answers on, for people: "Outport 4001", plus its
+// Inport when the face has something taking input ("Outport 4001 ·
+// Inport 2001"). An Inport that isn't listening isn't mentioned.
+function portsLine(face) {
+	const outport = "Outport " + outportFor(face.id);
+
+	return faceTakesInput(face)
+		? outport + " \u00b7 Inport " + inportFor(face.id)
+		: outport;
+}
+
 function readFaces() {
 	// A fresh install has no data folder yet — that's not an error,
 	// it just means no faces have been created
@@ -121,8 +157,8 @@ function createFace(name, title, theme, instances) {
 	const face = {
 		id: id,
 		// name is how the ADMIN recognises this face. Blank falls back to
-		// the port, which is always unique.
-		name: name && name.trim() ? name.trim() : "Face " + id,
+		// "Face 001": the face's ID, which is always unique.
+		name: name && name.trim() ? name.trim() : defaultFaceName(id),
 		// title is cosmetic — what a theme displays, if it displays one at
 		// all. Blank is fine and means no heading.
 		title: title || "",
@@ -156,7 +192,7 @@ function updateFace(id, changes) {
 
 	// id is fixed — it's the port the face runs on
 	if (changes.name !== undefined) {
-		face.name = changes.name.trim() ? changes.name.trim() : "Face " + face.id;
+		face.name = changes.name.trim() ? changes.name.trim() : defaultFaceName(face.id);
 	}
 	if (changes.title !== undefined) face.title = changes.title;
 	if (changes.theme !== undefined) face.theme = changes.theme;
@@ -307,6 +343,10 @@ module.exports = {
 	findFace,
 	nextDashboardPort,
 	faceIdFromPort,
+	faceNumber,
+	defaultFaceName,
+	faceLabel,
+	portsLine,
 	outportFor,
 	inportFor,
 	faceTakesInput,

@@ -28,7 +28,7 @@ const renderInputFacePage = require("./input-face-page");
 const { renderInputPickerPage } = require("./input-face-page");
 const { attachFontRoute } = require("./font-service");
 const { rememberUiMode } = require("./ui-theme");
-const { inportFor, faceTakesInput } = require("./face-store");
+const { inportFor, faceTakesInput, faceLabel } = require("./face-store");
 
 // Running Inports, keyed by port: { server }
 const runningInputFaces = new Map();
@@ -97,7 +97,7 @@ function startInputFace(faceOrId, maybeFace) {
 
 			res.send(
 				renderInputPickerPage(
-					face.name || `Face ${face.id}`,
+					faceLabel(face),
 					instances.map((instance) => ({
 						label: instance.label || readManifest(instance.module).name,
 						path: `/${instance.id}`

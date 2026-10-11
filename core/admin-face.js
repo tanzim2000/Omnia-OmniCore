@@ -45,12 +45,14 @@ const imageProxy = require("./image-proxy");
 const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
+const omnicoreVersion = require("./version");
 const { refresh } = require("./face-loader");
 const {
 	uiStyles,
 	backButton,
 	rememberUiMode,
 	currentUiMode,
+	versionHtml,
 	UI_MODE_SCRIPT,
 	passwordField,
 	PASSWORD_TOGGLE_SCRIPT,
@@ -301,6 +303,18 @@ const styles = `
 	   module from a face). The same button as everywhere else, in the
 	   danger colour, so it reads as "careful" before anyone reads it. */
 	.glass.glass-danger { color: var(--danger); border-color: var(--danger-border); }
+
+	/* The capsule (.dock, from the shared theme) at the foot of a page,
+	   centred under the segments, with the page's status line under it */
+	.page-dock {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75em;
+		margin: 1.5em auto 0;
+	}
+
+	.page-dock .status { margin: 0; text-align: center; }
 
 	/* The Updates page while an update is being installed: one line
 	   saying what's happening, one quieter line under it saying what to
@@ -1590,7 +1604,7 @@ function startAdminFace() {
 				<button class="version-pill" id="version-pill"
 					title="Updates">
 					${update.updateAvailable ? '<span class="version-dot"></span>' : ""}
-					OmniCore ${escapeHtml(running)}${
+					OmniCore ${versionHtml()}${
 						update.updateAvailable ? " · update ready" : ""
 					}
 				</button>
@@ -2885,15 +2899,24 @@ function startAdminFace() {
 		const last = updateStore.lastResult(running);
 		const offered = Boolean(last.updateAvailable && last.latestVersion);
 
+		// A development build (npm start from a clone) isn't a release:
+		// there's nothing for it to be compared with, and it never started
+		// from an image, so the page leaves out everything about checking
+		// and shows only what's in it. Its version is the source's own.
+		const dev = omnicoreVersion.isDevBuild();
+		const shown = omnicoreVersion.displayVersion();
+
 		// Read, never checked live: opening a page should not cost a
 		// call to GitHub. The button below is how a check happens on
 		// purpose.
 		const [currentNotes, upcomingNotes, since, readiness] = await Promise.all([
-			coreUpdater.fetchChangelogEntry(`v${running}`),
+			dev
+				? Promise.resolve(shown.number ? coreUpdater.localChangelogEntry(shown.number) : null)
+				: coreUpdater.fetchChangelogEntry(`v${running}`),
 			offered
 				? coreUpdater.fetchChangelogEntry(`v${last.latestVersion}`)
 				: Promise.resolve(null),
-			coreUpdater.runningSince(),
+			dev ? Promise.resolve(null) : coreUpdater.runningSince(),
 			offered ? coreUpdater.applyReadiness() : Promise.resolve(null)
 		]);
 
@@ -2904,7 +2927,9 @@ function startAdminFace() {
 
 		const when = (iso) => (iso ? localTime(iso) : "Unknown");
 
-		const status = !last.lastCheckedAt
+		const status = dev
+			? ""
+			: !last.lastCheckedAt
 			? `<p class="lede">No check has run yet.</p>`
 			: !last.lastCheckSucceeded
 			? `<p class="lede">Last check failed: ${escapeHtml(
@@ -2954,10 +2979,13 @@ function startAdminFace() {
 				<div class="field">
 					<strong>Running</strong>
 					<div class="stat-value" style="font-size:1.4em;margin-top:4px">
-						OmniCore ${escapeHtml(running)}
+						OmniCore ${versionHtml()}
 					</div>
 				</div>
-				${status}
+				${
+					dev
+						? ""
+						: `${status}
 				<div class="field">
 					<span class="hint">Last checked: ${when(last.lastCheckedAt)}</span>
 					<span class="hint">Running since: ${when(since)}</span>
@@ -2973,7 +3001,8 @@ function startAdminFace() {
 						<span class="hint" id="progress-hint"></span>
 						<button class="glass glass-block" id="progress-action" hidden></button>
 					</div>
-				</div>
+				</div>`
+				}
 			</div>
 
 			${
@@ -2987,14 +3016,17 @@ function startAdminFace() {
 			}
 
 			${notesSection(
-				`What's in ${running}`,
+				`What's in ${dev ? shown.number || "this build" : running}`,
 				currentNotes,
-				"Release notes for this version couldn't be fetched. A development build has none to fetch."
+				dev
+					? "This build's CHANGELOG.md has no notes for its version."
+					: "Release notes for this version couldn't be fetched."
 			)}
 			</div>
 			</div>`;
 
-		const script = localTimeScript + confirmScript + `
+		// Nothing on a development build's page does anything
+		const script = dev ? "" : localTimeScript + confirmScript + `
 			var checkButton = document.getElementById("check");
 			var applyButton = document.getElementById("apply");
 			var checkStatus = document.getElementById("check-status");
@@ -3632,8 +3664,8 @@ function startAdminFace() {
 
 				return `
 				<a class="row" href="/faces/${face.id}">
-					<strong>${escapeHtml(face.name)}</strong>
-					<span>port ${face.id} · ${count}${
+					<strong>${escapeHtml(faceStore.faceLabel(face))}</strong>
+					<span>${faceStore.portsLine(face)} · ${count}${
 						count === 1 ? " module" : " modules"
 					}</span>
 				</a>`;
@@ -3681,6 +3713,7 @@ function startAdminFace() {
 
 		const count = face.instances.length;
 		const themeName = themeLoader.readManifest(face.theme).name;
+		const faceName = faceStore.faceLabel(face);
 
 		// A face made before v1.19.2 has no notificationMode: dark
 		const noteLight = face.notificationMode === "light";
@@ -3689,8 +3722,8 @@ function startAdminFace() {
 			<div class="bento">
 			<div class="bento-row two">
 				<div class="segment">
-					<h1>${escapeHtml(face.name)}</h1>
-					<p class="lede" style="margin-bottom:14px">Running on port ${face.id}</p>
+					<h1>${escapeHtml(faceName)}</h1>
+					<p class="lede" style="margin-bottom:14px">${faceStore.portsLine(face)}</p>
 					<a class="row" href="/faces/${face.id}/modules">
 					<strong>Modules</strong>
 					<span>${count ? count + (count === 1 ? " module" : " modules") : "None added yet"}</span>
@@ -3703,10 +3736,10 @@ function startAdminFace() {
 				<div class="segment">
 					<div class="field">
 						<label for="name">Name</label>
-					<input type="text" id="name" value="${escapeHtml(face.name)}">
+					<input type="text" id="name" value="${escapeHtml(faceName)}">
 					<div class="help">
 						How you recognise this face here. Blank falls back to
-						Face ${face.id}.
+						${escapeHtml(faceStore.defaultFaceName(face.id))}.
 					</div>
 				</div>
 
@@ -3830,7 +3863,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page(face.name, body, script, "", "/faces"));
+		res.send(page(faceName, body, script, "", "/faces"));
 	});
 
 	app.post("/faces/:id", (req, res) => {
@@ -4255,7 +4288,10 @@ function startAdminFace() {
 		//
 		//   [ name, what the module is, and its widget type picker ]
 		//   [ the module's settings ]  [ the theme's settings for it ]
-		//   [ Save                     |  Remove from this face      ]
+		//                  ( Save  |  Remove )
+		//
+		// Save and Remove are one capsule under the segments (the wizard's
+		// .dock), Remove in red. Remove still asks before doing anything.
 		//
 		// The theme's segment only when the theme has anything to set; the
 		// module's settings then take the whole row.
@@ -4302,16 +4338,14 @@ function startAdminFace() {
 					</div>
 					${themeSegment}
 				</div>
+			</div>
 
-				<div class="bento-row two">
-					<div class="segment segment-actions">
-						<button class="glass glass-block" id="save">Save</button>
-						<p class="status" id="status"></p>
-					</div>
-					<div class="segment segment-actions">
-						<button class="glass glass-block glass-danger" id="remove">Remove from this face</button>
-					</div>
+			<div class="page-dock">
+				<div class="dock">
+					<button type="button" id="save">Save</button>
+					<button type="button" class="danger" id="remove">Remove</button>
 				</div>
+				<p class="status" id="status"></p>
 			</div>`;
 
 		const script = `

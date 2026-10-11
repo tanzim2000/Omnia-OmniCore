@@ -141,3 +141,15 @@ test("the green button: glossy and darker in dark mode, flat with white text in 
 	assert.equal(PALETTES.light.successButtonText, "#fff");
 	assert.equal(PALETTES.light.successButtonShadow, "none");
 });
+
+test("theme: a capsule section can be marked dangerous, red with a red halo", () => {
+	const { uiStyles } = require("../core/ui-theme");
+	const css = uiStyles();
+
+	assert.match(css, /\.dock button\.danger \{ color: var\(--danger\); \}/);
+	assert.match(
+		css,
+		/\.dock button\.danger:hover,\s*\.dock button\.danger:focus-visible \{[^}]*color-mix\(in srgb, var\(--danger\) 55%, transparent\)/
+	);
+	assert.match(css, /\.dock button:disabled \{/, "Save while saving looks pressed-out");
+});
