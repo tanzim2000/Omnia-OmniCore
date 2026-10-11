@@ -94,6 +94,15 @@ body > * { position: relative; z-index: 1; }
 	color: var(--danger-text);
 }
 
+/* A development build, in place of "All systems healthy": quiet and
+   neutral, the same muted outline as the `dev` badge elsewhere, since
+   it's a fact about this build rather than good or bad news */
+.health.dev {
+	background: var(--hover-subtle);
+	border: 1px solid var(--glass-border);
+	color: var(--fg-muted);
+}
+
 .health svg { flex-shrink: 0; }
 
 /* Card row ----------------------------------------------------------- */

@@ -138,6 +138,17 @@ function pushToFace(faceId, eventName, data, options) {
 	return sent;
 }
 
+// How many displays are showing this face right now: every OmniView and
+// every browser tab that has the face open. Each one holds an /events
+// connection open for as long as it's showing the face, so counting those
+// connections is counting the screens -- nothing has to report in
+// separately. A screen that's switched off or has lost its network drops
+// out of the count once its connection closes.
+function displayCount(faceId) {
+	const listeners = connections.get(faceId);
+	return listeners ? listeners.size : 0;
+}
+
 // Everything Core injects into a page, in one block: the reload
 // listener, the notification listener, and the overlay that draws one.
 //
@@ -157,4 +168,4 @@ function clientBundle(face) {
 	);
 }
 
-module.exports = { attachEvents, pushToFace, CLIENT_SCRIPT, clientBundle };
+module.exports = { attachEvents, pushToFace, displayCount, CLIENT_SCRIPT, clientBundle };

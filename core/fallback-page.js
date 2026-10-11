@@ -14,6 +14,7 @@
 
 const { uiStyles } = require("./ui-theme");
 const notifications = require("./notifications");
+const { CLIENT_SCRIPT } = require("./face-events");
 
 // `face` is the face this screen stands in for, so its notifications
 // come out in that face's light or dark.
@@ -83,6 +84,11 @@ ${notifications.overlayStyles(face && face.notificationMode)}
 		}
 	</script>
 	<script>${notifications.OVERLAY_SCRIPT}</script>
+	<!-- The same live connection a theme's page gets. It's what lets this
+	     screen swap itself for the theme the moment one is picked in
+	     Settings, and what the face's page in Settings counts as a display
+	     showing this face. Before v1.19.5 this screen had neither. -->
+	${CLIENT_SCRIPT}
 </body>
 </html>`;
 }

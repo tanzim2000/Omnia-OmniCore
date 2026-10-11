@@ -33,8 +33,18 @@ function themeDir(themeId) {
 	return path.join(themesDir(), themeId);
 }
 
-// A theme's name and description, falling back to its folder name
+// A theme's name and description, falling back to its folder name.
+//
+// A face can have no theme at all: one made before it was given one, or
+// whose theme was picked later in the wizard and never saved. That's
+// answered here, once, as "No theme", rather than every page that shows a
+// face's theme having to remember to check first -- before v1.19.5 the
+// face's own page didn't, and crashed instead of opening.
 function readManifest(themeId) {
+	if (!themeId) {
+		return { id: null, name: "No theme", description: "" };
+	}
+
 	const manifestPath = path.join(themeDir(themeId), "theme.json");
 
 	if (!fs.existsSync(manifestPath)) {
@@ -120,6 +130,11 @@ function withoutWidgetTags(fields) {
 
 // What settings a theme accepts. Empty list if it has none.
 function readSchema(themeId) {
+	// No theme, nothing to configure (see readManifest above)
+	if (!themeId) {
+		return [];
+	}
+
 	const schemaPath = path.join(themeDir(themeId), "settings.json");
 
 	if (!fs.existsSync(schemaPath)) {
@@ -209,6 +224,11 @@ function cleanConfig(themeId, values) {
 // widget type that module is showing: a theme gives a tile room, and the
 // module decides what fits in it, through richness.
 function readInstanceSchema(themeId) {
+	// No theme, nothing to configure (see readManifest above)
+	if (!themeId) {
+		return [];
+	}
+
 	const schemaPath = path.join(themeDir(themeId), "instance-settings.json");
 
 	if (!fs.existsSync(schemaPath)) {

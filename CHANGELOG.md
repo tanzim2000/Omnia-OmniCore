@@ -1,5 +1,28 @@
 # Changelog
 
+## v1.19.5
+
+A face's page that says what the face is, tidier Faces and Updates pages, and a face with no theme that opens
+
+### Changed
+
+- **A face's page tells you what the face is.** Its first box is split in two. The top one lists the face's facts: its **Face ID** (001), its **Outport** (4001), what it's **Showing on** (how many screens have it open right now, OmniViews and browser tabs alike, kept current every few seconds while the page is open), its **Inport** (2001), and the Inport's **branches** (one for each module on the face that takes input). A face with nothing taking input says "Inport: None" instead. The box under it holds the Modules and Theme buttons.
+- **The Faces page has no boxes around its heading or its button.** "Faces" is the page's heading, like on Settings and Updates, the faces are the list under it, and **Create a new face** sits at the foot of the page where the Save | Remove capsule sits on other pages, at the same width, as an ordinary button.
+- **On the Updates page, release notes scroll inside their own box**, so a long changelog doesn't make the page as long as itself, and the version and its buttons stay in view.
+- **A development build's Updates page is one column**, whatever the screen: the Running box on top and the notes under it. A release's page is side by side, as before.
+- **A development build's About page says "Development build"** where a release says "All systems healthy", and the OmniCore card shows just the number ("1.19.5"), centred like the cards beside it. If something is actually wrong, the red "Something isn't right" still shows instead, dev build or not.
+- **The setup steps in the README point at the latest release**, not at v1.0.0.
+
+### Fixed
+
+- **A face with no theme couldn't be opened in Settings.** Its page crashed. It opens now and says "No theme"; its theme page says the face hasn't been given one yet and offers **Choose a theme**.
+- **The "pick a theme" screen didn't update itself.** A display showing a face with no theme kept showing the picker after a theme was chosen in Settings, until someone reloaded it. It now swaps itself for the theme, the same way a theme's page redraws itself when anything about its face changes.
+
+### Notes
+
+- **"All systems healthy"** is the same check Docker uses to decide whether OmniCore is alive (`/health`): can OmniCore read its list of faces. It says nothing about modules, the network or disk space.
+- **Nothing new in the shared theme** (`core/ui-theme.js`): the new pieces (`.facts`, `.bento-column`, `.dock-button`) belong to the Settings pages, in `core/admin-face.js`.
+
 ## v1.19.4
 
 Faces by their number, a dev build that says what it is, and fonts that change when you pick them

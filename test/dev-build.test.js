@@ -167,7 +167,9 @@ test("faces: the pages say Face 001 and Outport 4001, never Face 4001", async ()
 
 	const page = await get("/faces/4001");
 	assert.ok(page.html.includes("<h1>Face 001</h1>"));
-	assert.ok(page.html.includes("Outport 4001"));
+	// Since v1.19.5 the Outport is one of the face's facts, a label and
+	// its value, rather than a line reading "Outport 4001"
+	assert.match(page.html, /<span class="fact-label">Outport<\/span>\s*<span class="fact-value"[^>]*>4001<\/span>/);
 	assert.ok(!page.html.includes("Running on port"));
 	assert.ok(page.html.includes('id="name" value="Face 001"'));
 	assert.match(page.html, /Blank falls back to\s+Face 001\./);
@@ -192,8 +194,10 @@ test("dev build: the Updates page has nothing about checking, and shows this bui
 		const { html } = await get("/updates");
 
 		// Looked for as page text and markup, not as bare words: the
-		// shared stylesheet mentions "Check now" in a comment
-		for (const gone of ["Last checked:", "Running since:", "No check has run yet", 'id="check"', ">Check now<", 'id="apply"', "Development build"]) {
+		// shared stylesheet mentions "Check now" in a comment, and this
+		// build's own release notes (shown on this page) mention
+		// "Development build", which is the About page's pill
+		for (const gone of ["Last checked:", "Running since:", "No check has run yet", 'id="check"', ">Check now<", 'id="apply"', ">Development build<"]) {
 			assert.ok(!html.includes(gone), `${gone} should not be on a dev build's page`);
 		}
 

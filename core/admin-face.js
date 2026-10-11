@@ -35,7 +35,8 @@ const {
 	readSchema,
 	applyDefaults,
 	cleanConfig,
-	widgetTypeOf
+	widgetTypeOf,
+	readInputSchema
 } = require("./module-config");
 const themeLoader = require("./theme-loader");
 const priority = require("./priority");
@@ -47,6 +48,7 @@ const { getLocation, searchCities } = require("./location-service");
 const faceStore = require("./face-store");
 const omnicoreVersion = require("./version");
 const { refresh } = require("./face-loader");
+const { displayCount } = require("./face-events");
 const {
 	uiStyles,
 	backButton,
@@ -295,6 +297,32 @@ const styles = `
 	   would otherwise be mostly empty space. */
 	.bento-row.top { align-items: start; }
 
+	/* Two or more segments stacked in one column of a .bento-row, so a
+	   column can hold a pair of segments beside one taller one (a face's
+	   page: its facts and its links on the left, its name on the right) */
+	.bento-column { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+	/* A segment's last row shouldn't leave a gap under itself */
+	.segment > a.row:last-child { margin-bottom: 0; }
+
+	/* A face's facts: a label on the left, its value on the right, an
+	   optional quieter line under the label explaining it */
+	.facts { display: flex; flex-direction: column; margin-top: 10px; }
+
+	.fact {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		column-gap: 1em;
+		align-items: baseline;
+		padding: 0.6em 0;
+		border-top: 1px solid var(--segment-border);
+	}
+
+	.fact:first-child { border-top: none; }
+	.fact-label { color: var(--fg-muted); font-size: 0.9em; }
+	.fact-value { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+	.fact .hint { grid-column: 1 / -1; margin: 2px 0 0 0; }
+
 	/* Everything a segment does at the end of a form: Save and its message,
 	   and anything after it, with even space between them */
 	.segment-actions { display: flex; flex-direction: column; gap: 12px; }
@@ -315,6 +343,15 @@ const styles = `
 	}
 
 	.page-dock .status { margin: 0; text-align: center; }
+
+	/* A page whose only action is one button: it sits where the capsule
+	   would, at the same width, but keeps the ordinary glass button's
+	   shape -- a capsule with one section in it would just be a pill */
+	.dock-button { width: calc(100vw - 3em); max-width: 26em; }
+
+	@media (orientation: landscape) {
+		.dock-button { width: 30em; max-width: 30em; }
+	}
 
 	/* The Updates page while an update is being installed: one line
 	   saying what's happening, one quieter line under it saying what to
@@ -444,6 +481,24 @@ const styles = `
 
 	/* Explanatory text under a control — quieter than the label it
 	   belongs to, for the "why" rather than the "what" */
+	/* Release notes scroll inside their own segment rather than making
+	   the page as long as the longest changelog: the version and its
+	   buttons beside them stay in view. As tall as the window allows,
+	   never shorter than a comfortable read. */
+	.changelog {
+		max-height: max(18em, calc(100vh - 20em));
+		overflow-y: auto;
+		padding-right: 0.75em;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.changelog::-webkit-scrollbar { width: 8px; }
+	.changelog::-webkit-scrollbar-track { background: transparent; }
+	.changelog::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 0.25em; }
+
+	.changelog > :first-child { margin-top: 0; }
+
 	.changelog h3 { font-size: 14px; margin: 16px 0 6px 0; opacity: 0.75; }
 	.changelog ul { margin: 0; padding-left: 1.25em; }
 	.changelog li { font-size: 14px; line-height: 1.65; margin-bottom: 8px; }
@@ -724,6 +779,60 @@ function escapeHtml(text) {
 // screen that is genuinely a root. `backLabel`, when given, replaces
 // the default arrow with text and switches to the pill shape — see
 // ui-theme.js's backButton().
+// "1 screen", "3 screens", "No screens right now"
+function screensText(count) {
+	if (!count) return "No screens right now";
+	return count + (count === 1 ? " screen" : " screens");
+}
+
+// What a face IS, for the top of its page: its number, its two ports,
+// how many screens are showing it, and how its Inport is laid out.
+//
+// The Inport's "branches": its root (2001/) is the picker, and every
+// module instance that takes input gets a branch of its own under it
+// (2001/<instance>). So the branch count is the number of instances
+// that take input. A face with none has no Inport listening at all,
+// which is said once instead of as two empty lines.
+//
+// `id` marks the value the page keeps up to date by itself.
+function faceFacts(face) {
+	const branches = face.instances.filter(
+		(instance) => readInputSchema(instance.module).length > 0
+	).length;
+
+	const facts = [
+		{ label: "Face ID", value: faceStore.faceNumber(face.id) },
+		{ label: "Outport", value: String(faceStore.outportFor(face.id)) },
+		{
+			label: "Showing on",
+			value: screensText(displayCount(face.id)),
+			hint: "OmniViews and browser tabs with this face open",
+			id: "display-count"
+		}
+	];
+
+	if (branches) {
+		facts.push(
+			{ label: "Inport", value: String(faceStore.inportFor(face.id)) },
+			{
+				label: "Inport branches",
+				value: String(branches),
+				hint: branches === 1
+					? "One module takes input, so its controls open straight away"
+					: "One per module that takes input, picked from the Inport's first page"
+			}
+		);
+	} else {
+		facts.push({
+			label: "Inport",
+			value: "None",
+			hint: "Nothing on this face takes input, so no Inport is listening"
+		});
+	}
+
+	return facts;
+}
+
 // Turns a changelog entry into safe HTML.
 //
 // Deliberately not a Markdown library: this handles exactly the three
@@ -2958,6 +3067,14 @@ function startAdminFace() {
 					(readiness && readiness.reason) || "This OmniCore can't install updates itself."
 			  )}</span>`;
 
+		// Side by side on a release (two segments, or three when a newer
+		// version's notes are shown too). On a development build always
+		// one above the other, whatever the screen: there's no checking to
+		// show beside the notes, so the Running segment is only a line, and
+		// a column of its own next to a long changelog would be mostly
+		// empty space.
+		const layout = dev ? "bento-row" : `bento-row ${offered ? "three" : "two"} top`;
+
 		const notesSection = (heading, notes, fallback) => `
 			<div class="segment">
 				<h2>${escapeHtml(heading)}</h2>
@@ -2974,7 +3091,7 @@ function startAdminFace() {
 			</div>
 
 			<div class="bento">
-			<div class="bento-row ${offered ? "three" : "two"} top">
+			<div class="${layout}">
 			<div class="segment">
 				<div class="field">
 					<strong>Running</strong>
@@ -3672,19 +3789,26 @@ function startAdminFace() {
 			})
 			.join("");
 
+		// The heading sits on the page, the faces are the list, and the one
+		// thing to do here sits where a page's actions always sit: at its
+		// foot, the width of the capsule (.dock) on other pages. No segment
+		// wraps any of them -- a box around a single heading, or around a
+		// single button, is a box with nothing to group.
 		const body = `
+			<div class="settings-head">
+				<h1>Faces</h1>
+			</div>
+
 			<div class="bento">
-				<div class="segment">
-					<h1 style="margin-bottom:14px">Faces</h1>
-					<div class="list">
-						${faces || '<div class="empty">No faces yet.</div>'}
-					</div>
+				<div class="list">
+					${faces || '<div class="empty">No faces yet.</div>'}
 				</div>
-				<div class="segment">
-					<button class="glass glass-block" onclick="goToWizard()">
-						Create a new face
-					</button>
-				</div>
+			</div>
+
+			<div class="page-dock">
+				<button class="glass dock-button" onclick="goToWizard()">
+					Create a new face
+				</button>
 			</div>`;
 
 		// The wizard lives on its own face now (3999), so this has to be
@@ -3718,20 +3842,38 @@ function startAdminFace() {
 		// A face made before v1.19.2 has no notificationMode: dark
 		const noteLight = face.notificationMode === "light";
 
+		// The face's facts, each one a label and its value (see .facts)
+		const facts = faceFacts(face)
+			.map(
+				(fact) => `
+					<div class="fact">
+						<span class="fact-label">${escapeHtml(fact.label)}</span>
+						<span class="fact-value"${fact.id ? ` id="${fact.id}"` : ""}>${escapeHtml(fact.value)}</span>
+						${fact.hint ? `<span class="hint">${escapeHtml(fact.hint)}</span>` : ""}
+					</div>`
+			)
+			.join("");
+
+		// Left: what this face IS (its facts), then where to change what
+		// it shows (Modules, Theme). Right: what it's called.
 		const body = `
 			<div class="bento">
-			<div class="bento-row two">
-				<div class="segment">
-					<h1>${escapeHtml(faceName)}</h1>
-					<p class="lede" style="margin-bottom:14px">${faceStore.portsLine(face)}</p>
-					<a class="row" href="/faces/${face.id}/modules">
-					<strong>Modules</strong>
-					<span>${count ? count + (count === 1 ? " module" : " modules") : "None added yet"}</span>
-				</a>
-					<a class="row" href="/faces/${face.id}/theme">
-						<strong>Theme</strong>
-						<span>${escapeHtml(themeName)}</span>
-					</a>
+			<div class="bento-row two top">
+				<div class="bento-column">
+					<div class="segment">
+						<h1>${escapeHtml(faceName)}</h1>
+						<div class="facts">${facts}</div>
+					</div>
+					<div class="segment">
+						<a class="row" href="/faces/${face.id}/modules">
+							<strong>Modules</strong>
+							<span>${count ? count + (count === 1 ? " module" : " modules") : "None added yet"}</span>
+						</a>
+						<a class="row" href="/faces/${face.id}/theme">
+							<strong>Theme</strong>
+							<span>${escapeHtml(themeName)}</span>
+						</a>
+					</div>
 				</div>
 				<div class="segment">
 					<div class="field">
@@ -3789,6 +3931,24 @@ function startAdminFace() {
 			</div>`;
 
 		const script = `
+			// "Showing on" stays current while this page is open: a screen
+			// turned on or off shows up here within a few seconds, without
+			// reloading. Asking every five seconds costs one tiny request.
+			(function () {
+				var displays = document.getElementById("display-count");
+				if (!displays) return;
+
+				setInterval(async function () {
+					try {
+						var response = await fetch("/faces/${face.id}/displays");
+						if (!response.ok) return;
+						displays.textContent = (await response.json()).text;
+					} catch (error) {
+						// OmniCore restarting, say: keep the last number
+					}
+				}, 5000);
+			})();
+
 			document.getElementById("save").addEventListener("click", async function () {
 				const button = this;
 				const status = document.getElementById("status");
@@ -3866,6 +4026,20 @@ function startAdminFace() {
 		res.send(page(faceName, body, script, "", "/faces"));
 	});
 
+	// How many screens are showing a face right now, for its page to keep
+	// its "Showing on" line current without reloading
+	app.get("/faces/:id/displays", (req, res) => {
+		const face = faceStore.findFace(Number(req.params.id));
+
+		if (!face) {
+			res.status(404).json({ error: "No such face" });
+			return;
+		}
+
+		const count = displayCount(face.id);
+		res.json({ count, text: screensText(count) });
+	});
+
 	app.post("/faces/:id", (req, res) => {
 		const id = Number(req.params.id);
 
@@ -3907,11 +4081,13 @@ function startAdminFace() {
 				<div class="segment">
 					<h1>${escapeHtml(manifest.name)}</h1>
 					<p class="lede" style="margin-bottom:14px">${escapeHtml(
-						manifest.description || "The theme this face is using"
+						face.theme
+							? manifest.description || "The theme this face is using"
+							: "This face hasn't been given a theme yet, so its screen shows OmniCore's own page"
 					)}</p>
 					<a class="row" href="/faces/${face.id}/theme/change">
-						<strong>Change theme</strong>
-						<span>Use a different theme on this face</span>
+						<strong>${face.theme ? "Change theme" : "Choose a theme"}</strong>
+						<span>${face.theme ? "Use a different theme on this face" : "Pick the theme this face shows"}</span>
 					</a>
 				</div>
 				<div class="segment">
@@ -3977,6 +4153,13 @@ function startAdminFace() {
 
 		if (!face) {
 			res.status(404).json({ error: "No such face" });
+			return;
+		}
+
+		// No theme means no theme settings to save, and nowhere to keep
+		// them: they're stored under the theme's name
+		if (!face.theme) {
+			res.status(409).json({ error: "This face has no theme yet" });
 			return;
 		}
 

@@ -24,6 +24,7 @@ const path = require("path");
 const paths = require("./paths");
 
 const { uiStyles, rememberUiMode, versionHtml } = require("./ui-theme");
+const omnicoreVersion = require("./version");
 const { portLinkScript, escapeHtml } = require("./face-links");
 const systemInfo = require("./system-info");
 const updateStore = require("./update-store");
@@ -45,6 +46,13 @@ const HEALTHY_RING = `<svg width="18" height="18" viewBox="0 0 36 36" aria-hidde
 		stroke-dasharray="94.2 94.2" stroke-linecap="round" transform="rotate(-90 18 18)"/>
 	<path d="M12 18l4 4 8-8" stroke="#3ed67a" stroke-width="2.5" fill="none"
 		stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+// A pair of code brackets: "this is running from the source"
+const DEV_MARK = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+	stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+	stroke-linejoin="round" aria-hidden="true">
+	<path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/>
 </svg>`;
 
 const OS_ICON = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none"
@@ -124,11 +132,40 @@ function versionCard(info) {
 		? '<span class="update-dot" title="An update is available"></span>'
 		: "";
 
+	// A development build is announced once, at the top of the page
+	// (see healthPill), so the card shows only the number and sits
+	// centred like the cards beside it. Without a number at all, the
+	// `dev` mark is all there is to show, so it stays.
+	const shown = omnicoreVersion.displayVersion();
+	const value = shown.dev && shown.number ? escapeHtml(shown.number) : versionHtml();
+
 	return `
 		<div class="card">
 			<div class="card-label">OmniCore${dot}</div>
-			<div class="card-value">${versionHtml()}</div>
+			<div class="card-value">${value}</div>
 		</div>`;
+}
+
+// The pill under the wordmark.
+//
+// "All systems healthy" is the same check GET /health answers, the one
+// Docker uses to decide whether OmniCore is alive: can it read its own
+// list of faces. On a release that's all this pill says.
+//
+// A development build says so here instead, since that's the first
+// thing anyone looking at the page should know about it. A failing
+// check still wins over that: a real problem is never hidden behind a
+// label.
+function healthPill(info) {
+	if (!info.healthy) {
+		return `<div class="health bad">Something isn't right</div>`;
+	}
+
+	if (omnicoreVersion.isDevBuild()) {
+		return `<div class="health dev">${DEV_MARK} Development build</div>`;
+	}
+
+	return `<div class="health ok">${HEALTHY_RING} All systems healthy</div>`;
 }
 
 function renderPage(info) {
@@ -136,9 +173,7 @@ function renderPage(info) {
 		? `${info.runtime.name}${info.runtime.version ? " v" + info.runtime.version : ""}`
 		: null;
 
-	const health = info.healthy
-		? `<div class="health ok">${HEALTHY_RING} All systems healthy</div>`
-		: `<div class="health bad">Something isn't right</div>`;
+	const health = healthPill(info);
 
 	return `<!DOCTYPE html>
 <html>
