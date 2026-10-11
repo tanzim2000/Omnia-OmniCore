@@ -149,7 +149,7 @@ until the Marketplace puts something in them.
 | `face-store.js`            | Reads/writes `data/faces.json`. Creating faces, instances, port assignment. The only thing that touches face data on disk. Also how a face is named for people: by its ID ("Face 001"), never its port, with its ports written out as "Outport 4001 · Inport 2001".                                                                                                                                                                                                                                                                                                                                              |
 | `face-loader.js`           | Starts a face as an Express server on its port. Owns `/identity`, `/api/:instanceId`, theme serving, client-script injection.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `face-events.js`           | Server-Sent Events. Pushes `face-changed` to displays. Holds the client script that gets injected into theme pages (and the fallback screen). Counts a face's open connections, which is how many screens are showing it (`displayCount`, the "Showing on" line on a face's page).                                                                                                                                                                                                                                                                                                                               |
-| `notifications.js`         | Notifications: who receives one, how long it stays, and the overlay that draws it (source box, Markdown body, QR pane for a link, a capped waiting line).                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `notifications.js`         | Notifications: who receives one, how long it stays, and the overlay that draws it (frosted boxes: the source on top, the Markdown body, a QR box for each of up to two links, a capped waiting line).                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `markdown.js`              | The small Markdown subset a notification's description is rendered from, tables included. Escapes everything first; no links.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `schema-fields.js`         | Cleans a list of fields read from a module's or theme's JSON: drops a `null`, a field with no key, a choice that isn't text. Used wherever those files are read.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `qr.js`                    | Turns a string into a QR code SVG. Used for `qr` content blocks and for a notification's link.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -943,11 +943,11 @@ the first is still stopping (fixed in 1.19.0).
 
 **What a background run's `omni` adds** to the usual one:
 
-| Member                                                   | What it does                                                                       |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `signal`                                                 | An `AbortSignal`, aborted when the instance stops (for the plain `fetch`)          |
-| `notify({ source, title, description, priority, link })` | Raises a notification on every display showing this face (`core/notifications.js`) |
-| `connections.join({ key, interest, open, onEvent })`     | Joins a shared connection -- see below; returns `{ leave }`                        |
+| Member                                                          | What it does                                                                       |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `signal`                                                        | An `AbortSignal`, aborted when the instance stops (for the plain `fetch`)          |
+| `notify({ source, title, description, priority, link, links })` | Raises a notification on every display showing this face (`core/notifications.js`) |
+| `connections.join({ key, interest, open, onEvent })`            | Joins a shared connection -- see below; returns `{ leave }`                        |
 
 `notify` exists only here. A tile call runs on every poll, so a
 notification raised from one would repeat every few seconds. A
@@ -960,13 +960,18 @@ lists, a subtitle, tables -- `core/markdown.js`), with everything the
 module wrote escaped before any Markdown is read, so the overlay can insert
 the result as markup. A table is cut to 6 columns and 11 rows (header
 included) and its text set at half of Core's font size. Links are
-deliberately not part of it: a `link: { url, title }` is shown instead as a
-QR code drawn by `core/qr.js`, in a pane beside the message (below it on a
-portrait screen). The overlay shows one notification at a time and keeps
+deliberately not part of it: a `link` (an address or `{ url, title }`),
+or up to two in `links`, is shown instead as QR codes drawn by
+`core/qr.js`, one box each, stacked beside the message (side by side under
+it on a portrait screen), each with its address on one line under the code.
+`readLinks` puts `link` first, drops what can't be shown and repeats, and
+stops at two (`MOST_LINKS`); the payload carries `links`, and `link` as the
+first of them for anything written before there could be two. The overlay shows one notification at a time and keeps
 at most ten waiting; past that the oldest waiting are dropped, and the next
 one shown says how many.
 
-Every notification has a source box on top saying where it came from.
+Every notification has a source box on top saying where it came from,
+drawn like a page's heading (light weight, 1.75em).
 `background.js` passes the module's name with every `notify`, and that's
 what shows unless the module gives a `source` of its own (ntfy gives its
 server's address). A module can't leave the box empty.
@@ -979,6 +984,14 @@ page has none of the Default UI's. Per face, not per browser like the rest
 of the Default UI, because a face's screen is usually one nobody signs in
 on. Emoji fonts are always at the end of its font lists. Theme
 faces serve `/ui-font.woff2` for this, like OmniCore's own pages.
+
+Its boxes are frosted glass rather than the Default UI's segments:
+see-through and blurred, tinted a little black in dark mode and a little
+grey in light (`NOTE_GLASS`), with a thin border and no glow or sheen. An
+OmniCore page sits on a plain background, but a notification sits on
+whatever a theme drew, so it needs a tint of its own to stay readable over
+a photo, and nothing in it can be pressed, so it has none of a button's
+glow.
 
 **`omni.memory`** is how the two halves of one instance meet. The tile
 function and the background run are separate calls; both are handed the

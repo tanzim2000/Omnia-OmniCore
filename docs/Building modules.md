@@ -663,11 +663,11 @@ and the instance counts as still starting.
 **The `omni` that `start` gets** has everything your tile function's
 does, plus three things only background work has any use for:
 
-| Member                                                   | What it does                                                                                                                                                                           |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `signal`                                                 | Aborted the moment this instance stops. Pass it to the plain `fetch(url, { signal: omni.signal })` -- not `omni.fetch`, which is shared and cached -- and that request ends by itself. |
-| `notify({ source, title, description, priority, link })` | Shows a notification on every display showing this face (a browser tab included). Priority 1 to 5 sets how long it stays up. See below for the rest.                                   |
-| `connections.join({ ... })`                              | Joins a connection shared with your module's other instances on the same server. See below.                                                                                            |
+| Member                                                          | What it does                                                                                                                                                                           |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `signal`                                                        | Aborted the moment this instance stops. Pass it to the plain `fetch(url, { signal: omni.signal })` -- not `omni.fetch`, which is shared and cached -- and that request ends by itself. |
+| `notify({ source, title, description, priority, link, links })` | Shows a notification on every display showing this face (a browser tab included). Priority 1 to 5 sets how long it stays up. See below for the rest.                                   |
+| `connections.join({ ... })`                                     | Joins a connection shared with your module's other instances on the same server. See below.                                                                                            |
 
 Your tile function doesn't get `notify`. It runs every time a display
 polls, so anything it raised would be raised again every few seconds.
@@ -685,13 +685,18 @@ columns and 11 rows, the header counting as one; anything past that is
 left off, and a line under the table says how much was. Write a `|` that
 belongs inside a cell as `\|`.
 
-Nothing on a display can be clicked, so to point somewhere pass
-`link: { url, title }` instead: the overlay shows a QR code for it beside
-the message, with the address printed underneath. Only `http` and `https`
-links are shown, and never one with a username and password in it.
+Nothing on a display can be clicked, so to point somewhere pass a link
+instead: the overlay shows a QR code for it beside the message, with the
+address printed underneath on one line (cut short with "..." if it's too
+long to fit). A link is an address, `"https://..."`, or `{ url, title }`;
+the title is kept but isn't shown on screen. Pass `link` for one, or
+`links: [ ... ]` for up to two, which stack one above the other (two
+needs OmniCore 1.19.7; an older one shows only `link`). The same address
+twice is shown once. Only `http` and `https` links are shown, and never one
+with a username and password in it.
 
-**Where it came from.** Every notification has a small box on top saying
-where it's from. OmniCore fills it with your module's name. Pass
+**Where it came from.** Every notification has a box on top saying where
+it's from, in large letters like a page's heading. OmniCore fills it with your module's name. Pass
 `source` -- a short line of plain text -- to say something more useful
 than that: ntfy names the server it heard the message on, `ntfy.sh`. It's
 read by everyone in the room, so never put anything private in it, nor in
@@ -703,7 +708,10 @@ omni.notify({
   title: "Build failed",
   description: "**main** is red after `a1b2c3`",
   priority: 5,
-  link: { url: "https://github.com/me/app/actions", title: "Open the build" },
+  links: [
+    "https://github.com/me/app/actions",
+    "https://github.com/me/app/commit/a1b2c3",
+  ],
 });
 ```
 

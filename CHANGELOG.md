@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.19.7
+
+Notifications in frosted glass, with room for two links, and a tidier face page
+
+### Changed
+
+- **A notification is laid out like a page.** The module's name sits on top in its own box, in large light letters like a page's heading, instead of a small bold bar. Under it are the message on the left, with its title in bold and its text, lists and tables lined up on the left rather than centred, and its QR codes on the right (under the message, side by side, on a screen taller than it is wide).
+- **Its boxes are frosted glass.** Whatever is on the screen shows through them, blurred, with no glow and no shine across the top. In dark mode the glass is tinted a little black, in light mode a little grey, so the text stays readable over a bright picture. The screen behind is still blurred.
+- **A QR box is just the code and its address.** The title above the code is gone, and the address under it stays on one line: one too long to fit ends in "..." instead of wrapping. It's still plain text, nothing to click.
+- **A face's page has two columns that end level.** Notifications moved up under the Name and Title box, so there's no row of its own across the bottom any more. The Dark and Light buttons grow to fill their box and sit in the middle of it.
+- **The Modules button is now Widgets** ("8 widgets"), in a box titled **Manage resources** with the Theme button, both a little taller. Only this button's wording changed; the page it opens is the same.
+
+### Added
+
+- **A notification can carry two links.** A module passes `links: [ ... ]` (or `link` and `links` together), and each gets its own QR box, stacked one above the other. The same address twice is shown once, and past two the rest are left off. `link` on its own works as before. Documented in `docs/Building modules.md`.
+
 ## v1.19.6
 
 The Welcome page shows every face, and the Marketplace says what a module does before you install it

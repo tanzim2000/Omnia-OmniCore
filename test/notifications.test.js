@@ -1,6 +1,8 @@
 // test/notifications.test.js
 // What a notification can carry: the Markdown subset its description is
-// rendered from, and the link shown beside it as a QR code.
+// rendered from, and the links (up to two) shown beside it as QR codes.
+// And how the overlay draws it (v1.19.7): frosted boxes, one QR box per
+// link, the address on one line.
 //
 // The rendering is checked on what it produces, not on how: every case
 // below is something a module could really send. The escaping cases
@@ -258,8 +260,12 @@ test("notify: the payload carries the rendered description and the link", () => 
 	assert.equal(sent[0].link.url, "https://example.com/report");
 	assert.equal(sent[0].seconds, 45);
 
+	assert.equal(sent[0].links.length, 1, "one link asked for, one carried");
+	assert.equal(sent[0].links[0], sent[0].link, "link is the first of links");
+
 	assert.equal(sent[1].html, "");
 	assert.equal(sent[1].link, null, "no link means the plain single card");
+	assert.deepEqual(sent[1].links, []);
 
 	assert.equal(sent[2].html, "<p>|||<br>---</p>");
 });
@@ -271,4 +277,135 @@ test("overlay: the waiting line is capped and says how many were skipped", () =>
 	assert.match(notifications.OVERLAY_SCRIPT, /earlier notifications skipped/);
 	assert.ok(!/innerHTML = note\.(title|description)/.test(notifications.OVERLAY_SCRIPT),
 		"title and plain description are only ever set as text");
+});
+// --- Two links (v1.19.7) ----------------------------------------------------
+
+test("links: link first, then links, each shown once, two at most", () => {
+	const urls = (message) => notifications.readLinks(message).map((link) => link.url);
+
+	assert.deepEqual(urls({ link: "https://a.example/", links: ["https://b.example/"] }), [
+		"https://a.example/",
+		"https://b.example/"
+	]);
+
+	// `links` alone is enough, and strings or { url, title } both work
+	assert.deepEqual(urls({ links: [{ url: "https://a.example/", title: "A" }, "https://b.example/"] }), [
+		"https://a.example/",
+		"https://b.example/"
+	]);
+
+	// The same address twice is one QR code, not two identical ones
+	assert.deepEqual(urls({ link: "https://a.example/", links: ["https://a.example/", "https://b.example/"] }), [
+		"https://a.example/",
+		"https://b.example/"
+	]);
+
+	// Two at most: a third would crowd out the message
+	assert.equal(notifications.MOST_LINKS, 2);
+	assert.equal(urls({ links: ["https://a.example/", "https://b.example/", "https://c.example/"] }).length, 2);
+
+	// One that can't be shown doesn't use up a place: the next one gets it
+	assert.deepEqual(urls({ links: ["javascript:alert(1)", "https://b.example/"] }), ["https://b.example/"]);
+
+	// Nothing, or `links` that isn't a list: no links, and no error
+	assert.deepEqual(notifications.readLinks(undefined), []);
+	assert.deepEqual(notifications.readLinks({ title: "x" }), []);
+	assert.deepEqual(notifications.readLinks({ links: "https://a.example/" }), []);
+});
+
+test("links: notify carries both to the screen", () => {
+	resetState();
+
+	const sent = [];
+	const original = faceEvents.pushToFace;
+	faceEvents.pushToFace = (faceId, event, note) => {
+		sent.push(note);
+		return 1;
+	};
+
+	try {
+		notifications.notify(4001, {
+			title: "Backup finished",
+			links: ["https://ntfy.sh/backups", { url: "https://home.lan/log", title: "Log" }]
+		});
+	} finally {
+		faceEvents.pushToFace = original;
+	}
+
+	assert.deepEqual(sent[0].links.map((link) => link.url), ["https://ntfy.sh/backups", "https://home.lan/log"]);
+	assert.ok(sent[0].links.every((link) => link.svg.startsWith("<svg")), "Core drew both codes");
+	assert.equal(sent[0].link.url, "https://ntfy.sh/backups");
+});
+
+test("overlay: one QR box per link, its address set as text, no title above it", () => {
+	const script = notifications.OVERLAY_SCRIPT;
+
+	// The column is emptied and refilled for every notification, with a
+	// box for each link, never more than two
+	assert.ok(script.includes('class="omni-note-links"'));
+	assert.match(script, /column\.innerHTML = ""/);
+	assert.match(script, /\.slice\(0, 2\)/);
+	assert.match(script, /box\.className = "omni-note omni-note-link"/);
+
+	// The address is text; only Core's own SVG goes in as markup
+	assert.match(script, /address\.textContent = link\.url/);
+	assert.match(script, /code\.innerHTML = link\.svg/);
+
+	// The QR box says nothing but its address: no title line
+	assert.ok(!script.includes("omni-note-link-title"));
+	assert.ok(!notifications.overlayStyles().includes("omni-note-link-title"));
+
+	// A notification from before v1.19.7 has only `link`; it still shows
+	assert.match(script, /note\.link \? \[note\.link\] : \[\]/);
+});
+
+// The CSS of one rule in the overlay, comments taken out
+function overlayRule(mode, selector) {
+	const css = notifications.overlayStyles(mode).replace(/\/\*[\s\S]*?\*\//g, "");
+	const at = css.search(new RegExp("\\n\\t" + selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " \\{"));
+	assert.notEqual(at, -1, selector + " has a rule");
+	return css.slice(at, css.indexOf("}", at));
+}
+
+test("overlay: frosted boxes with no glow and no sheen", () => {
+	const box = overlayRule("dark", ".omni-note");
+
+	assert.match(box, /backdrop-filter: blur\(18px\)/, "frosted: what's behind shows through, blurred");
+	assert.match(box, /background: var\(--omni-note-segment\)/);
+	assert.match(box, /border: 1px solid var\(--omni-note-edge\)/);
+	assert.doesNotMatch(box, /box-shadow/, "no glow");
+
+	const css = notifications.overlayStyles("dark");
+	assert.doesNotMatch(css, /\.omni-note::before/, "no sheen across the top of a box");
+	assert.doesNotMatch(css, /--omni-note-glow/);
+});
+
+test("overlay: dark mode tints the glass black, light mode tints it grey", () => {
+	const tint = (mode) => notifications.overlayStyles(mode).match(/--omni-note-segment: ([^;]+);/)[1];
+
+	assert.equal(tint("dark"), "rgba(0, 0, 0, 0.32)");
+	assert.equal(tint("light"), "rgba(170, 170, 175, 0.42)");
+	assert.equal(tint(), tint("dark"), "a face made before v1.19.2 is dark");
+
+	// The screen behind is blurred in both
+	assert.match(overlayRule("light", ".omni-note-layer"), /backdrop-filter: blur\(6px\)/);
+});
+
+test("overlay: the module's name is drawn like a page heading, the text left-aligned", () => {
+	const source = overlayRule("dark", ".omni-note-source");
+	assert.match(source, /font-size: 1\.75em/);
+	assert.match(source, /font-weight: 300/);
+
+	assert.match(overlayRule("dark", ".omni-note-layer"), /text-align: left/);
+});
+
+test("overlay: a QR box's address stays on one line, cut short with ...", () => {
+	const address = overlayRule("dark", ".omni-note-link-url");
+
+	assert.match(address, /white-space: nowrap/);
+	assert.match(address, /overflow: hidden/);
+	assert.match(address, /text-overflow: ellipsis/);
+
+	// The box is as wide as its code, so a long address can't widen it
+	assert.match(overlayRule("dark", ".omni-note-link"), /width: calc\(var\(--omni-note-qr\)/);
 });

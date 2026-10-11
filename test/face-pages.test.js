@@ -156,12 +156,15 @@ test("facts: a face with two modules taking input has an Inport with two branche
 	]);
 });
 
-test("facts: the facts and the Modules / Theme links are two segments", async () => {
+test("facts: the facts and the Widgets / Theme links are two segments", async () => {
 	const { html } = await get(ADMIN, "/faces/4001");
 
 	// One column holding both, beside the name form
 	assert.match(html, /<div class="bento-column">\s*<div class="segment">\s*<h1>Face 001<\/h1>\s*<div class="facts">/);
-	assert.match(html, /<\/div>\s*<\/div>\s*<div class="segment">\s*<a class="row" href="\/faces\/4001\/modules">/);
+	assert.match(
+		html,
+		/<\/div>\s*<\/div>\s*<div class="segment resources">\s*<h2>Manage resources<\/h2>\s*<p class="lede">[^<]*<\/p>\s*<a class="row" href="\/faces\/4001\/modules">/
+	);
 });
 
 test("showing on: counts the screens that have the face open, live", async () => {
@@ -303,4 +306,51 @@ test("pick-a-theme screen: grows with its themes instead of cutting them off", a
 
 	assert.match(body, /min-height: 100vh/);
 	assert.doesNotMatch(body, /(^|[^-])height: 100vh/);
+});
+
+// --- A face's page, laid out in two level columns (v1.19.7) ----------------
+
+test("face page: the modules button says Widgets, and counts them", async () => {
+	const none = await get(ADMIN, "/faces/4001");
+	assert.match(none.html, /<strong>Widgets<\/strong>\s*<span>None added yet<\/span>/);
+
+	const two = await get(ADMIN, "/faces/4002");
+	assert.match(two.html, /<strong>Widgets<\/strong>\s*<span>2 widgets<\/span>/);
+	assert.ok(!two.html.includes("<strong>Modules</strong>"));
+
+	// Still the same page behind it
+	assert.ok(two.html.includes('href="/faces/4002/modules"'));
+});
+
+test("face page: Notifications sits under the name form, in the right column", async () => {
+	const { html } = await get(ADMIN, "/faces/4001");
+
+	// Not side by side with a whole row under it any more, and not
+	// aligned to the top: both columns stretch to the same height
+	assert.ok(html.includes('<div class="bento-row two face-columns">'));
+	assert.ok(!html.includes('<div class="bento-row two top">'));
+
+	// The right column: the name form, then Notifications
+	assert.match(
+		html,
+		/<div class="bento-column">\s*<div class="segment">\s*<div class="field">\s*<label for="name">[\s\S]*?<p class="status" id="status"><\/p>\s*<\/div>\s*<div class="segment note-segment">\s*<h2>Notifications<\/h2>/
+	);
+});
+
+test("face page: the columns end level, and the Dark / Light buttons fill their box", async () => {
+	const { html } = await get(ADMIN, "/faces/4001");
+	const css = html.replace(/\/\*[\s\S]*?\*\//g, "");
+
+	// The last box in each column takes the spare height
+	assert.match(css, /\.face-columns > \.bento-column > :last-child \{ flex: 1; \}/);
+
+	// The previews grow to the box's height, keep their usual width
+	// (narrow-previews) and sit in the middle of it
+	assert.match(css, /\.note-segment \{ display: flex; flex-direction: column; \}/);
+	assert.match(css, /\.note-segment \.mode-previews \{ flex: 1; width: 100%; margin: 0 auto; \}/);
+	assert.match(css, /\.note-segment \.mode-screen \{ flex: 1; height: auto; min-height: 64px; \}/);
+	assert.ok(html.includes('<div class="mode-previews narrow-previews">'));
+
+	// The Widgets and Theme buttons are taller than an ordinary row
+	assert.match(css, /\.resources a\.row \{ padding-top: 1\.4em; padding-bottom: 1\.4em; \}/);
 });

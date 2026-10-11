@@ -302,6 +302,24 @@ const styles = `
 	   page: its facts and its links on the left, its name on the right) */
 	.bento-column { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 
+	/* A face's page: two columns that end level. The grid stretches
+	   both columns to the taller one's height, and the last box in each
+	   takes up the difference, so neither column ends short. */
+	.face-columns > .bento-column > :last-child { flex: 1; }
+
+	/* Manage resources: the Widgets and Theme buttons, a little taller
+	   than an ordinary row so the box holds its own beside the facts */
+	.resources a.row { padding-top: 1.4em; padding-bottom: 1.4em; }
+
+	/* Notifications on a face's page: the Dark and Light buttons fill
+	   the box's height, so a box stretched to line up with its
+	   neighbour has no empty band under them. They keep their usual
+	   width (narrow-previews) and sit in the middle of the box. */
+	.note-segment { display: flex; flex-direction: column; }
+	.note-segment .mode-previews { flex: 1; width: 100%; margin: 0 auto; }
+	.note-segment .mode-preview { display: flex; flex-direction: column; }
+	.note-segment .mode-screen { flex: 1; height: auto; min-height: 64px; }
+
 	/* A segment's last row shouldn't leave a gap under itself */
 	.segment > a.row:last-child { margin-bottom: 0; }
 
@@ -3962,19 +3980,22 @@ function startAdminFace() {
 			.join("");
 
 		// Left: what this face IS (its facts), then where to change what
-		// it shows (Modules, Theme). Right: what it's called.
+		// it shows (Widgets, Theme). Right: what it's called, then how its
+		// notifications look. The two columns end level (face-columns).
 		const body = `
 			<div class="bento">
-			<div class="bento-row two top">
+			<div class="bento-row two face-columns">
 				<div class="bento-column">
 					<div class="segment">
 						<h1>${escapeHtml(faceName)}</h1>
 						<div class="facts">${facts}</div>
 					</div>
-					<div class="segment">
+					<div class="segment resources">
+						<h2>Manage resources</h2>
+						<p class="lede">What this face shows, and how it looks.</p>
 						<a class="row" href="/faces/${face.id}/modules">
-							<strong>Modules</strong>
-							<span>${count ? count + (count === 1 ? " module" : " modules") : "None added yet"}</span>
+							<strong>Widgets</strong>
+							<span>${count ? count + (count === 1 ? " widget" : " widgets") : "None added yet"}</span>
 						</a>
 						<a class="row" href="/faces/${face.id}/theme">
 							<strong>Theme</strong>
@@ -3982,58 +4003,60 @@ function startAdminFace() {
 						</a>
 					</div>
 				</div>
-				<div class="segment">
-					<div class="field">
-						<label for="name">Name</label>
-					<input type="text" id="name" value="${escapeHtml(faceName)}">
-					<div class="help">
-						How you recognise this face here. Blank falls back to
-						${escapeHtml(faceStore.defaultFaceName(face.id))}.
-					</div>
-				</div>
-
-				<div class="field">
-					<label for="title">Title</label>
-					<input type="text" id="title"
-						value="${escapeHtml(face.title || "")}" placeholder="Optional">
-					<div class="help">
-						Shown on the dashboard itself, if the theme displays
-						one. Blank means no heading.
-					</div>
-				</div>
-
-					<button class="glass glass-block" id="save">Save face</button>
-					<p class="status" id="status"></p>
-				</div>
-			</div>
-
-			<div class="segment">
-				<h2>Notifications</h2>
-				<p class="lede">
-					How a notification looks on this face's screen, whatever
-					theme it's running. Saved as soon as you pick one.
-				</p>
-				<div class="mode-previews narrow-previews">
-					<div class="mode-preview note-mode ${noteLight ? "" : "active"}"
-						data-note-mode="dark" role="button" tabindex="0">
-						<div class="mode-screen" style="background:#0c0d10">
-							<span style="width:40%;height:5px;background:rgba(255,255,255,0.8)"></span>
-							<span style="width:70%;height:4px;background:rgba(255,255,255,0.3)"></span>
-							<span style="width:55%;height:4px;background:rgba(255,255,255,0.3)"></span>
+				<div class="bento-column">
+					<div class="segment">
+						<div class="field">
+							<label for="name">Name</label>
+							<input type="text" id="name" value="${escapeHtml(faceName)}">
+							<div class="help">
+								How you recognise this face here. Blank falls back to
+								${escapeHtml(faceStore.defaultFaceName(face.id))}.
+							</div>
 						</div>
-						<div class="mode-preview-label">Dark${noteLight ? "" : " (Active)"}</div>
-					</div>
-					<div class="mode-preview note-mode ${noteLight ? "active" : ""}"
-						data-note-mode="light" role="button" tabindex="0">
-						<div class="mode-screen" style="background:#e5e7eb">
-							<span style="width:40%;height:5px;background:#4b5563"></span>
-							<span style="width:70%;height:4px;background:#9ca3af"></span>
-							<span style="width:55%;height:4px;background:#9ca3af"></span>
+
+						<div class="field">
+							<label for="title">Title</label>
+							<input type="text" id="title"
+								value="${escapeHtml(face.title || "")}" placeholder="Optional">
+							<div class="help">
+								Shown on the dashboard itself, if the theme displays
+								one. Blank means no heading.
+							</div>
 						</div>
-						<div class="mode-preview-label">Light${noteLight ? " (Active)" : ""}</div>
+
+						<button class="glass glass-block" id="save">Save face</button>
+						<p class="status" id="status"></p>
+					</div>
+
+					<div class="segment note-segment">
+						<h2>Notifications</h2>
+						<p class="lede">
+							How a notification looks on this face's screen, whatever
+							theme it's running. Saved as soon as you pick one.
+						</p>
+						<div class="mode-previews narrow-previews">
+							<div class="mode-preview note-mode ${noteLight ? "" : "active"}"
+								data-note-mode="dark" role="button" tabindex="0">
+								<div class="mode-screen" style="background:#0c0d10">
+									<span style="width:40%;height:5px;background:rgba(255,255,255,0.8)"></span>
+									<span style="width:70%;height:4px;background:rgba(255,255,255,0.3)"></span>
+									<span style="width:55%;height:4px;background:rgba(255,255,255,0.3)"></span>
+								</div>
+								<div class="mode-preview-label">Dark${noteLight ? "" : " (Active)"}</div>
+							</div>
+							<div class="mode-preview note-mode ${noteLight ? "active" : ""}"
+								data-note-mode="light" role="button" tabindex="0">
+								<div class="mode-screen" style="background:#e5e7eb">
+									<span style="width:40%;height:5px;background:#4b5563"></span>
+									<span style="width:70%;height:4px;background:#9ca3af"></span>
+									<span style="width:55%;height:4px;background:#9ca3af"></span>
+								</div>
+								<div class="mode-preview-label">Light${noteLight ? " (Active)" : ""}</div>
+							</div>
+						</div>
+						<p class="status" id="note-status"></p>
 					</div>
 				</div>
-				<p class="status" id="note-status"></p>
 			</div>
 			</div>`;
 

@@ -65,9 +65,14 @@ const qr = require("./qr");
 const { readSettings } = require("./settings-store");
 const { PALETTES, fontStack, fontFace } = require("./ui-theme");
 
-// Longest link title worth showing above a QR code. It's a caption for a
-// code, not a second message.
+// Longest link title kept. The overlay doesn't show a link's title any
+// more (v1.19.7: the QR box is the code and its address, nothing else),
+// but it's still passed along for anything that might, like OmniView.
 const LINK_TITLE_LONGEST = 80;
+
+// Most links one notification can carry. Each gets a QR box of its own,
+// stacked beside the message; more than two would crowd the message out.
+const MOST_LINKS = 2;
 
 // Longest source worth showing. It's a label -- "ntfy.sh", "Calendar" --
 // not a sentence.
@@ -172,6 +177,42 @@ function readLink(link) {
 	return { url: url.href, title: title, svg: svg };
 }
 
+// Every link a notification asked for, made ready (see readLink), in
+// order: `link` first, then each of `links`. One the overlay can't show
+// is left out, the same address twice is shown once, and past MOST_LINKS
+// the rest are dropped. Always an array, empty when there's nothing.
+function readLinks(message) {
+	if (!message) {
+		return [];
+	}
+
+	const asked = [];
+
+	if (message.link) {
+		asked.push(message.link);
+	}
+
+	if (Array.isArray(message.links)) {
+		asked.push(...message.links);
+	}
+
+	const ready = [];
+
+	for (const candidate of asked) {
+		const link = readLink(candidate);
+
+		if (link && !ready.some((already) => already.url === link.url)) {
+			ready.push(link);
+		}
+
+		if (ready.length === MOST_LINKS) {
+			break;
+		}
+	}
+
+	return ready;
+}
+
 // A source label, made safe to show: plain text on one line, not too
 // long. Returns "" for nothing usable. It's set as text on the page, never
 // as markup, so this is about tidiness, not safety.
@@ -236,6 +277,9 @@ function notify(faceId, message, origin) {
 		return false;
 	}
 
+	// Drawn only now, once it's certain to be shown or held
+	const links = readLinks(message);
+
 	const note = {
 		// Where it came from: what the module said, or else its name
 		source: readSource(message && message.source) || readSource(origin),
@@ -247,7 +291,10 @@ function notify(faceId, message, origin) {
 		html: markdown.render(description),
 		priority: priority,
 		seconds: PRIORITY_SECONDS[priority],
-		link: readLink(message && message.link)
+		// Up to two, each drawn as its own QR box. `link` is the first of
+		// them, kept for anything written before there could be two.
+		links: links,
+		link: links[0] || null
 	};
 
 	// Every display showing this face, browser tabs included
@@ -318,48 +365,82 @@ function releaseHeld(faceId) {
 // so there's no browser choice there to follow. Whatever theme is
 // underneath, a notification looks the same.
 //
-// Three boxes, a bento:
+// Three kinds of box, a bento:
 //
 //   +--------------------------------------+
-//   |  ntfy.sh                    (source) |   where it came from
-//   +-------------------------+------------+
-//   |  Title                  |   QR code  |   the message, and its link
-//   |  Description, Markdown  |   address  |   when it has one
+//   |  Module name                         |   where it came from, drawn
+//   +-------------------------+------------+   like a page's heading
+//   |  Title                  |   QR code  |
+//   |  Description, Markdown  |   address  |   one box per link, up to
+//   |                         +------------+   two, stacked; no box at
+//   |                         |   QR code  |   all when there's no link
+//   |                         |   address  |
 //   +-------------------------+------------+
 //
-// On a screen taller than it is wide, the QR box goes under the message.
+// Every box is frosted glass: see-through, blurred, with no glow and no
+// sheen. On a screen taller than it is wide, the QR boxes go under the
+// message, side by side.
+
+// The frosted glass, per mode. These belong to the overlay alone, not
+// to the Default UI's palette: OmniCore's own pages sit on a plain
+// background, but a notification sits on whatever a theme drew -- a
+// photo, a bright tile -- so it needs its own tint to stay readable.
+//
+//   tint    the colour laid over the blur. Dark mode darkens what's
+//           behind a little; light mode greys it a little.
+//   edge    the thin border round every box
+//   screen  laid over the whole screen behind the boxes, which is
+//           blurred too, so the boxes stand out from it
+const NOTE_GLASS = {
+	dark: {
+		tint: "rgba(0, 0, 0, 0.32)",
+		edge: "rgba(255, 255, 255, 0.2)",
+		screen: "rgba(0, 0, 0, 0.28)"
+	},
+	light: {
+		tint: "rgba(170, 170, 175, 0.42)",
+		edge: "rgba(255, 255, 255, 0.55)",
+		screen: "rgba(255, 255, 255, 0.12)"
+	}
+};
 
 // `mode` is the face's notificationMode: "light", or anything else for
 // dark.
 function overlayStyles(mode) {
 	const settings = readSettings();
-	const palette = mode === "light" ? PALETTES.light : PALETTES.dark;
+	const light = mode === "light";
+	const palette = light ? PALETTES.light : PALETTES.dark;
+	const glass = light ? NOTE_GLASS.light : NOTE_GLASS.dark;
 	const size = Number(settings.uiFontSize) || 16;
 
 	return `
 	${fontFace(settings)}
 
-	/* The dimmed layer behind the boxes. Sits above everything a theme
-	   draws, which is the whole point of an overlay. Everything inside
-	   reads its colours and font from here. */
+	/* The layer over the whole screen: it blurs and slightly dims (or,
+	   in light mode, lightens) whatever the theme drew. Sits above
+	   everything a theme draws, which is the whole point of an overlay.
+	   Everything inside reads its colours and font from here. */
 	.omni-note-layer {
 		--omni-note-fg: ${palette.fg};
 		--omni-note-muted: ${palette.fgMuted};
-		--omni-note-segment: ${palette.segmentBg};
-		--omni-note-base: color-mix(in srgb, ${palette.bg} 72%, transparent);
-		--omni-note-border: ${palette.glassBorder};
+		--omni-note-segment: ${glass.tint};
+		--omni-note-edge: ${glass.edge};
 		--omni-note-sheen: ${palette.glassSheen};
-		--omni-note-glow: ${palette.glow};
 		--omni-note-radius: 0.75em;
 		--omni-note-size: ${size}px;
+		/* How wide a QR code is drawn: big enough to scan from a few
+		   steps away, small enough that two stacked still fit on a
+		   short screen */
+		--omni-note-qr: min(22vh, 9.5em);
 
 		position: fixed;
 		inset: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: rgba(0, 0, 0, 0.45);
+		background: ${glass.screen};
 		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
 		z-index: 9000;
 		opacity: 0;
 		transition: opacity 260ms ease;
@@ -370,7 +451,7 @@ function overlayStyles(mode) {
 		font-size: var(--omni-note-size);
 		font-weight: normal;
 		line-height: normal;
-		text-align: center;
+		text-align: left;
 	}
 
 	/* A theme's own rules -- "every h2 is red", "every p is Comic Sans"
@@ -391,6 +472,7 @@ function overlayStyles(mode) {
 		border: 0;
 		margin: 0;
 		padding: 0;
+		box-sizing: border-box;
 	}
 
 	/* The reset above takes bold and italic off too; these put them back */
@@ -399,46 +481,34 @@ function overlayStyles(mode) {
 
 	.omni-note-layer.is-open { opacity: 1; }
 
-	/* The source on top, the message and its QR code underneath */
+	/* The module's name on top, the message and its QR codes under it */
 	.omni-note-bento {
 		display: flex;
 		flex-direction: column;
-		align-items: stretch;
 		gap: 0.8em;
-		max-width: 94vw;
+		width: min(94vw, 52em);
+		max-height: 94vh;
 	}
 
+	/* The message, and the column of QR boxes beside it. Stretched, so
+	   the message box is as tall as the QR column and the two end level. */
 	.omni-note-row {
 		display: flex;
 		align-items: stretch;
-		justify-content: center;
-		gap: 1.2em;
+		gap: 0.8em;
+		min-height: 0;
 	}
 
-	@media (max-aspect-ratio: 1/1) {
-		.omni-note-row {
-			flex-direction: column;
-			align-items: center;
-		}
-	}
-
-	/* Every box. Same glass treatment as every other surface in the
-	   Default UI. */
+	/* Every box: frosted glass. The blur is what makes it frosted --
+	   whatever is behind shows through, softened -- and the tint keeps
+	   text readable over a bright picture. No glow and no sheen: those
+	   belong to buttons, and nothing here can be pressed. */
 	.omni-note {
-		box-sizing: border-box;
 		border-radius: var(--omni-note-radius);
-		border: 1px solid var(--omni-note-border);
-		/* The Default UI's segment, laid over a darker (or, in light
-		   mode, lighter) base. The glass alone is almost see-through,
-		   which is fine on OmniCore's plain pages but leaves text hard to
-		   read over a bright wallpaper. A browser too old to mix colours
-		   keeps just the glass. */
+		border: 1px solid var(--omni-note-edge);
 		background: var(--omni-note-segment);
-		background:
-			linear-gradient(var(--omni-note-segment), var(--omni-note-segment)),
-			var(--omni-note-base);
-		backdrop-filter: blur(14px);
-		box-shadow: 0 0 2.5em var(--omni-note-glow);
+		backdrop-filter: blur(18px) saturate(1.3);
+		-webkit-backdrop-filter: blur(18px) saturate(1.3);
 		position: relative;
 		overflow: hidden;
 
@@ -466,58 +536,34 @@ function overlayStyles(mode) {
 			opacity 200ms ease-in;
 	}
 
-	/* The sheen across the top, same as the glass buttons */
-	.omni-note::before {
-		content: "";
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: 40%;
-		background: linear-gradient(
-			to bottom, var(--omni-note-sheen), transparent
-		);
-		pointer-events: none;
-	}
-
-	/* The source box. Small and quiet: it answers "where's this from?"
-	   at a glance and then gets out of the way of the message. */
+	/* The source box: the module's name (or the source it gave), drawn
+	   the way a page's own heading is in the Default UI -- light weight,
+	   1.75em -- so a notification reads like the top of a page. */
 	.omni-note-source {
 		display: flex;
 		align-items: center;
-		justify-content: center;
 		gap: 0.5em;
-		padding: 0.6em 1.2em;
-		font-size: 0.85em;
-		font-weight: 600;
-		letter-spacing: 0.02em;
-		color: var(--omni-note-muted);
+		padding: 1em 1.5em;
+		font-size: 1.75em;
+		font-weight: 300;
+		line-height: 1.2;
 	}
 
 	/* Where a module's icon will go. Empty, and so not shown, until
 	   modules can have one. */
 	.omni-note-source-icon:empty { display: none; }
 
-	/* The message */
+	/* The message: takes whatever width the QR column leaves */
 	.omni-note-main {
-		width: min(70vw, 34em);
-		padding: 2.5em 2em;
-	}
-
-	/* Narrower when it shares the row with a QR box, and centred top to
-	   bottom, since the QR box is usually the taller of the two */
-	.omni-note-layer.has-link .omni-note-main {
-		width: min(56vw, 30em);
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
+		flex: 1 1 auto;
+		min-width: 0;
+		padding: 1.5em;
 	}
 
 	.omni-note-title {
-		font-size: 1.8em;
+		font-size: 1.25em;
 		font-weight: 600;
-		line-height: 1.2;
-		margin: 0;
+		line-height: 1.25;
 		color: var(--omni-note-fg);
 	}
 
@@ -543,15 +589,10 @@ function overlayStyles(mode) {
 	.omni-note-description p { margin: 0 0 0.5em; }
 	.omni-note-description > :last-child { margin-bottom: 0; }
 
-	/* The box is centred, but a list reads badly centred line by line.
-	   As a table it shrinks to fit and sits in the middle as a whole, with
-	   its own lines lined up on the left -- and, unlike an inline block,
-	   two lists in a row still stack rather than sitting side by side. */
+	/* Lists, indented as they are on any other page */
 	.omni-note-description ul,
 	.omni-note-description ol {
-		display: table;
-		text-align: left;
-		margin: 0 auto 0.5em;
+		margin: 0 0 0.5em;
 		padding-left: 1.3em;
 	}
 
@@ -573,20 +614,19 @@ function overlayStyles(mode) {
 
 	/* A table. Its text is a fixed share of Core's font size (see
 	   TABLE_TEXT_SCALE), not of whatever surrounds it, so every table is
-	   the same size wherever it sits. Centred as a whole, its cells lined
-	   up on the left. */
+	   the same size wherever it sits. */
 	.omni-note-description table {
 		font-size: calc(var(--omni-note-size) * ${TABLE_TEXT_SCALE});
 		border-collapse: collapse;
-		margin: 0.4em auto 1em;
-		text-align: left;
+		margin: 0.4em 0 1em;
 	}
 
 	.omni-note-description th,
 	.omni-note-description td {
 		padding: 0.35em 0.8em;
-		border-bottom: 1px solid var(--omni-note-border);
+		border-bottom: 1px solid var(--omni-note-edge);
 		vertical-align: top;
+		text-align: left;
 	}
 
 	.omni-note-description th {
@@ -612,51 +652,73 @@ function overlayStyles(mode) {
 		opacity: 0.8;
 	}
 
-	/* The QR box. Only there when the notification has a link. */
-	.omni-note-link {
-		/* As wide as what's in it, not as wide as a message box */
-		width: auto;
+	/* The QR column: one box per link, stacked. Not there at all when
+	   the notification has no link, and the message takes the row. */
+	.omni-note-links {
 		display: none;
+		flex-direction: column;
+		gap: 0.8em;
+	}
+
+	.omni-note-layer.has-link .omni-note-links { display: flex; }
+
+	/* One link: its code, and its address under it. Exactly as wide as
+	   the code plus the box's padding, so a long address can't widen it.
+	   Never shorter than what's in it; when the message is the taller
+	   side, the boxes share the spare height. */
+	.omni-note-link {
+		flex: 1 0 auto;
+		/* the code, the padding either side, and the 1px border */
+		width: calc(var(--omni-note-qr) + 2em + 2px);
+		padding: 1em;
+		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		padding: 1.5em;
+		text-align: center;
 	}
 
-	.omni-note-layer.has-link .omni-note-link { display: flex; }
-
-	.omni-note-link-title {
-		margin: 0 0 0.7em;
-		font-weight: 600;
-		max-width: 16em;
-	}
-
-	/* Big enough to scan from a few steps away, never bigger than the
-	   screen can spare */
 	.omni-note-qr svg {
 		display: block;
-		width: min(30vh, 14em);
+		width: var(--omni-note-qr);
 		height: auto;
 		border-radius: 0.4em;
 	}
 
-	/* The address itself: not clickable -- nothing here is -- but
-	   readable, for anyone who'd rather type it */
+	/* The address. One line, always: one too long to fit ends in "..."
+	   rather than wrapping. It's plain text, not a link -- nothing on a
+	   face's screen can be clicked -- there for anyone who'd rather type
+	   it than scan it. */
 	.omni-note-link-url {
-		margin: 0.7em 0 0;
-		max-width: 16em;
-		font-size: 0.8em;
+		margin: 0.6em 0 0;
+		width: 100%;
+		font-size: 0.7em;
 		color: var(--omni-note-muted);
-		word-break: break-all;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* A screen taller than it is wide: the QR boxes go under the
+	   message, side by side, rather than squeezing it into a sliver */
+	@media (max-aspect-ratio: 1/1) {
+		.omni-note-row { flex-direction: column; }
+
+		.omni-note-links {
+			flex-direction: row;
+			justify-content: center;
+		}
+
+		.omni-note-link { flex: 0 0 auto; }
 	}
 
 	/* The timer, bottom-left. Deliberately the same lamp the welcome
 	   face's auto-advance uses -- a draining amber wedge under a domed
 	   lens -- because "time is running out on this thing on screen"
 	   already has a look in OmniCore and should not grow a second one.
-	   Bottom-left is reserved for exactly this; the floating back button
-	   only ever offers bottom-right and top-left so the two can't
-	   collide. */
+	   Its housing is the same frosted glass as the boxes. Bottom-left is
+	   reserved for exactly this; the floating back button only ever
+	   offers bottom-right and top-left so the two can't collide. */
 	.omni-note-timer {
 		position: fixed;
 		bottom: 1.5em;
@@ -664,12 +726,10 @@ function overlayStyles(mode) {
 		width: 3.2em;
 		height: 3.2em;
 		border-radius: 50%;
-		border: 1px solid var(--omni-note-border);
+		border: 1px solid var(--omni-note-edge);
 		background: var(--omni-note-segment);
-		background:
-			linear-gradient(var(--omni-note-segment), var(--omni-note-segment)),
-			var(--omni-note-base);
-		backdrop-filter: blur(12px);
+		backdrop-filter: blur(18px) saturate(1.3);
+		-webkit-backdrop-filter: blur(18px) saturate(1.3);
 		overflow: hidden;
 		z-index: 9001;
 		opacity: 0;
@@ -704,6 +764,7 @@ function overlayStyles(mode) {
 		transition: background 1s linear;
 	}
 
+	/* The lamp's domed lens: a sheen over its top half */
 	.omni-note-timer::after {
 		content: "";
 		position: absolute;
@@ -768,11 +829,7 @@ const OVERLAY_SCRIPT = `
 							'<div class="omni-note-description"></div>' +
 							'<p class="omni-note-skipped"></p>' +
 						'</div>' +
-						'<div class="omni-note omni-note-link">' +
-							'<p class="omni-note-link-title"></p>' +
-							'<div class="omni-note-qr"></div>' +
-							'<p class="omni-note-link-url"></p>' +
-						'</div>' +
+						'<div class="omni-note-links"></div>' +
 					'</div>' +
 				'</div>' +
 				'<div class="omni-note-timer">' +
@@ -840,14 +897,36 @@ const OVERLAY_SCRIPT = `
 			);
 			skipped = 0;
 
-			// The QR box. The code is Core's own drawing -- an SVG built
-			// from numbers only (see core/qr.js) -- and the address and its
-			// title go in as plain text.
-			var link = note.link && note.link.svg ? note.link : null;
-			layer.classList.toggle("has-link", Boolean(link));
-			layer.querySelector(".omni-note-qr").innerHTML = link ? link.svg : "";
-			setText(".omni-note-link-title", link ? link.title : "");
-			setText(".omni-note-link-url", link ? link.url : "");
+			// The QR column: a box for each link, emptied first so the
+			// last notification's codes never linger. Each code is Core's
+			// own drawing -- an SVG built from numbers only (see
+			// core/qr.js) -- and the address goes in as plain text. A
+			// notification from before v1.19.7 has only "link", not
+			// "links", so that's read too.
+			var links = Array.isArray(note.links) ? note.links : (note.link ? [note.link] : []);
+			links = links.filter(function (link) { return link && link.svg; }).slice(0, ${MOST_LINKS});
+
+			var column = layer.querySelector(".omni-note-links");
+			column.innerHTML = "";
+
+			links.forEach(function (link) {
+				var box = document.createElement("div");
+				box.className = "omni-note omni-note-link";
+
+				var code = document.createElement("div");
+				code.className = "omni-note-qr";
+				code.innerHTML = link.svg;
+
+				var address = document.createElement("p");
+				address.className = "omni-note-link-url";
+				address.textContent = link.url;
+
+				box.appendChild(code);
+				box.appendChild(address);
+				column.appendChild(box);
+			});
+
+			layer.classList.toggle("has-link", links.length > 0);
 
 			var total = Number(note.seconds) || 30;
 			var left = total;
@@ -904,9 +983,11 @@ module.exports = {
 	releaseHeld,
 	resolvePriority,
 	readLink,
+	readLinks,
 	readSource,
 	overlayStyles,
 	PRIORITY_SECONDS,
+	MOST_LINKS,
 	TABLE_TEXT_SCALE,
 	EMOJI_FONTS,
 	OVERLAY_SCRIPT
