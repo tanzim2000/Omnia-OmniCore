@@ -31,6 +31,22 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
 6. **Bing Wallpaper**: shows "Not reachable" in the development sandbox and
    it was never explained. Also needs its Registry ref published.
 
+## v1.19.8: a face's page gets Open and Delete
+
+A new box on a face's page (the one with Name, Manage resources and
+Notifications), between **Manage resources** and **Notifications**, with
+two buttons:
+
+1. **Open face**: goes to the face itself.
+2. **Delete face**: removes the face. There is currently no way to delete
+   a face once it's created.
+
+Still to settle before building: what Delete asks first (a confirmation,
+since it can't be undone), what happens to the face's widgets and saved
+settings, its port and ID (free for reuse or kept so IDs never repeat),
+and what the Welcome page and any open screens show afterward. Show a
+demo before coding.
+
 ## Next: OmniCore
 
 - **Marketplace never shows "Update".** `listAvailable()` already works out
