@@ -202,11 +202,17 @@ it (`npm run docs`, into `_site/`, which is never committed), and the
 `scripts/` or `docs/` is in the image, and publishing the site never
 changes the version.
 
+The home page is the README, with the version from `package.json` beside
+its title and a **Set it up** button that jumps to the README's setup
+section, found by its heading ("Setting it up..."). Rename that heading to
+something that doesn't start with "Set it up" or "Setting it up" and the
+button falls back to the README's first section.
+
 | File                        | Responsibility                                                                                                                                                                                                                                          |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `scripts/build-docs.js`     | Finds every page, builds the side nav, and writes the site and its search index. A new `.md` in `docs/` gets a page by itself.                                                                                                                          |
 | `scripts/docs/markdown.js`  | One Markdown file to a page: heading links named the way GitHub names them, links between docs pointed at their pages, and a file name written as code linked to its page or to the file on GitHub.                                                     |
-| `scripts/docs/layout.js`    | The frame every page shares: the top bar, Dark / Light / Device, search, the side nav. Drawn with `ui-theme.js` itself.                                                                                                                                 |
+| `scripts/docs/layout.js`    | The frame every page shares: the top bar, Dark / Light / Device (as icons), search (`/` or Ctrl K / ⌘K), the side nav, the breadcrumb, "On this page" on wide screens with the section being read marked, and a Copy button on every code block. Drawn with `ui-theme.js` itself. |
 | `scripts/docs/catalogue.js` | The Default UI page.                                                                                                                                                                                                                                    |
 | `scripts/docs/changelog.js` | The changelog timeline. A release is dated by its git tag, or by the day it was added to `CHANGELOG.md` before it's tagged.                                                                                                                             |
 | `docs/ui-elements.js`       | The words behind the Default UI page: a name, a description, a sample and the markup for every element, and what every colour is for. **Add an entry here whenever an element is added to `ui-theme.js`:** `test/docs-site.test.js` fails until you do. |

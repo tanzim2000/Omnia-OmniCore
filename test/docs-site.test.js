@@ -187,6 +187,38 @@ test("docs site: builds, with a page for every doc", () => {
 			assert.ok(changelog.includes(`id="${version.replace(/\./g, "-")}"`), `${version} is on the timeline`);
 		}
 
+		// The home page: the version beside the title, read from
+		// package.json, and Set it up pointing at a heading that's there
+		const version = require("../package.json").version;
+		assert.ok(home.includes(`<span class="badge" title="The OmniCore version these docs describe">v${version}</span>`), "the version badge");
+		const setUp = home.match(/<a class="glass" href="#([^"]+)">Set it up<\/a>/);
+		assert.ok(setUp, "a Set it up button");
+		assert.ok(home.includes(`id="${setUp[1]}"`), `Set it up goes to a heading that exists (#${setUp[1]})`);
+		assert.match(setUp[1], /^setting-it-up/, "the README's setup section, not just its first one");
+
+		// Every page but home has a breadcrumb; a page with sections has
+		// "On this page"; Dark / Light / Device are icons with names for
+		// screen readers; and the search hint is there
+		for (const file of files) {
+			if (!file.endsWith(".html")) continue;
+			const html = fs.readFileSync(path.join(out, file), "utf8");
+
+			if (file === "index.html") {
+				assert.ok(!html.includes('class="crumbs"'), "home has no breadcrumb");
+			} else {
+				assert.match(html, /<nav class="crumbs" aria-label="Breadcrumb"><a href="index.html">Docs<\/a>/, `${file} has a breadcrumb`);
+			}
+
+			if (html.includes('class="outline"')) {
+				assert.ok(html.includes('<aside class="toc" aria-label="On this page">'), `${file} has On this page`);
+			}
+
+			for (const name of ["Dark", "Light", "Device"]) {
+				assert.ok(html.includes(`<span class="sr-only">${name}</span>`), `${file}: the ${name} button has a name`);
+			}
+			assert.ok(html.includes('<kbd id="search-key">'), `${file} shows the search shortcut`);
+		}
+
 		// Search can find an element by its name
 		const index = fs.readFileSync(path.join(out, "search-index.js"), "utf8");
 		assert.ok(index.startsWith("window.OMNIA_DOCS_SEARCH = "));

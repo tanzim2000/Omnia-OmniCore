@@ -213,7 +213,7 @@ function build(outDir) {
 		}
 
 		if (page.kind === "home") {
-			write(page.file, renderPage(site, homePage(page, pages)));
+			write(page.file, renderPage(site, homePage(page, pages, site)));
 
 			for (const section of page.rendered.sections) {
 				search.push({ p: "Overview", t: section.title, u: section.id ? `index.html#${section.id}` : "index.html", x: section.text });
@@ -256,8 +256,26 @@ function build(outDir) {
 	return { outDir, pages: pages.map((p) => ({ file: p.file, title: p.title || p.navTitle, group: p.group })), searchEntries: index.length };
 }
 
-// The home page: the README, with a card for every other page above it
-function homePage(page, pages) {
+// The home page: the README, with a card for every other page above it.
+//
+// Its header has the two things someone arriving here most likely wants:
+// to set Omnia up (a jump to the README's setup steps) and the code (the
+// repo on GitHub), plus the version these docs describe, read from
+// package.json, so it's never a number someone forgot to update.
+function homePage(page, pages, site) {
+	const version = require(path.join(ROOT, "package.json")).version;
+
+	// The README's setup section, found by its heading rather than by a
+	// fixed id, so renaming it slightly doesn't break the button. Without
+	// one, the button goes to the README's first section.
+	const outline = page.rendered.outline;
+	const setup = outline.find((o) => /^set(ting)?\s*(it\s*)?up/i.test(o.text)) || outline[0];
+
+	const actions = [
+		setup ? `<a class="glass" href="#${esc(setup.id)}">Set it up</a>` : "",
+		site.repoUrl ? `<a class="glass" href="${esc(site.repoUrl)}">GitHub</a>` : ""
+	].filter(Boolean).join("");
+
 	// The README's own title and first line become the page's header, so
 	// they're taken off the top of the README text below it
 	const withoutTop = page.markdown.replace(/^# .*\n+/, "").replace(/^(?!#)[^\n]+(\n[^\n]+)*\n+/, "");
@@ -291,11 +309,15 @@ function homePage(page, pages) {
 	.card b { font-size: 1.05em; font-weight: 600; }
 	.card-group { font-size: 0.7em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted); }
 	.card-text { font-size: 0.86em; color: var(--fg-muted); line-height: 1.5; }
+	.page-head h1 .badge { font-size: 0.34em; vertical-align: 0.55em; margin-left: 0.7em; }
+	.home-actions { display: flex; flex-wrap: wrap; gap: 0.7em; margin-top: 1.3em; }
+	.home-actions .glass { text-decoration: none; padding: 0.7em 1.5em; }
 </style>`,
 		body: `
 <div class="page-head">
-	<h1>${esc(page.title)}</h1>
+	<h1>${esc(page.title)}<span class="badge" title="The OmniCore version these docs describe">v${esc(version)}</span></h1>
 	<p class="lede">${esc(page.summary)}</p>
+	${actions ? `<div class="home-actions">${actions}</div>` : ""}
 </div>
 <div class="cards">${cards}</div>
 <article class="prose">${rendered.html}</article>`

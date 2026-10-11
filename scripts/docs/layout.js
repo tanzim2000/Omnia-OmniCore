@@ -1,7 +1,8 @@
 // scripts/docs/layout.js
 // The frame around every page of the docs site: the bar along the top
-// (title, search, Dark / Light / Device), the contents down the side, and
-// the footer. Each page only supplies what goes in the middle.
+// (title, search, Dark / Light / Device), the contents down the side, the
+// page's own "On this page" list on the right, the breadcrumb above each
+// title, and the footer. Each page only supplies what goes in the middle.
 //
 // The site is drawn with OmniCore's own stylesheet, core/ui-theme.js,
 // passed in as two copies (dark and light). So the docs look like Omnia,
@@ -40,13 +41,24 @@ const SITE_CSS = `
 	.brand { font-weight: 300; font-size: 1.15em; text-decoration: none; white-space: nowrap; }
 	.brand b { font-weight: 600; }
 	.search { position: relative; flex: 1 1 auto; max-width: 30em; margin-left: auto; }
-	.search input { padding-right: 2.6em; }
+	.search input { padding-right: 4.6em; }
 	.search kbd {
 		position: absolute; right: 0.8em; top: 50%; transform: translateY(-50%);
 		font-family: inherit; font-size: 0.75em; color: var(--fg-muted);
 		border: 1px solid var(--glass-border); border-radius: 0.35em; padding: 0.05em 0.45em;
 	}
 	.menu-button { display: none; }
+
+	/* Text only a screen reader reads out: the names of the icon-only
+	   Dark / Light / Device buttons */
+	.sr-only {
+		position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+		overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+	}
+
+	/* Dark / Light / Device, as a sun, a moon and a screen */
+	#mode-tabs .tab-btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.5em 0.7em; }
+	#mode-tabs svg { width: 1.05em; height: 1.05em; display: block; }
 
 	/* Search results: a panel under the box */
 	.results {
@@ -89,6 +101,54 @@ const SITE_CSS = `
 	nav.side .outline a { font-size: 0.92em; padding: 0.28em 0.6em; }
 
 	main { min-width: 0; }
+
+	/* "On this page", on the right, on screens wide enough for a third
+	   column without squeezing the page's own tables (about 1400 pixels
+	   at the normal text size). Narrower than that, the same list stays under the current
+	   page in the contents on the left (nav.side .outline), and this one
+	   isn't drawn. */
+	aside.toc { display: none; }
+
+	@media (min-width: 88em) {
+		.shell.has-toc { grid-template-columns: 15em minmax(0, 1fr) 13em; max-width: 94em; }
+		.shell.has-toc nav.side .outline { display: none; }
+		.shell.has-toc aside.toc {
+			display: block; position: sticky; top: 5.5em; align-self: start;
+			max-height: calc(100vh - 7em); overflow-y: auto; font-size: 0.85em;
+			scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent;
+		}
+	}
+	aside.toc h2 {
+		font-size: 0.75em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+		color: var(--fg-muted); margin: 0 0 0.6em 0.9em;
+	}
+	aside.toc nav { border-left: 1px solid var(--segment-border); }
+	aside.toc a {
+		display: block; text-decoration: none; color: var(--fg-muted);
+		padding: 0.3em 0.9em; margin-left: -1px; border-left: 2px solid transparent; line-height: 1.4;
+	}
+	aside.toc a:hover { color: var(--fg); }
+
+	/* The section being read right now, marked in both lists */
+	aside.toc a.active { color: var(--fg); border-left-color: var(--fg); }
+	nav.side .outline a.active { color: var(--fg); }
+
+	/* Where this page sits: Docs / Guides / Architecture */
+	.crumbs { display: flex; flex-wrap: wrap; gap: 0.4em; font-size: 0.82em; color: var(--fg-muted); margin: 0 0 1.1em; }
+	.crumbs a { text-decoration: none; color: var(--fg-muted); }
+	.crumbs a:hover { color: var(--fg); }
+	.crumbs .sep { opacity: 0.5; }
+	.crumbs [aria-current] { color: var(--fg); }
+
+	/* A code block with its Copy button in the top-right corner. The
+	   button sits on a wrapper rather than in the block itself, so it
+	   stays put when a long line is scrolled sideways. */
+	.code-block { position: relative; }
+	.code-block pre { padding-right: 5.5em; }
+	.copy-button.glass {
+		position: absolute; top: 0.45em; right: 0.45em;
+		padding: 0.35em 0.75em; font-size: 0.75em; border-radius: 0.5em;
+	}
 	footer.foot {
 		margin-top: 4em; padding-top: 1.25em; border-top: 1px solid var(--segment-border);
 		display: flex; flex-wrap: wrap; gap: 0.5em 1.5em; font-size: 0.82em; color: var(--fg-muted);
@@ -133,6 +193,10 @@ const SITE_CSS = `
 	th, td { text-align: left; vertical-align: top; padding: 0.6em 0.8em; border-bottom: 1px solid var(--segment-border); font-size: 0.9em; }
 	tr:last-child td { border-bottom: 0; }
 	th { font-weight: 600; background: var(--segment-bg); }
+	/* A file name in a table cell stays on one line ("settings-store.js",
+	   not "settin / gs-st / ore.js"): the column widens to fit it, and the
+	   description beside it wraps instead */
+	.prose td code, .prose th code { overflow-wrap: normal; white-space: nowrap; }
 
 	/* Page headers that aren't Markdown (home, Default UI, changelog) */
 	.page-head { margin-bottom: 2em; max-width: 50em; }
@@ -313,13 +377,155 @@ const FRAME_SCRIPT = `
 		});
 		panel.addEventListener("click", function () { panel.hidden = true; });
 
-		// "/" jumps to the search box from anywhere, as on GitHub
+		// Two ways to the search box from anywhere: "/", as on GitHub, and
+		// Ctrl K (Cmd K on a Mac), as on most docs sites. Ctrl K works even
+		// while typing somewhere else, since it doesn't type anything.
+		var mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+		var hint = document.getElementById("search-key");
+		hint.textContent = mac ? "\u2318K" : "Ctrl K";
+		box.title = "Search (" + (mac ? "\u2318K" : "Ctrl K") + " or /)";
+
 		document.addEventListener("keydown", function (event) {
 			var typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
-			if (event.key === "/" && !typing) { event.preventDefault(); box.focus(); }
+			var k = event.key && event.key.toLowerCase() === "k" && (mac ? event.metaKey : event.ctrlKey);
+			if (k || (event.key === "/" && !typing)) {
+				event.preventDefault();
+				box.focus();
+				box.select();
+			}
 		});
+
+		// --- Copy buttons on code blocks ------------------------------------
+		// Added here rather than written into each page, so every code
+		// block on every page has one: the guides' and the Default UI
+		// page's alike
+		function copyText(text) {
+			if (navigator.clipboard && window.isSecureContext) {
+				return navigator.clipboard.writeText(text);
+			}
+			// Opened straight from a folder (file://), the clipboard API
+			// isn't allowed; the older way still is
+			return new Promise(function (resolve, reject) {
+				var area = document.createElement("textarea");
+				area.value = text;
+				area.style.position = "fixed";
+				area.style.opacity = "0";
+				document.body.appendChild(area);
+				area.select();
+				var done = false;
+				try { done = document.execCommand("copy"); } catch (e) {}
+				document.body.removeChild(area);
+				done ? resolve() : reject();
+			});
+		}
+
+		document.querySelectorAll("main pre").forEach(function (pre) {
+			var wrap = document.createElement("div");
+			wrap.className = "code-block";
+			pre.parentNode.insertBefore(wrap, pre);
+			wrap.appendChild(pre);
+
+			var button = document.createElement("button");
+			button.type = "button";
+			button.className = "glass copy-button";
+			button.textContent = "Copy";
+			button.setAttribute("aria-label", "Copy this code");
+			wrap.appendChild(button);
+
+			var timer;
+			button.addEventListener("click", function () {
+				copyText(pre.innerText.replace(/\\n$/, "")).then(
+					function () { button.textContent = "Copied"; },
+					function () { button.textContent = "Couldn't copy"; }
+				);
+				clearTimeout(timer);
+				timer = setTimeout(function () { button.textContent = "Copy"; }, 1600);
+			});
+		});
+
+		// --- On this page: the section being read ----------------------
+		// The last heading that has scrolled up past the top bar is the one
+		// being read. Marked in the right-hand list and in the contents on
+		// the left (which shows it on narrower screens).
+		var outlineLinks = Array.prototype.slice.call(
+			document.querySelectorAll('aside.toc a[href^="#"], nav.side .outline a[href^="#"]')
+		);
+		var targets = [];
+		outlineLinks.forEach(function (a) {
+			var id = decodeURIComponent(a.getAttribute("href").slice(1));
+			var el = document.getElementById(id);
+			if (el && targets.indexOf(el) === -1) targets.push(el);
+		});
+
+		function markReading() {
+			if (!targets.length) return;
+			var line = 120;
+			var current = targets[0];
+			targets.forEach(function (el) {
+				// A closed release on the changelog has no height to scroll
+				// past, but still counts by where it is
+				if (el.getBoundingClientRect().top <= line) current = el;
+			});
+			// Scrolled to the very bottom: the last section, even if it's
+			// too short to reach the top
+			if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+				current = targets[targets.length - 1];
+			}
+			outlineLinks.forEach(function (a) {
+				var on = decodeURIComponent(a.getAttribute("href").slice(1)) === current.id;
+				a.classList.toggle("active", on);
+			});
+		}
+
+		var queued = false;
+		window.addEventListener("scroll", function () {
+			if (queued) return;
+			queued = true;
+			requestAnimationFrame(function () { queued = false; markReading(); });
+		}, { passive: true });
+		window.addEventListener("hashchange", markReading);
+		markReading();
 	})();
 `;
+
+// Dark / Light / Device as icons. The sun and the moon are the same
+// drawings as the sign-in page's light/dark switch (modeSwitch() in
+// core/ui-theme.js); the screen is drawn here in the same style. Each
+// button's name is still there for screen readers (.sr-only), and shows
+// as a tooltip when pointed at.
+const MODE_ICONS = {
+	dark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>`,
+	light: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>`,
+	device: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>`
+};
+
+const modeButton = (mode, name, help) =>
+	`<button type="button" class="tab-btn" data-mode="${mode}" title="${help}">${MODE_ICONS[mode]}<span class="sr-only">${name}</span></button>`;
+
+// "On this page", on the right: the current page's own headings
+function tableOfContents(outline) {
+	if (!outline.length) return "";
+
+	return `<aside class="toc" aria-label="On this page">
+		<h2>On this page</h2>
+		<nav>${outline.map((o) => `<a href="#${esc(o.id)}">${esc(o.text)}</a>`).join("")}</nav>
+	</aside>`;
+}
+
+// Docs / Guides / Architecture: where this page sits. The group has no page
+// of its own, so it's plain text. The home page has none: it IS "Docs".
+function breadcrumb(groups, currentFile, title) {
+	if (currentFile === "index.html") return "";
+
+	const group = groups.find((g) => g.pages.some((p) => p.file === currentFile));
+	const parts = [
+		`<a href="index.html">Docs</a>`,
+		group ? `<span>${esc(group.title)}</span>` : "",
+		`<span aria-current="page">${esc(title)}</span>`
+	].filter(Boolean);
+
+	return `<nav class="crumbs" aria-label="Breadcrumb">${parts.join('<span class="sep" aria-hidden="true">/</span>')}</nav>`;
+}
 
 // The contents down the side: every page, in its group, with the current
 // page's own headings listed under it.
@@ -345,6 +551,7 @@ function sideNav(groups, currentFile, outline) {
 // site:   { name, darkCss, lightCss, groups, repoUrl, commit, builtOn }
 // page:   { file, title, body, outline, sourcePath, head, scripts }
 function renderPage(site, page) {
+	const outline = page.outline || [];
 	const footer = [
 		page.sourcePath && site.repoUrl
 			? `<a href="${site.repoUrl}/blob/main/${encodeURI(page.sourcePath)}">Edit this page on GitHub</a>`
@@ -373,21 +580,23 @@ ${page.head || ""}
 	<a class="brand" href="index.html"><b>Omnia</b> <span>OmniCore docs</span></a>
 	<div class="search" role="search">
 		<input type="text" id="search-box" placeholder="Search the docs" aria-label="Search the docs" autocomplete="off" spellcheck="false">
-		<kbd>/</kbd>
+		<kbd id="search-key">Ctrl K</kbd>
 		<div class="results" id="search-results" hidden></div>
 	</div>
 	<div class="tabs" id="mode-tabs" role="group" aria-label="Colours">
-		<button type="button" class="tab-btn" data-mode="dark">Dark</button>
-		<button type="button" class="tab-btn" data-mode="light">Light</button>
-		<button type="button" class="tab-btn" data-mode="device">Device</button>
+		${modeButton("dark", "Dark", "Dark")}
+		${modeButton("light", "Light", "Light")}
+		${modeButton("device", "Device", "Follow this device")}
 	</div>
 </header>
-<div class="shell">
-	<nav class="side" id="side-nav" aria-label="Contents">${sideNav(site.groups, page.file, page.outline || [])}</nav>
+<div class="shell${outline.length ? " has-toc" : ""}">
+	<nav class="side" id="side-nav" aria-label="Contents">${sideNav(site.groups, page.file, outline)}</nav>
 	<main id="content">
+		${breadcrumb(site.groups, page.file, page.title)}
 		${page.body}
 		<footer class="foot">${footer}</footer>
 	</main>
+	${tableOfContents(outline)}
 </div>
 <script>${FRAME_SCRIPT}</script>
 ${page.scripts || ""}
