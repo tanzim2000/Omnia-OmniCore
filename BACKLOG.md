@@ -1,8 +1,8 @@
 # Backlog
 
 What is left to do, and what was deliberately put off. Last cleaned up
-after v1.19.8. Anything already built has been removed from here; the
-CHANGELOG is the record of what shipped.
+after the Weather rework (Oct 2026). Anything already built has been
+removed from here; the CHANGELOG is the record of what shipped.
 
 If you are picking this back up after a break, this file plus
 `docs/Architecture.md` should be enough to re-orient.
@@ -13,27 +13,11 @@ One module at a time, each with a user-friendly description, a "what it
 needs from you" paragraph, and the right `minOmniCore` in the Registry.
 
 1. **World Clock**: done (single, dual and multi clock).
-2. **Weather**: label follows the location; a Source setting (Open-Meteo,
-   Environment Canada, MET Norway, OpenWeatherMap, Google Weather).
-   - The settings and behaviour change with the source. Open-Meteo is the
-     default and stays as it is. Environment Canada is for places in
-     Canada, MET Norway for Norway. OpenWeatherMap and Google Weather first
-     ask "Do you have an API key?"; No puts the source back, Yes asks for
-     the key in a second dialogue.
-   - The list of fields changes with the source, and can still be
-     reordered, so the widget gives a different number of blocks per
-     source.
-   - Units: temperature (Celsius or Fahrenheit) and wind speed (km/h or
-     mph).
-   - Credit for the source, in `data-source` (OmniCore 1.19.8).
-   - Notifications for severe weather alerts where the source has them:
-     Environment Canada (red, orange, yellow), MET Norway's MetAlerts
-     (red, orange, yellow, by coordinates). OpenWeatherMap's alerts are
-     only on its paid One Call 4.0, so none on the free key. Open-Meteo has
-     none. Google Weather left for later.
-   - A US source too: the National Weather Service, US only.
-   - Built against the saved samples (see **Weather: tasks and samples**
-     below). Needs OmniCore 1.19.8.
+2. **Weather**: done. Six sources (Open-Meteo, Environment Canada, MET
+   Norway, US National Weather Service, OpenWeatherMap, Google Weather),
+   alerts as notifications, an Info order per source, temperature and wind
+   units, the source's credit. Left to check is under **Weather: left to
+   check** below.
 3. **Prayer Times**: a list that can include forbidden times behind one
    switch, with the times following the school of thought chosen for the
    prayers; notifications at each prayer and forbidden time, priority
@@ -46,60 +30,18 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
 6. **Bing Wallpaper**: shows "Not reachable" in the development sandbox and
    it was never explained. Also needs its Registry ref published.
 
-## Weather: tasks and samples
+## Weather: left to check
 
-### Samples
-
-Gathered on Oct 11, 2026 (kept in the session, not in the repo):
-
-| Source             | What we have                                                                                                   |
-| ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| Open-Meteo         | Current conditions and today's high and low.                                                                   |
-| Environment Canada | Regina's city page (current, forecast periods, a special weather statement) and all 844 cities (a yellow snowfall warning). Every value comes in English and French. |
-| MET Norway         | The Oslo forecast (`complete`, with `apparent_air_temperature` for feels like; wind in m/s), English MetAlerts (22 marine alerts) and the empty case. |
-| US (NWS)           | Point, forecast (Fahrenheit), latest station observation (metric), and real alerts: the Denver point (none) and 73 severe ones. `limit` isn't accepted on `alerts/active`; `point=` works. |
-| Google Weather     | Current conditions, 3-day forecast, and four real alerts (US floods, from NOAA). Alerts carry an id, title, event type, severity, urgency, times, instructions and the publisher. |
-| OpenWeatherMap     | None: the key answered 401. Built from the documented shape; test live with a working key.                     |
-
-### The US source
-
-The **National Weather Service** at `api.weather.gov`: free, no key (one
-may be required in future), and it needs a User-Agent. A place goes
-through `/points/{lat},{lon}` to find its forecast and nearby stations;
-current readings come from the nearest station's latest observation (up
-to about 20 minutes old). Alerts come from `/alerts/active?point=lat,lon`.
-Alert levels follow CAP (severity Minor, Moderate, Severe, Extreme), not
-colours, and an alert says whether it's new, an update or a cancellation.
-
-### Tasks (Weather module, Essentials)
-
-1. `module.exports.label`: the location's name.
-2. Source setting, default Open-Meteo, with `ask` for OpenWeatherMap and
-   Google Weather (each into its own `password` key setting). One small
-   adapter per source that turns its answer into the same named pieces
-   (Temperature, Condition, Feels like, High / low, Humidity, Wind, and
-   whatever else a source has), so the tile code doesn't care where the
-   data came from.
-3. Region rules: Environment Canada only for places in Canada, MET Norway
-   only for Norway, the US source only for the US. Outside its region the
-   tile says what that source covers instead of showing wrong data.
-4. Units: temperature (Celsius, Fahrenheit) and wind speed (km/h, mph),
-   separate choices, applied to every source.
-5. The Info order per source: one `priority` setting per source, each with
-   a `showWhen` on the source, with its own default order.
-6. `data-source` for every source, and "last known" kept for stale data.
-   Use `status` from `omni.fetch` to say "Invalid API key" on a 401 or 403.
-7. Alerts as notifications, for Environment Canada, MET Norway, the US
-   source and Google: one notification per new alert, never repeated on
-   every refresh, priority from the alert's level, link when the alert
-   has one. Tested with the saved samples, including the quiet case and a
-   cancelled alert.
-8. Rewritten description with a "What it needs from you" section per
-   source, no long dashes. Registry entry: new ref, `minOmniCore` 1.19.8,
-   `background` and `notifies` set.
-9. Windows 8 draws `data-source`, small, on a tile that has room.
-10. Tests with the saved samples; check each source's attribution wording
-    against its licence.
+- **OpenWeatherMap live.** Built from its documentation; the key used
+  while building answered 401. Test with a key that works.
+- **Google Weather live.** Tested with saved answers only (the demo key's
+  answers from Oct 11). Check a real key, and that 400 really means a
+  wrong key rather than a place Google doesn't cover.
+- **Environment Canada's list of places** (`data/ec-places.json`, 844
+  places, Oct 2026) is kept in the module. If Environment Canada adds or
+  renames places, the list needs refreshing.
+- **Essentials has tests now** (`node --test` in the repo root, the
+  Weather module against saved samples), but nothing runs them on a push.
 
 ## Next: OmniCore
 
@@ -171,7 +113,8 @@ registry wins. Reasoned about, never tested.
 Calendar rework.
 
 **Windows 8 theme.** Needs a pass, and does not draw `time` blocks as
-clocks yet (it falls back to plain text).
+clocks yet (it falls back to plain text). It draws `data-source` (Wide and
+Large at the foot, Medium as a page of its own, Small not at all).
 
 **More font subsets, and the Adamina `firstWoff2Url`.** Parked.
 
