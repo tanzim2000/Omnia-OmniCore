@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.19.8
+
+Delete a face from its page, choices that ask before they're taken, and what a weather source needs: headers, a credit line, and a reason when a call fails
+
+### Added
+
+- **A face can be deleted.** A face's page has a new box, **This face**, beside Manage resources: just two buttons, no heading. On a phone held upright it comes straight after the face's details. **Open face** opens the face itself in a new tab. **Delete face** asks first, saying how many widgets go with it, then deletes the face, its widgets and everything they saved. Any screen showing it goes to the welcome page, and anything its widgets were doing in the background stops. The face's number is free again, so the next face made gets it.
+- **A choice can ask before it's taken.** A module's setting can name options that need something first, such as a weather service that needs an API key. Picking one asks "Do you have an API key?" in a pop-up. No puts the choice back; Yes asks for the key and saves it into the module's key setting. Nothing is asked when the key is already there. Works on a widget's page and in the setup wizard. Documented for module authors (`ask`) in `docs/Building modules.md`.
+- **A widget can say where its data came from.** A module can return `data-source` next to its title ("Environment Canada"), and OmniCore passes it to the theme, which shows it however it likes. Some services only allow their data to be shown with credit; this is how the credit reaches the screen. Documented in `docs/Building modules.md`, `docs/Building theme.md` and `docs/Architecture.md`.
+- **Modules can send headers with their network calls** (`headers` in `omni.fetch`), such as an API key a service wants in a header. Calls with different headers are cached apart, so two widgets with two keys never see each other's answers.
+- **A failed network call says why.** `omni.fetch` now gives a module the service's status when a call fails (401, 404, 500, or 0 when nothing answered), so a widget can say "Invalid API key" instead of just "Not reachable".
+- **Question pop-ups for every page.** The pop-up that asks "Are you sure?" now lives in the shared Default UI, along with a new one that asks for something to be typed in. The admin pages and the setup wizard all have them, and they're described on the Default UI page of the docs site.
+
+### Changed
+
+- **Every network call from a module says it comes from OmniCore**, unless the module says otherwise. Some services (MET Norway, the US National Weather Service) refuse calls that don't say who they're from.
+- **A key field in the setup wizard hides what's typed**, as it already did on a widget's page.
+
 ## v1.19.7
 
 Notifications in frosted glass with room for two links, widgets that name themselves, a Refresh box of their own, and Light / Dark / Device on the welcome face

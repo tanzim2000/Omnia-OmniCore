@@ -319,6 +319,32 @@ function removeInstance(faceId, instanceId) {
 	return removed;
 }
 
+// Delete a face for good: its record, every widget on it, and everything
+// those widgets saved. Returns the face that was deleted, or null when
+// there's no such face.
+//
+// Only the data. Stopping the face's servers and whatever its widgets run
+// in the background is the caller's job (admin-face.js), the same split
+// as removeInstance: face-store.js never owns a running server.
+//
+// The face's number is free again afterwards, so the next face made gets
+// it: numbers are ports, and ports are reused rather than left as gaps.
+function deleteFace(faceId) {
+	const faces = readFaces();
+	const face = faces.find((candidate) => candidate.id === faceId);
+
+	if (!face) {
+		return null;
+	}
+
+	writeFaces(faces.filter((candidate) => candidate.id !== faceId));
+
+	// Every widget's own saved data lives in one folder per face
+	moduleStorage.deleteFaceData(faceId);
+
+	return face;
+}
+
 // Save a face's settings for one particular theme
 function updateThemeConfig(faceId, themeId, config) {
 	const faces = readFaces();
@@ -355,5 +381,6 @@ module.exports = {
 	updateFace,
 	addInstance,
 	updateInstance,
-	removeInstance
+	removeInstance,
+	deleteFace
 };

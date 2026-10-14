@@ -1326,6 +1326,18 @@ function uiStyles(options) {
 
 	.modal-close:hover { color: var(--fg); background: var(--glass-bg); }
 
+	/* A question in a pop-up, from confirmDialog or askDialog (see
+	   DIALOG_SCRIPT): the question's text, an optional box to type into,
+	   then its two buttons side by side, equally wide. */
+	.dialog-text { margin: 0; color: var(--fg-muted); line-height: 1.5; }
+	.dialog-buttons { display: flex; gap: 0.6em; margin-top: 0.4em; }
+	.dialog-buttons > button { flex: 1; }
+
+	/* A glass button for something that can't be taken back (deleting a
+	   face, removing a widget). The same button as everywhere else, in
+	   the danger colour, so it reads as "careful" before anyone reads it. */
+	.glass.glass-danger { color: var(--danger); border-color: var(--danger-border); }
+
 	.stepper {
 		display: flex;
 		align-items: center;
@@ -1475,8 +1487,139 @@ const MODE_SWITCH_SCRIPT = `
 	})();
 `;
 
+// Questions in a pop-up, drawn in the Default UI rather than the
+// browser's own confirm() and prompt() boxes: those look like system
+// warnings, can't say which button does what, and on a phone block the
+// whole page. Every page built on this library can use them: the admin
+// face, the setup wizard, the welcome face. Include this script, then:
+//
+//     if (!(await confirmDialog({ title, text, confirm: "Delete", danger: true }))) return;
+//
+//     const key = await askDialog({ title, text, placeholder, confirm: "Save" });
+//
+// confirmDialog resolves true for its confirm button. askDialog resolves
+// to what was typed (trimmed; the confirm button stays off until there is
+// something), with `secret: true` for a box that hides what's typed. Both
+// resolve false / null for Cancel, a click outside the panel, or Escape.
+const DIALOG_SCRIPT = `
+	function openDialog(options, withInput) {
+		return new Promise(function (resolve) {
+			var backdrop = document.createElement("div");
+			backdrop.className = "modal-backdrop";
+
+			var panel = document.createElement("div");
+			panel.className = "modal";
+			panel.setAttribute("role", "dialog");
+			panel.setAttribute("aria-modal", "true");
+
+			var title = document.createElement("h2");
+			title.textContent = options.title || "";
+			panel.appendChild(title);
+
+			if (options.text) {
+				var text = document.createElement("p");
+				text.className = "dialog-text";
+				text.textContent = options.text;
+				panel.appendChild(text);
+			}
+
+			var input = null;
+
+			if (withInput) {
+				input = document.createElement("input");
+				input.type = options.secret ? "password" : "text";
+				input.autocomplete = "off";
+				input.spellcheck = false;
+				input.placeholder = options.placeholder || "";
+				input.setAttribute("aria-label", options.title || "");
+				input.value = options.value || "";
+				panel.appendChild(input);
+			}
+
+			var buttons = document.createElement("div");
+			buttons.className = "dialog-buttons";
+
+			var cancel = document.createElement("button");
+			cancel.type = "button";
+			cancel.className = "glass";
+			cancel.textContent = options.cancel || "Cancel";
+
+			var confirmButton = document.createElement("button");
+			confirmButton.type = "button";
+			confirmButton.className = "glass" + (options.danger ? " glass-danger" : "");
+			confirmButton.textContent = options.confirm || "OK";
+
+			buttons.appendChild(cancel);
+			buttons.appendChild(confirmButton);
+			panel.appendChild(buttons);
+			backdrop.appendChild(panel);
+			document.body.appendChild(backdrop);
+
+			// Nothing typed yet: nothing to save
+			function typed() {
+				return input ? input.value.trim() : "";
+			}
+
+			function refresh() {
+				if (input) confirmButton.disabled = !typed();
+			}
+
+			function close(answer) {
+				document.removeEventListener("keydown", onKey);
+				backdrop.remove();
+				resolve(answer);
+			}
+
+			function yes() {
+				if (!input) return close(true);
+				if (typed()) close(typed());
+			}
+
+			function no() {
+				close(input ? null : false);
+			}
+
+			function onKey(event) {
+				if (event.key === "Escape") no();
+				// Enter in the box is the confirm button, once there's
+				// something in it
+				if (event.key === "Enter" && input && document.activeElement === input) {
+					event.preventDefault();
+					yes();
+				}
+			}
+
+			cancel.addEventListener("click", no);
+			confirmButton.addEventListener("click", yes);
+			if (input) input.addEventListener("input", refresh);
+
+			// A click on the dimmed area outside the panel is a "no"
+			backdrop.addEventListener("click", function (event) {
+				if (event.target === backdrop) no();
+			});
+
+			document.addEventListener("keydown", onKey);
+			refresh();
+
+			// The box gets the focus when there is one. Otherwise Cancel
+			// does, not the button that does something: an Enter pressed
+			// out of habit shouldn't be the yes.
+			(input || cancel).focus();
+		});
+	}
+
+	function confirmDialog(options) {
+		return openDialog(options || {}, false);
+	}
+
+	function askDialog(options) {
+		return openDialog(options || {}, true);
+	}
+`;
+
 module.exports = {
 	MODE_CHOICES,
+	DIALOG_SCRIPT,
 	uiStyles,
 	backButton,
 	fontStack,

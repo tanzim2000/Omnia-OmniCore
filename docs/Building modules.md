@@ -298,6 +298,25 @@ This is a fine way to get started, but it has no way to express richness,
 images, or anything beyond one number and a list of pairs. Move to `content`
 blocks once you want more than that.
 
+### Saying where the data came from
+
+If your data comes from a service, name it (OmniCore 1.19.8):
+
+```js
+return {
+  title: "Weather",
+  content: [ /* blocks */ ],
+  updated: new Date().toISOString(),
+  "data-source": "Environment Canada",
+};
+```
+
+`data-source` sits next to `title`, not in `content`: it's a fact about
+the whole widget, not one more thing to show in it. Keep it to the
+service's name as it asks to be credited, one line. A theme decides how to
+show it, and some services only allow their data to be shown with credit,
+so if yours is one of them, this is how the credit reaches the screen.
+
 ---
 
 ## 4. Settings
@@ -353,6 +372,52 @@ A `number` field can also carry `unit`, a word to show beside the box:
 `"unit": "km"` draws it as a short box with "km" after it, on one line,
 instead of a box the full width of the page. It needs OmniCore 1.19.7; an
 older one just leaves the word off.
+
+### Choices that ask first -- `ask`
+
+Some choices only work with something the person has to bring, like an API
+key for a service that needs one. A `select` can name those options in
+`ask`, and picking one asks first, in a pop-up (OmniCore 1.19.8):
+
+```json
+{
+  "key": "source",
+  "label": "Source",
+  "type": "select",
+  "options": ["Open-Meteo", "OpenWeatherMap"],
+  "default": "Open-Meteo",
+  "ask": {
+    "OpenWeatherMap": {
+      "question": "Do you have an OpenWeatherMap API key?",
+      "text": "It's free: sign up at openweathermap.org.",
+      "into": "owmKey",
+      "prompt": "Your OpenWeatherMap API key",
+      "placeholder": "Paste it here"
+    }
+  }
+},
+{
+  "key": "owmKey",
+  "label": "OpenWeatherMap API key",
+  "type": "password",
+  "showWhen": { "key": "source", "equals": "OpenWeatherMap" }
+}
+```
+
+- **No** puts the choice back to what it was.
+- **Yes** asks for the key in a second pop-up (`prompt` is its title,
+  `placeholder` the grey text in its box), and writes the answer into the
+  setting `into` names. Cancelling that pop-up puts the choice back too.
+- When `into` already holds something, nothing is asked: the key is there.
+- Without `into`, the question is all there is, and Yes simply takes the
+  choice.
+
+Only `question` is required. `into` has to name another setting in the
+same file, best a `password` with a `showWhen` on the choice, so the key
+can still be seen and changed later. An `ask` for an option the select
+doesn't have, or on anything but a `select`, is dropped with a line in the
+log. Works on a widget's page and in the setup wizard. An older OmniCore
+just takes the choice without asking.
 
 ### The refresh setting -- call it `refreshMinutes`
 
@@ -935,11 +1000,12 @@ the background by leaving it unsaid. Shown from OmniCore 1.19.6.
 **Use `omni.fetch` instead of calling `fetch()` yourself.**
 
 ```js
-const { data, stale } = await omni.fetch(url, {
+const { data, stale, status } = await omni.fetch(url, {
   cacheSeconds: 300, // default 300 -- how long a cached answer stays fresh
   timeoutSeconds: 10, // default 10 -- give up after this long
   as: "json", // default "json"; use "text" for non-JSON responses
-  key: "custom-key", // optional -- defaults to the URL itself
+  key: "custom-key", // optional -- defaults to the URL (plus headers)
+  headers: { "User-Agent": "MyModule (me@example.com)" }, // optional
 });
 ```
 
@@ -959,6 +1025,28 @@ yourself, and every module gets them for free:
   sets `stale: true` so you know. On a wall display, a twenty-minute-old
   temperature reads better than a blank tile -- use `stale` to append
   something like "(last known)" if you want to be transparent about it.
+
+**Headers** (OmniCore 1.19.8). `headers` adds request headers: an API
+key a service wants in a header rather than the URL, an `Accept` or
+`Accept-Language`, or a User-Agent. Every call already says it comes from
+OmniCore; a service that wants to know who to contact (MET Norway and the
+US National Weather Service refuse requests that don't say) gets your own
+`User-Agent` instead, which replaces OmniCore's. Calls to the same URL with
+different headers are cached apart, so two widgets with two API keys never
+see each other's answers.
+
+**Status** (OmniCore 1.19.8). When a call fails, `status` says how: the
+service's own HTTP status (`401` is usually a wrong API key, `404` a wrong
+address, `429` too many calls), or `0` when nothing answered at all. It's
+there even when `stale` hands back an older answer, and missing when the
+call worked. Use it to tell people something they can act on:
+
+```js
+if (!data) {
+  const reason = status === 401 || status === 403 ? "Invalid API key" : "Not reachable";
+  // ...
+}
+```
 
 `data` is `null` if nothing has ever succeeded. Always check for that:
 

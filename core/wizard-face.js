@@ -41,7 +41,8 @@ const {
 const widgetTypes = require("./widget-types");
 const { searchCities } = require("./location-service");
 const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
-const { uiStyles, rememberUiMode } = require("./ui-theme");
+const { uiStyles, rememberUiMode, DIALOG_SCRIPT } = require("./ui-theme");
+const { ASK_FIRST_SCRIPT } = require("./ask-first");
 
 // Only what's specific to the wizard. Everything else — glass buttons,
 // segments, inputs, the colour variables, the dock, the lists — comes from
@@ -368,7 +369,7 @@ function page(title, body, script) {
 </head>
 <body>
 	${body}
-	<script>${script || ""}</script>
+	<script>${DIALOG_SCRIPT}${ASK_FIRST_SCRIPT}${script || ""}</script>
 </body>
 </html>`;
 }
@@ -1120,11 +1121,19 @@ function renderWizard(data) {
 							escapeHtml(option) + "</option>";
 					}).join("");
 
+					// An option that needs something first (an API key)
+					// asks for it when picked. See core/ask-first.js.
+					const ask = field.ask
+						? ' data-ask="' + escapeHtml(JSON.stringify(field.ask)) + '"'
+						: "";
+
 					input = '<select data-key="' + escapeHtml(field.key) +
-						'" data-scope="' + owner + '" data-type="select">' +
+						'" data-scope="' + owner + '" data-type="select"' + ask + ">" +
 						options + "</select>";
 				} else {
-					const type = ["url", "number"].indexOf(field.type) >= 0
+					// A password (an API key) is a box that hides what's
+					// typed, the same as on a widget's page
+					const type = ["url", "number", "password"].indexOf(field.type) >= 0
 						? field.type : "text";
 
 					input = '<input type="' + type + '" data-key="' +
@@ -1283,6 +1292,9 @@ function renderWizard(data) {
 			}
 
 			applyFieldConditions();
+
+			// The step's form is new: wire up any choice that asks first
+			setUpAskFirst();
 
 			// Hide the fields that don't belong to the picked widget type,
 			// and light up its button. Does nothing on a step without a

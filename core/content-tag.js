@@ -32,8 +32,16 @@ const crypto = require("crypto");
 // single call by design, so including it would make every tag unique and
 // the whole thing pointless. What we want to know is whether the content
 // differs, not whether time has passed.
-function contentTag(title, blocks) {
-	const shape = JSON.stringify({ title: title, content: blocks });
+function contentTag(title, blocks, source) {
+	// The data's source counts as content too (a widget switched from one
+	// weather service to another has changed, even if every number is the
+	// same). Only added when there is one, so a widget without a source
+	// keeps the exact tag it always had.
+	const shape = JSON.stringify(
+		source
+			? { title: title, content: blocks, "data-source": source }
+			: { title: title, content: blocks }
+	);
 
 	// Not a security boundary — nobody is attacking this, it just needs
 	// to be short and to change when the content does. sha1 is fine and

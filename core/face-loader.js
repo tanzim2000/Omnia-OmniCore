@@ -24,6 +24,7 @@ const renderFallbackPage = require("./fallback-page");
 const {
 	attachEvents,
 	pushToFace,
+	closeFace,
 	clientBundle
 } = require("./face-events");
 const { toBlocks, proxyImages } = require("./envelope");
@@ -35,6 +36,30 @@ const { attachFontRoute } = require("./font-service");
 
 // Running faces, keyed by port: { server, face }
 const runningFaces = new Map();
+
+// Where a widget's data came from ("Environment Canada"), as the module
+// said it at the top level of what it returned, next to `title`. Part of
+// the Content Contract since v1.19.8: a theme shows it however it likes,
+// which is how a service that asks for credit gets it. One plain line of
+// text, at most 100 characters; anything else is no source at all.
+const SOURCE_KEY = "data-source";
+const SOURCE_MAX = 100;
+
+function dataSourceOf(envelope) {
+	const raw = envelope && envelope[SOURCE_KEY];
+
+	if (typeof raw !== "string") {
+		return null;
+	}
+
+	const line = raw.replace(/\s+/g, " ").trim();
+
+	if (!line) {
+		return null;
+	}
+
+	return line.length > SOURCE_MAX ? line.slice(0, SOURCE_MAX - 3).trimEnd() + "..." : line;
+}
 
 // A valid envelope saying something went wrong, so a failing module shows
 // as one dead tile rather than breaking the page
@@ -79,7 +104,7 @@ function sendContent(req, res, payload, tagBlocks) {
 	// even when the picture behind it changes — so tagging the proxied
 	// form would say "nothing changed" every time Bing published a new
 	// wallpaper. The original URLs are what actually move.
-	const tag = contentTag(payload.title, tagBlocks);
+	const tag = contentTag(payload.title, tagBlocks, payload["data-source"]);
 
 	res.set("ETag", tag);
 
@@ -310,24 +335,29 @@ function startFace(face) {
 					imageProxy.remember
 				);
 
-				sendContent(
-					req,
-					res,
-					{
-						// The label the user typed wins; then what the module
-						// suggests from its settings (see instance-label.js);
-						// then whatever title the tile itself returned. That's
-						// how two weather tiles get told apart.
-						title:
-							ownLabel(instance) ||
-							(await suggestedLabel(instance)) ||
-							envelope.title ||
-							instance.module,
-						content: blocks,
-						updated: envelope.updated || new Date().toISOString()
-					},
-					raw
-				);
+				const payload = {
+					// The label the user typed wins; then what the module
+					// suggests from its settings (see instance-label.js);
+					// then whatever title the tile itself returned. That's
+					// how two weather tiles get told apart.
+					title:
+						ownLabel(instance) ||
+						(await suggestedLabel(instance)) ||
+						envelope.title ||
+						instance.module,
+					content: blocks,
+					updated: envelope.updated || new Date().toISOString()
+				};
+
+				// Only there when the module named one: a theme never has
+				// to tell an empty source from a missing one
+				const source = dataSourceOf(envelope);
+
+				if (source) {
+					payload[SOURCE_KEY] = source;
+				}
+
+				sendContent(req, res, payload, raw);
 			} catch (error) {
 				// Catching here means a badly written module costs you one
 				// tile, not the whole face
@@ -472,6 +502,31 @@ function refresh(id) {
 	return updated;
 }
 
+// Stop a face's server for good: the face has been deleted. Every screen
+// showing it is sent to the welcome face first (see face-events.js), then
+// the port stops answering. Resolves once it has.
+function stopFace(id) {
+	const running = runningFaces.get(id);
+
+	closeFace(id);
+
+	if (!running) {
+		return Promise.resolve(false);
+	}
+
+	runningFaces.delete(id);
+
+	return new Promise((resolve) => {
+		running.server.close(() => resolve(true));
+
+		// A browser's keep-alive connection, idle between two requests,
+		// would hold the port open until it timed out
+		if (typeof running.server.closeAllConnections === "function") {
+			running.server.closeAllConnections();
+		}
+	});
+}
+
 // Change a face's own attributes and have it take effect right away
 function updateFace(id, changes) {
 	if (!faceStore.updateFace(id, changes)) {
@@ -481,4 +536,4 @@ function updateFace(id, changes) {
 	return refresh(id);
 }
 
-module.exports = { startFace, updateFace, refresh };
+module.exports = { startFace, stopFace, updateFace, refresh, dataSourceOf };

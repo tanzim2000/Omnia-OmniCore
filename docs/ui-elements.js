@@ -171,6 +171,15 @@ const sections = [
 				note: "A disabled one is faded, with no glow and no press. Disable it whenever a click would do nothing (Update now without Docker, Save while saving), or it reads as broken."
 			},
 			{
+				id: "glass-danger",
+				title: "Glass button for something final",
+				sel: ".glass.glass-danger",
+				desc: "The same glass button, in the danger colour, for something that can't be taken back: deleting a face, removing a widget. It reads as careful before anyone reads the word on it.",
+				demo: '<button class="glass glass-danger">Delete face</button>',
+				code: '<button class="glass glass-danger">Delete face</button>',
+				note: "Ask first, with confirmDialog and danger: true, so the yes in the question is the same red button."
+			},
+			{
 				id: "glossy",
 				title: "Coloured buttons",
 				sel: ".btn-glossy .btn-glossy-green / .btn-glossy-neutral",
@@ -307,6 +316,16 @@ const sections = [
 				demo: '<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2>Choose a font</h2><button class="modal-close" aria-label="Close">&#10005;</button></div><input type="text" placeholder="Search" aria-label="Search fonts"><div class="list"><div class="segment clickable font-row"><span>Adamina</span><span class="hint">serif</span></div></div></div></div>',
 				code: '<div class="modal-backdrop" hidden>\n\t<div class="modal">\n\t\t<div class="modal-head">\n\t\t\t<h2>Title</h2>\n\t\t\t<button class="modal-close">&#10005;</button>\n\t\t</div>\n\t\t…\n\t</div>\n</div>',
 				note: "It has to sit outside every segment (see --segment-blur above). Here it's kept inside its box; normally it covers the whole window."
+			},
+			{
+				id: "dialog",
+				title: "Question pop-up (confirmDialog, askDialog)",
+				sel: ".modal (.dialog-text, .dialog-buttons)",
+				desc: "A question in a pop-up instead of the browser's own confirm() or prompt() box: a title, a line of text, and two buttons side by side. askDialog adds a box to type into and keeps its confirm button off until something is typed. Built by DIALOG_SCRIPT, which every page on the Default UI carries: <code>await confirmDialog({ title, text, confirm, danger })</code> answers true or false, <code>await askDialog({ title, text, placeholder, secret, confirm })</code> answers what was typed, or null.",
+				stage: 260,
+				demo: '<div class="modal-backdrop"><div class="modal"><h2>Delete this face?</h2><p class="dialog-text">Its widgets and settings go with it.</p><div class="dialog-buttons"><button class="glass">Cancel</button><button class="glass glass-danger">Delete</button></div></div></div>',
+				code: 'const sure = await confirmDialog({\n\ttitle: "Delete this face?",\n\ttext: "Its widgets and settings go with it.",\n\tconfirm: "Delete",\n\tdanger: true\n});',
+				note: "Cancel, Escape and a click outside the panel are all a no. Cancel has the focus, so an Enter pressed out of habit is never the yes."
 			}
 		]
 	},

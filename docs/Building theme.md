@@ -101,6 +101,14 @@ actual content comes from.
 }
 ```
 
+An envelope can also carry **`"data-source"`** (OmniCore 1.19.8): one
+line saying where the data came from, such as `"data-source": "Environment
+Canada"`. It's there only when the module named a source. Show it however
+suits your theme (a small line at the foot of the tile, a tooltip, the back
+of a flipped tile); some services allow their data to be shown only with
+credit, so a theme that has room for it should show it. A change of source
+changes the ETag, the same as a change of content.
+
 `richness` is the one parameter you control, and it's the most important
 decision your theme makes -- the whole of §4 is about it. `title` here is
 already the resolved one (the instance's label if it has one, otherwise

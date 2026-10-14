@@ -6,6 +6,8 @@
 // browser auto-reconnects if the connection drops — which matters for an
 // unattended kiosk on flaky wifi.
 
+const { portLinkScript, WELCOME_PORT } = require("./face-links");
+
 // Open connections, keyed by face id (port). Each entry is the response
 // stream plus what the client said it was when it connected.
 const connections = new Map();
@@ -17,6 +19,10 @@ const connections = new Map();
 // "face-changed" means anything about this face was edited — its theme,
 // its name, its modules. The page just reloads and picks up whatever
 // changed, so displays nobody is standing in front of stay current.
+//
+// "face-deleted" means the face is gone (since v1.19.8). There's nothing
+// left to reload onto, so the screen goes to the welcome face, which
+// lists the faces still there.
 const CLIENT_SCRIPT = `<script>
 	(function () {
 		// Is this a real OmniView, or just a browser tab pointed at the
@@ -35,6 +41,13 @@ const CLIENT_SCRIPT = `<script>
 
 		events.addEventListener("face-changed", function () {
 			location.reload();
+		});
+
+		${portLinkScript}
+
+		events.addEventListener("face-deleted", function () {
+			events.close();
+			location.href = faceUrl(${WELCOME_PORT}) + "/";
 		});
 
 		// A notification for this face. The overlay that draws it is
@@ -99,10 +112,34 @@ function attachEvents(app, face) {
 		setImmediate(() => require("./notifications").releaseHeld(face.id));
 
 		// Clean up when the browser closes the tab or navigates away
+		// (The face's list is gone already when the face was deleted: see
+		// closeFace)
 		req.on("close", () => {
-			connections.get(face.id).delete(listener);
+			const listeners = connections.get(face.id);
+			if (listeners) listeners.delete(listener);
 		});
 	});
+}
+
+// The face is being deleted: tell every screen showing it, so each goes
+// to the welcome face, then end their connections. Without ending them,
+// the face's server couldn't close: an open stream keeps it alive.
+function closeFace(faceId) {
+	const listeners = connections.get(faceId);
+
+	if (!listeners) {
+		return 0;
+	}
+
+	const count = listeners.size;
+
+	for (const listener of listeners) {
+		listener.res.write("event: face-deleted\ndata: {}\n\n");
+		listener.res.end();
+	}
+
+	connections.delete(faceId);
+	return count;
 }
 
 // Push a message to every browser currently showing this face.
@@ -168,4 +205,4 @@ function clientBundle(face) {
 	);
 }
 
-module.exports = { attachEvents, pushToFace, displayCount, CLIENT_SCRIPT, clientBundle };
+module.exports = { attachEvents, pushToFace, closeFace, displayCount, CLIENT_SCRIPT, clientBundle };

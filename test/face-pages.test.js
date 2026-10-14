@@ -161,9 +161,11 @@ test("facts: the facts and the Widgets / Theme links are two segments", async ()
 
 	// One column holding both, beside the name form
 	assert.match(html, /<div class="bento-column">\s*<div class="segment">\s*<h1>Face 001<\/h1>\s*<div class="facts">/);
+	// The links come straight after the facts, in the pair they share with
+	// This face (since v1.19.8)
 	assert.match(
 		html,
-		/<\/div>\s*<\/div>\s*<div class="segment resources">\s*<h2>Manage resources<\/h2>\s*<p class="lede">[^<]*<\/p>\s*<a class="row" href="\/faces\/4001\/modules">/
+		/<\/div>\s*<\/div>\s*<div class="resource-pair">\s*<div class="segment resources">\s*<h2>Manage resources<\/h2>\s*<p class="lede">[^<]*<\/p>\s*<a class="row" href="\/faces\/4001\/modules">/
 	);
 });
 

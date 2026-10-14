@@ -50,7 +50,8 @@ const { getLocation, searchCities } = require("./location-service");
 const { ownLabel, suggestedLabel, labelsFor } = require("./instance-label");
 const faceStore = require("./face-store");
 const omnicoreVersion = require("./version");
-const { refresh } = require("./face-loader");
+const { refresh, stopFace } = require("./face-loader");
+const notifications = require("./notifications");
 const { displayCount } = require("./face-events");
 const {
 	uiStyles,
@@ -62,9 +63,11 @@ const {
 	passwordField,
 	PASSWORD_TOGGLE_SCRIPT,
 	modeSwitch,
-	MODE_SWITCH_SCRIPT
+	MODE_SWITCH_SCRIPT,
+	DIALOG_SCRIPT
 } = require("./ui-theme");
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
+const { askAttribute, ASK_FIRST_SCRIPT } = require("./ask-first");
 const coreUpdater = require("./core-updater");
 const updateStore = require("./update-store");
 const installStore = require("./install-store");
@@ -323,6 +326,32 @@ const styles = `
 	.note-segment .mode-preview { display: flex; flex-direction: column; }
 	.note-segment .mode-screen { flex: 1; height: auto; min-height: 64px; }
 
+	/* Manage resources and This face, one pair of boxes (since v1.19.8).
+	   This face has no heading, only Open face and Delete face.
+
+	   Portrait (a phone held upright): the boxes stack, This face first,
+	   straight under the face's facts, its buttons side by side.
+
+	   Landscape: the boxes sit side by side, This face on the right and
+	   narrower, its buttons stacked and filling its whole height, so the
+	   pair ends level with Manage resources. */
+	.resource-pair { display: grid; gap: 14px; grid-template-columns: 1fr; }
+	.resource-pair > .segment { min-width: 0; }
+	.face-actions { order: -1; display: flex; flex-direction: column; }
+	.face-buttons { display: flex; gap: 0.6em; flex: 1; }
+	.face-buttons > button { flex: 1; white-space: nowrap; }
+	.face-actions .status { margin: 0.6em 0 0 0; }
+
+	@media (orientation: landscape) {
+		.resource-pair { grid-template-columns: 1.45fr 1fr; }
+		.face-actions { order: 0; }
+		.face-buttons { flex-direction: column; gap: 10px; }
+
+		/* A phone held sideways leaves this box narrow: less padding at
+		   the sides, so "Delete face" still fits on one line */
+		.face-buttons > button { padding-left: 0.5em; padding-right: 0.5em; min-width: 0; }
+	}
+
 	/* A segment's last row shouldn't leave a gap under itself */
 	.segment > a.row:last-child { margin-bottom: 0; }
 
@@ -347,11 +376,6 @@ const styles = `
 	/* Everything a segment does at the end of a form: Save and its message,
 	   and anything after it, with even space between them */
 	.segment-actions { display: flex; flex-direction: column; gap: 12px; }
-
-	/* A glass button for something that can't be taken back (removing a
-	   module from a face). The same button as everywhere else, in the
-	   danger colour, so it reads as "careful" before anyone reads it. */
-	.glass.glass-danger { color: var(--danger); border-color: var(--danger-border); }
 
 	/* The capsule (.dock, from the shared theme) at the foot of a page,
 	   centred under the segments, with the page's status line under it */
@@ -813,6 +837,18 @@ function escapeHtml(text) {
 // screen that is genuinely a root. `backLabel`, when given, replaces
 // the default arrow with text and switches to the pill shape — see
 // ui-theme.js's backButton().
+// What Delete face's question says goes with the face. Said plainly,
+// because there's no undo: how many widgets, and what happens to a
+// screen that's showing it.
+function deleteWarning(face) {
+	const count = face.instances.length;
+	const widgets = count
+		? `Its ${count === 1 ? "widget" : count + " widgets"} and everything ${count === 1 ? "it has" : "they have"} saved go with it.`
+		: "It has no widgets.";
+
+	return `${widgets} A screen showing it goes back to the welcome page. This can't be undone.`;
+}
+
 // "1 screen", "3 screens", "No screens right now"
 function screensText(count) {
 	if (!count) return "No screens right now";
@@ -977,7 +1013,7 @@ function page(title, body, script, bodyClass, back, backLabel) {
 <body class="${bodyClass || ""}">
 	${body}
 	${backButton(back, backLabel)}
-	<script>${UI_MODE_SCRIPT}${PASSWORD_TOGGLE_SCRIPT}${script || ""}</script>
+	<script>${UI_MODE_SCRIPT}${PASSWORD_TOGGLE_SCRIPT}${DIALOG_SCRIPT}${script || ""}${ASK_FIRST_SCRIPT}</script>
 </body>
 </html>`;
 }
@@ -1216,86 +1252,6 @@ function registryUnreachable(message) {
 	);
 }
 
-// A "are you sure?" pop-up, drawn in the Default UI rather than the
-// browser's own confirm() box -- that one looks like a system warning,
-// can't say which button does what, and on a phone blocks the whole
-// page.
-//
-// Pages that need it include this script, then:
-//
-//     if (!(await confirmDialog({ title, text, confirm: "Remove", danger: true }))) return;
-//
-// Resolves true for the confirm button, false for Cancel, the backdrop,
-// or Escape.
-const confirmScript = `
-	function confirmDialog(options) {
-		return new Promise(function (resolve) {
-			var backdrop = document.createElement("div");
-			backdrop.className = "modal-backdrop";
-
-			var panel = document.createElement("div");
-			panel.className = "modal";
-			panel.setAttribute("role", "dialog");
-			panel.setAttribute("aria-modal", "true");
-
-			var title = document.createElement("h2");
-			title.textContent = options.title;
-
-			var text = document.createElement("p");
-			text.className = "lede";
-			text.style.margin = "0";
-			text.textContent = options.text || "";
-
-			var buttons = document.createElement("div");
-			buttons.style.display = "flex";
-			buttons.style.gap = "10px";
-			buttons.style.marginTop = "6px";
-
-			var cancel = document.createElement("button");
-			cancel.className = "glass";
-			cancel.style.flex = "1";
-			cancel.textContent = options.cancel || "Cancel";
-
-			var confirmButton = document.createElement("button");
-			confirmButton.className = "glass" + (options.danger ? " glass-danger" : "");
-			confirmButton.style.flex = "1";
-			confirmButton.textContent = options.confirm || "OK";
-
-			buttons.appendChild(cancel);
-			buttons.appendChild(confirmButton);
-			panel.appendChild(title);
-			panel.appendChild(text);
-			panel.appendChild(buttons);
-			backdrop.appendChild(panel);
-			document.body.appendChild(backdrop);
-
-			function close(answer) {
-				document.removeEventListener("keydown", onKey);
-				backdrop.remove();
-				resolve(answer);
-			}
-
-			function onKey(event) {
-				if (event.key === "Escape") close(false);
-			}
-
-			cancel.addEventListener("click", function () { close(false); });
-			confirmButton.addEventListener("click", function () { close(true); });
-
-			// A click on the dimmed area outside the panel is a "no"
-			backdrop.addEventListener("click", function (event) {
-				if (event.target === backdrop) close(false);
-			});
-
-			document.addEventListener("keydown", onKey);
-
-			// Cancel gets the focus, not the button that does something:
-			// an Enter pressed out of habit shouldn't be the yes
-			cancel.focus();
-		});
-	}
-`;
-
 // Turn declared settings into form fields.
 //
 // `context` carries anything a field type needs that the schema can't know
@@ -1456,9 +1412,11 @@ function renderFields(schema, config, context, scope) {
 					)
 					.join("");
 
+				// An option that needs something first (an API key) asks
+				// for it when picked. See ask-first.js.
 				input =
 					`<select data-key="${escapeHtml(field.key)}" data-scope="${owner}" ` +
-					`data-type="select">${options}</select>`;
+					`data-type="select"${askAttribute(field, escapeHtml)}>${options}</select>`;
 			} else {
 				// text, url, number, password all render as an input
 				const type = ["url", "number", "password"].includes(field.type)
@@ -3304,7 +3262,7 @@ function startAdminFace() {
 			</div>`;
 
 		// Nothing on a development build's page does anything
-		const script = dev ? "" : localTimeScript + confirmScript + `
+		const script = dev ? "" : localTimeScript + `
 			var checkButton = document.getElementById("check");
 			var applyButton = document.getElementById("apply");
 			var checkStatus = document.getElementById("check-status");
@@ -4016,7 +3974,9 @@ function startAdminFace() {
 			.join("");
 
 		// Left: what this face IS (its facts), then where to change what
-		// it shows (Widgets, Theme). Right: what it's called, then how its
+		// it shows (Widgets, Theme) beside Open face and Delete face (see
+		// .resource-pair for how that pair turns round on a phone).
+		// Right: what it's called, then how its
 		// notifications look. The two columns end level (face-columns).
 		const body = `
 			<div class="bento">
@@ -4026,17 +3986,28 @@ function startAdminFace() {
 						<h1>${escapeHtml(faceName)}</h1>
 						<div class="facts">${facts}</div>
 					</div>
-					<div class="segment resources">
-						<h2>Manage resources</h2>
-						<p class="lede">What this face shows, and how it looks.</p>
-						<a class="row" href="/faces/${face.id}/modules">
-							<strong>Widgets</strong>
-							<span>${count ? count + (count === 1 ? " widget" : " widgets") : "None added yet"}</span>
-						</a>
-						<a class="row" href="/faces/${face.id}/theme">
-							<strong>Theme</strong>
-							<span>${escapeHtml(themeName)}</span>
-						</a>
+					<div class="resource-pair">
+						<div class="segment resources">
+							<h2>Manage resources</h2>
+							<p class="lede">What this face shows, and how it looks.</p>
+							<a class="row" href="/faces/${face.id}/modules">
+								<strong>Widgets</strong>
+								<span>${count ? count + (count === 1 ? " widget" : " widgets") : "None added yet"}</span>
+							</a>
+							<a class="row" href="/faces/${face.id}/theme">
+								<strong>Theme</strong>
+								<span>${escapeHtml(themeName)}</span>
+							</a>
+						</div>
+						<!-- No heading on screen: the two buttons say it all.
+						     aria-label still names the box for a screen reader. -->
+						<div class="segment face-actions" role="group" aria-label="This face">
+							<div class="face-buttons">
+								<button type="button" class="glass" id="open-face">Open face</button>
+								<button type="button" class="glass glass-danger" id="delete-face">Delete face</button>
+							</div>
+							<p class="status" id="delete-status"></p>
+						</div>
 					</div>
 				</div>
 				<div class="bento-column">
@@ -4187,6 +4158,47 @@ function startAdminFace() {
 					}
 				});
 			}
+
+			${portLinkScript}
+
+			// Open face: the face itself, in a new tab, so this page stays
+			// where it was. Built here because only the browser knows the
+			// address OmniCore was reached at (see faceUrl).
+			document.getElementById("open-face").addEventListener("click", function () {
+				window.open(faceUrl(${face.id}) + "/", "_blank", "noopener");
+			});
+
+			// Delete face: asked first, in the Default UI's own pop-up.
+			// There's no undo, so the question says what goes with it.
+			document.getElementById("delete-face").addEventListener("click", async function () {
+				const button = this;
+				const status = document.getElementById("delete-status");
+
+				const sure = await confirmDialog({
+					title: ${JSON.stringify(`Delete ${faceName}?`).replace(/</g, "\\u003c")},
+					text: ${JSON.stringify(deleteWarning(face)).replace(/</g, "\\u003c")},
+					confirm: "Delete face",
+					danger: true
+				});
+
+				if (!sure) return;
+
+				button.disabled = true;
+				status.textContent = "";
+				status.className = "status";
+
+				try {
+					const response = await fetch("/faces/${face.id}", { method: "DELETE" });
+					if (!response.ok) throw new Error();
+
+					// Back to the list of faces, which no longer has it
+					location.href = "/faces";
+				} catch (error) {
+					status.textContent = "Couldn't delete it. Check OmniCore is still running.";
+					status.className = "status bad";
+					button.disabled = false;
+				}
+			});
 		`;
 
 		res.send(page(faceName, body, script, "", "/faces"));
@@ -4204,6 +4216,32 @@ function startAdminFace() {
 
 		const count = displayCount(face.id);
 		res.json({ count, text: screensText(count) });
+	});
+
+	// Delete a face for good (since v1.19.8). In this order: the screens
+	// showing it are sent to the welcome face and its port closes, its
+	// Inport closes, whatever its widgets run in the background stops,
+	// and only then is its record deleted with everything its widgets
+	// saved. Notifications still waiting for a screen go with it.
+	app.delete("/faces/:id", async (req, res) => {
+		const id = Number(req.params.id);
+		const face = faceStore.findFace(id);
+
+		if (!face) {
+			res.status(404).json({ error: "No such face" });
+			return;
+		}
+
+		await stopFace(id);
+		stopInputFace(id);
+
+		// An empty face to line up with: every background run stops
+		await background.syncFace({ ...face, instances: [] });
+
+		faceStore.deleteFace(id);
+		notifications.forgetFace(id);
+
+		res.json({ ok: true });
 	});
 
 	app.post("/faces/:id", (req, res) => {
@@ -4752,7 +4790,6 @@ function startAdminFace() {
 			${priorityScript}
 			${locationScript}
 			${widgetTypes.pickerScript}
-			${confirmScript}
 
 			applyWidgetFilter();
 

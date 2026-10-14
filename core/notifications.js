@@ -327,6 +327,11 @@ function notify(faceId, message, origin) {
 	return true;
 }
 
+// A deleted face's held notifications have nobody left to go to
+function forgetFace(faceId) {
+	held.delete(faceId);
+}
+
 // Hand over anything held for this face and forget it.
 //
 // Called when any display connects, which is the moment "nobody was
@@ -981,6 +986,7 @@ const OVERLAY_SCRIPT = `
 module.exports = {
 	notify,
 	releaseHeld,
+	forgetFace,
 	resolvePriority,
 	readLink,
 	readLinks,

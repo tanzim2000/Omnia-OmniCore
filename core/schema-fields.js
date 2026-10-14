@@ -27,6 +27,8 @@
 // bad entry would fill the log every few seconds.
 const warned = new Set();
 
+const { cleanAsk } = require("./ask-first");
+
 function warnOnce(message) {
 	if (warned.has(message)) {
 		return;
@@ -58,6 +60,10 @@ function isChoice(value) {
 //   showWhen   "only show me when another field has this value": must be
 //              an object naming that field and the value (`equals`), or
 //              it's taken off and the field is simply always shown
+//   ask        a select's options that ask before they're taken (see
+//              ask-first.js): only entries for real options, each with a
+//              question, and `into` only when it names another setting
+//              in this same list
 function usableFields(owner, fields) {
 	if (!Array.isArray(fields)) {
 		return [];
@@ -120,7 +126,20 @@ function usableFields(owner, fields) {
 		kept.push(clean);
 	}
 
-	return kept;
+	// `ask` is checked last, once every kept setting's name is known: its
+	// `into` has to name one of them
+	const keys = kept.map((field) => field.key);
+
+	return kept.map((field) => {
+		if (!("ask" in field)) {
+			return field;
+		}
+
+		const ask = cleanAsk(field, keys, (message) => warnOnce(`${owner}: ${message}`));
+		const { ask: dropped, ...rest } = field;
+
+		return ask ? { ...rest, ask } : rest;
+	});
 }
 
 module.exports = { usableFields };

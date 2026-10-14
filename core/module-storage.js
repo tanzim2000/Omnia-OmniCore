@@ -66,4 +66,14 @@ function deleteInstanceData(faceId, instanceId) {
 	}
 }
 
-module.exports = { readInstanceData, writeInstanceData, deleteInstanceData };
+// Called when a whole face is deleted: the folder that holds every one of
+// its widgets' files goes with it
+function deleteFaceData(faceId) {
+	try {
+		fs.rmSync(path.join(facesDataDir(), String(faceId)), { recursive: true, force: true });
+	} catch (error) {
+		// Nothing there, or already gone. Either way there's nothing left.
+	}
+}
+
+module.exports = { readInstanceData, writeInstanceData, deleteInstanceData, deleteFaceData };

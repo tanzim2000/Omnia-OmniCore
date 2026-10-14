@@ -1,7 +1,7 @@
 # Backlog
 
 What is left to do, and what was deliberately put off. Last cleaned up
-after v1.19.7. Anything already built has been removed from here; the
+after v1.19.8. Anything already built has been removed from here; the
 CHANGELOG is the record of what shipped.
 
 If you are picking this back up after a break, this file plus
@@ -25,18 +25,15 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
      source.
    - Units: temperature (Celsius or Fahrenheit) and wind speed (km/h or
      mph).
-   - Credit for the source, in whatever form is agreed.
+   - Credit for the source, in `data-source` (OmniCore 1.19.8).
    - Notifications for severe weather alerts where the source has them:
      Environment Canada (red, orange, yellow), MET Norway's MetAlerts
      (red, orange, yellow, by coordinates). OpenWeatherMap's alerts are
      only on its paid One Call 4.0, so none on the free key. Open-Meteo has
      none. Google Weather left for later.
-   - A US source is wanted too, in the same way (to be chosen).
-   - Built against saved sample responses, because the development sandbox
-     cannot reach these services. MET Norway needs the `omni.fetch`
-     headers option (v1.19.8, below).
-   - Build tasks, in order, once samples are in hand and "Start coding" is
-     said (see **Weather: tasks and samples** below).
+   - A US source too: the National Weather Service, US only.
+   - Built against the saved samples (see **Weather: tasks and samples**
+     below). Needs OmniCore 1.19.8.
 3. **Prayer Times**: a list that can include forbidden times behind one
    switch, with the times following the school of thought chosen for the
    prayers; notifications at each prayer and forbidden time, priority
@@ -51,140 +48,58 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
 
 ## Weather: tasks and samples
 
-### Samples to gather first
+### Samples
 
-The development sandbox cannot reach these services, so Weather is built
-against real saved responses. Run each in the Codespace and send the
-output (save to a file and attach it, or paste it). Use Regina
-(50.4452, -104.6189) for Canada, Oslo (59.9139, 10.7522) for Norway, and
-a US city such as Denver (39.7392, -104.9903). Where a place has an
-active alert right now, a second sample of that is the most valuable
-part, because that is the shape the notifications are built from.
+Gathered on Oct 11, 2026 (kept in the session, not in the repo):
 
-| Source             | Samples                                                                                                                                                                                | Needs                                                 |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Open-Meteo         | Nothing new; already working.                                                                                                                                                          | Nothing                                               |
-| Environment Canada | The `citypageweather-realtime` item for Regina, in English: current conditions, today's forecast, and the warnings block. One with an active warning if any exists anywhere in Canada. | Nothing                                               |
-| MET Norway         | `locationforecast/2.0/complete` for Oslo; MetAlerts as GeoJSON for a point with an active alert and for one without.                                                                   | A User-Agent header with contact details              |
-| US (NWS)           | `/points/{lat},{lon}`, then its `forecast`, its nearest station's `observations/latest`, and `alerts/active?point={lat},{lon}`. One with an active alert if possible.                  | A User-Agent header with contact details              |
-| OpenWeatherMap     | `data/2.5/weather` and `data/2.5/forecast` for Regina, metric. No alerts on the free key.                                                                                              | A free API key (email sign-up)                        |
-| Google Weather     | `currentConditions:lookup`, `forecast/days:lookup`, and whatever its public alerts endpoint is called (to confirm), for Regina.                                                        | An API key and a billing-enabled Google Cloud project |
-
-Exact URLs and the `curl` lines will be written out when the samples are
-asked for, and anything above marked "to confirm" is checked against the
-service's own documentation first.
+| Source             | What we have                                                                                                   |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Open-Meteo         | Current conditions and today's high and low.                                                                   |
+| Environment Canada | Regina's city page (current, forecast periods, a special weather statement) and all 844 cities (a yellow snowfall warning). Every value comes in English and French. |
+| MET Norway         | The Oslo forecast (`complete`, with `apparent_air_temperature` for feels like; wind in m/s), English MetAlerts (22 marine alerts) and the empty case. |
+| US (NWS)           | Point, forecast (Fahrenheit), latest station observation (metric), and real alerts: the Denver point (none) and 73 severe ones. `limit` isn't accepted on `alerts/active`; `point=` works. |
+| Google Weather     | Current conditions, 3-day forecast, and four real alerts (US floods, from NOAA). Alerts carry an id, title, event type, severity, urgency, times, instructions and the publisher. |
+| OpenWeatherMap     | None: the key answered 401. Built from the documented shape; test live with a working key.                     |
 
 ### The US source
 
-The US government source is the **National Weather Service** at
-`api.weather.gov`: free, no key (the docs say one may be required in the
-future), and it needs a User-Agent with contact details. A location goes
-through `/points/{lat},{lon}` to find the forecast grid and nearby
-stations. Current readings come from a station's latest observation (up
-to about 20 minutes old). Alerts are on `/alerts/active`, filtered by
-state or zone; the docs do not describe a direct point lookup, so the
-sample must show which filter to use. Alert levels follow CAP (severity
-Minor, Moderate, Severe, Extreme), not colours.
+The **National Weather Service** at `api.weather.gov`: free, no key (one
+may be required in future), and it needs a User-Agent. A place goes
+through `/points/{lat},{lon}` to find its forecast and nearby stations;
+current readings come from the nearest station's latest observation (up
+to about 20 minutes old). Alerts come from `/alerts/active?point=lat,lon`.
+Alert levels follow CAP (severity Minor, Moderate, Severe, Extreme), not
+colours, and an alert says whether it's new, an update or a cancellation.
 
-### Tasks
+### Tasks (Weather module, Essentials)
 
-OmniCore (v1.19.8):
-
-1. `omni.fetch` takes a `headers` option. Cached answers must not be
-   shared between calls that differ only in headers that matter to the
-   answer (the cache key stays the URL unless a `key` is given). Tests and
-   `docs/Building modules.md` updated.
-2. Move `confirmDialog` from `core/admin-face.js` into `core/ui-theme.js`,
-   so every page built on the shared library has it. Admin face keeps
-   working exactly as before (its two uses: the confirmations at lines
-   ~3561 and ~4809). Existing tests plus a new one that checks the shared
-   script is on the wizard and the admin pages. Nothing changes visually.
-3. Content Contract: `data-source` and `data-updated` as optional
-   top-level fields next to `title`, `content` and `updated`. Pass them
-   through `face-loader.js` and the envelope; include them in the change
-   check so a new source name redraws a tile. Document in
-   `docs/Architecture.md` and `docs/Building theme.md`. Default UI and the
-   Windows 8 theme draw the credit, small, on a tile that has room.
-4. Settings that change with another setting. A module's settings file
-   already supports `showWhen`; the Source setting needs the field list
-   itself to change with it (Info order differs per source), and the
-   "Do you have an API key?" dialogue on picking OpenWeatherMap or Google
-   (No puts the source back; Yes asks for the key in a second dialogue).
-   Works on a widget's page and in the setup wizard. Decide how a module
-   declares this in `settings.json`, and document it.
-5. Update this file's v1.19.8 notes and the CHANGELOG.
-
-Weather module (Essentials):
-
-6. `module.exports.label`: the location's name.
-7. Source setting, default Open-Meteo; one small adapter per source that
-   turns its answer into the same named pieces (Temperature, Condition,
-   Feels like, High / low, Humidity, Wind, and whatever else a source
-   has), so the tile code does not care where the data came from.
-8. Region rules: Environment Canada only for places in Canada, MET Norway
+1. `module.exports.label`: the location's name.
+2. Source setting, default Open-Meteo, with `ask` for OpenWeatherMap and
+   Google Weather (each into its own `password` key setting). One small
+   adapter per source that turns its answer into the same named pieces
+   (Temperature, Condition, Feels like, High / low, Humidity, Wind, and
+   whatever else a source has), so the tile code doesn't care where the
+   data came from.
+3. Region rules: Environment Canada only for places in Canada, MET Norway
    only for Norway, the US source only for the US. Outside its region the
    tile says what that source covers instead of showing wrong data.
-9. Units: temperature (Celsius, Fahrenheit) and wind speed (km/h, mph),
+4. Units: temperature (Celsius, Fahrenheit) and wind speed (km/h, mph),
    separate choices, applied to every source.
-10. The fields list and Info order per source, with a default order each.
-11. `data-source` and `data-updated` filled in for every source (and
-    "last known" kept for stale data).
-12. Alerts as notifications, for Environment Canada, MET Norway and the US
-    source (Google when its sample is in): one notification per new alert,
-    never repeated on every refresh, priority from the alert's level,
-    link when the alert has one. Test with saved samples, including the
-    quiet case (no alerts) and a cancelled alert.
-13. Rewritten description with a "What it needs from you" section per
-    source, no long dashes. Registry entry: new ref, `minOmniCore`
-    1.19.8, `background` and `notifies` set.
-14. Tests with the saved samples; a check on each source's attribution
-    wording against its licence.
-
-## v1.19.8: a face's page gets Open and Delete
-
-A new box on a face's page (the one with Name, Manage resources and
-Notifications), between **Manage resources** and **Notifications**, with
-two buttons:
-
-1. **Open face**: goes to the face itself.
-2. **Delete face**: removes the face. There is currently no way to delete
-   a face once it's created.
-
-Still to settle before building: what Delete asks first (a confirmation,
-since it can't be undone), what happens to the face's widgets and saved
-settings, its port and ID (free for reuse or kept so IDs never repeat),
-and what the Welcome page and any open screens show afterward. Show a
-demo before coding.
-
-Also planned for v1.19.8:
-
-- **`omni.fetch` can send headers.** A new `headers` option, so a module
-  can send what a service asks for, such as the descriptive User-Agent
-  MET Norway requires. Documented in `docs/Building modules.md`.
-- **A source credit in what a widget gives.** A new top-level field next
-  to `title` and `content`, `data-source` (for example "Environment
-  Canada"), and a `data-updated` for when the data itself was read. Themes
-  draw them however they like; a theme that leaves out the credit is the
-  theme author's doing. Goes into the Content Contract in
-  `docs/Architecture.md` and `docs/Building theme.md`.
-- **Dialogue boxes anywhere** (task 2 under Weather: tasks and samples). `confirmDialog` lives inside
-  `core/admin-face.js` (only the `.modal` styles are shared, in
-  `core/ui-theme.js`). Move it into `core/ui-theme.js` so the wizard and
-  other pages can use it too. Weather's "Do you have an API key?" flow
-  needs it on a widget's page and in the wizard.
-
-### Also planned for v1.19.8
-
-- **`omni.fetch` can send headers.** A new `headers` option, so a module
-  can send what a service asks for (MET Norway refuses requests without a
-  descriptive User-Agent). To settle: whether the headers become part of
-  the cache key, and whether a module may override OmniCore's own
-  User-Agent. Document it in `docs/Building modules.md` and add tests.
-- **Weather needs more from the settings system** (see the Weather entry
-  above; each of these is still to be decided before building):
-  a setting that asks a question in a dialog before it's accepted (the
-  "do you have an API key?" flow), and a list setting whose choices change
-  with another setting (the info list differs per weather source).
+5. The Info order per source: one `priority` setting per source, each with
+   a `showWhen` on the source, with its own default order.
+6. `data-source` for every source, and "last known" kept for stale data.
+   Use `status` from `omni.fetch` to say "Invalid API key" on a 401 or 403.
+7. Alerts as notifications, for Environment Canada, MET Norway, the US
+   source and Google: one notification per new alert, never repeated on
+   every refresh, priority from the alert's level, link when the alert
+   has one. Tested with the saved samples, including the quiet case and a
+   cancelled alert.
+8. Rewritten description with a "What it needs from you" section per
+   source, no long dashes. Registry entry: new ref, `minOmniCore` 1.19.8,
+   `background` and `notifies` set.
+9. Windows 8 draws `data-source`, small, on a tile that has room.
+10. Tests with the saved samples; check each source's attribution wording
+    against its licence.
 
 ## Next: OmniCore
 
@@ -201,36 +116,22 @@ Also planned for v1.19.8:
   - Right, small segments: **Compatible with** (the OmniCore version on
     the same line), **Version**, **Emits**, then **Author**, so Author and
     Source sit side by side at the bottom.
-  - Version is the module's publish date as `YYYY.M.D.H.M`, with no zero
-    at the front of any part. The Compatible with segment turns yellow
-    when the running OmniCore is older than the module needs.
-  - Themes' pages should probably match.
+  - Version is the module's publish date as `YYYY.M.D.H.M` in UTC, with
+    no zero at the front of any part (a lone `0` at midnight is fine). The
+    Compatible with segment turns yellow when the running OmniCore is older
+    than the module needs.
+  - Themes' pages should probably match. To settle: whether Installed
+    Resources shows the same version.
 - **A manual Update button.** Today updates only happen in the background
   after a check. Nothing lets a person press Update on one module.
 - **No uninstall in the UI.** Removing a module or theme still means
   deleting its folder.
-- **Test CI.** `npm test` has 20 test files, but nothing runs them on a
+- **Test CI.** `npm test` has 25 test files, but nothing runs them on a
   push. The workflows only publish the image and the docs site.
 - **Tag workflow concurrency.** Two `v*` tags pushed together can run the
   image publish at once. Push tags one at a time, or add `concurrency`.
 - **Updates are only noticed for tagged releases.** An untagged version
   bump is invisible to the updater. Always tag.
-
-## Proposed: a new layout for a module's Marketplace page
-
-Agreed in principle, not yet scheduled (themes share the page).
-
-- Top segment stays as it is.
-- Left: **Description** in its own scrollable segment with a title, and
-  **Source** below it.
-- Right, top to bottom: **Compatible with** (a version tag on the same
-  line), **Version**, **Emits**, **Author**. Author and Source end up side
-  by side along the bottom.
-- The version is the publish date as `YYYY.M.D.H.M` with no leading zeros,
-  so it reads like a version number. The segment turns yellow when the
-  running OmniCore is older than the one the module needs.
-- To settle: UTC or local time for the version, which segment tints, and
-  whether the Installed Resources page shows the same version.
 
 ## v2.0: settings rework
 
