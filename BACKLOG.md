@@ -140,16 +140,101 @@ Features:
 ## v2.0: settings rework and a new look
 
 A heavy rework of the settings pages, and of how OmniCore itself looks.
+Designed in conversation (Oct 2026), nothing built yet. A mockup comes
+first, so the look can be judged before any real code. OmniCore v2 is aimed
+at capable machines, so it does not need to be designed around slow ones.
+Everything below is opt-in: anyone who changes nothing sees no change.
 
-- A dedicated Marketplace segment on the settings home.
-- A clear way from there to Resource Management (Installed Resources).
-- Probably the moment to give the Marketplace a real visual pass too.
-- **Expand the settings home.** More is going onto it (place search, and
-  more to come), so the page needs to grow into a real home screen.
-- **A modern system UI theme, and a choice of them.** Redesign OmniCore's
-  own interface (settings, wizard, admin pages) to look modern, and let
-  people pick from several system themes. The face themes (Windows 8 and
-  others) are a separate thing and stay as they are.
+Settings home:
+
+- **Four tabs in a notch.** A black notch drops from the top centre with
+  four icons: General (Location Service, Place search), Appearance
+  (Appearance Mode, Back Button Position, Text Size and Typography),
+  Resources (Manage Faces, the Marketplace, Installed Resources) and
+  About (version and updates, system info). The selected icon shows its
+  name beside it; the others show theirs on hover, keyboard focus and long
+  press, and all have accessible labels. The icons are hand-drawn inline
+  SVG (no icon font, no CDN). The notch needs a thin lighter edge so it
+  shows on a black page. The heading moves below it on a phone held upright,
+  and the version pill and update dot stay on the right on every tab.
+- All four tabs are on one page, switched by a small script, so the
+  notch and the movement are not interrupted by a reload. The address
+  follows the tab (`/#appearance`), the last tab is remembered per browser,
+  and opening or reloading starts on the right tab without any movement.
+  Without the script, the four tabs are stacked so nothing is unreachable.
+- The Resources tab is the clear way to Resource Management, and replaces
+  the old idea of a Marketplace segment on the home page.
+
+Background and glass:
+
+- **Background.** Black stays the default. People can upload a picture, a
+  GIF, an animated WebP or a looping muted video (MP4 or WebM), kept in
+  OmniCore's data folder and served by Core, never sent anywhere. Video is
+  the better choice for HD; a GIF cannot look HD. Check the real file type
+  rather than the name, set a size limit, and refuse SVG. The picture is
+  drawn on a fixed layer behind the page, because `background-attachment:
+fixed` is unreliable on iPhones. Starts as a global setting; per browser
+  could follow. Applies to OmniCore's own pages, not to a face, which keeps
+  its theme's own background.
+- **Pure frosted glass segments.** Every bento segment becomes a
+  translucent fill, a blur and a thin light edge, from one set of values.
+  The comment in `ui-theme.js` about the ambient blobs (blur does nothing
+  over a flat colour) goes away once a real picture is behind the glass.
+  The blur, tint and dimming ranges can be generous, and a faint grain and a
+  small saturation boost behind the glass are possible.
+- **Tint.** A colour and a strength, kept to "a little", with presets and a
+  picker. **Match the picture** takes the colour from the background
+  automatically: sampled once when the picture is set (an average of its
+  main colours, or one frame of a video), not live, so the interface does
+  not change colour while a video plays. A hand-picked colour overrides it.
+- **Readability.** An automatic dimming layer under the glass, checked for
+  contrast, plus a brightness slider, so text stays readable over a bright
+  or busy picture.
+- Reduced motion shows a still frame. A hidden tab pauses the video.
+  Nothing here is about slow machines.
+
+Motion:
+
+- **Tab-linked movement.** The four tabs sit side by side on one wide
+  canvas and the screen is a window over it. Switching a tab pans the window,
+  in the direction of the switch: the old tab's glass panes slide out, the
+  new ones slide in, and the wallpaper moves the same way but about a
+  quarter as far, so the glass crosses different parts of the picture and
+  the blur shows. The notch stays fixed. Each tab scrolls up and down on
+  its own, tabs that are off screen are hidden from the keyboard and screen
+  readers, and the picture never moves by itself. Reduced motion switches
+  tabs instantly. The plain black background still slides the panes.
+- **Page fades.** Leaving a page slides the notch up (Settings home only),
+  then fades the whole screen to the page's base colour: black in dark
+  mode, white in light mode, following Appearance Mode first and the device
+  setting when it is left on automatic. The next page fades in from that
+  colour, and the notch drops in again. About a quarter of a second out, a
+  little longer in. Applies to every page, faces included. Handle: the back
+  and forward buttons restoring a page from memory (reset on `pageshow`, or
+  it stays black), Ctrl or Cmd-click, new-tab links, downloads and
+  same-page `#` links (no fade), a slow or failed load (the old page
+  returns after a few seconds), form posts and the redirect after Save, and
+  reduced motion (instant). Reloads and automatic refreshes do not replay
+  it, so a wall display does not flash. The colours and animation live in
+  `uiStyles` in `core/ui-theme.js`; the click handling is a small shared
+  script added to each page template.
+- **Face themes own their appearing animation.** Core only draws the
+  fade-from-black curtain. The theme runs its own entrance after it (Windows
+  8 tiles flying in and flipping into place, say). Core needs to give
+  themes a signal at the moment the curtain has lifted, so the intro does not
+  play hidden behind the black, and a theme can opt out of the Core fade in
+  `theme.json` to do the whole entrance itself. A theme that says nothing
+  gets the Core fade, so existing themes keep working. To be written into
+  the theme docs.
+
+Settled, so not to be reopened by accident:
+
+- The neumorphism look was considered for OmniCore's own interface and
+  judged too much work for a system UI (it changes how every surface is
+  drawn, not only its colours). It is kept for a face theme instead (see
+  **Neumorphic bento face theme** below). OmniCore's own pages stay glass,
+  and the old ideas of a modern system UI theme and a choice of system themes
+  are dropped in favour of the background and tint above.
 
 ## Deferred, with why
 
@@ -188,6 +273,19 @@ Environment and Climate Change Canada data" from the Weather module, wraps
 onto two lines and crowds the tile's name on a Wide tile. The module sends
 its full source credit, so the theme has to cope with a long one (shorten,
 wrap properly or scroll). Look at it when the theme is rebuilt.
+
+**Neumorphic bento face theme** (Omnia-Essentials). A new dashboard theme in
+soft UI: surfaces the same colour as the page, pushed out of it or pressed
+into it by one light and one dark shadow, in a bento layout, based on the
+smart-home dashboard picture shared in Oct 2026. Notes: a dial or a toggle
+is drawn from a value, not from text, and modules only send `pair`, `text`
+and `time` blocks today, so a dial needs a new block type in the Content
+Contract (a separate decision; the first version would draw the existing
+blocks in soft tiles). A dashboard is read from across a room, so it needs
+large dark text and a strong accent colour for the key value, not the low
+contrast soft UI tends to have. Cope with a long source credit from the
+start. Give it an appearing animation (tiles rising out of the surface)
+once themes can own one. Not started; mockup first.
 
 **More font subsets, and the Adamina `firstWoff2Url`.** Parked.
 
