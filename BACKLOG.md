@@ -75,13 +75,81 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
 - **Updates are only noticed for tagged releases.** An untagged version
   bump is invisible to the updater. Always tag.
 
-## v2.0: settings rework
+## Next: found while testing Weather (Oct 2026)
 
-A heavy rework of the settings pages.
+Not coded yet. The release version for these is not decided; they may ship
+as one release.
+
+Fixes:
+
+- **Widget page heading.** `/faces/<id>/modules/<module>` shows the widget's
+  suggested label (the place, for Weather) as its heading, and "Weather"
+  only when the location is set by hand. The heading should always be the
+  module's own name. The Label box and the tile title keep following the
+  suggestion, or the person's own label. Applies to every module. The
+  heading is built from `shownName` in `core/admin-face.js`.
+- **Save does not go back.** After a successful save on a widget's page,
+  show "Saved" for about a second, then return to `/faces/<id>/modules`.
+  On an error, stay on the page.
+- **Delete face glows white.** `.glass:hover` adds a white glow and
+  `.glass-danger` does not override it. Give `.glass.glass-danger:hover`
+  and `:focus-visible` a glow in the danger colour, like
+  `.dock button.danger`. (`core/ui-theme.js`)
+- **The Save | Remove capsule is not docked on a widget's page.** It sits
+  after the segments, so a long settings list pushes it off the screen. Pin
+  it under the segments like the wizard does, and make the Settings segment
+  scroll inside itself so the page stops scrolling.
+
+Features:
+
+- **Info order as a button.** The `priority` setting is drawn in both
+  `core/admin-face.js` and `core/wizard-face.js`. With 4 items or fewer it
+  stays an inline segment with drag and drop. With more, it becomes a
+  button showing the order in short form (for example "Temperature,
+  Condition, Alert and 8 more") that opens a dialogue with the full list,
+  drag and drop, Done and Cancel. Keep the up and down arrows for the
+  keyboard and for touch. Every module with an order setting gets it,
+  including Weather's six.
+- **Place search source, an OmniCore setting.** City search
+  (`searchCities` in `core/location-service.js`) uses only Open-Meteo, which
+  has no record of small places (nothing for Bekkestua; Bærum only as the
+  village Bærums verk). Add a **Primary** and a **Secondary** source (Secondary can be
+  None, and cannot equal the Primary); the Secondary is asked when the
+  Primary finds nothing or cannot be reached. Default: Open-Meteo, then
+  Nominatim, both without a key. One function serves the widget page, the
+  wizard and OmniCore settings, so one change covers them. Sources:
+  - No key: Open-Meteo, Nominatim (OpenStreetMap; at most 1 request a
+    second, an identifying User-Agent, no search as you type, so only on
+    pressing Search), Photon (Komoot; finds Bekkestua, terms page could not
+    be read, check them first).
+  - Key needed, asked for the way Weather asks (a `password` setting, the
+    key kept secret, never shown or logged): GeoNames (a free account
+    name, limits not verified), LocationIQ (5,000 a day, needs a "Search by
+    LocationIQ.com" link), Geoapify (3,000 a day, needs "Powered by
+    Geoapify"), Geocode.maps.co (25,000 requests then 1 a second), Google
+    (billing must be enabled on the project, 10,000 free a month).
+  - Left out: OpenCage (its free plan is for testing only).
+  - A keyed Primary with no key saved falls back to the Secondary, and the
+    settings page says so.
+  - Show a small credit under the results naming the source that answered
+    (and "(c) OpenStreetMap contributors" for Nominatim and Photon). The
+    setting's text says what leaves the machine and to whom.
+  - Needs tests with saved answers; nothing is checked live in the
+    sandbox for the keyed ones.
+
+## v2.0: settings rework and a new look
+
+A heavy rework of the settings pages, and of how OmniCore itself looks.
 
 - A dedicated Marketplace segment on the settings home.
 - A clear way from there to Resource Management (Installed Resources).
 - Probably the moment to give the Marketplace a real visual pass too.
+- **Expand the settings home.** More is going onto it (place search, and
+  more to come), so the page needs to grow into a real home screen.
+- **A modern system UI theme, and a choice of them.** Redesign OmniCore's
+  own interface (settings, wizard, admin pages) to look modern, and let
+  people pick from several system themes. The face themes (Windows 8 and
+  others) are a separate thing and stay as they are.
 
 ## Deferred, with why
 
@@ -115,6 +183,11 @@ Calendar rework.
 **Windows 8 theme.** Needs a pass, and does not draw `time` blocks as
 clocks yet (it falls back to plain text). It draws `data-source` (Wide and
 Large at the foot, Medium as a page of its own, Small not at all).
+The credit line does not fit well yet: a long one, such as "Based on
+Environment and Climate Change Canada data" from the Weather module, wraps
+onto two lines and crowds the tile's name on a Wide tile. The module sends
+its full source credit, so the theme has to cope with a long one (shorten,
+wrap properly or scroll). Look at it when the theme is rebuilt.
 
 **More font subsets, and the Adamina `firstWoff2Url`.** Parked.
 
