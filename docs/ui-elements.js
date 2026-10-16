@@ -174,7 +174,7 @@ const sections = [
 				id: "glass-danger",
 				title: "Glass button for something final",
 				sel: ".glass.glass-danger",
-				desc: "The same glass button, in the danger colour, for something that can't be taken back: deleting a face, removing a widget. It reads as careful before anyone reads the word on it.",
+				desc: "The same glass button, in the danger colour, for something that can't be taken back: deleting a face, removing a widget. It reads as careful before anyone reads the word on it. Pointed at or focused, it glows red rather than the usual white (since 1.19.9).",
 				demo: '<button class="glass glass-danger">Delete face</button>',
 				code: '<button class="glass glass-danger">Delete face</button>',
 				note: "Ask first, with confirmDialog and danger: true, so the yes in the question is the same red button."
@@ -195,7 +195,7 @@ const sections = [
 				desc: "One continuous capsule holding two or three actions, with a thin line between them: the wizard's Cancel | Back | Next, a module's Save | Remove. It sits in the page, not floating over it. Each section glows like a glass button. The capsule keeps the same width however many sections it has (26em upright, 30em on a wide screen), and nothing in it is ever marked as chosen.",
 				demo: '<div class="center-row"><div class="dock"><button type="button">Save</button><button type="button" class="danger">Remove</button></div></div>',
 				code: '<div class="dock">\n\t<button type="button">Save</button>\n\t<button type="button" class="danger">Remove</button>\n</div>',
-				note: ".danger gives a section a red label and a red glow: a warning, not the safeguard. The action should still ask before doing anything. The capsule doesn't clip its contents on purpose, since that would clip the glow too."
+				note: ".danger gives a section a red label and a red glow: a warning, not the safeguard. The action should still ask before doing anything. The capsule doesn't clip its contents on purpose, since that would clip the glow too. On a widget's page (since 1.19.9) the page is docked: it fills the window, the capsule stays at the bottom, and long settings scroll inside their own box."
 			},
 			{
 				id: "dock-disabled",

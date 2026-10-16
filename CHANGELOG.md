@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.19.9
+
+Four fixes found while testing the Weather module: a widget's page keeps its module's name, Save takes you back, the Save and Remove capsule stays on screen, and red buttons glow red
+
+### Fixed
+
+- **A widget's page is headed with its module's name.** The heading followed the widget's label, so a weather widget's page said "Quincy" with OmniCore's location and "Weather" with coordinates typed in. It now always says "Weather". The label still follows the widget's settings in the Label box, on the tile, and in the browser tab, so two weather widgets can still be told apart.
+- **Save takes you back to the face's widgets.** After a save, "Saved. Already in effect." shows for a moment and the page goes back to the list of widgets. If the save fails, the page stays, with what was typed, and says why.
+- **The Save and Remove capsule stays at the bottom of the screen.** A widget's page now fills the window like the setup wizard: the capsule is always in view, and long settings scroll inside their own box instead of pushing it off the screen. On a phone held upright the boxes scroll together, and the capsule leaves room for the Back button beside it. On a phone held sideways there's less space around the boxes, so the settings get more room.
+- **Red buttons glow red.** Delete face, and the red button in a pop-up that asks first, lit up with the ordinary white glow when pointed at. They now glow red, like Remove in the capsule.
+
 ## v1.19.8
 
 Delete a face from its page, choices that ask before they're taken, and what a weather source needs: headers, a credit line, and a reason when a call fails

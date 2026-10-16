@@ -650,6 +650,10 @@ costs only its suggestion: the module's name is used. A suggestion is kept
 to one line of at most 60 characters. Needs OmniCore 1.19.7; older versions
 ignore it and use the module's name.
 
+Your suggestion names the tile, not the page: since OmniCore 1.19.9 the
+widget's page is always headed with your module's own name ("Weather"),
+and the suggestion shows in its Label box and the browser tab.
+
 ---
 
 ## 5. System time, storage, input, and running in the background

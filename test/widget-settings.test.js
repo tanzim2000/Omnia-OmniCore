@@ -1,9 +1,11 @@
 // test/widget-settings.test.js
-// A widget's page, as v1.19.7 draws it.
+// A widget's page, as v1.19.9 draws it.
 //
 //   - Labels that follow the widget's settings: a module can suggest one
 //     (module.exports.label), the label the user types wins, and clearing
 //     it goes back to the suggestion. With no suggestion, the module's name.
+//   - The page's heading is always the module's own name (since v1.19.9),
+//     whatever the label is. The browser tab keeps the widget's name.
 //   - The refresh setting (refreshMinutes): spotted by Core, drawn in a box
 //     of its own with "minutes" beside it, and never under a minute.
 //   - A number setting with a "unit" gets it beside the box.
@@ -148,8 +150,11 @@ test("labels: with nothing typed, the module's suggestion names it everywhere", 
 	const page = await get(ADMIN, `/faces/${withTheme.id}/modules/${instance.id}`);
 	assert.equal(page.status, 200);
 
-	// Tidied: one line, no trailing spaces
-	assert.ok(page.html.includes("<h1>Near the lake</h1>"));
+	// Tidied: one line, no trailing spaces. The heading is the module's
+	// name; the suggestion is in the Label box and the browser tab.
+	assert.ok(page.html.includes("<h1>Suggests</h1>"));
+	assert.ok(!page.html.includes("<h1>Near the lake</h1>"));
+	assert.ok(page.html.includes("<title>Near the lake — OmniCore</title>"));
 	assert.match(page.html, /<input type="text" id="label" value=""\s*placeholder="Near the lake">/);
 	assert.ok(page.html.includes("which follows this widget&#39;s settings") || page.html.includes("which follows this widget's settings"));
 
@@ -182,7 +187,8 @@ test("labels: one typed by the user wins, and clearing it follows the settings a
 
 	await post(base, { label: "Mine", config: {}, themeConfig: {} });
 	const typed = await get(ADMIN, base);
-	assert.ok(typed.html.includes("<h1>Mine</h1>"));
+	assert.ok(typed.html.includes("<h1>Suggests</h1>"), "a typed label doesn't change the heading");
+	assert.ok(typed.html.includes("<title>Mine — OmniCore</title>"));
 	assert.match(typed.html, /id="label" value="Mine"/);
 
 	const tile = await (await fetch(`http://127.0.0.1:${withTheme.id}/api/${instance.id}`)).json();
@@ -190,7 +196,9 @@ test("labels: one typed by the user wins, and clearing it follows the settings a
 
 	await post(base, { label: "  ", config: { place: "the hills" }, themeConfig: {} });
 	const cleared = await get(ADMIN, base);
-	assert.ok(cleared.html.includes("<h1>Near the hills</h1>"), "spaces alone are no label");
+	assert.ok(cleared.html.includes("<title>Near the hills — OmniCore</title>"), "spaces alone are no label");
+	assert.ok(cleared.html.includes('placeholder="Near the hills"'));
+	assert.ok(cleared.html.includes("<h1>Suggests</h1>"));
 });
 
 test("labels: a module that suggests nothing, or fails to, is called by its name", async () => {
@@ -311,3 +319,86 @@ test("unit: the setup wizard draws refresh and units the same way", async () => 
 	assert.ok(html.includes('<div class="unit-row">'));
 	assert.ok(html.includes('label: "",'), "a new widget starts with no label of its own");
 });
+
+// --- The heading (v1.19.9) ---------------------------------------------------
+
+test("heading: the module's name, with a manual location or OmniCore's", async () => {
+	const instance = faceStore.findFace(withTheme.id).instances[0];
+	const base = `/faces/${withTheme.id}/modules/${instance.id}`;
+
+	// A place typed in by hand, with a name: the label follows it, the
+	// heading doesn't
+	faceStore.updateInstance(withTheme.id, instance.id, {
+		label: "",
+		config: { where: { mode: "manual", latitude: 50.45, longitude: -104.6, label: "Regina" } }
+	});
+	const named = await get(ADMIN, base);
+	assert.ok(named.html.includes("<h1>Suggests</h1>"));
+	assert.ok(named.html.includes('placeholder="Regina"'));
+
+	// Coordinates with no name: nothing to suggest, still the module's name
+	faceStore.updateInstance(withTheme.id, instance.id, {
+		config: { where: { mode: "manual", latitude: 50.45, longitude: -104.6, label: "" } }
+	});
+	const bare = await get(ADMIN, base);
+	assert.ok(bare.html.includes("<h1>Suggests</h1>"));
+	assert.ok(bare.html.includes('placeholder="Suggests"'));
+});
+
+// --- Saving (v1.19.9) --------------------------------------------------------
+
+test("save: says it worked, then goes back to the face's widgets; stays on an error", async () => {
+	const instance = faceStore.findFace(withTheme.id).instances[0];
+	const { html } = await get(ADMIN, `/faces/${withTheme.id}/modules/${instance.id}`);
+
+	assert.ok(html.includes(`const modulesPage = "/faces/${withTheme.id}/modules";`));
+	assert.ok(html.includes("const SAVED_PAUSE = 900;"));
+
+	// Success: the message, then the list, and the button stays off
+	const savedAt = html.indexOf('status.textContent = "Saved. Already in effect."');
+	const catchAt = html.indexOf("} catch (error)", savedAt);
+	assert.ok(savedAt !== -1 && catchAt !== -1);
+	const success = html.slice(savedAt, catchAt);
+	assert.ok(success.includes("setTimeout(function () { location.href = modulesPage; }, SAVED_PAUSE);"));
+	assert.ok(success.includes("return;"), "the button isn't turned back on while leaving");
+
+	// An error: the message, and no leaving
+	const failure = html.slice(catchAt, html.indexOf("button.disabled = false;", catchAt));
+	assert.ok(failure.includes("Couldn't save."));
+	assert.ok(!failure.includes("location.href"));
+});
+
+// --- Docked (v1.19.9) --------------------------------------------------------
+
+test("docked: the page fills the window, its capsule stays at the bottom", async () => {
+	const settingsStore = require("../core/settings-store");
+	const instance = faceStore.findFace(withTheme.id).instances[0];
+	const address = `/faces/${withTheme.id}/modules/${instance.id}`;
+
+	const { html } = await get(ADMIN, address);
+	assert.match(html, /<body class="docked back-br">/, "Back bottom right: the capsule makes room for it");
+
+	// The page never scrolls itself; Settings scrolls in its own box
+	assert.ok(html.includes("body.docked {"));
+	assert.match(html, /body\.docked \{[^}]*overflow: hidden;/);
+	assert.match(html, /body\.docked \.bento-row > \.bento-column:first-child > \.segment:first-child \{[^}]*overflow-y: auto;/);
+	assert.match(html, /body\.docked \.bento-row\.two > \.bento-column:last-child \{ overflow-y: auto; \}/);
+
+	// A phone held upright: the stack scrolls as one
+	assert.match(html, /@media \(orientation: portrait\) \{\s*body\.docked \.bento > \.bento-row \{ overflow-y: auto;/);
+
+	// Back top left: nothing to make room for
+	const before = settingsStore.readSettings().backButtonCorner;
+	settingsStore.writeSettings({ backButtonCorner: "top-left" });
+	try {
+		const topLeft = await get(ADMIN, address);
+		assert.match(topLeft.html, /<body class="docked">/);
+	} finally {
+		settingsStore.writeSettings({ backButtonCorner: before });
+	}
+
+	// Only a widget's page is docked
+	const list = await get(ADMIN, `/faces/${withTheme.id}/modules`);
+	assert.ok(!/<body class="docked/.test(list.html));
+});
+

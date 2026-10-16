@@ -389,6 +389,121 @@ const styles = `
 
 	.page-dock .status { margin: 0; text-align: center; }
 
+	/* ---------------------------------------------------------------
+	   A docked page (since v1.19.9): a widget's page.
+
+	   The page is exactly the height of the window and never scrolls
+	   itself, the same as the setup wizard. The Save | Remove capsule
+	   is always at the bottom, and whatever is too long scrolls inside
+	   its own box instead of pushing the capsule off the screen.
+
+	   Landscape: the widget's Settings box scrolls inside itself, and
+	   the column beside it (the theme's box and Refresh) scrolls on its
+	   own if it ever has to.
+
+	   Portrait (a phone held upright): the boxes are stacked, so the
+	   whole stack scrolls as one, between the name and the capsule.
+	   --------------------------------------------------------------- */
+	html:has(body.docked) { height: 100%; }
+
+	body.docked {
+		height: 100vh;
+		height: 100dvh;
+		min-height: 0;
+		overflow: hidden;
+		box-sizing: border-box;
+		padding-bottom: 1.5em;
+		gap: 1.25em;
+	}
+
+	body.docked .bento { flex: 1 1 auto; min-height: 0; }
+
+	/* The widget's name and description never shrink away */
+	body.docked .bento > .segment:first-child { flex-shrink: 0; }
+
+	body.docked .bento > .bento-row { flex: 1 1 auto; min-height: 0; }
+
+	body.docked .page-dock { flex-shrink: 0; margin: 0 auto; }
+
+	/* Thin, quiet scrollbars, like the wizard's */
+	body.docked .bento > .bento-row,
+	body.docked .bento-column,
+	body.docked .bento-column > .segment {
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	body.docked .bento > .bento-row::-webkit-scrollbar,
+	body.docked .bento-column::-webkit-scrollbar,
+	body.docked .bento-column > .segment::-webkit-scrollbar { width: 8px; }
+
+	body.docked .bento > .bento-row::-webkit-scrollbar-thumb,
+	body.docked .bento-column::-webkit-scrollbar-thumb,
+	body.docked .bento-column > .segment::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 0.25em;
+	}
+
+	@media (orientation: portrait) {
+		body.docked .bento > .bento-row { overflow-y: auto; align-content: start; }
+	}
+
+	@media (orientation: landscape) {
+		/* One row as tall as the space left, so the columns have a real
+		   height to fill and to scroll within */
+		body.docked .bento > .bento-row {
+			grid-template-rows: minmax(0, 1fr);
+			align-items: stretch;
+		}
+
+		body.docked .bento-column { min-height: 0; }
+
+		/* The widget's own Settings box: the first box of the first column */
+		body.docked .bento-row > .bento-column:first-child > .segment:first-child {
+			flex: 1 1 auto;
+			min-height: 0;
+			overflow-y: auto;
+		}
+
+		/* The theme's box and Refresh, beside it */
+		body.docked .bento-row.two > .bento-column:last-child { overflow-y: auto; }
+	}
+
+	/* A phone held sideways has very little height: less space above
+	   and between, so the widget's settings get as much as possible */
+	@media (orientation: landscape) and (max-height: 32em) {
+		body.docked { gap: 0.75em; }
+		body.docked .bento { gap: 0.75em; }
+
+		/* Unless the Back button is top left: then the room above is
+		   what keeps it off the widget's name (ui-theme.js) */
+		body.docked:not(:has(> .floating.top-left)) { padding-top: 1em; }
+	}
+
+	/* The Back button bottom right. Every other page keeps room under
+	   itself for the button (ui-theme.js), so its last box never ends
+	   up underneath. A docked page doesn't need that: the capsule is
+	   always at the bottom, level with the button, so the room would
+	   just be a gap under it. */
+	body.docked:has(> .floating.bottom-right) { padding-bottom: 1.5em; }
+
+	/* On a phone held upright, or any narrow window, the capsule spans
+	   the screen and would sit under the button, so it leaves room for
+	   the button on its right instead. Wider, the capsule is a settled
+	   width in the middle and never reaches the corner. */
+	@media (orientation: portrait), (max-width: 42em) {
+		/* No auto margins here: they would stop the stretch and shrink
+		   the capsule to the width of its two words */
+		body.docked.back-br .page-dock {
+			align-self: stretch;
+			margin: 0;
+			padding-right: calc(3.4em + 0.75em);
+			box-sizing: border-box;
+		}
+
+		body.docked.back-br .page-dock .dock { width: 100%; }
+	}
+
 	/* A page whose only action is one button: it sits where the capsule
 	   would, at the same width, but keeps the ordinary glass button's
 	   shape -- a capsule with one section in it would just be a pill */
@@ -4683,6 +4798,12 @@ function startAdminFace() {
 		// be called with the Label box empty: the module's suggestion from
 		// its settings, or the module's name. The second is shown greyed
 		// in the empty box, so it's clear what clearing it gives.
+		//
+		// The page's heading is always the module's own name ("Weather"),
+		// since v1.19.9: the label belongs to the tile, and a heading that
+		// changed with the place ("Quincy") made the page look like a
+		// different module depending on where it was set. The browser tab
+		// keeps the widget's name, so two weather widgets can be told apart.
 		const suggestion = await suggestedLabel(instance);
 		const following = suggestion || manifest.name;
 		const shownName = ownLabel(instance) || following;
@@ -4697,6 +4818,9 @@ function startAdminFace() {
 		//
 		// Save and Remove are one capsule under the segments (the wizard's
 		// .dock), Remove in red. Remove still asks before doing anything.
+		// The page is docked (body.docked, since v1.19.9): the capsule stays
+		// at the bottom of the window and long settings scroll inside their
+		// own box rather than pushing it off the screen.
 		//
 		// The theme's segment only when the theme has anything to set; the
 		// module's settings then take the whole row, with Refresh under
@@ -4767,7 +4891,7 @@ function startAdminFace() {
 		const body = `
 			<div class="bento">
 				<div class="segment">
-					<h1>${escapeHtml(shownName)}</h1>
+					<h1>${escapeHtml(manifest.name)}</h1>
 					<p class="lede"${picker ? ' style="margin-bottom:14px"' : ""}>${escapeHtml(
 						manifest.description || manifest.name
 					)}</p>
@@ -4794,6 +4918,10 @@ function startAdminFace() {
 			applyWidgetFilter();
 
 			const base = "/faces/${face.id}/modules/${encodeURIComponent(instance.id)}";
+			const modulesPage = "/faces/${face.id}/modules";
+
+			// How long "Saved" shows before going back to the list
+			const SAVED_PAUSE = 900;
 
 			document.getElementById("save").addEventListener("click", async function () {
 				const button = this;
@@ -4831,10 +4959,16 @@ function startAdminFace() {
 
 					if (!response.ok) throw new Error();
 
-					// The face reads this per request, so it's already live
+					// The face reads this per request, so it's already live.
+					// Then back to the face's list of widgets, after long
+					// enough to read that it worked. The button stays off
+					// meanwhile, so it can't be saved twice on the way out.
 					status.textContent = "Saved. Already in effect.";
 					status.className = "status good";
+					setTimeout(function () { location.href = modulesPage; }, SAVED_PAUSE);
+					return;
 				} catch (error) {
+					// Stays on the page, so nothing typed is lost
 					status.textContent = "Couldn't save. Check OmniCore is still running.";
 					status.className = "status bad";
 				}
@@ -4855,11 +4989,21 @@ function startAdminFace() {
 				if (!sure) return;
 
 				await fetch(base, { method: "DELETE" });
-				location.href = "/faces/${face.id}/modules";
+				location.href = modulesPage;
 			});
 		`;
 
-		res.send(page(shownName, body, script, "", `/faces/${req.params.id}/modules`));
+		// The Back button's corner matters to a docked page: bottom right,
+		// the capsule leaves room for it on a phone held upright
+		const backBottomRight = readSettings().backButtonCorner !== "top-left";
+
+		res.send(page(
+			shownName,
+			body,
+			script,
+			backBottomRight ? "docked back-br" : "docked",
+			`/faces/${req.params.id}/modules`
+		));
 	});
 
 	app.post("/faces/:id/modules/:instanceId", (req, res) => {

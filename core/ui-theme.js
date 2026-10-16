@@ -1338,6 +1338,19 @@ function uiStyles(options) {
 	   the danger colour, so it reads as "careful" before anyone reads it. */
 	.glass.glass-danger { color: var(--danger); border-color: var(--danger-border); }
 
+	/* A red button glows red (since v1.19.9). Without this it took the
+	   ordinary white glow from .glass:hover, so Delete face and the
+	   pop-up's red confirm button lit up white like any other button.
+	   The same glow as Remove in the capsule (.dock button.danger). A
+	   disabled one keeps no glow at all, like any disabled button. */
+	.glass.glass-danger:not(:disabled):hover,
+	.glass.glass-danger:not(:disabled):focus-visible {
+		box-shadow:
+			inset 0 1px 0 var(--glass-sheen),
+			inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+			0 0 30px color-mix(in srgb, var(--danger) 55%, transparent);
+	}
+
 	.stepper {
 		display: flex;
 		align-items: center;

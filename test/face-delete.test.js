@@ -157,3 +157,19 @@ test("a screen told its face is gone goes to the welcome face", () => {
 	assert.ok(CLIENT_SCRIPT.includes('location.href = faceUrl(4000) + "/"'));
 	assert.ok(CLIENT_SCRIPT.includes("function faceUrl(port)"));
 });
+
+test("Delete face glows red, not white (v1.19.9)", () => {
+	const { uiStyles } = require("../core/ui-theme");
+	const css = uiStyles();
+
+	// Its own glow, in the danger colour, on hover and keyboard focus
+	assert.match(
+		css,
+		/\.glass\.glass-danger:not\(:disabled\):hover,\s*\.glass\.glass-danger:not\(:disabled\):focus-visible \{\s*box-shadow:[^}]*0 0 30px color-mix\(in srgb, var\(--danger\) 55%, transparent\);/
+	);
+
+	// After the white one, so it wins when both apply
+	const white = css.indexOf(".glass:hover,");
+	const red = css.indexOf(".glass.glass-danger:not(:disabled):hover");
+	assert.ok(white !== -1 && red > white);
+});

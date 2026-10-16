@@ -1,7 +1,7 @@
 # Backlog
 
 What is left to do, and what was deliberately put off. Last cleaned up
-after the Weather rework (Oct 2026). Anything already built has been
+after v1.19.9 (Oct 2026). Anything already built has been
 removed from here; the CHANGELOG is the record of what shipped.
 
 If you are picking this back up after a break, this file plus
@@ -64,8 +64,10 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
     than the module needs.
   - Themes' pages should probably match. To settle: whether Installed
     Resources shows the same version.
-- **A manual Update button.** Today updates only happen in the background
-  after a check. Nothing lets a person press Update on one module.
+- **A manual Update button for a module or theme.** Today they only update
+  in the background after a check. Nothing lets a person press Update on
+  one module. (OmniCore itself already has Update now on its Updates page,
+  which moves into the About tab in v2.)
 - **No uninstall in the UI.** Removing a module or theme still means
   deleting its folder.
 - **Test CI.** `npm test` has 25 test files, but nothing runs them on a
@@ -75,32 +77,48 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
 - **Updates are only noticed for tagged releases.** An untagged version
   bump is invisible to the updater. Always tag.
 
-## Next: found while testing Weather (Oct 2026)
+## v2: how it is built
 
-Not coded yet. The release version for these is not decided; they may ship
-as one release.
+`main` holds the released version. v1.19.9 sealed the fixes found while
+testing Weather (see the CHANGELOG). Everything below is built on the
+branch **`v2`**:
 
-Fixes:
+- The version stays as it is in `package.json` and nothing is tagged
+  while v2 is built, so released installs never see it. The CHANGELOG
+  gets an **Unreleased** section that grows as v2 does.
+- Nothing publishes from `v2`: the image workflow runs only on `v*` tags,
+  the docs site only on pushes to `main`. For a throwaway `:dev` image of
+  `v2`, run the image workflow by hand from the Actions tab and pick the
+  branch.
+- A fix that has to reach people before v2 goes on `main`, is released and
+  tagged there, then `main` is merged into `v2`.
+- When v2 is ready: merge `v2` into `main`, pick the version, tag.
 
-- **Widget page heading.** `/faces/<id>/modules/<module>` shows the widget's
-  suggested label (the place, for Weather) as its heading, and "Weather"
-  only when the location is set by hand. The heading should always be the
-  module's own name. The Label box and the tile title keep following the
-  suggestion, or the person's own label. Applies to every module. The
-  heading is built from `shownName` in `core/admin-face.js`.
-- **Save does not go back.** After a successful save on a widget's page,
-  show "Saved" for about a second, then return to `/faces/<id>/modules`.
-  On an error, stay on the page.
-- **Delete face glows white.** `.glass:hover` adds a white glow and
-  `.glass-danger` does not override it. Give `.glass.glass-danger:hover`
-  and `:focus-visible` a glow in the danger colour, like
-  `.dock button.danger`. (`core/ui-theme.js`)
-- **The Save | Remove capsule is not docked on a widget's page.** It sits
-  after the segments, so a long settings list pushes it off the screen. Pin
-  it under the segments like the wizard does, and make the Settings segment
-  scroll inside itself so the page stops scrolling.
+One commit per step, each with its tests passing:
 
-Features:
+1. `v2` is made from `main` once v1.19.9 is tagged, so it starts with the
+   fixes. First commit there: the docs site shows an undated
+   **Unreleased** section in the CHANGELOG.
+2. Info order as a button, with its dialogue (below).
+3. Place search: the engine (eight providers, Primary then Secondary,
+   caching, tests with saved answers).
+4. Place search: its setting, the key prompts, the credit line on the
+   three pages that search.
+5. Glass tokens: real frosted segments everywhere, tuned in light and
+   dark.
+6. Backgrounds, pictures first: safe upload, the fixed layer, dimming,
+   tint and blur, Match the picture.
+7. Animated backgrounds: GIF, animated WebP, video; a still frame for
+   reduced motion; paused when the tab is hidden.
+8. The settings home: four tabs in the notch, one page, the remembered
+   tab, the asymmetric bento, the About tab with the updates.
+9. Tab-linked movement: the pan and the wallpaper moving a quarter as far.
+10. Page fades on every page, and the notch hiding (the riskiest: it
+    touches every page, so each kind of page is tested on its own).
+11. The theme intro signal and the `theme.json` opt-out, documented.
+12. A docs pass, this Backlog cleaned up, the final Unreleased entry.
+
+## v2: features
 
 - **Info order as a button.** The `priority` setting is drawn in both
   `core/admin-face.js` and `core/wizard-face.js`. With 4 items or fewer it
@@ -137,13 +155,17 @@ Features:
   - Needs tests with saved answers; nothing is checked live in the
     sandbox for the keyed ones.
 
-## v2.0: settings rework and a new look
+## v2: the design
 
 A heavy rework of the settings pages, and of how OmniCore itself looks.
-Designed in conversation (Oct 2026), nothing built yet. A mockup comes
-first, so the look can be judged before any real code. OmniCore v2 is aimed
-at capable machines, so it does not need to be designed around slow ones.
-Everything below is opt-in: anyone who changes nothing sees no change.
+Designed in conversation and in a clickable mockup (Oct 2026): the Design
+canvas "OmniCore Settings Home Mockup",
+https://claude.ai/artifact/LveFSPbVeF9ScADgdPWFhP (desktop and phone
+upright; its wallpapers and search results are stand-ins). OmniCore v2 is
+aimed at capable machines, so it does not need to be designed around slow
+ones. Everything below is opt-in: anyone who changes nothing sees no
+change. More problems are expected once it is built and used; fix them
+as they come, one small commit at a time.
 
 Settings home:
 
@@ -155,8 +177,33 @@ Settings home:
   name beside it; the others show theirs on hover, keyboard focus and long
   press, and all have accessible labels. The icons are hand-drawn inline
   SVG (no icon font, no CDN). The notch needs a thin lighter edge so it
-  shows on a black page. The heading moves below it on a phone held upright,
-  and the version pill and update dot stay on the right on every tab.
+  shows on a black page. The heading moves below it on a phone held upright.
+- **No version pill.** The About tab holds the version and the updates
+  (the Updates page moves in: Update now, Check now), so a pill in the
+  corner would say the same thing twice. When an update is ready, a dot
+  sits on the About icon in the notch.
+- **Asymmetric bento on every tab.** A six-column grid with mixed spans,
+  so boxes are different sizes rather than even halves; one column on a
+  phone held upright. As in the mockup:
+  - General: Location Service wide, Place search narrow beside it.
+  - Appearance: Background as a big box two rows tall, with Appearance
+    Mode and Back Button stacked beside it; then Frosted glass (wide)
+    beside Text Size and Typography.
+  - Resources: Manage Faces and Installed Resources wide and stacked, the
+    Marketplace a tall box beside them; each a whole clickable box with an
+    icon and its name at the foot.
+  - About: OmniCore (version, port, data folder) narrow, Updates wide.
+- **Location Service keeps the manual location from v1.** On or off; when
+  on, "Detect it automatically" or "Set it myself". Set it myself shows
+  Search for a city (through the Place search setting, with its credit
+  line, and saying when the secondary was asked), Latitude, Longitude and
+  Save location.
+- **The Back button** stays a floating round button in the corner chosen
+  under Back Button, on every page. Top left: the page heading starts after
+  it rather than under it, and on a phone held upright the button gets a
+  row of its own below the notch, the heading beside it, the content below
+  both. Bottom right: a docked page's capsule leaves room for it beside
+  itself (done in 1.19.9).
 - All four tabs are on one page, switched by a small script, so the
   notch and the movement are not interrupted by a reload. The address
   follows the tab (`/#appearance`), the last tab is remembered per browser,
@@ -167,13 +214,14 @@ Settings home:
 
 Background and glass:
 
-- **Background.** Black stays the default. People can upload a picture, a
+- **Background.** Black stays the default ("Plain": black in dark mode,
+  the light grey in light mode). People can upload a picture, a
   GIF, an animated WebP or a looping muted video (MP4 or WebM), kept in
   OmniCore's data folder and served by Core, never sent anywhere. Video is
   the better choice for HD; a GIF cannot look HD. Check the real file type
   rather than the name, set a size limit, and refuse SVG. The picture is
   drawn on a fixed layer behind the page, because `background-attachment:
-fixed` is unreliable on iPhones. Starts as a global setting; per browser
+  fixed` is unreliable on iPhones. Starts as a global setting; per browser
   could follow. Applies to OmniCore's own pages, not to a face, which keeps
   its theme's own background.
 - **Pure frosted glass segments.** Every bento segment becomes a
