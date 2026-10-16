@@ -179,6 +179,8 @@ until the Marketplace puts something in them.
 | `place-search.js`          | Looking places up by name, for every "Search for a city" box: eight services, a Primary then a Secondary, answers kept a day, keys never sent back to a page.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `place-search-ui.js`       | The browser half: draws the matches, the note when the Secondary was asked, and the credit line, on all three pages that search.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `backdrop.js`              | The picture behind OmniCore's own pages and the frosted glass over it: checks a file by its first bytes, keeps it in `data/backdrop/`, serves it on every port, works out the veil that keeps text readable.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `page-motion.js`           | Page fades: the curtain every page starts with, which links and `omniGo()` fade out, which arrivals fade in (never a reload), and the `omnicore:revealed` signal for a theme's entrance.                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `settings-home.js`         | The settings home's frame: the notch and its four tabs, the strip they slide on, the picture moving a quarter as far, the remembered tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `time-service.js`          | One place that knows what time OmniCore thinks it is. Read-only; reachable by a module through `omni.time()` and by a theme directly at `GET /time`.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `settings-store.js`        | OmniCore's own install-wide settings (`data/settings.json`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `paths.js`                 | Resolves where `data/`, `modules/` and `themes/` actually live. Honours `OMNICORE_*_DIR` overrides, which is what lets the test suite use a sandbox.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -1069,7 +1071,7 @@ can reach is what a face hands it.
 | File                     | Required | Purpose                                                       |
 | ------------------------ | -------- | ------------------------------------------------------------- |
 | `index.html`             | yes      | The page itself.                                              |
-| `theme.json`             | no       | `{ name, description }`. Falls back to folder name.           |
+| `theme.json`             | no       | `{ name, description, coreFade }`. Falls back to folder name; `coreFade: false` turns off Core's fade in (§6 of Building theme.md). |
 | `settings.json`          | no       | Settings for the whole face.                                  |
 | `instance-settings.json` | no       | Settings the theme needs **per instance** -- sizing, usually. |
 
@@ -1414,6 +1416,44 @@ with a theme keeps its theme's background.
   Match the picture. Over a picture the glass gets a fuller fill, a thin
   light edge and a little more colour (`--glass-saturate`). With the plain
   background and no tint, it looks as it always did.
+
+### The settings home and page fades
+
+Since v2 the settings home (`GET /` on the admin face) is four tabs on one
+page, switched by a small script (`settings-home.js`): **General**
+(Location Service, Place search), **Appearance** (Background, Appearance
+Mode, Back Button, Frosted glass, Text Size), **Resources** (Manage Faces,
+the Marketplace, Installed Resources) and **About** (the version, the data
+folder, the updates). A black notch at the top holds an icon per tab; a
+dot on About means an update is ready.
+
+- The tabs lie side by side on one strip, and picking one slides it; the
+  picture behind the page moves the same way a quarter as far. Each tab
+  scrolls on its own; the others are `inert`. Reduced motion: no movement.
+- The address follows the tab (`/#appearance`, pointing at the tab's
+  heading, which is only shown without the script), and the last tab is
+  kept in `localStorage`. The tab is picked before the tabs are drawn, so
+  opening or reloading doesn't move.
+- Without the script, the four tabs are one long page, and the notch's
+  icons are links down it.
+- The boxes are a six-column grid with mixed widths and heights; one
+  column on a phone held upright.
+- `/background` (commit 3's page) now opens the Appearance tab. Place
+  search keeps its own page (the keys); its box on General shows the
+  choice and links there. Installing an update is still followed on the
+  Updates page; the About tab checks, says what was found and links to it.
+
+Every page fades out to its base colour and the next fades in
+(`page-motion.js`): Settings, the wizard, the welcome face, About, Inports,
+and faces (the curtain goes right after the theme's `<body>`). A page
+fades in only when arrived at by a link, an address or first opening
+(the navigation type is `navigate`), never on a reload or back and forward,
+so a refreshing wall display doesn't flash. Leaving fades on a click on an
+ordinary link, or `omniGo(address)` from a script, never for a new tab, a
+download or a `#` on the same page; if the next page doesn't come within
+five seconds the old one comes back. Leaving the settings home slides the
+notch up first. A theme hears `omnicore:revealed` when the curtain has
+lifted, and can turn Core's fade in off with `"coreFade": false`.
 
 ### Image proxying
 

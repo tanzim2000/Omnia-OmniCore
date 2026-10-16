@@ -21,6 +21,7 @@
 const { AsyncLocalStorage } = require("node:async_hooks");
 const { readSettings } = require("./settings-store");
 const backdrop = require("./backdrop");
+const pageMotion = require("./page-motion");
 
 // ---------------------------------------------------------------------
 // Light or dark: chosen per BROWSER, not per install
@@ -363,16 +364,20 @@ function uiStyles(options) {
 
 	// The palette, then the glass and the picture's veil for the same
 	// mode (backdrop.js), which can override a palette value or two
+	// The curtain a page fades in from and out to (page-motion.js): the
+	// page's own base colour, black or white, rather than its grey
+	const curtain = (light) => `--curtain: ${light ? "#fff" : "#000"};`;
+
 	const colours = mode
 		? `
-	:root {${paletteVariables(PALETTES[mode])}${backdrop.glassVariables(settings, mode === "light")}}
+	:root {${paletteVariables(PALETTES[mode])}${backdrop.glassVariables(settings, mode === "light")}${curtain(mode === "light")}}
 	${modeRules(mode === "light")}`
 		: `
-	:root {${paletteVariables(PALETTES.dark)}${backdrop.glassVariables(settings, false)}}
+	:root {${paletteVariables(PALETTES.dark)}${backdrop.glassVariables(settings, false)}${curtain(false)}}
 	${modeRules(false)}
 
 	@media (prefers-color-scheme: light) {
-		:root {${paletteVariables(PALETTES.light)}${backdrop.glassVariables(settings, true)}}
+		:root {${paletteVariables(PALETTES.light)}${backdrop.glassVariables(settings, true)}${curtain(true)}}
 		${modeRules(true)}
 	}`;
 
@@ -414,6 +419,8 @@ function uiStyles(options) {
 		margin: 0;
 	}
 	${overPicture}
+
+	${pageMotion.CURTAIN_CSS}
 
 	/* ---------------------------------------------------------------
 	   The picture behind the page (since v2), when one is set in
@@ -1457,7 +1464,7 @@ function backButton(href) {
 	return `
 	<button
 		class="floating ${corner}"
-		onclick="location.href='${href}'"
+		onclick="${pageMotion.goScript(`'${href}'`)}"
 		aria-label="Back">&#8592;</button>`;
 }
 

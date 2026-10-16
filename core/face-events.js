@@ -47,7 +47,7 @@ const CLIENT_SCRIPT = `<script>
 
 		events.addEventListener("face-deleted", function () {
 			events.close();
-			location.href = faceUrl(${WELCOME_PORT}) + "/";
+			(window.omniGo || function (a) { location.href = a; })(faceUrl(${WELCOME_PORT}) + "/");
 		});
 
 		// A notification for this face. The overlay that draws it is

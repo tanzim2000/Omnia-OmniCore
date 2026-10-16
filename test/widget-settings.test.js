@@ -359,13 +359,13 @@ test("save: says it worked, then goes back to the face's widgets; stays on an er
 	const catchAt = html.indexOf("} catch (error)", savedAt);
 	assert.ok(savedAt !== -1 && catchAt !== -1);
 	const success = html.slice(savedAt, catchAt);
-	assert.ok(success.includes("setTimeout(function () { location.href = modulesPage; }, SAVED_PAUSE);"));
+	assert.ok(success.includes("setTimeout(function () { omniGo(modulesPage); }, SAVED_PAUSE);"), "with the page fade since v2");
 	assert.ok(success.includes("return;"), "the button isn't turned back on while leaving");
 
 	// An error: the message, and no leaving
 	const failure = html.slice(catchAt, html.indexOf("button.disabled = false;", catchAt));
 	assert.ok(failure.includes("Couldn't save."));
-	assert.ok(!failure.includes("location.href"));
+	assert.ok(!failure.includes("location.href") && !failure.includes("omniGo"));
 });
 
 // --- Docked (v1.19.9) --------------------------------------------------------

@@ -19,7 +19,7 @@ wall, not to make your life harder.
 
 ```
 themes/my-theme/
-├── theme.json               name and description         (optional)
+├── theme.json               name, description, coreFade   (optional)
 ├── settings.json            face-wide settings            (optional)
 ├── instance-settings.json   per-tile settings              (optional)
 └── index.html                the page itself                (required)
@@ -27,7 +27,7 @@ themes/my-theme/
 
 OmniCore serves `index.html` as-is -- no build step, no server-side
 templating, nothing evaluated on your behalf. Whatever you write is exactly
-what gets sent to the browser (with one small addition -- see §6). This
+what gets sent to the browser (with two small additions -- see §6). This
 means a theme downloaded from anywhere is safe by construction: it can only
 ever render data a face already hands it, because it has no way to reach
 anything else.
@@ -545,6 +545,52 @@ for settings changes -- it already happens. Your job is just to read
 on its own schedule (§7); you don't need to detect settings changes
 yourself.
 
+### The fade in, and when to start your entrance
+
+Since v2, OmniCore also adds a curtain right after your `<body>`: when a
+face is opened (from a link, by its address, or for the first time), it
+fades in from black, or from white in light mode. Not on a reload, which
+is also how the script above refreshes a face, so a wall display never
+flashes.
+
+If your theme has an entrance of its own (tiles flying in, say), start it
+when the curtain has lifted, not on load, or it plays hidden behind it.
+OmniCore says when:
+
+```js
+function intro() {
+	// your entrance
+}
+
+if (document.documentElement.hasAttribute("data-omnicore-revealed")) {
+	intro();
+} else {
+	window.addEventListener("omnicore:revealed", intro, { once: true });
+}
+```
+
+`omnicore:revealed` fires on `window` once the curtain is gone, about half
+a second after the page opens, and `data-omnicore-revealed` is set on
+`<html>` at the same moment, for a script that runs later. On a reload
+there's no curtain, and the signal comes as soon as the page's scripts
+have run.
+
+Would rather do the whole entrance yourself, from black? Say so in
+`theme.json`:
+
+```json
+{ "name": "My theme", "coreFade": false }
+```
+
+OmniCore then doesn't fade your face in, and the signal comes straight
+away. Leaving a face still fades out. Leave `coreFade` out (or `true`) to
+keep OmniCore's fade: a theme that says nothing gets it, so existing themes
+keep working.
+
+With reduced motion turned on in the device's settings, there's no
+curtain at all, and the signal comes straight away. Consider skipping your
+own entrance then too (`matchMedia("(prefers-reduced-motion: reduce)")`).
+
 ---
 
 ## 7. Refreshing content
@@ -726,6 +772,8 @@ Everything in §4 and §5 is additive on top of this.
 - [ ] Handles zero instances without breaking
 - [ ] Doesn't attempt to write anything, and doesn't try to reimplement the
       reload behaviour §6 already gives it for free
+- [ ] An entrance animation, if it has one, starts on `omnicore:revealed`
+      (§6), or `"coreFade": false` is in `theme.json`
 
 ---
 

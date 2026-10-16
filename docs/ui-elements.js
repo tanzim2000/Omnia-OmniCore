@@ -160,6 +160,15 @@ const sections = [
 				note: "With reduced motion turned on in the device's settings, an animation shows its still frame and a video doesn't play. A video pauses while its tab is hidden."
 			},
 			{
+				id: "curtain",
+				title: "Page fade (the curtain)",
+				sel: ".omni-curtain · html.omni-arriving · html.omni-leaving",
+				desc: "Since v2, going from one page to another fades the page out to its base colour (<code>--curtain</code>: black in dark mode, white in light mode) and the next one in from it. Every page starts its <code>&lt;body&gt;</code> with the curtain (<code>pageStart()</code> in <code>core/page-motion.js</code>). <b>html.omni-arriving</b> lifts it, only when a page is arrived at by a link, an address or first opening it, never on a reload or going back. <b>html.omni-leaving</b> drops it, on a click on an ordinary link or <code>omniGo(address)</code> from a page's script. Links opened in a new tab, downloads and <code>#</code> links on the same page don't fade.",
+				demo: `<p class="muted" style="margin:0">Open any other page of the docs site's Default UI from OmniCore itself to see it; the docs site doesn't fade.</p>`,
+				code: '<body>\n${pageStart()}\n…\n<script>omniGo("/faces");</script>',
+				note: "With reduced motion turned on in the device's settings, pages change without a fade. A face's theme can wait for the curtain with the <code>omnicore:revealed</code> event; see Building theme.md."
+			},
+			{
 				id: "type",
 				title: "Text styles",
 				sel: "h1 · .lede · label · .help · .hint · .empty · .muted",

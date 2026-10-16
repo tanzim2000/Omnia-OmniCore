@@ -143,7 +143,7 @@ test("welcome face: the switch in the corner and Settings beside it", async () =
 
 	// Settings opens the admin face, on whatever address this page was
 	// opened on (faceUrl), which asks to sign in first if need be
-	assert.ok(page.includes("function goToSettings() { location.href = faceUrl(3000); }"));
+	assert.ok(page.includes("function goToSettings() { omniGo(faceUrl(3000)); }"), "with the page fade since v2");
 
 	// And the switch works here: the scripts that set the cookie
 	assert.ok(page.includes("function setUiMode"));

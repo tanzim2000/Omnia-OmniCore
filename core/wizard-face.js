@@ -23,7 +23,8 @@
 // looks exactly as it did on 4000. See
 // docs/planning/default-ui-architecture.md.
 
-const { backdropHtml, attachBackdropRoute } = require("./backdrop");
+const { attachBackdropRoute } = require("./backdrop");
+const { pageStart } = require("./page-motion");
 const { attachFontRoute } = require("./font-service");
 const express = require("express");
 const faceStore = require("./face-store");
@@ -338,7 +339,7 @@ function page(title, body, script) {
 	<style>${uiStyles()}${styles}</style>
 </head>
 <body>
-${backdropHtml()}
+${pageStart()}
 	${body}
 	<script>${DIALOG_SCRIPT}${ASK_FIRST_SCRIPT}${script || ""}</script>
 </body>
@@ -1348,7 +1349,7 @@ function renderWizard(data) {
 		// wizard regardless. A new tab would only hide that, not avoid
 		// it.
 		function toMarketplace() {
-			location.href = faceUrl(3000) + "/marketplace";
+			omniGo(faceUrl(3000) + "/marketplace");
 		}
 
 		document.getElementById("cancel").addEventListener("click", function () {
@@ -1357,7 +1358,7 @@ function renderWizard(data) {
 			// which has no route at all -- the wizard only ever
 			// answers at /faces/new. Cross-port back to where creating
 			// a face is actually started from.
-			location.href = faceUrl(3000) + "/faces";
+			omniGo(faceUrl(3000) + "/faces");
 		});
 
 		document.getElementById("next").addEventListener("click", async function () {
@@ -1403,7 +1404,7 @@ function renderWizard(data) {
 				// Note: in Codespaces you may hit a 404 on first load — the
 				// port takes a moment to get published by the forwarding
 				// proxy. Just reload. Doesn't happen on a real host.
-				location.href = faceUrl(created.id);
+				omniGo(faceUrl(created.id));
 			} catch (error) {
 				status.textContent = "Couldn't create the face.";
 				this.disabled = false;

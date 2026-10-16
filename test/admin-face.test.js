@@ -45,20 +45,32 @@ test("admin face: settings home renders every section", async () => {
 		await fetch(`http://127.0.0.1:${PORT}/`, { headers: { cookie } })
 	).text();
 
-	assert.ok(html.includes("Location Service"), "missing Location Service");
-	assert.ok(html.includes("Appearance Mode"), "missing Appearance Mode");
-	assert.ok(html.includes("Back Button Position"), "missing Back Button Position");
-	assert.ok(html.includes("Text Size"), "missing Text Size");
-	assert.ok(html.includes("Manage Faces"), "missing Manage Faces link");
+	// Since v2, four tabs on one page: every box is on it
+	for (const name of [
+		"Location Service",
+		"Place search",
+		"Background",
+		"Appearance Mode",
+		"Back Button Position",
+		"Frosted glass",
+		"Text Size",
+		"Manage Faces",
+		"Marketplace",
+		"Installed Resources",
+		"Updates"
+	]) {
+		assert.ok(html.includes(name), `missing ${name}`);
+	}
 
-	// Installed Resources deliberately moved to the About face -- the
-	// About link is how you reach it now, not a Settings row.
-	assert.ok(html.includes("About OmniCore"), "missing About link");
+	// The About tab links to the About face, for system info
+	assert.ok(html.includes('id="about-link"'), "missing the About link");
 
-	// Both modals ship with the page rather than being fetched when
-	// opened, so their absence would mean a dead button
+	// The font picker ships with the page rather than being fetched
+	// when opened, so its absence would mean a dead button. Setting the
+	// location is right in its box since v2, not a pop-up.
 	assert.ok(html.includes('id="font-modal"'), "font picker modal missing");
-	assert.ok(html.includes('id="location-modal"'), "location modal missing");
+	assert.ok(html.includes('id="location-manual"'), "the boxes for setting the location");
+	assert.ok(!html.includes('id="location-modal"'));
 });
 
 // The regression this whole suite exists for. It rendered fine with
@@ -110,7 +122,10 @@ test("admin face: light or dark comes from this browser's cookie, not a setting"
 	).text();
 
 	assert.ok(light.includes("--bg: #f2f2f4"), "light mode did not take effect");
-	assert.ok(!light.includes("prefers-color-scheme"), "only the chosen palette");
+	// In the stylesheet: a page's script may still ask the device (the
+	// glass preview on the settings home does)
+	const lightStyles = light.slice(light.indexOf("<style>"), light.indexOf("</style>"));
+	assert.ok(!lightStyles.includes("prefers-color-scheme"), "only the chosen palette");
 });
 
 test("admin face: an absurd text size is clamped, not stored", async () => {

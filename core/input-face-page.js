@@ -12,7 +12,7 @@
 // controls on it, no sub-navigation at all, so there is genuinely
 // nowhere for "back" to lead.
 
-const { backdropHtml } = require("./backdrop");
+const { pageStart } = require("./page-motion");
 const { uiStyles } = require("./ui-theme");
 
 function escapeHtml(text) {
@@ -154,7 +154,7 @@ ${uiStyles()}
 	</style>
 </head>
 <body>
-${backdropHtml()}
+${pageStart()}
 	<h1>${escapeHtml(label)}</h1>
 	<div class="controls">${rendered}</div>
 	<script>
@@ -258,7 +258,7 @@ ${uiStyles()}
 	</style>
 </head>
 <body>
-${backdropHtml()}
+${pageStart()}
 	<h1>${escapeHtml(faceName)}</h1>
 	<div class="list">${rows}</div>
 </body>

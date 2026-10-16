@@ -69,7 +69,8 @@ async function html(url) {
 
 // The floating back button's destination on a page
 function backTarget(page) {
-	const match = /class="floating [^"]*"\s+onclick="location\.href='([^']*)'"/.exec(page);
+	// Since v2 it goes with the page fade when it can: omniGo('...')
+	const match = /class="floating [^"]*"\s+onclick="\(window\.omniGo \|\| function \(a\) \{ location\.href = a; \}\)\('([^']*)'\)"/.exec(page);
 	return match ? match[1] : null;
 }
 

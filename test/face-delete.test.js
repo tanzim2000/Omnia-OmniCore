@@ -154,7 +154,7 @@ test("deleting a face that isn't there is a 404, and signed out is refused", asy
 
 test("a screen told its face is gone goes to the welcome face", () => {
 	assert.match(CLIENT_SCRIPT, /addEventListener\("face-deleted"/);
-	assert.ok(CLIENT_SCRIPT.includes('location.href = faceUrl(4000) + "/"'));
+	assert.ok(CLIENT_SCRIPT.includes('(window.omniGo || function (a) { location.href = a; })(faceUrl(4000) + "/")'), "with the page fade since v2");
 	assert.ok(CLIENT_SCRIPT.includes("function faceUrl(port)"));
 });
 

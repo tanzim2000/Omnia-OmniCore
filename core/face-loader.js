@@ -20,7 +20,8 @@ const { ownLabel, suggestedLabel } = require("./instance-label");
 const { readSystemTime } = require("./time-service");
 const themeLoader = require("./theme-loader");
 const faceStore = require("./face-store");
-const { rememberUiMode } = require("./ui-theme");
+const { rememberUiMode, uiModeFromRequest } = require("./ui-theme");
+const { curtainHtml } = require("./page-motion");
 const renderFallbackPage = require("./fallback-page");
 const {
 	attachEvents,
@@ -461,6 +462,23 @@ function startFace(face) {
 				let html = fs.readFileSync(filePath, "utf-8");
 
 				const injected = clientBundle(face);
+
+				// The page fade (page-motion.js), right after <body> so the
+				// theme is never seen before its curtain. A theme that does
+				// its own entrance says "coreFade": false in its theme.json:
+				// then there's no fade in, only the signal that it may start.
+				// Its colour follows this browser's Appearance Mode (the
+				// cookie reaches every port), or the device.
+				const mode = uiModeFromRequest(req);
+				const curtain = curtainHtml({
+					fadeIn: themeLoader.readManifest(face.theme).coreFade,
+					styles: true,
+					light: mode === "light" ? true : mode === "dark" ? false : null
+				});
+				const opening = html.match(/<body[^>]*>/i);
+				html = opening
+					? html.replace(opening[0], opening[0] + curtain)
+					: curtain + html;
 
 				if (html.includes("</body>")) {
 					html = html.replace("</body>", injected + "\n</body>");

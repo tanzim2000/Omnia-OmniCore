@@ -18,7 +18,8 @@
 // /about.css, so this page's look can be changed without touching any
 // JavaScript.
 
-const { backdropHtml, attachBackdropRoute } = require("./backdrop");
+const { attachBackdropRoute } = require("./backdrop");
+const { pageStart } = require("./page-motion");
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -186,7 +187,7 @@ function renderPage(info) {
 	<link rel="stylesheet" href="/about.css">
 </head>
 <body>
-${backdropHtml()}
+${pageStart()}
 	<h1 class="omnia-title">Omnia</h1>
 
 	${health}
@@ -228,7 +229,7 @@ ${backdropHtml()}
 		var back = document.getElementById("back");
 		if (back) {
 			back.addEventListener("click", function () {
-				location.href = faceUrl(${ADMIN_PORT});
+				omniGo(faceUrl(${ADMIN_PORT}));
 			});
 		}
 
@@ -237,7 +238,7 @@ ${backdropHtml()}
 		var resources = document.getElementById("resources-card");
 		if (resources) {
 			resources.addEventListener("click", function () {
-				location.href = faceUrl(${ADMIN_PORT}) + "/installed?from=about";
+				omniGo(faceUrl(${ADMIN_PORT}) + "/installed?from=about");
 			});
 		}
 	</script>

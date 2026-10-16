@@ -28,7 +28,8 @@
 // settings.json. Modules never supply HTML, which is what keeps admin pages
 // consistent no matter who wrote the module.
 
-const { backdropHtml, attachBackdropRoute } = require("./backdrop");
+const { attachBackdropRoute } = require("./backdrop");
+const { pageStart } = require("./page-motion");
 const backdropStore = require("./backdrop");
 const express = require("express");
 const { listModules } = require("./module-loader");
@@ -51,6 +52,8 @@ const imageProxy = require("./image-proxy");
 const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation } = require("./location-service");
 const placeSearch = require("./place-search");
+const settingsHome = require("./settings-home");
+const paths = require("./paths");
 const { PLACE_SEARCH_SCRIPT, PLACE_SEARCH_CSS } = require("./place-search-ui");
 const { ownLabel, suggestedLabel, labelsFor } = require("./instance-label");
 const faceStore = require("./face-store");
@@ -138,34 +141,6 @@ const styles = `
 		align-items: center;
 		justify-content: space-between;
 		gap: 1em;
-	}
-
-	/* The version pill doubles as the way to the updates page */
-	.version-pill {
-		appearance: none;
-		-webkit-appearance: none;
-		display: inline-flex;
-		align-items: center;
-		gap: 7px;
-		font-family: inherit;
-		font-size: 0.78em;
-		background: var(--glass-bg);
-		border: 1px solid var(--glass-border);
-		border-radius: 999em;
-		padding: 0.4808em 1.1218em;
-		color: var(--fg);
-		cursor: pointer;
-		transition: background 0.2s ease;
-	}
-
-	.version-pill:hover { background: var(--glass-bg-hover); }
-
-	.version-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background: var(--success);
-		box-shadow: 0 0 5px rgba(62, 214, 122, 0.7);
 	}
 
 	/* Mode picker: two miniature screens rather than a switch, so the
@@ -602,6 +577,13 @@ const styles = `
 	${priorityUi.PRIORITY_CSS}
 	/* Under place search matches: see place-search-ui.js */
 	${PLACE_SEARCH_CSS}
+
+	${settingsHome.SETTINGS_HOME_CSS}
+
+	/* Location Service's own boxes, under "Set it myself" */
+	.location-manual { margin-top: 14px; }
+	.location-manual[hidden] { display: none; }
+	.update-ready { color: var(--fg); }
 
 	/* Set the location: with the matches, the note and the credit
 	   under the search box, it can be taller than the window, so it
@@ -1211,7 +1193,7 @@ function page(title, body, script, bodyClass, back, backLabel) {
 	<style>${uiStyles()}${styles}</style>
 </head>
 <body class="${bodyClass || ""}">
-${backdropHtml()}
+${pageStart()}
 	${body}
 	${backButton(back, backLabel)}
 	<script>${UI_MODE_SCRIPT}${PASSWORD_TOGGLE_SCRIPT}${DIALOG_SCRIPT}${script || ""}${ASK_FIRST_SCRIPT}</script>
@@ -1653,7 +1635,7 @@ function credentialsPage(options) {
 				// -- so reloading the same address is that page. Except
 				// signing out, which would just sign out again.
 				if (location.pathname === "/logout") {
-					location.href = "/";
+					omniGo("/");
 				} else {
 					location.reload();
 				}
@@ -1675,6 +1657,446 @@ function credentialsPage(options) {
 	`;
 
 	return page(options.heading, body, script, "centered");
+}
+
+// The Background and Frosted glass boxes, and what makes them work: the
+// Appearance tab of the settings home draws them (since v2 they were a
+// page of their own, /background, which now opens that tab). Returns the
+// two boxes as HTML and the script behind both.
+function backgroundPanel(settings) {
+	const picture = backdropStore.hasPicture(settings);
+	const tint = settings.glassTint || "none";
+	const uiMode = currentUiMode();
+
+	const kindName = {
+		picture: "A picture",
+		animated: "An animated picture",
+		video: "A video"
+	}[settings.backgroundKind];
+
+	const preview = picture
+		? `<img src="/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}" alt="">`
+		: `<span>Plain</span>`;
+
+	// A colour chip for the tint. "none" and "match" are words, the
+	// rest colours. Match the picture only with a picture, showing
+	// the picture's own colour.
+	const chip = (value, label, colour, disabled) =>
+		`<button type="button" class="tint-chip${tint === value ? " active" : ""}" data-tint="${escapeHtml(value)}"` +
+		`${disabled ? " disabled" : ""} title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"` +
+		` aria-pressed="${tint === value ? "true" : "false"}">` +
+		(colour ? `<span class="tint-swatch" style="background:${escapeHtml(colour)}"></span>` : "") +
+		(value === "none" || value === "match" ? `<span>${escapeHtml(label)}</span>` : "") +
+		"</button>";
+
+	const custom = /^#[0-9a-f]{6}$/i.test(tint) && !backdropStore.TINT_PRESETS.includes(tint.toLowerCase());
+
+	const backgroundBox = `
+				<div class="segment c4 r2" id="background">
+					<h2>Background</h2>
+					<p class="lede">
+						Behind OmniCore's own pages: these settings, the setup
+						wizard, the welcome screen and About. A face keeps its
+						theme's own background.
+					</p>
+
+					<div class="backdrop-preview${picture ? "" : " plain"}" id="preview">${preview}</div>
+					<p class="hint" id="kind">${
+						picture ? escapeHtml(kindName || "A picture") : "Plain: black, or light grey in light mode."
+					}</p>
+
+					<div class="button-row">
+						<button type="button" class="glass" id="choose">Choose a file</button>
+						${picture ? `<button type="button" class="glass" id="plain">Back to plain</button>` : ""}
+					</div>
+					<input type="file" id="file" hidden
+						accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm">
+					<p class="status" id="upload-status" aria-live="polite"></p>
+
+					<p class="help">
+						A picture (JPEG, PNG, WebP), an animated GIF or WebP, or a
+						looping video (MP4, WebM) without sound, up to 50 MB. A video
+						looks sharper than a GIF. It's kept in OmniCore's data folder
+						and shown by OmniCore itself, never sent anywhere, and it's
+						seen on the pages that need no sign-in too. With reduced
+						motion turned on in your device's settings, a still frame is
+						shown instead.
+					</p>
+				</div>
+`;
+
+	const glassBox = `
+				<div class="segment c4" id="glass">
+					<h2>Frosted glass</h2>
+					<p class="lede">Every box on these pages, over the background.</p>
+
+					<div class="field">
+						<label for="blur">Blur <span class="muted" id="blur-value">${Number(settings.glassBlur)} px</span></label>
+						<input type="range" id="blur" min="0" max="${backdropStore.BLUR_MOST}" step="1"
+							value="${Number(settings.glassBlur)}">
+					</div>
+
+					<div class="field">
+						<label>Tint</label>
+						<div class="tint-chips" id="tints">
+							${chip("none", "None", "", false)}
+							${chip("match", "Match the picture", picture && settings.backgroundColor ? settings.backgroundColor : "", !picture)}
+							${backdropStore.TINT_PRESETS.map((colour) => chip(colour, colour, colour, false)).join("")}
+							<label class="tint-chip tint-custom${custom ? " active" : ""}" title="Pick a colour">
+								<input type="color" id="custom" value="${escapeHtml(custom ? tint : "#7aa2ff")}" aria-label="Pick a colour">
+							</label>
+						</div>
+						<div class="help">${
+							picture
+								? "Match the picture takes the picture's main colour, worked out once when it was picked."
+								: "Match the picture needs a picture."
+						}</div>
+					</div>
+
+					<div class="field">
+						<label for="strength">Tint strength <span class="muted" id="strength-value">${Number(settings.glassTintStrength)}%</span></label>
+						<input type="range" id="strength" min="0" max="${backdropStore.TINT_STRENGTH_MOST}" step="1"
+							value="${Number(settings.glassTintStrength)}">
+					</div>
+
+					${
+						picture
+							? `<div class="field">
+						<label for="brightness">Picture brightness <span class="muted" id="brightness-value">${Number(settings.backgroundBrightness)}%</span></label>
+						<input type="range" id="brightness" min="${backdropStore.BRIGHTNESS_LEAST}" max="${backdropStore.BRIGHTNESS_MOST}" step="1"
+							value="${Number(settings.backgroundBrightness)}">
+						<div class="help">
+							The picture is dimmed by itself, just enough for text to read
+							over it: <span id="dim-value"></span>.
+						</div>
+					</div>`
+							: ""
+					}
+					<p class="status" id="glass-status" aria-live="polite"></p>
+				</div>
+`;
+
+	const script = `
+		// How the veil is worked out, the same function the server uses
+		// (backdrop.js), so what's previewed is what's saved
+		${backdropStore.autoDim.toString()}
+
+		const PICTURE = ${JSON.stringify(
+			picture
+				? { low: settings.backgroundLow, high: settings.backgroundHigh, color: settings.backgroundColor || "" }
+				: null
+		).replace(/</g, "\\u003c")};
+		const MAX_BYTES = ${backdropStore.MAX_BYTES};
+
+		let tint = ${JSON.stringify(tint)};
+
+		const root = document.documentElement;
+		const blur = document.getElementById("blur");
+		const strength = document.getElementById("strength");
+		const brightness = document.getElementById("brightness");
+		const custom = document.getElementById("custom");
+
+		// Light or dark: this browser's own choice, or the device's when
+		// it hasn't made one
+		function light() {
+			return ${
+				uiMode
+					? JSON.stringify(uiMode === "light")
+					: 'window.matchMedia("(prefers-color-scheme: light)").matches'
+			};
+		}
+
+		function rgba(hex, alpha) {
+			const value = parseInt(hex.slice(1), 16);
+			return "rgba(" + ((value >> 16) & 255) + ", " + ((value >> 8) & 255) + ", " + (value & 255) + ", " + alpha + ")";
+		}
+
+		// Everything moved shows at once on this page, before saving
+		function preview() {
+			document.getElementById("blur-value").textContent = blur.value + " px";
+			document.getElementById("strength-value").textContent = strength.value + "%";
+			root.style.setProperty("--glass-blur", blur.value + "px");
+
+			const colour = tint === "match" ? (PICTURE && PICTURE.color) : (tint === "none" ? "" : tint);
+			root.style.setProperty(
+				"--glass-tint",
+				colour && Number(strength.value) ? rgba(colour, Number(strength.value) / 100) : "transparent"
+			);
+
+			if (brightness && PICTURE) {
+				document.getElementById("brightness-value").textContent = brightness.value + "%";
+				root.style.setProperty("--backdrop-brightness", Number(brightness.value) / 100);
+				const dim = autoDim(PICTURE.low, PICTURE.high, brightness.value, light());
+				root.style.setProperty(
+					"--backdrop-dim",
+					light() ? "rgba(242, 242, 244, " + dim + ")" : "rgba(0, 0, 0, " + dim + ")"
+				);
+				document.getElementById("dim-value").textContent =
+					"a veil of " + Math.round(dim * 100) + "% at this brightness";
+			}
+
+			for (const chip of document.querySelectorAll("[data-tint]")) {
+				const on = chip.dataset.tint === tint;
+				chip.classList.toggle("active", on);
+				chip.setAttribute("aria-pressed", on ? "true" : "false");
+			}
+			document.querySelector(".tint-custom").classList.toggle(
+				"active",
+				/^#/.test(tint) && !document.querySelector('[data-tint="' + tint + '"]')
+			);
+		}
+
+		for (const input of [blur, strength, brightness]) {
+			if (input) input.addEventListener("input", preview);
+		}
+
+		document.getElementById("tints").addEventListener("click", function (event) {
+			const chip = event.target.closest("[data-tint]");
+			if (!chip || chip.disabled) return;
+			tint = chip.dataset.tint;
+			// Picking a colour with the strength at nothing would show
+			// nothing; give it a little
+			if (tint !== "none" && Number(strength.value) === 0) strength.value = 12;
+			preview();
+			save();
+		});
+
+		custom.addEventListener("input", function () {
+			tint = custom.value.toLowerCase();
+			if (Number(strength.value) === 0) strength.value = 12;
+			preview();
+		});
+		custom.addEventListener("change", save);
+
+		preview();
+
+		// Saved as it changes: a slider when it's let go, a tint when
+		// it's picked. A moment's wait, so dragging a slider across
+		// sends one save, not twenty.
+		let saving = null;
+		function save() {
+			clearTimeout(saving);
+			saving = setTimeout(async function () {
+				const status = document.getElementById("glass-status");
+				status.className = "status";
+				try {
+					const response = await fetch("/background/glass", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							blur: Number(blur.value),
+							tint: tint,
+							tintStrength: Number(strength.value),
+							brightness: brightness ? Number(brightness.value) : undefined
+						})
+					});
+					if (!response.ok) throw new Error();
+					status.textContent = "Saved.";
+				} catch (error) {
+					status.className = "status bad";
+					status.textContent = "Couldn't save.";
+				}
+			}, 300);
+		}
+
+		for (const input of [blur, strength, brightness]) {
+			if (input) input.addEventListener("change", save);
+		}
+
+		// --- Picking a file ------------------------------------------
+
+		const upload = document.getElementById("upload-status");
+
+		function say(text, bad) {
+			upload.className = "status" + (bad ? " bad" : "");
+			upload.textContent = text;
+		}
+
+		// Waits for an element's event, or gives up after a while
+		function once(element, name, seconds) {
+			return new Promise(function (resolve, reject) {
+				const timer = setTimeout(function () { reject(new Error("timeout")); }, seconds * 1000);
+				element.addEventListener(name, function () { clearTimeout(timer); resolve(); }, { once: true });
+				element.addEventListener("error", function () { clearTimeout(timer); reject(new Error("error")); }, { once: true });
+			});
+		}
+
+		// How bright a colour looks, 0-1 (relative luminance)
+		function luminance(r, g, b) {
+			function channel(value) {
+				const c = value / 255;
+				return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+			}
+			return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+		}
+
+		// Draw the picture, or a frame a second into the video, then
+		// work out its main colour, how dark its darker parts and how
+		// bright its brighter parts are, and a still frame. Done here,
+		// once, from the file on this device, before anything is sent.
+		async function study(file) {
+			const address = URL.createObjectURL(file);
+			let source;
+			let width;
+			let height;
+
+			try {
+				if (file.type.indexOf("video/") === 0) {
+					const video = document.createElement("video");
+					video.muted = true;
+					video.playsInline = true;
+					video.preload = "auto";
+					video.src = address;
+					await once(video, "loadeddata", 20);
+					video.currentTime = Math.min(1, (video.duration || 2) / 2);
+					await once(video, "seeked", 20);
+					source = video;
+					width = video.videoWidth;
+					height = video.videoHeight;
+				} else {
+					const image = new Image();
+					image.src = address;
+					await image.decode();
+					source = image;
+					width = image.naturalWidth;
+					height = image.naturalHeight;
+				}
+
+				if (!width || !height) throw new Error("empty");
+
+				// The still frame, at most 1920 px wide
+				const scale = Math.min(1, 1920 / width);
+				const frame = document.createElement("canvas");
+				frame.width = Math.round(width * scale);
+				frame.height = Math.round(height * scale);
+				frame.getContext("2d").drawImage(source, 0, 0, frame.width, frame.height);
+				const still = await new Promise(function (resolve) {
+					frame.toBlob(resolve, "image/jpeg", 0.85);
+				});
+
+				// A small copy to read the colours from
+				const small = document.createElement("canvas");
+				small.width = 48;
+				small.height = 48;
+				const context = small.getContext("2d", { willReadFrequently: true });
+				context.drawImage(source, 0, 0, 48, 48);
+				const pixels = context.getImageData(0, 0, 48, 48).data;
+
+				const shades = [];
+				const buckets = {};
+				for (let i = 0; i < pixels.length; i += 4) {
+					const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+					shades.push(luminance(r, g, b));
+					const key = (r >> 5) + "," + (g >> 5) + "," + (b >> 5);
+					const bucket = buckets[key] || (buckets[key] = { n: 0, r: 0, g: 0, b: 0 });
+					bucket.n++; bucket.r += r; bucket.g += g; bucket.b += b;
+				}
+				shades.sort(function (a, b) { return a - b; });
+
+				// Its main colours: the four most common, averaged by how
+				// common each is
+				const main = Object.values(buckets).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
+				const total = main.reduce(function (sum, bucket) { return sum + bucket.n; }, 0);
+				const average = ["r", "g", "b"].map(function (part) {
+					return Math.round(main.reduce(function (sum, bucket) { return sum + bucket[part]; }, 0) / total);
+				});
+				const color = "#" + average.map(function (value) {
+					return value.toString(16).padStart(2, "0");
+				}).join("");
+
+				return {
+					still: still,
+					color: color,
+					low: shades[Math.floor(shades.length * 0.1)],
+					high: shades[Math.floor(shades.length * 0.9)]
+				};
+			} finally {
+				URL.revokeObjectURL(address);
+			}
+		}
+
+		async function send(address, body) {
+			const response = await fetch(address, {
+				method: "POST",
+				headers: { "Content-Type": "application/octet-stream" },
+				body: body
+			});
+			const answer = await response.json().catch(function () { return {}; });
+			if (!response.ok) {
+				throw new Error(answer.error || (response.status === 413 ? "That file is bigger than 50 MB." : "Couldn't send it."));
+			}
+			return answer;
+		}
+
+		document.getElementById("choose").addEventListener("click", function () {
+			document.getElementById("file").click();
+		});
+
+		document.getElementById("file").addEventListener("change", async function () {
+			const file = this.files[0];
+			this.value = "";
+			if (!file) return;
+
+			if (file.size > MAX_BYTES) {
+				say("That file is bigger than 50 MB.", true);
+				return;
+			}
+
+			document.getElementById("choose").disabled = true;
+
+			try {
+				say("Looking at it…");
+				let about;
+				try {
+					about = await study(file);
+				} catch (error) {
+					throw new Error(
+						"This browser can't show that file, so it can't be the background. " +
+						"JPEG, PNG, GIF, WebP, MP4 and WebM work; a video has to be in a format browsers play (H.264 or VP9, say)."
+					);
+				}
+
+				say("Sending it…");
+				const received = await send("/background/upload", file);
+				await send("/background/still?id=" + encodeURIComponent(received.id), about.still);
+
+				const response = await fetch("/background/use", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ id: received.id, color: about.color, low: about.low, high: about.high })
+				});
+				const answer = await response.json().catch(function () { return {}; });
+				if (!response.ok) throw new Error(answer.error || "Couldn't use it.");
+
+				say("Done.");
+				location.reload();
+			} catch (error) {
+				say(error.message, true);
+				document.getElementById("choose").disabled = false;
+			}
+		});
+
+		const plain = document.getElementById("plain");
+		if (plain) {
+			plain.addEventListener("click", async function () {
+				const sure = await confirmDialog({
+					title: "Back to plain?",
+					text: "The picture is deleted from OmniCore's data folder.",
+					confirm: "Back to plain"
+				});
+				if (!sure) return;
+				const response = await fetch("/background/plain", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: "{}"
+				});
+				if (response.ok) location.reload();
+				else say("Couldn't change it.", true);
+			});
+		}
+	`;
+
+	return { backgroundBox, glassBox, script };
 }
 
 // The routes that take a file as it is rather than JSON. See the JSON
@@ -1826,11 +2248,14 @@ function startAdminFace() {
 
 	// Settings — the sections of OmniCore you can change.
 	// OmniCore's own settings will join Faces here as they appear.
+	// The settings home: four tabs in a notch, on one page (since v2).
+	// The frame, the notch, the movement and the tab script are in
+	// settings-home.js; the boxes on each tab are drawn here.
 	app.get("/", async (req, res) => {
 		const settings = readSettings();
 		const installedFont = fontService.installedFont();
-		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
 		const update = updateStore.lastResult(process.env.OMNICORE_VERSION);
+		const dev = omnicoreVersion.isDevBuild();
 
 		// Location: show what OmniCore currently believes, so it's
 		// obvious whether automatic detection actually worked
@@ -1851,177 +2276,270 @@ function startAdminFace() {
 			name + (uiMode === mode ? " (Active)" : "");
 		const bottomRight = settings.backButtonCorner !== "top-left";
 
-		const body = `
-			<div class="settings-head">
-				<h1>Settings</h1>
-				<button class="version-pill" id="version-pill"
-					title="Updates">
-					${update.updateAvailable ? '<span class="version-dot"></span>' : ""}
-					OmniCore ${versionHtml()}${
-						update.updateAvailable ? " · update ready" : ""
+		// --- General --------------------------------------------------------
+
+		// Location Service. "Set it myself" opens its boxes right here: a
+		// search through the Place search setting, the place's name, and
+		// its coordinates.
+		const locationBox = `
+			<div class="segment c4">
+				<h2>Location Service</h2>
+				<p class="lede">
+					Used by weather and prayer-time modules to know where
+					you are. Turn it off and OmniCore never looks one up
+					and never hands one out.
+				</p>
+
+				<label class="option" style="margin-bottom:14px">
+					<input type="checkbox" id="enabled"
+						${settings.locationEnabled ? "checked" : ""}>
+					<span>Let OmniCore know where it is</span>
+				</label>
+
+				<div id="location-detail"
+					style="${settings.locationEnabled ? "" : "display:none"}">
+					<div class="tabs" id="location-mode-tabs"
+						style="margin-bottom:14px">
+						<button type="button" class="tab-btn ${
+							manualLocation ? "" : "active"
+						}" data-value="auto">Work it out automatically</button>
+						<button type="button" class="tab-btn ${
+							manualLocation ? "active" : ""
+						}" data-value="manual">Set it myself</button>
+					</div>
+
+					<div class="inset">
+						<div class="inset-text">
+							<div class="inset-label">CURRENTLY ${
+								manualLocation ? "SET" : "DETECTED"
+							}</div>
+							<div class="inset-value" id="location-value">${escapeHtml(
+								currentText
+							)}</div>
+						</div>
+						<button class="glass" id="location-action"
+							style="flex-shrink:0;padding:0.641em 1.1218em;font-size:0.78em${manualLocation ? ";display:none" : ""}">
+							Refresh
+						</button>
+					</div>
+
+					<div id="location-manual" class="location-manual"${manualLocation ? "" : " hidden"}>
+						<div class="field">
+							<label for="city">Search for a city</label>
+							<div class="search-row">
+								<input type="text" id="city" placeholder="Regina">
+								<button class="glass" style="width:auto;padding:0.75em 1.25em"
+									id="search">Search</button>
+							</div>
+							<div id="results"></div>
+						</div>
+						<div class="field">
+							<label for="label">Place name</label>
+							<input type="text" id="label"
+								value="${escapeHtml(settings.locationLabel || "")}"
+								placeholder="Home">
+						</div>
+						<div class="field" style="display:flex;gap:12px">
+							<div style="flex:1">
+								<label for="latitude">Latitude</label>
+								<input type="number" step="any" id="latitude"
+									value="${escapeHtml(
+										settings.latitude === null ? "" : settings.latitude
+									)}">
+							</div>
+							<div style="flex:1">
+								<label for="longitude">Longitude</label>
+								<input type="number" step="any" id="longitude"
+									value="${escapeHtml(
+										settings.longitude === null ? "" : settings.longitude
+									)}">
+							</div>
+						</div>
+						<button class="glass" id="save-location" style="padding:0.75em 1.4em">Save location</button>
+						<p class="status" id="location-status"></p>
+					</div>
+				</div>
+			</div>`;
+
+		// Place search: which services, at a glance. The keys and the
+		// rest are on its own page.
+		const placeChoice = placeSearch.chosen(settings);
+		const placeWarning = placeSearch.warningFor(settings);
+		const placeBox = `
+			<div class="segment c2">
+				<h2>Place search</h2>
+				<p class="lede">Where a search for a city is sent.</p>
+				<div class="fact"><span>Primary</span><span>${escapeHtml(placeChoice.primary.name)}</span></div>
+				<div class="fact"><span>Secondary</span><span>${
+					placeChoice.secondary ? escapeHtml(placeChoice.secondary.name) : "None"
+				}</span></div>
+				${placeWarning ? `<p class="place-warning">${escapeHtml(placeWarning)}</p>` : ""}
+				<div class="button-row">
+					<a class="glass" href="/place-search">Change</a>
+				</div>
+			</div>`;
+
+		// --- Appearance -----------------------------------------------------
+
+		const glassParts = backgroundPanel(settings);
+
+		const modeBox = `
+			<div class="segment c2">
+				<h2>Appearance Mode</h2>
+				<p class="lede">
+					Saved in this browser only, so each screen can have
+					its own. Device follows this device's own setting.
+				</p>
+				<div class="mode-previews narrow-previews">
+					<div class="mode-preview ${uiMode === "dark" ? "active" : ""}"
+						data-mode="dark" role="button" tabindex="0">
+						<div class="mode-screen" style="background:#0c0d10">
+							<span style="width:40%;height:5px;background:rgba(255,255,255,0.8)"></span>
+							<span style="width:70%;height:4px;background:rgba(255,255,255,0.3)"></span>
+						</div>
+						<div class="mode-preview-label">${modeLabel("dark", "Dark")}</div>
+					</div>
+					<div class="mode-preview ${uiMode === "light" ? "active" : ""}"
+						data-mode="light" role="button" tabindex="0">
+						<div class="mode-screen" style="background:#e5e7eb">
+							<span style="width:40%;height:5px;background:#4b5563"></span>
+							<span style="width:70%;height:4px;background:#9ca3af"></span>
+						</div>
+						<div class="mode-preview-label">${modeLabel("light", "Light")}</div>
+					</div>
+					<div class="mode-preview ${uiMode ? "" : "active"}"
+						data-mode="device" role="button" tabindex="0">
+						<div class="mode-screen mode-screen-split">
+							<div style="background:#0c0d10">
+								<span style="width:60%;height:5px;background:rgba(255,255,255,0.8)"></span>
+							</div>
+							<div style="background:#e5e7eb">
+								<span style="width:60%;height:5px;background:#4b5563"></span>
+							</div>
+						</div>
+						<div class="mode-preview-label">${modeLabel(null, "Device")}</div>
+					</div>
+				</div>
+			</div>`;
+
+		const cornerBox = `
+			<div class="segment c2">
+				<h2>Back Button Position</h2>
+				<div class="corner-map" id="corner-map">
+					<button type="button" class="corner-tl ${
+						bottomRight ? "" : "active"
+					}" data-value="top-left">&#8598; Top left</button>
+					<button type="button" class="corner-tr" disabled>Top right</button>
+					<button type="button" class="corner-bl" disabled>Bottom left</button>
+					<button type="button" class="corner-br ${
+						bottomRight ? "active" : ""
+					}" data-value="bottom-right">Bottom right &#8600;</button>
+				</div>
+				<p class="hint" style="margin-top:8px">
+					Top right and bottom left aren't available.
+				</p>
+			</div>`;
+
+		const textBox = `
+			<div class="segment c2">
+				<h2>Text Size &amp; Typography</h2>
+				<div class="stepper" style="margin-bottom:10px">
+					<button type="button" class="glass" id="size-down"
+						aria-label="Smaller">&#8722;</button>
+					<input type="number" id="size" min="12" max="24" step="1"
+						value="${Number(settings.uiFontSize) || 16}">
+					<span class="muted">px</span>
+					<button type="button" class="glass" id="size-up"
+						aria-label="Larger">&#43;</button>
+				</div>
+				<p class="hint" style="margin-bottom:12px">
+					Applies immediately. Dashboards are unaffected.
+				</p>
+				<div class="inset">
+					<div class="inset-text">
+						<div class="inset-label">FONT</div>
+						<div class="inset-value">${
+							installedFont
+								? escapeHtml(installedFont.family)
+								: "System font"
+						}</div>
+					</div>
+					<button class="glass" id="change-font"
+						style="flex-shrink:0;padding:0.641em 1.1218em;font-size:0.78em">
+						Change
+					</button>
+				</div>
+			</div>`;
+
+		// --- Resources ------------------------------------------------------
+
+		const resourcesPane =
+			settingsHome.tileHtml("/faces", "faces", "Manage Faces", "Create, edit and remove dashboards", "c4") +
+			settingsHome.tileHtml("/marketplace", "marketplace", "Marketplace", "Modules and themes to install", "c2 r2") +
+			settingsHome.tileHtml(
+				"/installed",
+				"installed",
+				"Installed Resources",
+				"What's installed, its versions, and what has an update waiting",
+				"c4"
+			);
+
+		// --- About ----------------------------------------------------------
+
+		const aboutBox = `
+			<div class="segment c2">
+				<h2>OmniCore</h2>
+				<div class="fact"><span>Version</span><span>OmniCore ${versionHtml()}</span></div>
+				<div class="fact"><span>Port</span><span>${ADMIN_PORT}</span></div>
+				<div class="fact"><span>Data folder</span><span>${escapeHtml(paths.dataDir())}</span></div>
+				<div class="button-row">
+					<a class="glass" id="about-link" href="#">System info</a>
+				</div>
+			</div>`;
+
+		// The updates: what the last check found, Check now, and the way
+		// to install one. Installing is followed on the Updates page, which
+		// shows it all the way through OmniCore restarting.
+		const updateLine = dev
+			? "A development build doesn't check for updates. See what's in it, and what isn't released yet."
+			: !update.lastCheckedAt
+			? "No check has run yet."
+			: !update.lastCheckSucceeded
+			? `The last check failed: ${update.lastCheckError || "unknown error"}`
+			: update.updateAvailable
+			? `Version ${update.latestVersion} is available. It installs on its own, usually within six hours, or you can install it now.`
+			: "This is the newest version.";
+
+		const updatesBox = `
+			<div class="segment c4">
+				<h2>Updates</h2>
+				<p class="lede${update.updateAvailable ? " update-ready" : ""}">${escapeHtml(updateLine)}</p>
+				${
+					dev || !update.lastCheckedAt
+						? ""
+						: `<p class="hint">Last checked: ${localTime(update.lastCheckedAt)}</p>`
+				}
+				<div class="button-row">
+					${
+						update.updateAvailable
+							? `<a class="glass" href="/updates">Update to ${escapeHtml(update.latestVersion)}</a>`
+							: ""
 					}
-				</button>
-			</div>
-
-			<div class="bento">
-				<div class="bento-row two">
-					<div class="segment">
-						<h2>Location Service</h2>
-						<p class="lede">
-							Used by weather and prayer-time modules to know where
-							you are. Turn it off and OmniCore never looks one up
-							and never hands one out.
-						</p>
-
-						<label class="option" style="margin-bottom:14px">
-							<input type="checkbox" id="enabled"
-								${settings.locationEnabled ? "checked" : ""}>
-							<span>Let OmniCore know where it is</span>
-						</label>
-
-						<div id="location-detail"
-							style="${settings.locationEnabled ? "" : "display:none"}">
-							<div class="tabs" id="location-mode-tabs"
-								style="margin-bottom:14px">
-								<button type="button" class="tab-btn ${
-									manualLocation ? "" : "active"
-								}" data-value="auto">Work it out automatically</button>
-								<button type="button" class="tab-btn ${
-									manualLocation ? "active" : ""
-								}" data-value="manual">Set it myself</button>
-							</div>
-
-							<div class="inset">
-								<div class="inset-text">
-									<div class="inset-label">CURRENTLY ${
-										manualLocation ? "SET" : "DETECTED"
-									}</div>
-									<div class="inset-value" id="location-value">${escapeHtml(
-										currentText
-									)}</div>
-								</div>
-								<button class="glass" id="location-action"
-									style="flex-shrink:0;padding:0.641em 1.1218em;font-size:0.78em">
-									${manualLocation ? "Change" : "Refresh"}
-								</button>
-							</div>
-						</div>
-					</div>
-
-					<div class="segment">
-						<h2>Appearance Mode</h2>
-						<p class="lede">
-							Saved in this browser only, so each screen can have
-							its own. Device follows this device's own setting.
-							Dashboards are unaffected — how they look belongs to
-							whichever theme they run.
-						</p>
-						<div class="mode-previews">
-							<div class="mode-preview ${uiMode === "dark" ? "active" : ""}"
-								data-mode="dark" role="button" tabindex="0">
-								<div class="mode-screen" style="background:#0c0d10">
-									<span style="width:40%;height:5px;background:rgba(255,255,255,0.8)"></span>
-									<span style="width:70%;height:4px;background:rgba(255,255,255,0.3)"></span>
-									<span style="width:55%;height:4px;background:rgba(255,255,255,0.3)"></span>
-								</div>
-								<div class="mode-preview-label">${modeLabel("dark", "Dark")}</div>
-							</div>
-							<div class="mode-preview ${uiMode === "light" ? "active" : ""}"
-								data-mode="light" role="button" tabindex="0">
-								<div class="mode-screen" style="background:#e5e7eb">
-									<span style="width:40%;height:5px;background:#4b5563"></span>
-									<span style="width:70%;height:4px;background:#9ca3af"></span>
-									<span style="width:55%;height:4px;background:#9ca3af"></span>
-								</div>
-								<div class="mode-preview-label">${modeLabel("light", "Light")}</div>
-							</div>
-							<div class="mode-preview ${uiMode ? "" : "active"}"
-								data-mode="device" role="button" tabindex="0">
-								<div class="mode-screen mode-screen-split">
-									<div style="background:#0c0d10">
-										<span style="width:60%;height:5px;background:rgba(255,255,255,0.8)"></span>
-										<span style="width:90%;height:4px;background:rgba(255,255,255,0.3)"></span>
-									</div>
-									<div style="background:#e5e7eb">
-										<span style="width:60%;height:5px;background:#4b5563"></span>
-										<span style="width:90%;height:4px;background:#9ca3af"></span>
-									</div>
-								</div>
-								<div class="mode-preview-label">${modeLabel(null, "Device")}</div>
-							</div>
-						</div>
-					</div>
+					${dev ? "" : `<button type="button" class="glass" id="check-now">Check now</button>`}
+					<a class="glass" href="/updates">${dev ? "What's in this build" : "Release notes"}</a>
 				</div>
+				<p class="status" id="check-status" aria-live="polite"></p>
+			</div>`;
 
-				<div class="bento-row three">
-					<div class="segment">
-						<h2>Back Button Position</h2>
-						<div class="corner-map" id="corner-map">
-							<button type="button" class="corner-tl ${
-								bottomRight ? "" : "active"
-							}" data-value="top-left">&#8598; Top left</button>
-							<button type="button" class="corner-tr" disabled>Top right</button>
-							<button type="button" class="corner-bl" disabled>Bottom left</button>
-							<button type="button" class="corner-br ${
-								bottomRight ? "active" : ""
-							}" data-value="bottom-right">Bottom right &#8600;</button>
-						</div>
-						<p class="hint" style="margin-top:8px">
-							Top right and bottom left aren't available.
-						</p>
-					</div>
-
-					<div class="segment">
-						<h2>Text Size &amp; Typography</h2>
-						<div class="stepper" style="margin-bottom:10px">
-							<button type="button" class="glass" id="size-down"
-								aria-label="Smaller">&#8722;</button>
-							<input type="number" id="size" min="12" max="24" step="1"
-								value="${Number(settings.uiFontSize) || 16}">
-							<span class="muted">px</span>
-							<button type="button" class="glass" id="size-up"
-								aria-label="Larger">&#43;</button>
-						</div>
-						<p class="hint" style="margin-bottom:12px">
-							Applies immediately. Dashboards are unaffected.
-						</p>
-						<div class="inset">
-							<div class="inset-text">
-								<div class="inset-label">FONT</div>
-								<div class="inset-value">${
-									installedFont
-										? escapeHtml(installedFont.family)
-										: "System font"
-								}</div>
-							</div>
-							<button class="glass" id="change-font"
-								style="flex-shrink:0;padding:0.641em 1.1218em;font-size:0.78em">
-								Change
-							</button>
-						</div>
-					</div>
-
-					<div class="segment link-segment">
-						<a class="link-row" href="/background">
-							<strong>Background and glass</strong>
-							<span>A picture behind these pages, and the frosted glass</span>
-						</a>
-						<a class="link-row" href="/place-search">
-							<strong>Place search</strong>
-							<span>Where a search for a city is sent</span>
-						</a>
-						<a class="link-row" href="/faces">
-							<strong>Manage Faces (Dashboards)</strong>
-							<span>Create, edit and remove dashboards</span>
-						</a>
-						<a class="link-row" id="about-link" href="#">
-							<strong>About OmniCore</strong>
-							<span>Installed resources &amp; system info</span>
-						</a>
-					</div>
-				</div>
-			</div>
-
+		const body = settingsHome.homeHtml(
+			{
+				general: locationBox + placeBox,
+				appearance: glassParts.backgroundBox + modeBox + cornerBox + glassParts.glassBox + textBox,
+				resources: resourcesPane,
+				about: aboutBox + updatesBox
+			},
+			update.updateAvailable
+		) + `
 			<div class="modal-backdrop" id="font-modal" hidden>
 				<div class="modal">
 					<div class="modal-head">
@@ -2043,55 +2561,15 @@ function startAdminFace() {
 					}
 					<p class="status" id="font-status"></p>
 				</div>
-			</div>
-
-			<div class="modal-backdrop" id="location-modal" hidden>
-				<div class="modal">
-					<div class="modal-head">
-						<h2>Set the location</h2>
-						<button class="modal-close" data-close="location-modal"
-							aria-label="Close">&times;</button>
-					</div>
-					<div class="field">
-						<label for="city">Search for a city</label>
-						<div class="search-row">
-							<input type="text" id="city" placeholder="Regina">
-							<button class="glass" style="width:auto;padding:0.75em 1.25em"
-								id="search">Search</button>
-						</div>
-						<div id="results"></div>
-					</div>
-					<div class="field">
-						<label for="label">Place name</label>
-						<input type="text" id="label"
-							value="${escapeHtml(settings.locationLabel || "")}"
-							placeholder="Home">
-					</div>
-					<div class="field" style="display:flex;gap:12px">
-						<div style="flex:1">
-							<label for="latitude">Latitude</label>
-							<input type="number" step="any" id="latitude"
-								value="${escapeHtml(
-									settings.latitude === null ? "" : settings.latitude
-								)}">
-						</div>
-						<div style="flex:1">
-							<label for="longitude">Longitude</label>
-							<input type="number" step="any" id="longitude"
-								value="${escapeHtml(
-									settings.longitude === null ? "" : settings.longitude
-								)}">
-						</div>
-					</div>
-					<button class="glass glass-block" id="save-location">Save</button>
-					<p class="status" id="location-status"></p>
-				</div>
 			</div>`;
 
 		const script =
 			portLinkScript +
+			localTimeScript +
+			settingsHome.HOME_SCRIPT +
+			glassParts.script +
 			`
-			// --- Modals ---------------------------------------------
+			// --- Pop-ups --------------------------------------------
 			function openModal(id) {
 				document.getElementById(id).hidden = false;
 			}
@@ -2124,19 +2602,41 @@ function startAdminFace() {
 				}
 			});
 
-			// --- Navigation -----------------------------------------
-			document.getElementById("version-pill").addEventListener("click", function () {
-				location.href = "/updates";
-			});
-
+			// --- About ----------------------------------------------
 			document.getElementById("about-link").addEventListener("click", function (event) {
 				event.preventDefault();
-				location.href = faceUrl(1303);
+				omniGo(faceUrl(1303));
 			});
+
+			const checkNow = document.getElementById("check-now");
+			if (checkNow) {
+				checkNow.addEventListener("click", async function () {
+					const status = document.getElementById("check-status");
+					checkNow.disabled = true;
+					status.className = "status";
+					status.textContent = "Checking...";
+					try {
+						const response = await fetch("/updates/check", {
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: "{}"
+						});
+						const data = await response.json();
+						if (!response.ok) throw new Error(data.error || "Couldn't reach GitHub.");
+						location.reload();
+					} catch (error) {
+						status.className = "status bad";
+						status.textContent = error.message;
+						checkNow.disabled = false;
+					}
+				});
+			}
 
 			// --- Location -------------------------------------------
 			const enabled = document.getElementById("enabled");
 			const detail = document.getElementById("location-detail");
+			const manual = document.getElementById("location-manual");
+			const action = document.getElementById("location-action");
 
 			enabled.addEventListener("change", function () {
 				detail.style.display = this.checked ? "" : "none";
@@ -2153,25 +2653,22 @@ function startAdminFace() {
 					tab.classList.add("active");
 					locationMode = tab.dataset.value;
 
-					// Choosing "set it myself" is the moment someone needs
-					// the fields, so open them rather than making them
-					// hunt for a second thing to click
+					// "Set it myself" shows its boxes; nothing changes until
+					// Save location. Back to automatic saves at once.
 					if (locationMode === "manual") {
-						openModal("location-modal");
+						manual.hidden = false;
+						action.style.display = "none";
+						document.getElementById("city").focus();
 					} else {
+						manual.hidden = true;
 						saveLocation({ locationMode: "auto" });
 					}
 				});
 			}
 
-			document.getElementById("location-action").addEventListener("click", function () {
-				if (locationMode === "manual") {
-					openModal("location-modal");
-					return;
-				}
-
-				// Automatic mode: re-run detection rather than showing
-				// whatever was cached when the page loaded
+			// Automatic: run detection again rather than showing whatever
+			// was cached when the page loaded
+			action.addEventListener("click", function () {
 				this.disabled = true;
 				this.textContent = "...";
 				saveLocation({ locationMode: "auto" });
@@ -2194,6 +2691,8 @@ function startAdminFace() {
 
 				if (response.ok) {
 					location.reload();
+				} else {
+					throw new Error();
 				}
 			}
 
@@ -2408,7 +2907,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page("Settings", body, script, "", "/logout", "Sign Out"));
+		res.send(page("Settings", body, script, "settings-home", "/logout", "Sign Out"));
 	});
 
 
@@ -2512,439 +3011,10 @@ function startAdminFace() {
 	//   3. POST /background/use      put it in place, with what the page
 	//                                worked out (its colour, how dark and
 	//                                bright it is)
+	// Background and glass were a page of their own until the settings
+	// home had tabs; that address now opens the Appearance tab
 	app.get("/background", (req, res) => {
-		const settings = readSettings();
-		const picture = backdropStore.hasPicture(settings);
-		const tint = settings.glassTint || "none";
-		const uiMode = currentUiMode();
-
-		const kindName = {
-			picture: "A picture",
-			animated: "An animated picture",
-			video: "A video"
-		}[settings.backgroundKind];
-
-		const preview = picture
-			? `<img src="/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}" alt="">`
-			: `<span>Plain</span>`;
-
-		// A colour chip for the tint. "none" and "match" are words, the
-		// rest colours. Match the picture only with a picture, showing
-		// the picture's own colour.
-		const chip = (value, label, colour, disabled) =>
-			`<button type="button" class="tint-chip${tint === value ? " active" : ""}" data-tint="${escapeHtml(value)}"` +
-			`${disabled ? " disabled" : ""} title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"` +
-			` aria-pressed="${tint === value ? "true" : "false"}">` +
-			(colour ? `<span class="tint-swatch" style="background:${escapeHtml(colour)}"></span>` : "") +
-			(value === "none" || value === "match" ? `<span>${escapeHtml(label)}</span>` : "") +
-			"</button>";
-
-		const custom = /^#[0-9a-f]{6}$/i.test(tint) && !backdropStore.TINT_PRESETS.includes(tint.toLowerCase());
-
-		const body = `
-			<div class="settings-head">
-				<h1>Background and glass</h1>
-			</div>
-
-			<div class="bento">
-				<div class="bento-row two top">
-					<div class="segment">
-						<h2>Background</h2>
-						<p class="lede">
-							Behind OmniCore's own pages: these settings, the setup
-							wizard, the welcome screen and About. A face keeps its
-							theme's own background.
-						</p>
-
-						<div class="backdrop-preview${picture ? "" : " plain"}" id="preview">${preview}</div>
-						<p class="hint" id="kind">${
-							picture ? escapeHtml(kindName || "A picture") : "Plain: black, or light grey in light mode."
-						}</p>
-
-						<div class="button-row">
-							<button type="button" class="glass" id="choose">Choose a file</button>
-							${picture ? `<button type="button" class="glass" id="plain">Back to plain</button>` : ""}
-						</div>
-						<input type="file" id="file" hidden
-							accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm">
-						<p class="status" id="upload-status" aria-live="polite"></p>
-
-						<p class="help">
-							A picture (JPEG, PNG, WebP), an animated GIF or WebP, or a
-							looping video (MP4, WebM) without sound, up to 50 MB. A video
-							looks sharper than a GIF. It's kept in OmniCore's data folder
-							and shown by OmniCore itself, never sent anywhere, and it's
-							seen on the pages that need no sign-in too. With reduced
-							motion turned on in your device's settings, a still frame is
-							shown instead.
-						</p>
-					</div>
-
-					<div class="segment">
-						<h2>Frosted glass</h2>
-						<p class="lede">Every box on these pages, over the background.</p>
-
-						<div class="field">
-							<label for="blur">Blur <span class="muted" id="blur-value">${Number(settings.glassBlur)} px</span></label>
-							<input type="range" id="blur" min="0" max="${backdropStore.BLUR_MOST}" step="1"
-								value="${Number(settings.glassBlur)}">
-						</div>
-
-						<div class="field">
-							<label>Tint</label>
-							<div class="tint-chips" id="tints">
-								${chip("none", "None", "", false)}
-								${chip("match", "Match the picture", picture && settings.backgroundColor ? settings.backgroundColor : "", !picture)}
-								${backdropStore.TINT_PRESETS.map((colour) => chip(colour, colour, colour, false)).join("")}
-								<label class="tint-chip tint-custom${custom ? " active" : ""}" title="Pick a colour">
-									<input type="color" id="custom" value="${escapeHtml(custom ? tint : "#7aa2ff")}" aria-label="Pick a colour">
-								</label>
-							</div>
-							<div class="help">${
-								picture
-									? "Match the picture takes the picture's main colour, worked out once when it was picked."
-									: "Match the picture needs a picture."
-							}</div>
-						</div>
-
-						<div class="field">
-							<label for="strength">Tint strength <span class="muted" id="strength-value">${Number(settings.glassTintStrength)}%</span></label>
-							<input type="range" id="strength" min="0" max="${backdropStore.TINT_STRENGTH_MOST}" step="1"
-								value="${Number(settings.glassTintStrength)}">
-						</div>
-
-						${
-							picture
-								? `<div class="field">
-							<label for="brightness">Picture brightness <span class="muted" id="brightness-value">${Number(settings.backgroundBrightness)}%</span></label>
-							<input type="range" id="brightness" min="${backdropStore.BRIGHTNESS_LEAST}" max="${backdropStore.BRIGHTNESS_MOST}" step="1"
-								value="${Number(settings.backgroundBrightness)}">
-							<div class="help">
-								The picture is dimmed by itself, just enough for text to read
-								over it: <span id="dim-value"></span>.
-							</div>
-						</div>`
-								: ""
-						}
-					</div>
-				</div>
-			</div>
-
-			<div class="page-dock">
-				<div class="dock">
-					<button type="button" id="save">Save</button>
-				</div>
-				<p class="status" id="status"></p>
-			</div>`;
-
-		const script = `
-			// How the veil is worked out, the same function the server uses
-			// (backdrop.js), so what's previewed is what's saved
-			${backdropStore.autoDim.toString()}
-
-			const PICTURE = ${JSON.stringify(
-				picture
-					? { low: settings.backgroundLow, high: settings.backgroundHigh, color: settings.backgroundColor || "" }
-					: null
-			).replace(/</g, "\\u003c")};
-			const MODE = ${JSON.stringify(uiMode)};
-			const MAX_BYTES = ${backdropStore.MAX_BYTES};
-
-			let tint = ${JSON.stringify(tint)};
-
-			const root = document.documentElement;
-			const blur = document.getElementById("blur");
-			const strength = document.getElementById("strength");
-			const brightness = document.getElementById("brightness");
-			const custom = document.getElementById("custom");
-
-			function light() {
-				return MODE ? MODE === "light" : window.matchMedia("(prefers-color-scheme: light)").matches;
-			}
-
-			function rgba(hex, alpha) {
-				const value = parseInt(hex.slice(1), 16);
-				return "rgba(" + ((value >> 16) & 255) + ", " + ((value >> 8) & 255) + ", " + (value & 255) + ", " + alpha + ")";
-			}
-
-			// Everything moved shows at once on this page, before saving
-			function preview() {
-				document.getElementById("blur-value").textContent = blur.value + " px";
-				document.getElementById("strength-value").textContent = strength.value + "%";
-				root.style.setProperty("--glass-blur", blur.value + "px");
-
-				const colour = tint === "match" ? (PICTURE && PICTURE.color) : (tint === "none" ? "" : tint);
-				root.style.setProperty(
-					"--glass-tint",
-					colour && Number(strength.value) ? rgba(colour, Number(strength.value) / 100) : "transparent"
-				);
-
-				if (brightness && PICTURE) {
-					document.getElementById("brightness-value").textContent = brightness.value + "%";
-					root.style.setProperty("--backdrop-brightness", Number(brightness.value) / 100);
-					const dim = autoDim(PICTURE.low, PICTURE.high, brightness.value, light());
-					root.style.setProperty(
-						"--backdrop-dim",
-						light() ? "rgba(242, 242, 244, " + dim + ")" : "rgba(0, 0, 0, " + dim + ")"
-					);
-					document.getElementById("dim-value").textContent =
-						"a veil of " + Math.round(dim * 100) + "% at this brightness";
-				}
-
-				for (const chip of document.querySelectorAll("[data-tint]")) {
-					const on = chip.dataset.tint === tint;
-					chip.classList.toggle("active", on);
-					chip.setAttribute("aria-pressed", on ? "true" : "false");
-				}
-				document.querySelector(".tint-custom").classList.toggle(
-					"active",
-					/^#/.test(tint) && !document.querySelector('[data-tint="' + tint + '"]')
-				);
-			}
-
-			for (const input of [blur, strength, brightness]) {
-				if (input) input.addEventListener("input", preview);
-			}
-
-			document.getElementById("tints").addEventListener("click", function (event) {
-				const chip = event.target.closest("[data-tint]");
-				if (!chip || chip.disabled) return;
-				tint = chip.dataset.tint;
-				// Picking a colour with the strength at nothing would show
-				// nothing; give it a little
-				if (tint !== "none" && Number(strength.value) === 0) strength.value = 12;
-				preview();
-			});
-
-			custom.addEventListener("input", function () {
-				tint = custom.value.toLowerCase();
-				if (Number(strength.value) === 0) strength.value = 12;
-				preview();
-			});
-
-			preview();
-
-			document.getElementById("save").addEventListener("click", async function () {
-				const button = this;
-				const status = document.getElementById("status");
-				button.disabled = true;
-				status.className = "status";
-				status.textContent = "";
-
-				try {
-					const response = await fetch("/background/glass", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							blur: Number(blur.value),
-							tint: tint,
-							tintStrength: Number(strength.value),
-							brightness: brightness ? Number(brightness.value) : undefined
-						})
-					});
-					if (!response.ok) throw new Error();
-					status.textContent = "Saved. Every page of OmniCore's has it now.";
-				} catch (error) {
-					status.className = "status bad";
-					status.textContent = "Couldn't save.";
-				}
-				button.disabled = false;
-			});
-
-			// --- Picking a file ------------------------------------------
-
-			const upload = document.getElementById("upload-status");
-
-			function say(text, bad) {
-				upload.className = "status" + (bad ? " bad" : "");
-				upload.textContent = text;
-			}
-
-			// Waits for an element's event, or gives up after a while
-			function once(element, name, seconds) {
-				return new Promise(function (resolve, reject) {
-					const timer = setTimeout(function () { reject(new Error("timeout")); }, seconds * 1000);
-					element.addEventListener(name, function () { clearTimeout(timer); resolve(); }, { once: true });
-					element.addEventListener("error", function () { clearTimeout(timer); reject(new Error("error")); }, { once: true });
-				});
-			}
-
-			// How bright a colour looks, 0-1 (relative luminance)
-			function luminance(r, g, b) {
-				function channel(value) {
-					const c = value / 255;
-					return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-				}
-				return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-			}
-
-			// Draw the picture, or a frame a second into the video, then
-			// work out its main colour, how dark its darker parts and how
-			// bright its brighter parts are, and a still frame. Done here,
-			// once, from the file on this device, before anything is sent.
-			async function study(file) {
-				const address = URL.createObjectURL(file);
-				let source;
-				let width;
-				let height;
-
-				try {
-					if (file.type.indexOf("video/") === 0) {
-						const video = document.createElement("video");
-						video.muted = true;
-						video.playsInline = true;
-						video.preload = "auto";
-						video.src = address;
-						await once(video, "loadeddata", 20);
-						video.currentTime = Math.min(1, (video.duration || 2) / 2);
-						await once(video, "seeked", 20);
-						source = video;
-						width = video.videoWidth;
-						height = video.videoHeight;
-					} else {
-						const image = new Image();
-						image.src = address;
-						await image.decode();
-						source = image;
-						width = image.naturalWidth;
-						height = image.naturalHeight;
-					}
-
-					if (!width || !height) throw new Error("empty");
-
-					// The still frame, at most 1920 px wide
-					const scale = Math.min(1, 1920 / width);
-					const frame = document.createElement("canvas");
-					frame.width = Math.round(width * scale);
-					frame.height = Math.round(height * scale);
-					frame.getContext("2d").drawImage(source, 0, 0, frame.width, frame.height);
-					const still = await new Promise(function (resolve) {
-						frame.toBlob(resolve, "image/jpeg", 0.85);
-					});
-
-					// A small copy to read the colours from
-					const small = document.createElement("canvas");
-					small.width = 48;
-					small.height = 48;
-					const context = small.getContext("2d", { willReadFrequently: true });
-					context.drawImage(source, 0, 0, 48, 48);
-					const pixels = context.getImageData(0, 0, 48, 48).data;
-
-					const shades = [];
-					const buckets = {};
-					for (let i = 0; i < pixels.length; i += 4) {
-						const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-						shades.push(luminance(r, g, b));
-						const key = (r >> 5) + "," + (g >> 5) + "," + (b >> 5);
-						const bucket = buckets[key] || (buckets[key] = { n: 0, r: 0, g: 0, b: 0 });
-						bucket.n++; bucket.r += r; bucket.g += g; bucket.b += b;
-					}
-					shades.sort(function (a, b) { return a - b; });
-
-					// Its main colours: the four most common, averaged by how
-					// common each is
-					const main = Object.values(buckets).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
-					const total = main.reduce(function (sum, bucket) { return sum + bucket.n; }, 0);
-					const average = ["r", "g", "b"].map(function (part) {
-						return Math.round(main.reduce(function (sum, bucket) { return sum + bucket[part]; }, 0) / total);
-					});
-					const color = "#" + average.map(function (value) {
-						return value.toString(16).padStart(2, "0");
-					}).join("");
-
-					return {
-						still: still,
-						color: color,
-						low: shades[Math.floor(shades.length * 0.1)],
-						high: shades[Math.floor(shades.length * 0.9)]
-					};
-				} finally {
-					URL.revokeObjectURL(address);
-				}
-			}
-
-			async function send(address, body) {
-				const response = await fetch(address, {
-					method: "POST",
-					headers: { "Content-Type": "application/octet-stream" },
-					body: body
-				});
-				const answer = await response.json().catch(function () { return {}; });
-				if (!response.ok) {
-					throw new Error(answer.error || (response.status === 413 ? "That file is bigger than 50 MB." : "Couldn't send it."));
-				}
-				return answer;
-			}
-
-			document.getElementById("choose").addEventListener("click", function () {
-				document.getElementById("file").click();
-			});
-
-			document.getElementById("file").addEventListener("change", async function () {
-				const file = this.files[0];
-				this.value = "";
-				if (!file) return;
-
-				if (file.size > MAX_BYTES) {
-					say("That file is bigger than 50 MB.", true);
-					return;
-				}
-
-				document.getElementById("choose").disabled = true;
-
-				try {
-					say("Looking at it…");
-					let about;
-					try {
-						about = await study(file);
-					} catch (error) {
-						throw new Error(
-							"This browser can't show that file, so it can't be the background. " +
-							"JPEG, PNG, GIF, WebP, MP4 and WebM work; a video has to be in a format browsers play (H.264 or VP9, say)."
-						);
-					}
-
-					say("Sending it…");
-					const received = await send("/background/upload", file);
-					await send("/background/still?id=" + encodeURIComponent(received.id), about.still);
-
-					const response = await fetch("/background/use", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ id: received.id, color: about.color, low: about.low, high: about.high })
-					});
-					const answer = await response.json().catch(function () { return {}; });
-					if (!response.ok) throw new Error(answer.error || "Couldn't use it.");
-
-					say("Done.");
-					location.reload();
-				} catch (error) {
-					say(error.message, true);
-					document.getElementById("choose").disabled = false;
-				}
-			});
-
-			const plain = document.getElementById("plain");
-			if (plain) {
-				plain.addEventListener("click", async function () {
-					const sure = await confirmDialog({
-						title: "Back to plain?",
-						text: "The picture is deleted from OmniCore's data folder.",
-						confirm: "Back to plain"
-					});
-					if (!sure) return;
-					const response = await fetch("/background/plain", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: "{}"
-					});
-					if (response.ok) location.reload();
-					else say("Couldn't change it.", true);
-				});
-			}
-		`;
-
-		res.send(page("Background and glass", body, script, "", "/", "Settings"));
+		res.redirect("/#appearance");
 	});
 
 	app.post(
@@ -4750,7 +4820,7 @@ function startAdminFace() {
 					var back = document.querySelector(".floating");
 					if (back) {
 						back.onclick = function () {
-							location.href = faceUrl(1303);
+							omniGo(faceUrl(1303));
 						};
 					}
 				`
@@ -4859,7 +4929,7 @@ function startAdminFace() {
 			portLinkScript +
 			`
 			function goToWizard() {
-				location.href = faceUrl(${WIZARD_PORT}) + "/faces/new";
+				omniGo(faceUrl(${WIZARD_PORT}) + "/faces/new");
 			}
 		`;
 
@@ -5113,7 +5183,7 @@ function startAdminFace() {
 					if (!response.ok) throw new Error();
 
 					// Back to the list of faces, which no longer has it
-					location.href = "/faces";
+					omniGo("/faces");
 				} catch (error) {
 					status.textContent = "Couldn't delete it. Check OmniCore is still running.";
 					status.className = "status bad";
@@ -5358,7 +5428,7 @@ function startAdminFace() {
 
 						if (!response.ok) throw new Error();
 
-						location.href = "/faces/${face.id}/theme";
+						omniGo("/faces/${face.id}/theme");
 					} catch (error) {
 						const status = document.getElementById("status");
 						status.textContent = "Couldn't change the theme.";
@@ -5483,8 +5553,8 @@ function startAdminFace() {
 
 					// Straight into its settings — a new instance usually
 					// needs configuring before it's useful
-					location.href = "/faces/${face.id}/modules/" +
-						encodeURIComponent(instance.id);
+					omniGo("/faces/${face.id}/modules/" +
+						encodeURIComponent(instance.id));
 				} catch (error) {
 					status.textContent = "Couldn't add that module.";
 					status.className = "status bad";
@@ -5811,7 +5881,7 @@ function startAdminFace() {
 					// meanwhile, so it can't be saved twice on the way out.
 					status.textContent = "Saved. Already in effect.";
 					status.className = "status good";
-					setTimeout(function () { location.href = modulesPage; }, SAVED_PAUSE);
+					setTimeout(function () { omniGo(modulesPage); }, SAVED_PAUSE);
 					return;
 				} catch (error) {
 					// Stays on the page, so nothing typed is lost
@@ -5835,7 +5905,7 @@ function startAdminFace() {
 				if (!sure) return;
 
 				await fetch(base, { method: "DELETE" });
-				location.href = modulesPage;
+				omniGo(modulesPage);
 			});
 		`;
 

@@ -48,7 +48,7 @@ function readManifest(themeId) {
 	const manifestPath = path.join(themeDir(themeId), "theme.json");
 
 	if (!fs.existsSync(manifestPath)) {
-		return { id: themeId, name: themeId, description: "" };
+		return { id: themeId, name: themeId, description: "", coreFade: true };
 	}
 
 	try {
@@ -57,10 +57,14 @@ function readManifest(themeId) {
 		return {
 			id: themeId,
 			name: parsed.name || themeId,
-			description: parsed.description || ""
+			description: parsed.description || "",
+			// Whether Core fades the face in (page-motion.js). Only an
+			// explicit false turns it off, so a theme that says nothing
+			// keeps working as it did.
+			coreFade: parsed.coreFade !== false
 		};
 	} catch (error) {
-		return { id: themeId, name: themeId, description: "" };
+		return { id: themeId, name: themeId, description: "", coreFade: true };
 	}
 }
 

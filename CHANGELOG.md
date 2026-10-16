@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-OmniCore v2, being built on the `v2` branch: Info order lists that are dragged into place, a long one in a pop-up, a city search that finds small places from the service you pick, and a picture, a GIF or a video behind OmniCore's pages under frosted glass
+OmniCore v2, being built on the `v2` branch: Info order lists that are dragged into place, a long one in a pop-up, a city search that finds small places from the service you pick, a picture, a GIF or a video behind OmniCore's pages under frosted glass, and a settings home of four tabs in a notch, with pages that fade from one to the next
 
 ### Added
 
@@ -20,10 +20,18 @@ OmniCore v2, being built on the `v2` branch: Info order lists that are dragged i
 - **Text stays readable over any picture.** A veil, black in dark mode and light grey in light mode, sits between the picture and the boxes. It's worked out from the picture when it's picked: just strong enough for the text to read against its brightest parts (or darkest, in light mode). A **Brightness** slider dims the picture itself, and the veil follows.
 - **Frosted glass.** Every box on OmniCore's pages is now frosted glass: what's behind it is blurred, by an amount you pick. Over a picture the glass gets a thin light edge along the top and a little more colour. With the plain background it looks as it did.
 - **A tint for the glass**: a colour laid over every box, a little of it (up to 35%), from a few colours, a colour picker, or **Match the picture**, which uses the picture's main colour. That colour is worked out once, when the picture is picked, so nothing changes colour while a video plays. Every change shows on the page at once, before Save.
-- **Reduced motion is respected.** With it turned on in the device's settings, an animated picture shows a still frame and a video doesn't play. A video also pauses while its tab is hidden.
+- **The settings home is four tabs.** A black notch at the top of Settings holds an icon for each: **General** (Location Service, Place search), **Appearance** (Background, Appearance Mode, Back Button, Frosted glass, Text Size), **Resources** (Manage Faces, the Marketplace, Installed Resources) and **About** (the version, the data folder, the updates). The tab picked shows its name; the others show theirs on hover, keyboard focus or a long press. A dot on About means an update is ready.
+- **The tabs slide.** Picking a tab slides the boxes across to it, and the picture behind the page moves the same way, a quarter as far, so the glass crosses different parts of it. Each tab scrolls on its own. The address follows the tab (`/#appearance`), and Settings opens again on the last tab you were on.
+- **Boxes of different sizes.** Each tab's boxes are laid out on a six-column grid, wide and narrow, tall and short, rather than in even halves. One column on a phone held upright.
+- **Pages fade from one to the next.** Leaving a page fades it out to black (white in light mode), and the next page fades in from it. On every page OmniCore draws, and on faces: Settings slides its notch up first. Not on a reload, so a wall display that refreshes never flashes, and not for a link opened in a new tab. If the next page doesn't come within a few seconds, the old one comes back.
+- **A theme can start its entrance when the face has faded in.** OmniCore fires `omnicore:revealed` once the curtain has lifted, so a theme's own entrance (tiles flying in, say) doesn't play hidden behind it. A theme that would rather do the whole entrance itself says `"coreFade": false` in its `theme.json`. A theme that says nothing keeps working as it did. Documented in `docs/Building theme.md`.
+- **Reduced motion is respected.** With it turned on in the device's settings, an animated picture shows a still frame, a video doesn't play, tabs change without sliding, and pages change without fading. A video also pauses while its tab is hidden.
 
 ### Changed
 
+- **Setting the location happens in its box.** "Set it myself" now opens the city search, the place's name and its coordinates right in the Location Service box, with **Save location**, rather than in a pop-up.
+- **No version pill.** The version and the updates are on the About tab, with Check now. Installing an update is still followed on the Updates page, which the About tab links to.
+- **Background and glass are on the Appearance tab**, saved as they change. Their own page, from earlier in v2, now opens that tab.
 - **An image built by hand is a development build.** Running the image workflow from the Actions tab (the throwaway `:dev` image) used to give the image the branch's name as its version: "v2", which OmniCore read as 2.0.0, so every module counted as compatible and the Updates page looked for notes that weren't there. It now gets `dev`, like a build from a clone: the source's version with the dev badge, no update checks, and the notes from its own `CHANGELOG.md`, which is now part of the image, including what isn't released yet.
 
 ### Fixed

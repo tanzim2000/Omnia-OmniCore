@@ -307,16 +307,18 @@ test("pages: a fresh install has the plain background and the default glass", as
 	}
 });
 
-test("pages: the Background and glass page, linked from Settings", async () => {
-	const home = (await request(3000, "/")).body.toString();
-	assert.ok(home.includes('href="/background"'));
+test("pages: Background and Frosted glass, on Settings' Appearance tab", async () => {
+	// The page they had in v2's commit 3 opens the tab now
+	const old = await request(3000, "/background", { redirect: "manual" });
+	assert.equal(old.status, 302);
 
-	const page = (await request(3000, "/background")).body.toString();
-	assert.ok(page.includes("<h1>Background and glass</h1>"));
+	const page = (await request(3000, "/")).body.toString();
+	assert.match(page, /<h2 class="pane-title" id="appearance">Appearance<\/h2>[\s\S]*<h2>Background<\/h2>[\s\S]*<h2>Frosted glass<\/h2>/);
 	assert.ok(page.includes('accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"'));
 	assert.ok(page.includes('data-tint="match"') && page.includes(" disabled"), "Match the picture needs a picture");
 	assert.ok(page.includes("never sent anywhere"));
 	assert.ok(page.includes(backdrop.autoDim.toString()), "the preview uses the same veil as the server");
+	assert.ok(page.includes('id="glass-status"'), "saved as it changes, and says so");
 	for (const source of [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])) {
 		assert.doesNotThrow(() => new vm.Script(source));
 	}

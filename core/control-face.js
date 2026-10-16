@@ -14,7 +14,8 @@
 // the admin UI looks like. See
 // docs/planning/default-ui-architecture.md.
 
-const { backdropHtml, attachBackdropRoute } = require("./backdrop");
+const { attachBackdropRoute } = require("./backdrop");
+const { pageStart } = require("./page-motion");
 const express = require("express");
 const faceStore = require("./face-store");
 const {
@@ -195,7 +196,7 @@ function page(title, body, script) {
 	<style>${uiStyles()}${styles}</style>
 </head>
 <body>
-${backdropHtml()}
+${pageStart()}
 	${body}
 	<script>${script || ""}</script>
 </body>
@@ -317,11 +318,11 @@ function startControlFace() {
 		const script =
 			portLinkScript +
 			`
-			function goToFace(port) { location.href = faceUrl(port); }
+			function goToFace(port) { omniGo(faceUrl(port)); }
 			function goToWizard() {
-				location.href = faceUrl(${WIZARD_PORT}) + "/faces/new";
+				omniGo(faceUrl(${WIZARD_PORT}) + "/faces/new");
 			}
-			function goToSettings() { location.href = faceUrl(${ADMIN_PORT}); }
+			function goToSettings() { omniGo(faceUrl(${ADMIN_PORT})); }
 
 			// The Light / Dark / Device switch (see ui-theme.js). Pressing
 			// it, or Settings, cancels the auto-advance below like any
@@ -346,7 +347,7 @@ function startControlFace() {
 
 				if (remaining <= 0) {
 					clearInterval(tick);
-					location.href = faceUrl(onlyFace);
+					omniGo(faceUrl(onlyFace));
 				}
 			}, 1000);
 

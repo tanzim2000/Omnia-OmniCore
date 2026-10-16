@@ -70,7 +70,7 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
   which moves into the About tab in v2.)
 - **No uninstall in the UI.** Removing a module or theme still means
   deleting its folder.
-- **Test CI.** `npm test` has 28 test files, but nothing runs them on a
+- **Test CI.** `npm test` has 29 test files, but nothing runs them on a
   push. The workflows only publish the image and the docs site.
 - **Tag workflow concurrency.** Two `v*` tags pushed together can run the
   image publish at once. Push tags one at a time, or add `concurrency`.
@@ -111,11 +111,10 @@ judged ready, not as part of any of these.
    presets, a picker and Match the picture; a still frame for reduced
    motion, and a video paused when its tab is hidden. With it, the
    wizard's missing font route.
-4. The settings home and movement: four tabs in the notch, one page, the
-   remembered tab, the asymmetric bento, the About tab with the updates;
-   the tab-linked pan with the wallpaper moving a quarter as far; page
-   fades on every page and the notch hiding (the riskiest: it touches every
-   page, so each kind of page is tested on its own); the theme intro signal
+4. **Done.** The settings home and movement: four tabs in the notch, one
+   page, the remembered tab, the asymmetric bento, the About tab with the
+   updates; the tab-linked pan with the picture moving a quarter as far;
+   page fades on every page and the notch hiding; the theme intro signal
    and the `theme.json` opt-out, documented.
 5. A docs pass, this Backlog cleaned up, the final Unreleased entry.
 
@@ -147,96 +146,31 @@ ones. Everything below is opt-in: anyone who changes nothing sees no
 change. More problems are expected once it is built and used; fix them
 as they come, one small commit at a time.
 
-Settings home:
+Settings home: built (commit 4, see the CHANGELOG). Left from the design,
+not built:
 
-- **Four tabs in a notch.** A black notch drops from the top centre with
-  four icons: General (Location Service, Place search), Appearance
-  (Appearance Mode, Back Button Position, Text Size and Typography),
-  Resources (Manage Faces, the Marketplace, Installed Resources) and
-  About (version and updates, system info). The selected icon shows its
-  name beside it; the others show theirs on hover, keyboard focus and long
-  press, and all have accessible labels. The icons are hand-drawn inline
-  SVG (no icon font, no CDN). The notch needs a thin lighter edge so it
-  shows on a black page. The heading moves below it on a phone held upright.
-- **No version pill.** The About tab holds the version and the updates
-  (the Updates page moves in: Update now, Check now), so a pill in the
-  corner would say the same thing twice. When an update is ready, a dot
-  sits on the About icon in the notch.
-- **Asymmetric bento on every tab.** A six-column grid with mixed spans,
-  so boxes are different sizes rather than even halves; one column on a
-  phone held upright. As in the mockup:
-  - General: Location Service wide, Place search narrow beside it.
-  - Appearance: Background as a big box two rows tall, with Appearance
-    Mode and Back Button stacked beside it; then Frosted glass (wide)
-    beside Text Size and Typography.
-  - Resources: Manage Faces and Installed Resources wide and stacked, the
-    Marketplace a tall box beside them; each a whole clickable box with an
-    icon and its name at the foot.
-  - About: OmniCore (version, port, data folder) narrow, Updates wide.
-- **Location Service keeps the manual location from v1.** On or off; when
-  on, "Detect it automatically" or "Set it myself". Set it myself shows
-  Search for a city (through the Place search setting, with its credit
-  line, and saying when the secondary was asked), Latitude, Longitude and
-  Save location.
-- **The Back button** stays a floating round button in the corner chosen
-  under Back Button, on every page. Top left: the page heading starts after
-  it rather than under it, and on a phone held upright the button gets a
-  row of its own below the notch, the heading beside it, the content below
-  both. Bottom right: a docked page's capsule leaves room for it beside
-  itself (done in 1.19.9).
-- All four tabs are on one page, switched by a small script, so the
-  notch and the movement are not interrupted by a reload. The address
-  follows the tab (`/#appearance`), the last tab is remembered per browser,
-  and opening or reloading starts on the right tab without any movement.
-  Without the script, the four tabs are stacked so nothing is unreachable.
-- The Resources tab is the clear way to Resource Management, and replaces
-  the old idea of a Marketplace segment on the home page.
+- **Update now on the About tab.** The About tab checks and says what was
+  found; installing is still started and followed on the Updates page,
+  which has the progress through OmniCore restarting. Move it in once the
+  progress view is its own piece.
+- **Place search on the General tab** is a box with the choice and a link
+  to its own page (the keys, the list of services). The design had the
+  whole setting in the box.
+- The Background box offers Choose a file; the mockup's ready-made
+  pictures were stand-ins, and none ship.
 
 Background and glass: built (commit 3, see the CHANGELOG). Left from the
 design, not built:
 
 - A background per browser rather than one for the whole install.
 - A faint grain over the glass.
-- The Background and Frosted glass boxes move into the Appearance tab with
-  the settings home (commit 4); for now they're a page of their own,
-  linked from Settings.
 - Video plays only in the formats the browser can play: H.264 MP4 or VP9
   WebM. The test browser used while building has no H.264, so MP4 was
   tested on the server side only; try one in Chrome, Edge or Safari.
 
-Motion:
-
-- **Tab-linked movement.** The four tabs sit side by side on one wide
-  canvas and the screen is a window over it. Switching a tab pans the window,
-  in the direction of the switch: the old tab's glass panes slide out, the
-  new ones slide in, and the wallpaper moves the same way but about a
-  quarter as far, so the glass crosses different parts of the picture and
-  the blur shows. The notch stays fixed. Each tab scrolls up and down on
-  its own, tabs that are off screen are hidden from the keyboard and screen
-  readers, and the picture never moves by itself. Reduced motion switches
-  tabs instantly. The plain black background still slides the panes.
-- **Page fades.** Leaving a page slides the notch up (Settings home only),
-  then fades the whole screen to the page's base colour: black in dark
-  mode, white in light mode, following Appearance Mode first and the device
-  setting when it is left on automatic. The next page fades in from that
-  colour, and the notch drops in again. About a quarter of a second out, a
-  little longer in. Applies to every page, faces included. Handle: the back
-  and forward buttons restoring a page from memory (reset on `pageshow`, or
-  it stays black), Ctrl or Cmd-click, new-tab links, downloads and
-  same-page `#` links (no fade), a slow or failed load (the old page
-  returns after a few seconds), form posts and the redirect after Save, and
-  reduced motion (instant). Reloads and automatic refreshes do not replay
-  it, so a wall display does not flash. The colours and animation live in
-  `uiStyles` in `core/ui-theme.js`; the click handling is a small shared
-  script added to each page template.
-- **Face themes own their appearing animation.** Core only draws the
-  fade-from-black curtain. The theme runs its own entrance after it (Windows
-  8 tiles flying in and flipping into place, say). Core needs to give
-  themes a signal at the moment the curtain has lifted, so the intro does not
-  play hidden behind the black, and a theme can opt out of the Core fade in
-  `theme.json` to do the whole entrance itself. A theme that says nothing
-  gets the Core fade, so existing themes keep working. To be written into
-  the theme docs.
+Motion: built (commit 4). Faces fade in from Core's curtain and themes
+hear `omnicore:revealed`; the Windows 8 theme doesn't use it yet (its
+rebuild will).
 
 Settled, so not to be reopened by accident:
 
