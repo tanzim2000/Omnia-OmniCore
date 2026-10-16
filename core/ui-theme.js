@@ -20,6 +20,7 @@
 
 const { AsyncLocalStorage } = require("node:async_hooks");
 const { readSettings } = require("./settings-store");
+const backdrop = require("./backdrop");
 
 // ---------------------------------------------------------------------
 // Light or dark: chosen per BROWSER, not per install
@@ -274,11 +275,14 @@ function paletteVariables(active) {
 		--glow-strong: ${active.glowStrong};
 
 		/* Segments: the boxes every page is built from. See .segment
-		   below. --segment-blur is "none" (flat, as now) or a blur such
-		   as "blur(0.75em)" for frosted glass over the background. */
+		   below. Frosted glass since v2: --segment-blur blurs whatever
+		   is behind a segment, by --glass-blur (Settings, Background and
+		   glass), and lifts its colour a little over a picture
+		   (--glass-saturate). The glass values come after these, from
+		   glassVariables in backdrop.js. */
 		--segment-bg: ${active.segmentBg};
 		--segment-border: ${active.segmentBorder};
-		--segment-blur: none;
+		--segment-blur: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 
 		--flash: ${active.flash};
 		--scroll-thumb: ${active.scrollThumb};
@@ -357,18 +361,27 @@ function uiStyles(options) {
 	const forced = options && options.forceMode;
 	const mode = forced === "light" || forced === "dark" ? forced : currentUiMode();
 
+	// The palette, then the glass and the picture's veil for the same
+	// mode (backdrop.js), which can override a palette value or two
 	const colours = mode
 		? `
-	:root {${paletteVariables(PALETTES[mode])}}
+	:root {${paletteVariables(PALETTES[mode])}${backdrop.glassVariables(settings, mode === "light")}}
 	${modeRules(mode === "light")}`
 		: `
-	:root {${paletteVariables(PALETTES.dark)}}
+	:root {${paletteVariables(PALETTES.dark)}${backdrop.glassVariables(settings, false)}}
 	${modeRules(false)}
 
 	@media (prefers-color-scheme: light) {
-		:root {${paletteVariables(PALETTES.light)}}
+		:root {${paletteVariables(PALETTES.light)}${backdrop.glassVariables(settings, true)}}
 		${modeRules(true)}
 	}`;
+
+	// With a picture behind the page, the faint blobs below have nothing
+	// left to do: the picture is what the glass blurs
+	const overPicture = backdrop.hasPicture(settings)
+		? `
+	body { background-image: none; }`
+		: "";
 
 	return `
 	${fontFace(settings)}
@@ -399,6 +412,42 @@ function uiStyles(options) {
 		font-family: var(--font);
 		font-size: var(--font-size);
 		margin: 0;
+	}
+	${overPicture}
+
+	/* ---------------------------------------------------------------
+	   The picture behind the page (since v2), when one is set in
+	   Settings: drawn by backdropHtml() in backdrop.js as the first
+	   thing in <body>. A layer fixed to the screen rather than
+	   background-attachment: fixed, which iPhones don't honour.
+	   Behind everything (z-index -1), never in the way of a click, and
+	   covered by a veil (::after) just strong enough for text to read.
+	   --------------------------------------------------------------- */
+	.omni-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: -1;
+		overflow: hidden;
+		pointer-events: none;
+		background: var(--bg);
+	}
+
+	.omni-backdrop picture { display: block; width: 100%; height: 100%; }
+
+	.omni-backdrop img,
+	.omni-backdrop video {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		filter: brightness(var(--backdrop-brightness));
+	}
+
+	.omni-backdrop::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background: var(--backdrop-dim);
 	}
 
 	/* ---------------------------------------------------------------
@@ -593,16 +642,21 @@ function uiStyles(options) {
 	                          every other clickable thing.
 
 	   Frosted glass is --segment-blur, set with the other variables at
-	   the top. A word of warning for when it's turned on: a blurred box
+	   the top, and on since v2. A word of warning: a blurred box
 	   becomes the frame for anything inside it with position: fixed.
 	   A pop-up (.modal-backdrop) has to sit outside every segment, or
 	   it would cover only its own box instead of the whole screen.
 	   --------------------------------------------------------------- */
 	.segment {
-		background: var(--segment-bg);
+		/* The tint (a colour, a little of it) over the glass's own fill.
+		   --glass-tint is transparent until one is picked. */
+		background: linear-gradient(var(--glass-tint), var(--glass-tint)), var(--segment-bg);
 		border: 1px solid var(--segment-border);
 		border-radius: var(--radius);
 		padding: 1.25em;
+		/* A thin light edge along the top, over a picture only
+		   (--segment-edge is transparent otherwise) */
+		box-shadow: inset 0 1px 0 var(--segment-edge);
 		backdrop-filter: var(--segment-blur);
 		-webkit-backdrop-filter: var(--segment-blur);
 	}

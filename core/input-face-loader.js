@@ -20,6 +20,7 @@
 // module says what controls exist; OmniCore alone decides how a tap
 // looks and feels.
 
+const { attachBackdropRoute } = require("./backdrop");
 const express = require("express");
 const { loadModule } = require("./module-loader");
 const { readInputSchema } = require("./module-config");
@@ -71,6 +72,10 @@ function startInputFace(faceOrId, maybeFace) {
 
 		// Light or dark for whichever browser is asking. See ui-theme.js.
 		app.use(rememberUiMode);
+
+		// The picture behind OmniCore's own pages, when one is set. See
+		// backdrop.js.
+		attachBackdropRoute(app);
 
 		// Serves the chosen UI font from this face's own origin
 		attachFontRoute(app);

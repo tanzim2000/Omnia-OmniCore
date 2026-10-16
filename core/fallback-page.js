@@ -12,6 +12,7 @@
 // picker with Default on it. See
 // docs/planning/default-ui-architecture.md.
 
+const { backdropHtml } = require("./backdrop");
 const { uiStyles } = require("./ui-theme");
 const notifications = require("./notifications");
 const { CLIENT_SCRIPT } = require("./face-events");
@@ -74,6 +75,7 @@ ${notifications.overlayStyles(face && face.notificationMode)}
 	</style>
 </head>
 <body>
+${backdropHtml()}
 	${body}
 	<script>
 		// Send the chosen theme back to this face, then reload to render it

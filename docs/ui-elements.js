@@ -122,15 +122,21 @@ const sections = [
 				id: "variables",
 				title: "Global variables",
 				sel: ":root",
-				desc: "Four layout variables set on every page, besides the colours above. They're the knobs Settings turns (font and text size) plus the two that shape every box.",
+				desc: "The layout variables set on every page, besides the colours above: the knobs Settings turns (font, text size, the glass and the picture behind the page) plus the ones that shape every box.",
 				demo: `<table class="plain">
 <tr><td><code>--font</code></td><td>The font stack. The system font until a Google font is installed, then <code>"Name", system-ui, …</code>.</td></tr>
 <tr><td><code>--font-size</code></td><td>Base size in px (16 unless changed in Settings). Almost everything is sized in <code>em</code>, so this scales the whole UI.</td></tr>
 <tr><td><code>--radius</code></td><td>0.75em. The corners of segments, lists, tabs and glass buttons.</td></tr>
-<tr><td><code>--segment-blur</code></td><td><code>none</code>. Set it to something like <code>blur(0.75em)</code> to turn every segment into frosted glass.</td></tr>
+<tr><td><code>--segment-blur</code></td><td>Frosted glass, on since v2: <code>blur(var(--glass-blur)) saturate(var(--glass-saturate))</code>. Every segment blurs what's behind it.</td></tr>
+<tr><td><code>--glass-blur</code></td><td>How much, in px: 20 unless changed under Settings, Background and glass (0 to 40).</td></tr>
+<tr><td><code>--glass-saturate</code></td><td>1, or 1.4 over a picture, so the colour showing through the glass isn't washed out.</td></tr>
+<tr><td><code>--glass-tint</code></td><td>A colour laid over every segment's fill, a little of it (at most 35%). <code>transparent</code> until one is picked; "Match the picture" uses the picture's own main colour.</td></tr>
+<tr><td><code>--segment-edge</code></td><td>The thin light line along a segment's top edge. Transparent with the plain background, there over a picture.</td></tr>
+<tr><td><code>--backdrop-brightness</code></td><td>The picture's brightness, 0.4 to 1.2 (the Brightness setting).</td></tr>
+<tr><td><code>--backdrop-dim</code></td><td>The veil over the picture: black in dark mode, the light grey in light mode, just strong enough for the text to read. Worked out from the picture, not set by hand.</td></tr>
 </table>`,
-				code: ":root {\n\t--font: system-ui, …;\n\t--font-size: 16px;\n\t--radius: 0.75em;\n\t--segment-blur: none;\n}",
-				note: "With --segment-blur turned on, a blurred box becomes the frame for anything inside it with position: fixed, so a pop-up (.modal-backdrop) has to sit outside every segment."
+				code: ":root {\n\t--font: system-ui, …;\n\t--font-size: 16px;\n\t--radius: 0.75em;\n\t--segment-blur: blur(var(--glass-blur)) saturate(var(--glass-saturate));\n\t--glass-blur: 20px;\n\t--glass-tint: transparent;\n}",
+				note: "A blurred box becomes the frame for anything inside it with position: fixed, so a pop-up (.modal-backdrop) has to sit outside every segment."
 			},
 			{
 				id: "body",
@@ -140,6 +146,18 @@ const sections = [
 				demo: `<p class="muted" style="margin:0">The soft glow behind this whole page is it.</p>`,
 				code: "body { background: var(--bg); color: var(--fg); font-family: var(--font); … }",
 				note: "Two rules apply by themselves: a page with a back button in the top-left corner starts below it, and one with the button bottom-right ends above it, so the button never covers anything."
+			},
+			{
+				id: "backdrop",
+				title: "Picture behind the page",
+				sel: ".omni-backdrop",
+				desc: "Since v2, a picture, an animated GIF or WebP, or a looping video can be set behind OmniCore's own pages (Settings, Background and glass). It's drawn as the first thing inside <code>&lt;body&gt;</code>, fixed to the screen behind everything, with a veil over it (<code>::after</code>, <code>--backdrop-dim</code>) so text stays readable. Nothing is drawn with the plain background. A page doesn't write this itself: <code>backdropHtml()</code> in <code>core/backdrop.js</code> does, and the page's port serves the file at <code>/backdrop/…</code>.",
+				demo: `<div style="position:relative;height:140px;border-radius:var(--radius);overflow:hidden;background:linear-gradient(135deg,#3a6df0,#c46cd8 55%,#f2a65a)">
+<div style="position:absolute;inset:0;background:rgba(0,0,0,0.35)"></div>
+<div class="segment" style="position:absolute;left:1em;right:1em;top:1.5em;backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)">A segment over a picture</div>
+</div>`,
+				code: '<body>\n${backdropHtml()}\n…',
+				note: "With reduced motion turned on in the device's settings, an animation shows its still frame and a video doesn't play. A video pauses while its tab is hidden."
 			},
 			{
 				id: "type",

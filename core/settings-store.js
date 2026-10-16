@@ -74,6 +74,29 @@ const DEFAULTS = {
 	// the welcome face's auto-advance timer.
 	backButtonCorner: "bottom-right",
 
+	// --- Background and glass (since v2) -----------------------------
+	// The picture behind OmniCore's own pages. "plain" is none: black, or
+	// the light grey in light mode. See backdrop.js for what each means.
+	backgroundKind: "plain",
+	backgroundType: "",
+	backgroundFile: "",
+	backgroundStill: "",
+	// Worked out from the picture once, when it was picked: its main
+	// colour (for Match the picture), and how dark and how bright its
+	// darker and brighter parts are (for the veil that keeps text readable)
+	backgroundColor: "",
+	backgroundLow: 0,
+	backgroundHigh: 0,
+	// The picture's brightness, 40-120 (%)
+	backgroundBrightness: 100,
+
+	// The frosted glass of every segment: its blur (0-40 px), and a tint:
+	// "none", "match" (the picture's own colour) or a colour like
+	// "#7aa2ff", at a strength of 0-35 (%)
+	glassBlur: 20,
+	glassTint: "none",
+	glassTintStrength: 12,
+
 	// --- Notifications ----------------------------------------------
 	// Live here rather than in a face or a theme because the overlay is
 	// Core's, not a theme's. Every display showing a face draws it -- see

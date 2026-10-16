@@ -18,6 +18,7 @@
 // /about.css, so this page's look can be changed without touching any
 // JavaScript.
 
+const { backdropHtml, attachBackdropRoute } = require("./backdrop");
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -185,6 +186,7 @@ function renderPage(info) {
 	<link rel="stylesheet" href="/about.css">
 </head>
 <body>
+${backdropHtml()}
 	<h1 class="omnia-title">Omnia</h1>
 
 	${health}
@@ -248,6 +250,10 @@ function startAboutFace() {
 
 	// Light or dark for whichever browser is asking. See ui-theme.js.
 	app.use(rememberUiMode);
+
+	// The picture behind OmniCore's own pages, when one is set. See
+	// backdrop.js.
+	attachBackdropRoute(app);
 
 	// Served from a real file rather than inlined, so the stylesheet
 	// stays editable on its own.

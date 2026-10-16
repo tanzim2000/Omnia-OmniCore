@@ -28,6 +28,8 @@
 // settings.json. Modules never supply HTML, which is what keeps admin pages
 // consistent no matter who wrote the module.
 
+const { backdropHtml, attachBackdropRoute } = require("./backdrop");
+const backdropStore = require("./backdrop");
 const express = require("express");
 const { listModules } = require("./module-loader");
 const {
@@ -606,6 +608,80 @@ const styles = `
 	   scrolls rather than cutting Save off */
 	#location-modal .modal { overflow-y: auto; }
 
+	/* The Background and glass page: what's behind these pages now */
+	.backdrop-preview {
+		aspect-ratio: 16 / 10;
+		border-radius: 0.6em;
+		overflow: hidden;
+		border: 1px solid var(--segment-border);
+		margin: 4px 0 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.backdrop-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+	.backdrop-preview.plain { background: var(--bg); color: var(--fg-muted); font-size: 0.9em; }
+
+	.button-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+	.button-row .glass { padding: 0.65em 1.2em; }
+
+	/* Its tint choices: None, Match the picture, a few colours, a picker */
+	.tint-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+	.tint-chip {
+		appearance: none;
+		-webkit-appearance: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 2.4em;
+		height: 2.4em;
+		padding: 0 0.7em;
+		border-radius: 1.2em;
+		border: 1px solid var(--segment-border);
+		background: var(--glass-bg);
+		color: var(--fg);
+		font: inherit;
+		font-size: 0.85em;
+		cursor: pointer;
+		position: relative;
+	}
+
+	.tint-chip:disabled { opacity: 0.35; cursor: default; }
+	.tint-chip.active { border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg); }
+	.tint-chip:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--glow-strong); }
+
+	.tint-swatch {
+		width: 1.1em;
+		height: 1.1em;
+		border-radius: 50%;
+		border: 1px solid rgba(255, 255, 255, 0.35);
+		flex: none;
+	}
+
+	/* A chip that's only a colour has no words: the swatch fills it */
+	.tint-chip:not(:has(span:not(.tint-swatch))) { padding: 0; justify-content: center; }
+
+	/* The picker: the browser's own colour box, made round */
+	.tint-custom input[type="color"] {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 1.4em;
+		height: 1.4em;
+		border: none;
+		border-radius: 50%;
+		padding: 0;
+		background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+		cursor: pointer;
+	}
+
+	.tint-custom input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+	.tint-custom input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+	.tint-custom { padding: 0; justify-content: center; }
+
+	input[type="range"] { width: 100%; accent-color: var(--fg); }
+
 	/* The Place search page: what's saved won't work as it reads */
 	.place-warning {
 		margin: 12px 0 0;
@@ -1135,6 +1211,7 @@ function page(title, body, script, bodyClass, back, backLabel) {
 	<style>${uiStyles()}${styles}</style>
 </head>
 <body class="${bodyClass || ""}">
+${backdropHtml()}
 	${body}
 	${backButton(back, backLabel)}
 	<script>${UI_MODE_SCRIPT}${PASSWORD_TOGGLE_SCRIPT}${DIALOG_SCRIPT}${script || ""}${ASK_FIRST_SCRIPT}</script>
@@ -1600,12 +1677,20 @@ function credentialsPage(options) {
 	return page(options.heading, body, script, "centered");
 }
 
+// The routes that take a file as it is rather than JSON. See the JSON
+// check in startAdminFace.
+const RAW_UPLOADS = ["/background/upload", "/background/still"];
+
 function startAdminFace() {
 	const app = express();
 	app.use(express.json());
 
 	// Light or dark for whichever browser is asking. See ui-theme.js.
 	app.use(rememberUiMode);
+
+	// The picture behind OmniCore's own pages, when one is set. See
+	// backdrop.js.
+	attachBackdropRoute(app);
 
 	// Serves the chosen UI font. Mounted before the auth gate below:
 	// the sign-in screen itself renders in the chosen font, and it is
@@ -1651,6 +1736,15 @@ function startAdminFace() {
 		// port can send without asking first. DELETE and the rest always
 		// ask, and are refused.
 		if (req.method !== "POST" || req.is("application/json")) {
+			next();
+			return;
+		}
+
+		// The two routes that take a file as it is (a picture for the
+		// background, and its still frame). application/octet-stream is
+		// just as safe as JSON here: a page on another port can't send
+		// that either without asking first, and it's never told yes.
+		if (RAW_UPLOADS.includes(req.path) && req.is("application/octet-stream")) {
 			next();
 			return;
 		}
@@ -1908,6 +2002,10 @@ function startAdminFace() {
 					</div>
 
 					<div class="segment link-segment">
+						<a class="link-row" href="/background">
+							<strong>Background and glass</strong>
+							<span>A picture behind these pages, and the frosted glass</span>
+						</a>
 						<a class="link-row" href="/place-search">
 							<strong>Place search</strong>
 							<span>Where a search for a city is sent</span>
@@ -2398,6 +2496,509 @@ function startAdminFace() {
 		// settings file, which since v2 holds the place search keys:
 		// those never go back to a page.
 		res.json(location);
+	});
+
+	// ---- background and glass -----------------------------------------
+	//
+	// A picture, an animation or a video behind OmniCore's own pages, and
+	// the frosted glass over it. See backdrop.js. Reached from the
+	// settings page.
+	//
+	// Picking a file goes in three steps, so a big file is sent as it is
+	// rather than as text inside JSON:
+	//
+	//   1. POST /background/upload   the file itself; kept aside, not used
+	//   2. POST /background/still    a still frame the page drew from it
+	//   3. POST /background/use      put it in place, with what the page
+	//                                worked out (its colour, how dark and
+	//                                bright it is)
+	app.get("/background", (req, res) => {
+		const settings = readSettings();
+		const picture = backdropStore.hasPicture(settings);
+		const tint = settings.glassTint || "none";
+		const uiMode = currentUiMode();
+
+		const kindName = {
+			picture: "A picture",
+			animated: "An animated picture",
+			video: "A video"
+		}[settings.backgroundKind];
+
+		const preview = picture
+			? `<img src="/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}" alt="">`
+			: `<span>Plain</span>`;
+
+		// A colour chip for the tint. "none" and "match" are words, the
+		// rest colours. Match the picture only with a picture, showing
+		// the picture's own colour.
+		const chip = (value, label, colour, disabled) =>
+			`<button type="button" class="tint-chip${tint === value ? " active" : ""}" data-tint="${escapeHtml(value)}"` +
+			`${disabled ? " disabled" : ""} title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"` +
+			` aria-pressed="${tint === value ? "true" : "false"}">` +
+			(colour ? `<span class="tint-swatch" style="background:${escapeHtml(colour)}"></span>` : "") +
+			(value === "none" || value === "match" ? `<span>${escapeHtml(label)}</span>` : "") +
+			"</button>";
+
+		const custom = /^#[0-9a-f]{6}$/i.test(tint) && !backdropStore.TINT_PRESETS.includes(tint.toLowerCase());
+
+		const body = `
+			<div class="settings-head">
+				<h1>Background and glass</h1>
+			</div>
+
+			<div class="bento">
+				<div class="bento-row two top">
+					<div class="segment">
+						<h2>Background</h2>
+						<p class="lede">
+							Behind OmniCore's own pages: these settings, the setup
+							wizard, the welcome screen and About. A face keeps its
+							theme's own background.
+						</p>
+
+						<div class="backdrop-preview${picture ? "" : " plain"}" id="preview">${preview}</div>
+						<p class="hint" id="kind">${
+							picture ? escapeHtml(kindName || "A picture") : "Plain: black, or light grey in light mode."
+						}</p>
+
+						<div class="button-row">
+							<button type="button" class="glass" id="choose">Choose a file</button>
+							${picture ? `<button type="button" class="glass" id="plain">Back to plain</button>` : ""}
+						</div>
+						<input type="file" id="file" hidden
+							accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm">
+						<p class="status" id="upload-status" aria-live="polite"></p>
+
+						<p class="help">
+							A picture (JPEG, PNG, WebP), an animated GIF or WebP, or a
+							looping video (MP4, WebM) without sound, up to 50 MB. A video
+							looks sharper than a GIF. It's kept in OmniCore's data folder
+							and shown by OmniCore itself, never sent anywhere, and it's
+							seen on the pages that need no sign-in too. With reduced
+							motion turned on in your device's settings, a still frame is
+							shown instead.
+						</p>
+					</div>
+
+					<div class="segment">
+						<h2>Frosted glass</h2>
+						<p class="lede">Every box on these pages, over the background.</p>
+
+						<div class="field">
+							<label for="blur">Blur <span class="muted" id="blur-value">${Number(settings.glassBlur)} px</span></label>
+							<input type="range" id="blur" min="0" max="${backdropStore.BLUR_MOST}" step="1"
+								value="${Number(settings.glassBlur)}">
+						</div>
+
+						<div class="field">
+							<label>Tint</label>
+							<div class="tint-chips" id="tints">
+								${chip("none", "None", "", false)}
+								${chip("match", "Match the picture", picture && settings.backgroundColor ? settings.backgroundColor : "", !picture)}
+								${backdropStore.TINT_PRESETS.map((colour) => chip(colour, colour, colour, false)).join("")}
+								<label class="tint-chip tint-custom${custom ? " active" : ""}" title="Pick a colour">
+									<input type="color" id="custom" value="${escapeHtml(custom ? tint : "#7aa2ff")}" aria-label="Pick a colour">
+								</label>
+							</div>
+							<div class="help">${
+								picture
+									? "Match the picture takes the picture's main colour, worked out once when it was picked."
+									: "Match the picture needs a picture."
+							}</div>
+						</div>
+
+						<div class="field">
+							<label for="strength">Tint strength <span class="muted" id="strength-value">${Number(settings.glassTintStrength)}%</span></label>
+							<input type="range" id="strength" min="0" max="${backdropStore.TINT_STRENGTH_MOST}" step="1"
+								value="${Number(settings.glassTintStrength)}">
+						</div>
+
+						${
+							picture
+								? `<div class="field">
+							<label for="brightness">Picture brightness <span class="muted" id="brightness-value">${Number(settings.backgroundBrightness)}%</span></label>
+							<input type="range" id="brightness" min="${backdropStore.BRIGHTNESS_LEAST}" max="${backdropStore.BRIGHTNESS_MOST}" step="1"
+								value="${Number(settings.backgroundBrightness)}">
+							<div class="help">
+								The picture is dimmed by itself, just enough for text to read
+								over it: <span id="dim-value"></span>.
+							</div>
+						</div>`
+								: ""
+						}
+					</div>
+				</div>
+			</div>
+
+			<div class="page-dock">
+				<div class="dock">
+					<button type="button" id="save">Save</button>
+				</div>
+				<p class="status" id="status"></p>
+			</div>`;
+
+		const script = `
+			// How the veil is worked out, the same function the server uses
+			// (backdrop.js), so what's previewed is what's saved
+			${backdropStore.autoDim.toString()}
+
+			const PICTURE = ${JSON.stringify(
+				picture
+					? { low: settings.backgroundLow, high: settings.backgroundHigh, color: settings.backgroundColor || "" }
+					: null
+			).replace(/</g, "\\u003c")};
+			const MODE = ${JSON.stringify(uiMode)};
+			const MAX_BYTES = ${backdropStore.MAX_BYTES};
+
+			let tint = ${JSON.stringify(tint)};
+
+			const root = document.documentElement;
+			const blur = document.getElementById("blur");
+			const strength = document.getElementById("strength");
+			const brightness = document.getElementById("brightness");
+			const custom = document.getElementById("custom");
+
+			function light() {
+				return MODE ? MODE === "light" : window.matchMedia("(prefers-color-scheme: light)").matches;
+			}
+
+			function rgba(hex, alpha) {
+				const value = parseInt(hex.slice(1), 16);
+				return "rgba(" + ((value >> 16) & 255) + ", " + ((value >> 8) & 255) + ", " + (value & 255) + ", " + alpha + ")";
+			}
+
+			// Everything moved shows at once on this page, before saving
+			function preview() {
+				document.getElementById("blur-value").textContent = blur.value + " px";
+				document.getElementById("strength-value").textContent = strength.value + "%";
+				root.style.setProperty("--glass-blur", blur.value + "px");
+
+				const colour = tint === "match" ? (PICTURE && PICTURE.color) : (tint === "none" ? "" : tint);
+				root.style.setProperty(
+					"--glass-tint",
+					colour && Number(strength.value) ? rgba(colour, Number(strength.value) / 100) : "transparent"
+				);
+
+				if (brightness && PICTURE) {
+					document.getElementById("brightness-value").textContent = brightness.value + "%";
+					root.style.setProperty("--backdrop-brightness", Number(brightness.value) / 100);
+					const dim = autoDim(PICTURE.low, PICTURE.high, brightness.value, light());
+					root.style.setProperty(
+						"--backdrop-dim",
+						light() ? "rgba(242, 242, 244, " + dim + ")" : "rgba(0, 0, 0, " + dim + ")"
+					);
+					document.getElementById("dim-value").textContent =
+						"a veil of " + Math.round(dim * 100) + "% at this brightness";
+				}
+
+				for (const chip of document.querySelectorAll("[data-tint]")) {
+					const on = chip.dataset.tint === tint;
+					chip.classList.toggle("active", on);
+					chip.setAttribute("aria-pressed", on ? "true" : "false");
+				}
+				document.querySelector(".tint-custom").classList.toggle(
+					"active",
+					/^#/.test(tint) && !document.querySelector('[data-tint="' + tint + '"]')
+				);
+			}
+
+			for (const input of [blur, strength, brightness]) {
+				if (input) input.addEventListener("input", preview);
+			}
+
+			document.getElementById("tints").addEventListener("click", function (event) {
+				const chip = event.target.closest("[data-tint]");
+				if (!chip || chip.disabled) return;
+				tint = chip.dataset.tint;
+				// Picking a colour with the strength at nothing would show
+				// nothing; give it a little
+				if (tint !== "none" && Number(strength.value) === 0) strength.value = 12;
+				preview();
+			});
+
+			custom.addEventListener("input", function () {
+				tint = custom.value.toLowerCase();
+				if (Number(strength.value) === 0) strength.value = 12;
+				preview();
+			});
+
+			preview();
+
+			document.getElementById("save").addEventListener("click", async function () {
+				const button = this;
+				const status = document.getElementById("status");
+				button.disabled = true;
+				status.className = "status";
+				status.textContent = "";
+
+				try {
+					const response = await fetch("/background/glass", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							blur: Number(blur.value),
+							tint: tint,
+							tintStrength: Number(strength.value),
+							brightness: brightness ? Number(brightness.value) : undefined
+						})
+					});
+					if (!response.ok) throw new Error();
+					status.textContent = "Saved. Every page of OmniCore's has it now.";
+				} catch (error) {
+					status.className = "status bad";
+					status.textContent = "Couldn't save.";
+				}
+				button.disabled = false;
+			});
+
+			// --- Picking a file ------------------------------------------
+
+			const upload = document.getElementById("upload-status");
+
+			function say(text, bad) {
+				upload.className = "status" + (bad ? " bad" : "");
+				upload.textContent = text;
+			}
+
+			// Waits for an element's event, or gives up after a while
+			function once(element, name, seconds) {
+				return new Promise(function (resolve, reject) {
+					const timer = setTimeout(function () { reject(new Error("timeout")); }, seconds * 1000);
+					element.addEventListener(name, function () { clearTimeout(timer); resolve(); }, { once: true });
+					element.addEventListener("error", function () { clearTimeout(timer); reject(new Error("error")); }, { once: true });
+				});
+			}
+
+			// How bright a colour looks, 0-1 (relative luminance)
+			function luminance(r, g, b) {
+				function channel(value) {
+					const c = value / 255;
+					return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+				}
+				return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+			}
+
+			// Draw the picture, or a frame a second into the video, then
+			// work out its main colour, how dark its darker parts and how
+			// bright its brighter parts are, and a still frame. Done here,
+			// once, from the file on this device, before anything is sent.
+			async function study(file) {
+				const address = URL.createObjectURL(file);
+				let source;
+				let width;
+				let height;
+
+				try {
+					if (file.type.indexOf("video/") === 0) {
+						const video = document.createElement("video");
+						video.muted = true;
+						video.playsInline = true;
+						video.preload = "auto";
+						video.src = address;
+						await once(video, "loadeddata", 20);
+						video.currentTime = Math.min(1, (video.duration || 2) / 2);
+						await once(video, "seeked", 20);
+						source = video;
+						width = video.videoWidth;
+						height = video.videoHeight;
+					} else {
+						const image = new Image();
+						image.src = address;
+						await image.decode();
+						source = image;
+						width = image.naturalWidth;
+						height = image.naturalHeight;
+					}
+
+					if (!width || !height) throw new Error("empty");
+
+					// The still frame, at most 1920 px wide
+					const scale = Math.min(1, 1920 / width);
+					const frame = document.createElement("canvas");
+					frame.width = Math.round(width * scale);
+					frame.height = Math.round(height * scale);
+					frame.getContext("2d").drawImage(source, 0, 0, frame.width, frame.height);
+					const still = await new Promise(function (resolve) {
+						frame.toBlob(resolve, "image/jpeg", 0.85);
+					});
+
+					// A small copy to read the colours from
+					const small = document.createElement("canvas");
+					small.width = 48;
+					small.height = 48;
+					const context = small.getContext("2d", { willReadFrequently: true });
+					context.drawImage(source, 0, 0, 48, 48);
+					const pixels = context.getImageData(0, 0, 48, 48).data;
+
+					const shades = [];
+					const buckets = {};
+					for (let i = 0; i < pixels.length; i += 4) {
+						const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+						shades.push(luminance(r, g, b));
+						const key = (r >> 5) + "," + (g >> 5) + "," + (b >> 5);
+						const bucket = buckets[key] || (buckets[key] = { n: 0, r: 0, g: 0, b: 0 });
+						bucket.n++; bucket.r += r; bucket.g += g; bucket.b += b;
+					}
+					shades.sort(function (a, b) { return a - b; });
+
+					// Its main colours: the four most common, averaged by how
+					// common each is
+					const main = Object.values(buckets).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
+					const total = main.reduce(function (sum, bucket) { return sum + bucket.n; }, 0);
+					const average = ["r", "g", "b"].map(function (part) {
+						return Math.round(main.reduce(function (sum, bucket) { return sum + bucket[part]; }, 0) / total);
+					});
+					const color = "#" + average.map(function (value) {
+						return value.toString(16).padStart(2, "0");
+					}).join("");
+
+					return {
+						still: still,
+						color: color,
+						low: shades[Math.floor(shades.length * 0.1)],
+						high: shades[Math.floor(shades.length * 0.9)]
+					};
+				} finally {
+					URL.revokeObjectURL(address);
+				}
+			}
+
+			async function send(address, body) {
+				const response = await fetch(address, {
+					method: "POST",
+					headers: { "Content-Type": "application/octet-stream" },
+					body: body
+				});
+				const answer = await response.json().catch(function () { return {}; });
+				if (!response.ok) {
+					throw new Error(answer.error || (response.status === 413 ? "That file is bigger than 50 MB." : "Couldn't send it."));
+				}
+				return answer;
+			}
+
+			document.getElementById("choose").addEventListener("click", function () {
+				document.getElementById("file").click();
+			});
+
+			document.getElementById("file").addEventListener("change", async function () {
+				const file = this.files[0];
+				this.value = "";
+				if (!file) return;
+
+				if (file.size > MAX_BYTES) {
+					say("That file is bigger than 50 MB.", true);
+					return;
+				}
+
+				document.getElementById("choose").disabled = true;
+
+				try {
+					say("Looking at it…");
+					let about;
+					try {
+						about = await study(file);
+					} catch (error) {
+						throw new Error(
+							"This browser can't show that file, so it can't be the background. " +
+							"JPEG, PNG, GIF, WebP, MP4 and WebM work; a video has to be in a format browsers play (H.264 or VP9, say)."
+						);
+					}
+
+					say("Sending it…");
+					const received = await send("/background/upload", file);
+					await send("/background/still?id=" + encodeURIComponent(received.id), about.still);
+
+					const response = await fetch("/background/use", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ id: received.id, color: about.color, low: about.low, high: about.high })
+					});
+					const answer = await response.json().catch(function () { return {}; });
+					if (!response.ok) throw new Error(answer.error || "Couldn't use it.");
+
+					say("Done.");
+					location.reload();
+				} catch (error) {
+					say(error.message, true);
+					document.getElementById("choose").disabled = false;
+				}
+			});
+
+			const plain = document.getElementById("plain");
+			if (plain) {
+				plain.addEventListener("click", async function () {
+					const sure = await confirmDialog({
+						title: "Back to plain?",
+						text: "The picture is deleted from OmniCore's data folder.",
+						confirm: "Back to plain"
+					});
+					if (!sure) return;
+					const response = await fetch("/background/plain", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: "{}"
+					});
+					if (response.ok) location.reload();
+					else say("Couldn't change it.", true);
+				});
+			}
+		`;
+
+		res.send(page("Background and glass", body, script, "", "/", "Settings"));
+	});
+
+	app.post(
+		"/background/upload",
+		express.raw({ type: "application/octet-stream", limit: backdropStore.MAX_BYTES }),
+		(req, res) => {
+			const result = backdropStore.receive(req.body);
+			res.status(result.error ? 400 : 200).json(result);
+		}
+	);
+
+	app.post(
+		"/background/still",
+		express.raw({ type: "application/octet-stream", limit: backdropStore.MAX_STILL_BYTES }),
+		(req, res) => {
+			const result = backdropStore.receiveStill(String(req.query.id || ""), req.body);
+			res.status(result.error ? 400 : 200).json(result);
+		}
+	);
+
+	app.post("/background/use", (req, res) => {
+		const result = backdropStore.use((req.body || {}).id, req.body);
+
+		if (result.error) {
+			res.status(400).json(result);
+			return;
+		}
+
+		const saved = writeSettings(result.changes);
+
+		// The one before it goes
+		backdropStore.removeOthers([saved.backgroundFile, saved.backgroundStill]);
+		res.json({ ok: true, kind: saved.backgroundKind });
+	});
+
+	app.post("/background/plain", (req, res) => {
+		writeSettings(backdropStore.PLAIN);
+		backdropStore.removeOthers([]);
+		res.json({ ok: true });
+	});
+
+	app.post("/background/glass", (req, res) => {
+		writeSettings(backdropStore.cleanGlass(req.body));
+		res.json({ ok: true });
+	});
+
+	// A file too big for the upload routes: said in words, as JSON, rather
+	// than Express's own page
+	app.use((error, req, res, next) => {
+		if (error && error.type === "entity.too.large") {
+			res.status(413).json({ error: "That file is bigger than 50 MB." });
+			return;
+		}
+		next(error);
 	});
 
 	// ---- place search ---------------------------------------------------

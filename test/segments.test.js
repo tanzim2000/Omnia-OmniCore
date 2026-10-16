@@ -41,7 +41,7 @@ function source(file) {
 	return fs.readFileSync(path.join(core, file), "utf8");
 }
 
-test("the shared theme defines the segment, with frosted glass off by default", () => {
+test("the shared theme defines the segment, frosted glass since v2", () => {
 	resetState();
 	const { uiStyles } = require("../core/ui-theme");
 	const css = uiStyles();
@@ -50,7 +50,13 @@ test("the shared theme defines the segment, with frosted glass off by default", 
 	assert.match(css, /\.segment\.clickable:hover/, "the clickable kind glows or lifts");
 	assert.match(css, /--segment-bg: /);
 	assert.match(css, /--segment-border: /);
-	assert.match(css, /--segment-blur: none;/, "flat until someone turns frosting on");
+	assert.match(
+		css,
+		/--segment-blur: blur\(var\(--glass-blur\)\) saturate\(var\(--glass-saturate\)\);/,
+		"frosted, by the Background and glass setting's blur"
+	);
+	assert.match(css, /--glass-blur: 20px;/, "20 px unless changed");
+	assert.match(css, /--glass-tint: transparent;/, "no tint unless picked");
 	assert.match(css, /backdrop-filter: var\(--segment-blur\)/);
 });
 

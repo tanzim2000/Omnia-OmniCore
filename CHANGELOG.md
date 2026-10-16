@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-OmniCore v2, being built on the `v2` branch: Info order lists that are dragged into place, a long one in a pop-up, and a city search that finds small places, from the service you pick
+OmniCore v2, being built on the `v2` branch: Info order lists that are dragged into place, a long one in a pop-up, a city search that finds small places from the service you pick, and a picture, a GIF or a video behind OmniCore's pages under frosted glass
 
 ### Added
 
@@ -16,6 +16,11 @@ OmniCore v2, being built on the `v2` branch: Info order lists that are dragged i
 - **The settings page says when the choice won't work as it reads**, such as a Primary that needs a key with none saved ("GeoNames has no key saved, so every search goes straight to Nominatim"). It also lists what each service is like and what it costs, and has a box to try a search.
 - **Under the matches: who found them, and why.** A small line credits the service that answered, linked, with "© OpenStreetMap contributors" for the ones built on OpenStreetMap (several only allow their results to be shown with it). When the Secondary was asked, another line says why ("Open-Meteo found nothing, so Nominatim (OpenStreetMap) was asked."). The credit stays after a place is picked.
 - **Only what you type leaves the machine**, to the service picked, and only when Search is pressed, never while typing. Each answer is kept for a day, so the same search twice is one request, and Nominatim and Geocode.maps.co are never asked more than once a second, as their rules ask.
+- **A picture, a GIF or a video behind OmniCore's pages.** Under **Settings → Background and glass**, pick a picture (JPEG, PNG, WebP), an animated GIF or WebP, or a looping video (MP4, WebM) without sound, up to 50 MB. It goes behind Settings, the setup wizard, the welcome screen, About and an Inport's page. A face keeps its theme's own background. The file is kept in OmniCore's data folder, shown by OmniCore itself and never sent anywhere. It's checked by what it really is, not its name, and SVG is refused. **Back to plain** deletes it. Nothing changes for anyone who doesn't pick one.
+- **Text stays readable over any picture.** A veil, black in dark mode and light grey in light mode, sits between the picture and the boxes. It's worked out from the picture when it's picked: just strong enough for the text to read against its brightest parts (or darkest, in light mode). A **Brightness** slider dims the picture itself, and the veil follows.
+- **Frosted glass.** Every box on OmniCore's pages is now frosted glass: what's behind it is blurred, by an amount you pick. Over a picture the glass gets a thin light edge along the top and a little more colour. With the plain background it looks as it did.
+- **A tint for the glass**: a colour laid over every box, a little of it (up to 35%), from a few colours, a colour picker, or **Match the picture**, which uses the picture's main colour. That colour is worked out once, when the picture is picked, so nothing changes colour while a video plays. Every change shows on the page at once, before Save.
+- **Reduced motion is respected.** With it turned on in the device's settings, an animated picture shows a still frame and a video doesn't play. A video also pauses while its tab is hidden.
 
 ### Changed
 
@@ -24,6 +29,7 @@ OmniCore v2, being built on the `v2` branch: Info order lists that are dragged i
 ### Fixed
 
 - **Saving the location no longer sends all of OmniCore's settings back to the page.** It sent the whole settings file in its answer. Nothing secret was in it before, but the place search keys now are, so the answer is only the location that was saved.
+- **The setup wizard shows the chosen font.** The wizard's page asked its own port for the font, but that port never served it, so the wizard was always in the system font.
 - **The Set the location pop-up scrolls** when the matches make it taller than the window, rather than cutting off Save.
 - **Release notes on the Updates page show code as code.** A name written between backticks in the notes (`CHANGELOG.md`, say) was shown with the backticks around it. It's now drawn like code, as on the docs site.
 

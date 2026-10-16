@@ -70,7 +70,7 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
   which moves into the About tab in v2.)
 - **No uninstall in the UI.** Removing a module or theme still means
   deleting its folder.
-- **Test CI.** `npm test` has 27 test files, but nothing runs them on a
+- **Test CI.** `npm test` has 28 test files, but nothing runs them on a
   push. The workflows only publish the image and the docs site.
 - **Tag workflow concurrency.** Two `v*` tags pushed together can run the
   image publish at once. Push tags one at a time, or add `concurrency`.
@@ -105,10 +105,12 @@ judged ready, not as part of any of these.
    setting with its key prompts, the credit line on the three pages that
    search. With it, the `:dev` image fix (a hand-run image is a
    development build, with the CHANGELOG in it).
-3. Glass and backgrounds: real frosted segments everywhere, tuned in light
-   and dark; pictures (safe upload, the fixed layer, dimming, tint and
-   blur, Match the picture); animated backgrounds (GIF, animated WebP,
-   video; a still frame for reduced motion; paused when the tab is hidden).
+3. **Done.** Glass and backgrounds: frosted segments everywhere; a
+   picture, GIF, animated WebP or video behind OmniCore's pages (checked
+   upload, the fixed layer, the automatic veil, Brightness); the tint with
+   presets, a picker and Match the picture; a still frame for reduced
+   motion, and a video paused when its tab is hidden. With it, the
+   wizard's missing font route.
 4. The settings home and movement: four tabs in the notch, one page, the
    remembered tab, the asymmetric bento, the About tab with the updates;
    the tab-linked pan with the wallpaper moving a quarter as far; page
@@ -125,10 +127,6 @@ judged ready, not as part of any of these.
     their documentation (`test/fixtures/place-search/README.md`). Try each
     with a real key, and replace those files with real answers. GeoNames
     did answer live, refusing a made-up username, and that was handled.
-  - The default order doesn't fix "Bærum": Open-Meteo finds Bærums verk,
-    which counts as finding something, so Nominatim is never asked. Either
-    make Nominatim the default Primary, or leave the default and let people
-    switch. To decide.
   - Google's terms ask that Geocoding results be shown on a Google Map and
     limit how long they're kept. OmniCore credits Google under the matches,
     but a picked place's coordinates are saved for as long as the setting
@@ -194,34 +192,17 @@ Settings home:
 - The Resources tab is the clear way to Resource Management, and replaces
   the old idea of a Marketplace segment on the home page.
 
-Background and glass:
+Background and glass: built (commit 3, see the CHANGELOG). Left from the
+design, not built:
 
-- **Background.** Black stays the default ("Plain": black in dark mode,
-  the light grey in light mode). People can upload a picture, a
-  GIF, an animated WebP or a looping muted video (MP4 or WebM), kept in
-  OmniCore's data folder and served by Core, never sent anywhere. Video is
-  the better choice for HD; a GIF cannot look HD. Check the real file type
-  rather than the name, set a size limit, and refuse SVG. The picture is
-  drawn on a fixed layer behind the page, because `background-attachment:
-  fixed` is unreliable on iPhones. Starts as a global setting; per browser
-  could follow. Applies to OmniCore's own pages, not to a face, which keeps
-  its theme's own background.
-- **Pure frosted glass segments.** Every bento segment becomes a
-  translucent fill, a blur and a thin light edge, from one set of values.
-  The comment in `ui-theme.js` about the ambient blobs (blur does nothing
-  over a flat colour) goes away once a real picture is behind the glass.
-  The blur, tint and dimming ranges can be generous, and a faint grain and a
-  small saturation boost behind the glass are possible.
-- **Tint.** A colour and a strength, kept to "a little", with presets and a
-  picker. **Match the picture** takes the colour from the background
-  automatically: sampled once when the picture is set (an average of its
-  main colours, or one frame of a video), not live, so the interface does
-  not change colour while a video plays. A hand-picked colour overrides it.
-- **Readability.** An automatic dimming layer under the glass, checked for
-  contrast, plus a brightness slider, so text stays readable over a bright
-  or busy picture.
-- Reduced motion shows a still frame. A hidden tab pauses the video.
-  Nothing here is about slow machines.
+- A background per browser rather than one for the whole install.
+- A faint grain over the glass.
+- The Background and Frosted glass boxes move into the Appearance tab with
+  the settings home (commit 4); for now they're a page of their own,
+  linked from Settings.
+- Video plays only in the formats the browser can play: H.264 MP4 or VP9
+  WebM. The test browser used while building has no H.264, so MP4 was
+  tested on the server side only; try one in Chrome, Edge or Safari.
 
 Motion:
 

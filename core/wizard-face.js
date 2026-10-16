@@ -23,6 +23,8 @@
 // looks exactly as it did on 4000. See
 // docs/planning/default-ui-architecture.md.
 
+const { backdropHtml, attachBackdropRoute } = require("./backdrop");
+const { attachFontRoute } = require("./font-service");
 const express = require("express");
 const faceStore = require("./face-store");
 const { startFace } = require("./face-loader");
@@ -336,6 +338,7 @@ function page(title, body, script) {
 	<style>${uiStyles()}${styles}</style>
 </head>
 <body>
+${backdropHtml()}
 	${body}
 	<script>${DIALOG_SCRIPT}${ASK_FIRST_SCRIPT}${script || ""}</script>
 </body>
@@ -348,6 +351,15 @@ function startWizardFace() {
 
 	// Light or dark for whichever browser is asking. See ui-theme.js.
 	app.use(rememberUiMode);
+
+	// The picture behind OmniCore's own pages, when one is set. See
+	// backdrop.js.
+	attachBackdropRoute(app);
+
+	// The chosen UI font. The wizard's stylesheet asks this port for it
+	// like every other page does, but until v2 the route was never
+	// mounted here, so the wizard fell back to the system font.
+	attachFontRoute(app);
 
 	app.post("/faces", async (req, res) => {
 		const { name, title, theme, instances, themeConfig } = req.body;

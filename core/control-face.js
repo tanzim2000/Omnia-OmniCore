@@ -14,6 +14,7 @@
 // the admin UI looks like. See
 // docs/planning/default-ui-architecture.md.
 
+const { backdropHtml, attachBackdropRoute } = require("./backdrop");
 const express = require("express");
 const faceStore = require("./face-store");
 const {
@@ -194,6 +195,7 @@ function page(title, body, script) {
 	<style>${uiStyles()}${styles}</style>
 </head>
 <body>
+${backdropHtml()}
 	${body}
 	<script>${script || ""}</script>
 </body>
@@ -206,6 +208,10 @@ function startControlFace() {
 
 	// Light or dark for whichever browser is asking. See ui-theme.js.
 	app.use(rememberUiMode);
+
+	// The picture behind OmniCore's own pages, when one is set. See
+	// backdrop.js.
+	attachBackdropRoute(app);
 
 	// Serves the chosen UI font from this face's own origin
 	attachFontRoute(app);

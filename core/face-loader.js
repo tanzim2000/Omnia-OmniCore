@@ -7,6 +7,7 @@
 // and its module instances. That's what lets any of them be edited while
 // OmniCore keeps running.
 
+const { attachBackdropRoute } = require("./backdrop");
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -135,6 +136,10 @@ function startFace(face) {
 
 		// Light or dark for whichever browser is asking. See ui-theme.js.
 		app.use(rememberUiMode);
+
+		// The picture behind OmniCore's own pages, when one is set. See
+		// backdrop.js.
+		attachBackdropRoute(app);
 
 		console.log(`Starting face "${face.name}" on port ${face.id}`);
 
