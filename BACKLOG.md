@@ -96,18 +96,11 @@ CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
 
 ## v2: left to check
 
-- **Place search's keyed services.** GeoNames, LocationIQ, Geoapify,
-  Geocode.maps.co and Google are tested only against answers written from
+- **Place search's keyed services.** GeoNames, LocationIQ, Geoapify and
+  Geocode.maps.co are tested only against answers written from
   their documentation (`test/fixtures/place-search/README.md`). Try each
   with a real key, and replace those files with real answers. GeoNames did
   answer live, refusing a made-up username, and that was handled.
-- **Google's terms** ask that Geocoding results be shown on a Google Map
-  and limit how long they're kept. OmniCore credits Google under the
-  matches, but a picked place's coordinates are saved for as long as the
-  setting stands. Decide whether to keep Google as a choice.
-- **Nominatim's policy** asks that an application can stop using it if the
-  OpenStreetMap Foundation asks, without an update. Today that means each
-  install picks another service on the General tab.
 - **An MP4 background in a real browser.** The browser used while building
   has no H.264, so MP4 was tested on the server side only; try one in
   Chrome, Edge or Safari. Video plays only in formats the browser plays
@@ -115,6 +108,15 @@ CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
 - **Update now through a real restart.** The About tab's Update now is the
   Updates page's own code, moved; it has only been run against tests and a
   fake Docker. The first real release after v2 will show it working.
+- **The veil on bright pictures.** It aims at the brightest tenth of the
+  picture, so a mostly bright picture may be dimmed more than it needs.
+  Tune it after real use, with real pictures.
+- **A favicon 404 on every page.** No page names an icon, so the browser
+  asks for `/favicon.ico` and gets a 404. Harmless (one console error),
+  and older than v2.
+- **`module-fetch.js` keeps every answer forever.** Its cache is never
+  trimmed, so memory grows for a module whose address changes each time
+  (a timestamp in it, say). Place search has its own cache, capped at 500.
 
 ## v2: ideas left from the design
 
@@ -128,6 +130,15 @@ https://claude.ai/artifact/LveFSPbVeF9ScADgdPWFhP). Not needed for v2:
 
 Settled, so not to be reopened by accident:
 
+- Google is not a place search service. Its terms want Geocoding results
+  shown on a Google Map and limit how long they're kept, and a picked
+  place stays in the settings. Dropped before v2 was released.
+- Nominatim's policy asks that an application can stop using it if the
+  OpenStreetMap Foundation asks, without an update. Each install can pick
+  another service on the General tab; that's enough.
+- The data folder isn't shown on the About tab. In Docker it's a volume
+  (`/app/data` inside the container), which says nothing useful to the
+  person looking.
 - The neumorphism look was considered for OmniCore's own interface and
   judged too much work for a system UI (it changes how every surface is
   drawn, not only its colours). It is kept for a face theme instead (see

@@ -40,8 +40,7 @@ const HOSTS = {
 	"secure.geonames.org": "geonames",
 	"us1.locationiq.com": "locationiq",
 	"api.geoapify.com": "geoapify",
-	"geocode.maps.co": "geocode-maps-co",
-	"maps.googleapis.com": "google"
+	"geocode.maps.co": "geocode-maps-co"
 };
 
 // Every request made, and what each service answers: { service: answer }
@@ -69,8 +68,7 @@ const KEYS = {
 	geonames: "my-geonames-user",
 	locationiq: "pk.locationiq-secret",
 	geoapify: "geoapify-secret",
-	"geocode-maps-co": "maps-co-secret",
-	google: "AIza-google-secret"
+	"geocode-maps-co": "maps-co-secret"
 };
 
 const only = (primary, secondary, keys) => ({
@@ -83,11 +81,18 @@ test.after(() => placeSearch.setRequestForTests(null));
 
 // --- Reading each service --------------------------------------------------------
 
-test("eight services, two without a key by default", () => {
+test("seven services, two without a key by default, and no Google", () => {
 	assert.deepEqual(
 		placeSearch.SERVICES.map((s) => s.id),
-		["open-meteo", "nominatim", "photon", "geonames", "locationiq", "geoapify", "geocode-maps-co", "google"]
+		["open-meteo", "nominatim", "photon", "geonames", "locationiq", "geoapify", "geocode-maps-co"]
 	);
+
+	// Dropped when v2 was finished: a Google choice saved before then is
+	// unknown, so the default Primary is used, or no Secondary
+	const old = placeSearch.chosen({ placeSearchPrimary: "google", placeSearchSecondary: "google" });
+	assert.equal(old.primary.id, "open-meteo");
+	assert.equal(old.secondary, null);
+	assert.ok(!placeSearch.servicesForPage({ placeSearchKeys: { google: "k" } }).some((s) => s.id === "google"));
 	assert.equal(placeSearch.DEFAULT_PRIMARY, "open-meteo");
 	assert.equal(placeSearch.DEFAULT_SECONDARY, "nominatim");
 	for (const id of ["open-meteo", "nominatim", "photon"]) {
@@ -103,8 +108,7 @@ test("every service's answer is read into label, latitude and longitude", async 
 		["geonames", "geonames-bekkestua", "Bekkestua", "Bekkestua, Akershus, Norway", 59.91775],
 		["locationiq", "locationiq-bekkestua", "Bekkestua", "Bekkestua, Bærum, Akershus, Norway", 59.9177484],
 		["geoapify", "geoapify-bekkestua", "Bekkestua", "Bekkestua, Bærum, Akershus, Norway", 59.9177484],
-		["geocode-maps-co", "geocode-maps-co-bekkestua", "Bekkestua", "Bekkestua, Bærum, Akershus, Norway", 59.9177484],
-		["google", "google-regina", "Regina", "Regina, SK, Canada", 50.4452112]
+		["geocode-maps-co", "geocode-maps-co-bekkestua", "Bekkestua", "Bekkestua, Bærum, Akershus, Norway", 59.9177484]
 	];
 
 	for (const [id, file, query, label, latitude] of cases) {
@@ -175,7 +179,6 @@ test("a refused key, a service that's down, too many searches: the Secondary is 
 		["geonames", { status: 200, data: saved("geonames-limit") }, "GeoNames said too many searches"],
 		["locationiq", { status: 401, data: saved("locationiq-refused") }, "LocationIQ refused its key"],
 		["geoapify", { status: 401, data: saved("geoapify-refused") }, "Geoapify refused its key"],
-		["google", { status: 200, data: saved("google-refused") }, "Google refused its key"],
 		["geocode-maps-co", { status: 429, data: null }, "Geocode.maps.co said too many searches"],
 		["open-meteo", "down", "Open-Meteo couldn't be reached"],
 		["open-meteo", { status: 500, data: null }, "Open-Meteo couldn't be reached"],
@@ -190,10 +193,9 @@ test("a refused key, a service that's down, too many searches: the Secondary is 
 	}
 });
 
-test("nothing found: LocationIQ's 404 and Google's ZERO_RESULTS are answers, not failures", async () => {
-	fresh({ locationiq: { status: 404, data: saved("locationiq-nothing") }, google: ok("google-nothing") });
+test("nothing found: LocationIQ's 404 is an answer, not a failure", async () => {
+	fresh({ locationiq: { status: 404, data: saved("locationiq-nothing") } });
 	assert.equal((await placeSearch.searchPlaces("Nowhere", only("locationiq"))).note, null);
-	assert.equal((await placeSearch.searchPlaces("Nowhere", only("google"))).note, null);
 });
 
 test("when neither finds it, or neither can, the page is told", async () => {
@@ -310,18 +312,18 @@ test("setting: known services only, the Secondary never the Primary", () => {
 });
 
 test("setting: keys are trimmed, kept only for services that take one, and an empty box keeps the saved one", () => {
-	const current = { placeSearchKeys: { geonames: "old-user", google: "old-google" } };
+	const current = { placeSearchKeys: { geonames: "old-user", geoapify: "old-geoapify" } };
 
 	const changes = placeSearch.cleanSetting(
 		{
-			keys: { geonames: "  new-user  ", "open-meteo": "nope", madeup: "nope", google: "", locationiq: 7 },
+			keys: { geonames: "  new-user  ", "open-meteo": "nope", madeup: "nope", geoapify: "", locationiq: 7 },
 			removeKeys: []
 		},
 		current
 	);
-	assert.deepEqual(changes.placeSearchKeys, { geonames: "new-user", google: "old-google" });
+	assert.deepEqual(changes.placeSearchKeys, { geonames: "new-user", geoapify: "old-geoapify" });
 
-	const removed = placeSearch.cleanSetting({ removeKeys: ["google", "made-up"] }, current);
+	const removed = placeSearch.cleanSetting({ removeKeys: ["geoapify", "made-up"] }, current);
 	assert.deepEqual(removed.placeSearchKeys, { geonames: "old-user" });
 
 	const long = placeSearch.cleanSetting({ keys: { geoapify: "x".repeat(500) } }, {});
@@ -347,15 +349,15 @@ test("setting: a warning when what's saved won't work as it reads", () => {
 		"GeoNames has no key saved, so every search goes straight to Nominatim (OpenStreetMap)."
 	);
 	assert.equal(
-		placeSearch.warningFor({ placeSearchPrimary: "google", placeSearchSecondary: "none" }),
-		"Google has no key saved, and there's nothing to fall back on, so searches find nothing."
+		placeSearch.warningFor({ placeSearchPrimary: "locationiq", placeSearchSecondary: "none" }),
+		"LocationIQ has no key saved, and there's nothing to fall back on, so searches find nothing."
 	);
 	assert.equal(
 		placeSearch.warningFor({ placeSearchPrimary: "photon", placeSearchSecondary: "geoapify" }),
 		"Geoapify has no key saved, so it's never asked."
 	);
 	assert.equal(
-		placeSearch.warningFor({ placeSearchPrimary: "google", placeSearchSecondary: "none", placeSearchKeys: { google: "k" } }),
+		placeSearch.warningFor({ placeSearchPrimary: "locationiq", placeSearchSecondary: "none", placeSearchKeys: { locationiq: "k" } }),
 		null
 	);
 });
@@ -431,7 +433,8 @@ test("pages: Place search on Settings' General tab, with keys never on it", asyn
 	assert.ok(!text.includes("my-geonames-user"), "the saved key isn't on the page");
 	assert.match(general, /<option value="geonames" selected>GeoNames \(needs a username\)<\/option>/);
 	assert.match(general, /data-remove-key="geonames"\s+style="[^"]*">Remove<\/button>/, "a saved key can be removed");
-	assert.match(general, /data-remove-key="google"\s+style="[^"]*" hidden>Remove<\/button>/, "nothing to remove without one");
+	assert.match(general, /data-remove-key="geoapify"\s+style="[^"]*" hidden>Remove<\/button>/, "nothing to remove without one");
+	assert.ok(!general.includes('value="google"'), "Google isn't offered");
 	assert.ok(general.includes("Saved. Type a new username to replace it"));
 	assert.ok(general.includes("https://operations.osmfoundation.org/policies/nominatim/"), "Nominatim's rules are linked");
 	assert.ok(general.includes("Only what you type is sent"), "says what leaves the machine");
@@ -481,7 +484,6 @@ test("pages: all three that search share the same drawing, with the credit line"
 	assertScriptsParse(wizard.text, "the wizard");
 
 	const { PLACE_SEARCH_SCRIPT } = require("../core/place-search-ui");
-	assert.ok(PLACE_SEARCH_SCRIPT.includes('translate="no"'), "Google's name is never translated");
 	assert.ok(PLACE_SEARCH_SCRIPT.includes('rel="noopener noreferrer"'));
 });
 

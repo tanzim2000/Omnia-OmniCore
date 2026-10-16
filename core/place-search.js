@@ -126,7 +126,11 @@ function nominatimPlaces(data) {
 	});
 }
 
-// The eight services, in the order they're offered.
+// The seven services, in the order they're offered. (Google was one until
+// v2 was finished: its terms want results shown on a Google Map and limit
+// how long they're kept, and a picked place stays in the settings, so
+// OmniCore couldn't keep them. A Google choice saved before then is
+// treated as unknown: the default Primary, or no Secondary.)
 //
 //   name       what the person sees
 //   key        what to ask for, for a service that needs one; absent for
@@ -138,7 +142,7 @@ function nominatimPlaces(data) {
 //   address    the request for a search, as { url, headers }
 //   read       its answer -> a list of places, or null when it isn't an
 //              answer at all. May throw a { status } for an answer that's
-//              really a refusal (GeoNames and Google say "no" with a 200).
+//              really a refusal (GeoNames says "no" with a 200).
 const SERVICES = [
 	{
 		id: "open-meteo",
@@ -278,31 +282,6 @@ const SERVICES = [
 			headers: { Authorization: "Bearer " + key }
 		}),
 		read: nominatimPlaces
-	},
-	{
-		id: "google",
-		name: "Google",
-		key: "API key",
-		about: "Needs an API key from a Google Cloud project with billing turned on and the Geocoding API enabled. Google asks that its results be shown with its name, and limits how long they may be kept.",
-		signUp: "https://console.cloud.google.com/google/maps-apis/",
-		credit: { text: "Google Maps", url: "https://www.google.com/maps", google: true },
-		address: (query, key) => ({
-			url:
-				"https://maps.googleapis.com/maps/api/geocode/json?language=en&address=" +
-				encodeURIComponent(query) + "&key=" + encodeURIComponent(key)
-		}),
-		read: (data) => {
-			if (!data || typeof data !== "object" || typeof data.status !== "string") return null;
-			// Google also says no with a 200 and a status
-			if (data.status === "ZERO_RESULTS") return [];
-			if (data.status === "REQUEST_DENIED") throw { status: 401 };
-			if (data.status === "OVER_QUERY_LIMIT" || data.status === "OVER_DAILY_LIMIT") throw { status: 429 };
-			if (data.status !== "OK" || !Array.isArray(data.results)) throw { status: 500 };
-			return data.results.slice(0, LIMIT).map((item) => {
-				const point = (item.geometry && item.geometry.location) || {};
-				return place(item.formatted_address, point.lat, point.lng);
-			});
-		}
 	}
 ];
 
@@ -467,9 +446,7 @@ function creditFor(service) {
 	return {
 		text: service.credit.text,
 		url: service.credit.url,
-		osm: service.credit.osm ? OSM_CREDIT : null,
-		// Google's name is written exactly so, never translated
-		google: Boolean(service.credit.google)
+		osm: service.credit.osm ? OSM_CREDIT : null
 	};
 }
 

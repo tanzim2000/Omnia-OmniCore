@@ -53,7 +53,6 @@ const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation } = require("./location-service");
 const placeSearch = require("./place-search");
 const settingsHome = require("./settings-home");
-const paths = require("./paths");
 const { PLACE_SEARCH_SCRIPT, PLACE_SEARCH_CSS } = require("./place-search-ui");
 const { ownLabel, suggestedLabel, labelsFor } = require("./instance-label");
 const faceStore = require("./face-store");
@@ -2110,8 +2109,10 @@ function backgroundPanel(settings) {
 // The About tab's updates. Until v2 they were a page of their own,
 // /updates; that address now opens the tab:
 //
-//   aboutBox    which OmniCore this is: version, port, data folder, and
-//               since when it's been running
+//   aboutBox    which OmniCore this is: version, port, and since when it's
+//               been running. Not the data folder: in Docker that's a
+//               volume, and the path inside the container means nothing on
+//               the server.
 //   updatesBox  what the last check found, Check now, Update now, and the
 //               install followed through OmniCore restarting
 //   notesBox    the release notes, filled in after the page has opened
@@ -2175,7 +2176,6 @@ async function updatesPanel() {
 			<h2>OmniCore</h2>
 			<div class="fact"><span>Version</span><span>OmniCore ${versionHtml()}</span></div>
 			<div class="fact"><span>Port</span><span>${ADMIN_PORT}</span></div>
-			<div class="fact"><span>Data folder</span><span>${escapeHtml(paths.dataDir())}</span></div>
 			${dev ? "" : `<div class="fact"><span>Running since</span><span>${when(since)}</span></div>`}
 			<div class="button-row">
 				<a class="glass" id="about-link" href="#">System info</a>

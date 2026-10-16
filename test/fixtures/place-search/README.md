@@ -18,6 +18,5 @@ a real answer:
 - `locationiq-*.json`
 - `geoapify-*.json`
 - `geocode-maps-co-*.json`
-- `google-*.json`
 
 When a real key is at hand, replace these with real answers.

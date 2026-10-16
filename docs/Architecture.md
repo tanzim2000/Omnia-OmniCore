@@ -176,7 +176,7 @@ until the Marketplace puts something in them.
 | `envelope.js`              | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `image-proxy.js`           | Fetches images on the display's behalf so a display only ever talks to your server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `location-service.js`      | One place that knows where OmniCore is. Resolves `location` settings before a module sees them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| `place-search.js`          | Looking places up by name, for every "Search for a city" box: eight services, a Primary then a Secondary, answers kept a day, keys never sent back to a page.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `place-search.js`          | Looking places up by name, for every "Search for a city" box: seven services, a Primary then a Secondary, answers kept a day, keys never sent back to a page.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `place-search-ui.js`       | The browser half: draws the matches, the note when the Secondary was asked, and the credit line, on all three pages that search.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `backdrop.js`              | The picture behind OmniCore's own pages and the frosted glass over it: checks a file by its first bytes, keeps it in `data/backdrop/`, serves it on every port, works out the veil that keeps text readable.                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `page-motion.js`           | Page fades: the curtain every page starts with, which links and `omniGo()` fade out, which arrivals fade in (never a reload), and the `omnicore:revealed` signal for a theme's entrance.                                                                                                                                                                                                                                                                                                                                                                                                                         |
@@ -1352,7 +1352,11 @@ than each module working it out, OmniCore establishes it once.
   None) when the Primary finds nothing, can't be reached, refuses its key,
   or needs a key that isn't saved. Default: Open-Meteo, then Nominatim,
   both without a key. The others: Photon (no key), GeoNames (a username),
-  LocationIQ, Geoapify, Geocode.maps.co and Google (an API key each).
+  LocationIQ, Geoapify and Geocode.maps.co (an API key each). Google
+  isn't offered: its terms want results shown on a Google Map and limit
+  how long they're kept, and a picked place stays in the settings. A
+  Google choice saved by an early v2 build counts as unknown (the
+  default Primary, or no Secondary).
   - Only the typed words leave the machine, to the service picked, when
     Search is pressed: never as someone types (Nominatim forbids that).
   - Answers are kept for a day. Nominatim and Geocode.maps.co are never
@@ -1423,8 +1427,8 @@ Since v2 the settings home (`GET /` on the admin face) is four tabs on one
 page, switched by a small script (`settings-home.js`): **General**
 (Location Service, Place search), **Appearance** (Background, Appearance
 Mode, Back Button, Frosted glass, Text Size), **Resources** (Manage Faces,
-the Marketplace, Installed Resources) and **About** (the version, the data
-folder, the updates). A black notch at the top holds an icon per tab; a
+the Marketplace, Installed Resources) and **About** (the version, the
+updates). A black notch at the top holds an icon per tab; a
 dot on About means an update is ready.
 
 - The tabs lie side by side on one strip, and picking one slides it; the
@@ -1701,7 +1705,7 @@ window, when the latest came, and its priority.
 tabs under a notch, with Updates, Place search and Background and glass on
 the tabs rather than pages of their own; a picture, an animation or a
 video behind OmniCore's pages under frosted glass; page fades, with a
-signal for a theme's entrance; place search from eight services; Info
+signal for a theme's entrance; place search from seven services; Info
 order lists dragged into place. See "The settings home and page fades",
 "Background and glass" and "Location" in §8, and the CHANGELOG.
 

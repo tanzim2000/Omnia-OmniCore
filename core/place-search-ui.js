@@ -39,10 +39,7 @@ const PLACE_SEARCH_SCRIPT = `
 				: placeText(text);
 		}
 
-		// Google's name is written exactly so, and never translated
-		var own = credit.google
-			? '<span translate="no">' + placeText(credit.text) + "</span>"
-			: link(credit.text, credit.url);
+		var own = link(credit.text, credit.url);
 
 		var osm = credit.osm ? " · " + link(credit.osm.text, credit.osm.url) : "";
 
