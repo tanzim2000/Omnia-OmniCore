@@ -170,6 +170,7 @@ until the Marketplace puts something in them.
 | `input-face-page.js`       | Renders an Inport's default page. Not a theme, and not meant to be one -- OmniCore's own UI, same as `fallback-page.js`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `marketplace.js`           | Fetches the registry, downloads a pinned commit, verifies it, places it. Never executes anything it downloads.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `priority.js`              | The `priority` field type's reconciliation and reveal math (`normalize`, `visible`, `share`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `priority-ui.js`           | How a `priority` setting is drawn and moved, on a widget's page and in the wizard: rows to drag, or a button and a pop-up for more than four.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `widget-types.js`          | Widget types: a module offering more than one shape for its data. Reads and checks the declarations, the `widgets` tags, and draws the picker.                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `theme-loader.js`          | Finds themes, reads their manifest and both settings schemas.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `envelope.js`              | Normalises whatever a module returned into content blocks. Swaps image URLs for proxy paths.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -216,7 +217,7 @@ button falls back to the README's first section.
 | `scripts/docs/markdown.js`  | One Markdown file to a page: heading links named the way GitHub names them, links between docs pointed at their pages, and a file name written as code linked to its page or to the file on GitHub.                                                     |
 | `scripts/docs/layout.js`    | The frame every page shares: the top bar, Dark / Light / Device (as icons), search (`/` or Ctrl K / ⌘K), the side nav, the breadcrumb, "On this page" on wide screens with the section being read marked, and a Copy button on every code block. Drawn with `ui-theme.js` itself. |
 | `scripts/docs/catalogue.js` | The Default UI page.                                                                                                                                                                                                                                    |
-| `scripts/docs/changelog.js` | The changelog timeline. A release is dated by its git tag, or by the day it was added to `CHANGELOG.md` before it's tagged.                                                                                                                             |
+| `scripts/docs/changelog.js` | The changelog timeline. A release is dated by its git tag, or by the day it was added to `CHANGELOG.md` before it's tagged. A `## Unreleased` section goes on top, under "In progress", undated and not counted.                                                                                                                             |
 | `docs/ui-elements.js`       | The words behind the Default UI page: a name, a description, a sample and the markup for every element, and what every colour is for. **Add an entry here whenever an element is added to `ui-theme.js`:** `test/docs-site.test.js` fails until you do. |
 
 ### `data/` -- never committed
@@ -1253,9 +1254,20 @@ gained or lost an item is repaired rather than rejected: unknown names are
 dropped, missing ones are appended at the end. A module can therefore change
 what it offers without invalidating anybody's saved settings.
 
-In the form it renders as rows with up/down arrows. The chosen order lives
-in a hidden input, so every existing save handler collects it the same way
-it collects a text box -- there is no special case in the collection code.
+How it's drawn depends on its length (`core/priority-ui.js`, since v2).
+Four items or fewer: the rows themselves, numbered, each with a grip to drag
+it by and up/down arrows; on a widget's page that list gets a box of its own
+beside the settings, carrying the field's `showWhen` and widget types so it
+hides as a whole. More than four: one button with the order in short form
+("Temperature, Condition, Alert and 8 more") that opens the whole list in a
+pop-up, kept with Done or thrown away with Cancel. Dragging uses pointer
+events: a mouse drags a row from anywhere on it, a finger only by its grip,
+so a finger brushing the list still scrolls. The wizard is sent the same
+drawing functions as source, so both pages draw the same thing.
+
+Either way the chosen order lives in a hidden input, so every existing save
+handler collects it the same way it collects a text box -- there is no
+special case in the collection code.
 
 **This does not change the richness contract.** A theme still sends one
 number and learns nothing about what it buys; a module still decides what

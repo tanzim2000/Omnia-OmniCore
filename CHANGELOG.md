@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+OmniCore v2, being built on the `v2` branch: Info order lists that are dragged into place, and a long one in a pop-up
+
+### Added
+
+- **Info order rows can be dragged.** Every Info order list (what a widget shows first) can now be put in order by dragging its rows, as well as with the arrows. With a mouse, drag a row from anywhere on it. On a touch screen, drag it by the six dots at its left, so a finger brushing the list still scrolls the page. The arrows are still there, for the keyboard and for anyone who'd rather tap.
+- **A long Info order opens in a pop-up.** A list of more than four items no longer fills the page. It's one button saying the order in short form ("Temperature, Condition, Alert and 8 more") that opens the whole list in a pop-up. Drag the rows or use the arrows, then Done keeps the new order and Cancel leaves it as it was. Nothing is saved until the page's Save, as before. Works on a widget's page and in the setup wizard. Weather's six lists, Disk Space's and System Stats' all become buttons.
+- **A short Info order gets a box of its own** on a widget's page, beside the settings, with its rows right there to drag. Four items or fewer.
+- **Work not released yet has a place in the changelog.** `CHANGELOG.md` can start with a `## Unreleased` section, written like any release. The docs site shows it above the releases, under "In progress", with no date, and doesn't count it as a release. When the version is picked, its heading becomes the version.
+- **A development build shows what isn't released yet.** Its Updates page shows the `## Unreleased` notes from its own `CHANGELOG.md` under "Not released yet", above its version's notes.
+
+### Fixed
+
+- **Release notes on the Updates page show code as code.** A name written between backticks in the notes (`CHANGELOG.md`, say) was shown with the backticks around it. It's now drawn like code, as on the docs site.
+
+### Notes
+
+- The version stays at 1.19.9 while v2 is built, and nothing is tagged, so installs that update themselves never see this work.
+
 ## v1.19.9
 
 Four fixes found while testing the Weather module: a widget's page keeps its module's name, Save takes you back, the Save and Remove capsule stays on screen, and red buttons glow red

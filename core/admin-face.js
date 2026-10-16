@@ -42,6 +42,7 @@ const {
 } = require("./module-config");
 const themeLoader = require("./theme-loader");
 const priority = require("./priority");
+const priorityUi = require("./priority-ui");
 const widgetTypes = require("./widget-types");
 const marketplace = require("./marketplace");
 const imageProxy = require("./image-proxy");
@@ -593,48 +594,8 @@ const styles = `
 	}
 
 
-	/* A reorderable priority list. Deliberately looks like .option rows,
-	   since it's the same kind of choice made a different way. */
-	.priority-row {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 0.6667em 0.8em;
-		border: 1px solid var(--border);
-		border-radius: 0.6667em;
-		margin-bottom: 8px;
-		font-size: 15px;
-	}
-
-	.priority-rank {
-		opacity: 0.4;
-		font-size: 12px;
-		min-width: 16px;
-		text-align: right;
-	}
-
-	.priority-name { flex: 1; }
-
-	.priority-move {
-		width: 32px;
-		height: 32px;
-		padding: 0;
-		margin: 0;
-		flex: none;
-		font-size: 13px;
-		line-height: 1;
-		cursor: pointer;
-		color: inherit;
-		border-radius: 0.6154em;
-		border: 1px solid var(--border);
-		background: var(--glass-bg);
-	}
-
-	.priority-move:hover:not(:disabled) {
-		background: var(--border);
-	}
-
-	.priority-move:disabled { opacity: 0.2; cursor: default; }
+	/* Info order lists, short and long: see priority-ui.js */
+	${priorityUi.PRIORITY_CSS}
 
 
 
@@ -664,6 +625,15 @@ const styles = `
 	.changelog li { font-size: 14px; line-height: 1.65; margin-bottom: 8px; }
 	.changelog p { font-size: 14px; line-height: 1.65; }
 	.changelog strong { font-weight: 600; }
+	/* A name written between backticks in the notes */
+	.changelog code {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		font-size: 0.9em;
+		padding: 0.1em 0.35em;
+		border-radius: 0.3em;
+		background: var(--glass-bg);
+		border: 1px solid var(--segment-border);
+	}
 
 	.hint {
 		display: block;
@@ -1038,7 +1008,11 @@ function renderNotes(markdown) {
 	};
 
 	for (const line of lines) {
-		const bolded = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+		// **bold** and `code`. The text is already escaped above, so what's
+		// inside the backticks can't become HTML.
+		const bolded = line
+			.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+			.replace(/`([^`]+)`/g, "<code>$1</code>");
 
 		if (/^### /.test(line)) {
 			closeList();
@@ -1257,70 +1231,10 @@ const locationScript = `
 	}
 `;
 
-// Reordering a priority list.
-//
-// The chosen order lives in a hidden input, so the save handlers on every
-// page collect it exactly the way they collect a text box — one value, read
-// off .value, with no special case anywhere.
-//
-// One listener on the document handles every list on the page. That's not
-// just tidiness: the wizard rebuilds its form on each step, and delegation
-// keeps working across a re-render where per-button listeners wouldn't.
-const priorityScript = `
-	function syncPriority(container) {
-		const rows = Array.from(container.querySelectorAll("[data-priority-item]"));
-		const store = container.querySelector("[data-type='priority']");
-
-		if (store) {
-			store.value = JSON.stringify(rows.map(function (row) {
-				return row.dataset.priorityItem;
-			}));
-		}
-
-		rows.forEach(function (row, index) {
-			const rank = row.querySelector("[data-priority-rank]");
-			if (rank) rank.textContent = index + 1;
-
-			// Nothing above the first row, nothing below the last
-			const up = row.querySelector("[data-priority-move='up']");
-			const down = row.querySelector("[data-priority-move='down']");
-
-			if (up) up.disabled = index === 0;
-			if (down) down.disabled = index === rows.length - 1;
-		});
-	}
-
-	function syncAllPriorities() {
-		for (const container of document.querySelectorAll("[data-priority]")) {
-			syncPriority(container);
-		}
-	}
-
-	document.addEventListener("click", function (event) {
-		const button = event.target.closest("[data-priority-move]");
-		if (!button) return;
-
-		event.preventDefault();
-
-		const container = button.closest("[data-priority]");
-		const row = button.closest("[data-priority-item]");
-		const rows = Array.from(container.querySelectorAll("[data-priority-item]"));
-		const index = rows.indexOf(row);
-		const target = button.dataset.priorityMove === "up" ? index - 1 : index + 1;
-
-		if (target < 0 || target >= rows.length) return;
-
-		if (target < index) {
-			container.insertBefore(row, rows[target]);
-		} else {
-			container.insertBefore(rows[target], row);
-		}
-
-		syncPriority(container);
-	});
-
-	syncAllPriorities();
-`;
+// Reordering a priority list (an Info order): the arrows, dragging, and
+// the pop-up for a long list. The same code as the wizard's; see
+// priority-ui.js.
+const priorityScript = priorityUi.PRIORITY_SCRIPT;
 
 function notFound(heading, backHref, backLabel) {
 	return page(
@@ -1374,6 +1288,27 @@ function registryUnreachable(message) {
 // which module should feed something like a wallpaper, and `labels`, what
 // each of them is called (see instance-label.js), so the list names them
 // the way every other page does.
+// What decides whether a setting is shown, written onto whatever holds
+// it: a .field, or the box of its own an Info order gets on a widget's
+// page.
+//
+// A field can depend on another one: no point showing a gradient's
+// second colour when the background isn't a gradient.
+//
+// A field that only belongs to some widget types says which, so the
+// picker at the top of the page can hide it while another type is
+// picked. See widget-types.js.
+function fieldAttributes(field) {
+	const condition = field.showWhen
+		? ` data-when-key="${escapeHtml(field.showWhen.key)}" ` +
+		  `data-when-is="${escapeHtml(
+				[].concat(field.showWhen.equals).join("|")
+		  )}"`
+		: "";
+
+	return condition + widgetTypes.widgetsAttribute(field);
+}
+
 function renderFields(schema, config, context, scope) {
 	const owner = scope || "module";
 
@@ -1491,27 +1426,10 @@ function renderFields(schema, config, context, scope) {
 				// shows a complete, current list.
 				const order = priority.normalize(value, field.options);
 
-				const rows = order
-					.map(
-						(item, index) => `
-					<div class="priority-row" data-priority-item="${escapeHtml(item)}">
-						<span class="priority-rank" data-priority-rank>${index + 1}</span>
-						<span class="priority-name">${escapeHtml(item)}</span>
-						<button type="button" class="priority-move"
-							data-priority-move="up" title="Move up">↑</button>
-						<button type="button" class="priority-move"
-							data-priority-move="down" title="Move down">↓</button>
-					</div>`
-					)
-					.join("");
-
-				input =
-					`<div data-priority>` +
-					`<input type="hidden" data-key="${escapeHtml(field.key)}" ` +
-					`data-scope="${owner}" data-type="priority" ` +
-					`value="${escapeHtml(JSON.stringify(order))}">` +
-					rows +
-					`</div>`;
+				// Up to four: the rows themselves. More: a button saying
+				// the order in short form, which opens the whole list in a
+				// pop-up. See priority-ui.js.
+				input = priorityUi.priorityFieldHtml(field, order, owner, escapeHtml);
 			} else if (field.type === "boolean") {
 				input =
 					`<input type="checkbox" data-key="${escapeHtml(field.key)}" ` +
@@ -1570,19 +1488,8 @@ function renderFields(schema, config, context, scope) {
 				}
 			}
 
-			// A field can depend on another one — no point showing a
-			// gradient's second colour when the background isn't a gradient
-			const condition = field.showWhen
-				? ` data-when-key="${escapeHtml(field.showWhen.key)}" ` +
-				  `data-when-is="${escapeHtml(
-						[].concat(field.showWhen.equals).join("|")
-				  )}"`
-				: "";
-
-			// A field that only belongs to some widget types says which, so
-			// the picker at the top of the page can hide it while another
-			// type is picked. See widget-types.js.
-			const widgets = widgetTypes.widgetsAttribute(field);
+			// When it's shown: see fieldAttributes below
+			const attributes = fieldAttributes(field);
 
 			// The refresh setting is worded by Core, the same for every
 			// module: "Refresh every [ 10 ] minutes"
@@ -1592,7 +1499,7 @@ function renderFields(schema, config, context, scope) {
 					: field.label || field.key;
 
 			return `
-				<div class="field"${condition}${widgets}>
+				<div class="field"${attributes}>
 					<label>${escapeHtml(label)}</label>
 					${input}
 					${help}
@@ -3263,6 +3170,15 @@ function startAdminFace() {
 			offered ? coreUpdater.applyReadiness() : Promise.resolve(null)
 		]);
 
+		// A development build of a branch with work not in a release yet
+		// (v2, say) shows that too, above its version's own notes: it's
+		// what the build has that the version number doesn't say. Read
+		// from the "## Unreleased" section of its own CHANGELOG.md, and
+		// only on a development build: a release has none.
+		const unreleasedNotes = dev
+			? coreUpdater.localChangelogEntry("Unreleased")
+			: null;
+
 		// An update already under way when the page opened -- started by
 		// the scheduler, or from another tab. The page picks it up and
 		// follows it rather than offering to start a second one.
@@ -3363,6 +3279,12 @@ function startAdminFace() {
 							upcomingNotes,
 							"Release notes for that version couldn't be fetched."
 					  )
+					: ""
+			}
+
+			${
+				unreleasedNotes
+					? notesSection("Not released yet", unreleasedNotes, "")
 					: ""
 			}
 
@@ -4812,7 +4734,8 @@ function startAdminFace() {
 		// Laid out as segments like every other admin page:
 		//
 		//   [ name, what the module is, and its widget type picker ]
-		//   [ the module's settings ]  [ the theme's settings for it ]
+		//   [ the module's settings ]  [ a short Info order          ]
+		//                              [ the theme's settings for it ]
 		//                              [ Refresh                     ]
 		//                  ( Save  |  Remove )
 		//
@@ -4822,9 +4745,11 @@ function startAdminFace() {
 		// at the bottom of the window and long settings scroll inside their
 		// own box rather than pushing it off the screen.
 		//
-		// The theme's segment only when the theme has anything to set; the
-		// module's settings then take the whole row, with Refresh under
-		// them. The two columns end level, like a face's page.
+		// The theme's segment only when the theme has anything to set. A
+		// short Info order (four items or fewer) gets a box of its own in
+		// the same column. With neither, the module's settings take the
+		// whole row, with Refresh under them. The two columns end level,
+		// like a face's page.
 		//
 		// Refresh is the module's refreshMinutes setting, drawn by Core in
 		// a box of its own rather than among the module's settings: it
@@ -4845,7 +4770,42 @@ function startAdminFace() {
 			: "";
 
 		const refreshFields = schema.filter(isRefreshField);
-		const moduleFields = schema.filter((field) => !isRefreshField(field));
+
+		// An Info order of four items or fewer gets a box of its own, with
+		// the rows right there to drag (since v2). A longer one stays among
+		// the settings as a button that opens the whole list in a pop-up.
+		// See priority-ui.js.
+		const ownBox = (field) =>
+			field.type === "priority" &&
+			priority.normalize(config[field.key], field.options).length <=
+				priorityUi.INLINE_MAX;
+
+		const orderFields = schema.filter(
+			(field) => !isRefreshField(field) && ownBox(field)
+		);
+		const moduleFields = schema.filter(
+			(field) => !isRefreshField(field) && !ownBox(field)
+		);
+
+		// The box carries the setting's showWhen and widget types, so it
+		// hides as a whole, the way a .field would
+		const orderSegments = orderFields
+			.map(
+				(field) => `<div class="segment order-segment"${fieldAttributes(field)}>
+					<h2>${escapeHtml(field.label || field.key)}</h2>
+					<p class="lede">${escapeHtml(
+						field.help ||
+							"Drag a row, or move it with the arrows. What's at the top shows even on the smallest tile."
+					)}</p>
+					${priorityUi.priorityFieldHtml(
+						field,
+						priority.normalize(config[field.key], field.options),
+						"module",
+						escapeHtml
+					)}
+				</div>`
+			)
+			.join("");
 
 		const refreshSegment = refreshFields.length
 			? `<div class="segment refresh-segment">
@@ -4877,12 +4837,14 @@ function startAdminFace() {
 						}
 					</div>`;
 
-		// With the theme's box on the right, Refresh goes under it;
-		// without one, under the module's settings
-		const columns = themeSegment
+		// With anything in the right-hand column (a short Info order, the
+		// theme's box), Refresh goes under it; without, under the module's
+		// settings
+		const rightColumn = orderSegments + themeSegment;
+		const columns = rightColumn
 			? `<div class="bento-row two face-columns">
 					<div class="bento-column">${settingsSegment}</div>
-					<div class="bento-column">${themeSegment}${refreshSegment}</div>
+					<div class="bento-column">${rightColumn}${refreshSegment}</div>
 				</div>`
 			: `<div class="bento-row top">
 					<div class="bento-column">${settingsSegment}${refreshSegment}</div>

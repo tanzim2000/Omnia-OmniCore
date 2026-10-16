@@ -186,6 +186,9 @@ test("docs site: builds, with a page for every doc", () => {
 		for (const version of versions) {
 			assert.ok(changelog.includes(`id="${version.replace(/\./g, "-")}"`), `${version} is on the timeline`);
 		}
+		if (/^## Unreleased\s*$/m.test(fs.readFileSync(path.join(ROOT, "CHANGELOG.md"), "utf8"))) {
+			assert.ok(changelog.includes('id="unreleased"'), "work not released yet is on the timeline");
+		}
 
 		// The home page: the version beside the title, read from
 		// package.json, and Set it up pointing at a heading that's there
@@ -235,6 +238,51 @@ test("docs site: builds, with a page for every doc", () => {
 		}
 	} finally {
 		fs.rmSync(out, { recursive: true, force: true });
+	}
+});
+
+test("changelog: work not released yet goes on top, undated and not counted", () => {
+	const { renderChangelog, isUnreleased } = require("../scripts/docs/changelog");
+	const source = [
+		"# Changelog",
+		"## Unreleased", "Being built", "### Added", "- A thing", "- Another",
+		"## v1.0.1", "A fix", "### Fixed", "- A bug",
+		"## v1.0.0", "The first", ""
+	].join("\n\n");
+
+	// No git here, so no dates: only the Unreleased marking is tested
+	const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "omnia-changelog-"));
+	const renderMd = (md) => ({ html: `<p>${md}</p>`, sections: [{ text: md }] });
+
+	try {
+		const page = renderChangelog({ source, renderMd, cwd, file: "changelog.html" });
+
+		assert.ok(isUnreleased({ version: "Unreleased" }) && isUnreleased({ version: "unreleased" }));
+		assert.ok(!isUnreleased({ version: "v1.0.1" }));
+
+		// On top, under "In progress", open, marked, and not "the latest"
+		const unreleased = page.body.indexOf('id="unreleased"');
+		assert.ok(unreleased > 0, "it's on the page");
+		assert.ok(unreleased < page.body.indexOf('id="v1-0-1"'), "above the releases");
+		assert.ok(page.body.includes('<div class="series" id="in-progress">In progress</div>'));
+		assert.match(page.body, /<details class="segment release unreleased" id="unreleased" open>/);
+		assert.match(page.body, /<details class="segment release latest" id="v1-0-1" open>/, "the newest release is still the latest");
+		assert.ok(page.body.includes("<span>Added 2</span>"), "its sections are counted like a release's");
+
+		// Not counted as a release
+		assert.ok(page.body.includes("<b>2</b><span>releases</span>"));
+		assert.ok(page.body.includes("<b>v1.0.1</b><span>latest</span>"));
+
+		// First in the outline, and found by search
+		assert.deepEqual(page.outline[0], { id: "in-progress", text: "In progress" });
+		assert.equal(page.searchEntries[0].t, "Unreleased");
+
+		// Without one, nothing about it at all
+		const plain = renderChangelog({ source: source.replace(/## Unreleased[\s\S]*?(?=## v1\.0\.1)/, ""), renderMd, cwd, file: "changelog.html" });
+		assert.ok(!plain.body.includes("In progress"));
+		assert.ok(!plain.body.includes("unreleased"));
+	} finally {
+		fs.rmSync(cwd, { recursive: true, force: true });
 	}
 });
 

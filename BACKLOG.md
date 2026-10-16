@@ -70,12 +70,22 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
   which moves into the About tab in v2.)
 - **No uninstall in the UI.** Removing a module or theme still means
   deleting its folder.
-- **Test CI.** `npm test` has 25 test files, but nothing runs them on a
+- **Test CI.** `npm test` has 26 test files, but nothing runs them on a
   push. The workflows only publish the image and the docs site.
 - **Tag workflow concurrency.** Two `v*` tags pushed together can run the
   image publish at once. Push tags one at a time, or add `concurrency`.
 - **Updates are only noticed for tagged releases.** An untagged version
   bump is invisible to the updater. Always tag.
+- **A `:dev` image reports the branch as its version.** The image
+  workflow bakes in `OMNICORE_VERSION=${{ github.ref_name }}`, so an image
+  built by hand from `v2` says it's version "v2", which OmniCore reads as
+  2.0.0: every module counts as compatible, and its Updates page looks for
+  release notes under a `## v2` heading that isn't there. Built from `main`
+  it's "main", which isn't a version at all. Proposed: a hand-run build
+  gets `dev`, so it's a development build (the source's version with the
+  dev badge, no update checks), and `CHANGELOG.md` stops being left out of
+  the image (`.dockerignore`), so the Updates page can show what isn't
+  released yet.
 
 ## v2: how it is built
 
@@ -94,40 +104,30 @@ branch **`v2`**:
   tagged there, then `main` is merged into `v2`.
 - When v2 is ready: merge `v2` into `main`, pick the version, tag.
 
-One commit per step, each with its tests passing:
+Five commits, each with its tests passing and its part of the
+Unreleased entry in the CHANGELOG. The version is bumped only when v2 is
+judged ready, not as part of any of these.
 
-1. `v2` is made from `main` once v1.19.9 is tagged, so it starts with the
-   fixes. First commit there: the docs site shows an undated
-   **Unreleased** section in the CHANGELOG.
-2. Info order as a button, with its dialogue (below).
-3. Place search: the engine (eight providers, Primary then Secondary,
-   caching, tests with saved answers).
-4. Place search: its setting, the key prompts, the credit line on the
-   three pages that search.
-5. Glass tokens: real frosted segments everywhere, tuned in light and
-   dark.
-6. Backgrounds, pictures first: safe upload, the fixed layer, dimming,
-   tint and blur, Match the picture.
-7. Animated backgrounds: GIF, animated WebP, video; a still frame for
-   reduced motion; paused when the tab is hidden.
-8. The settings home: four tabs in the notch, one page, the remembered
-   tab, the asymmetric bento, the About tab with the updates.
-9. Tab-linked movement: the pan and the wallpaper moving a quarter as far.
-10. Page fades on every page, and the notch hiding (the riskiest: it
-    touches every page, so each kind of page is tested on its own).
-11. The theme intro signal and the `theme.json` opt-out, documented.
-12. A docs pass, this Backlog cleaned up, the final Unreleased entry.
+1. **Done.** The Unreleased section (docs site, and a development build's
+   Updates page), and Info order lists: dragged into place, a box of its
+   own when short, a button and a pop-up when longer than four.
+2. Place search: the engine (eight providers, Primary then Secondary,
+   caching, tests with saved answers), its setting, the key prompts, the
+   credit line on the three pages that search.
+3. Glass and backgrounds: real frosted segments everywhere, tuned in light
+   and dark; pictures (safe upload, the fixed layer, dimming, tint and
+   blur, Match the picture); animated backgrounds (GIF, animated WebP,
+   video; a still frame for reduced motion; paused when the tab is hidden).
+4. The settings home and movement: four tabs in the notch, one page, the
+   remembered tab, the asymmetric bento, the About tab with the updates;
+   the tab-linked pan with the wallpaper moving a quarter as far; page
+   fades on every page and the notch hiding (the riskiest: it touches every
+   page, so each kind of page is tested on its own); the theme intro signal
+   and the `theme.json` opt-out, documented.
+5. A docs pass, this Backlog cleaned up, the final Unreleased entry.
 
 ## v2: features
 
-- **Info order as a button.** The `priority` setting is drawn in both
-  `core/admin-face.js` and `core/wizard-face.js`. With 4 items or fewer it
-  stays an inline segment with drag and drop. With more, it becomes a
-  button showing the order in short form (for example "Temperature,
-  Condition, Alert and 8 more") that opens a dialogue with the full list,
-  drag and drop, Done and Cancel. Keep the up and down arrows for the
-  keyboard and for touch. Every module with an order setting gets it,
-  including Weather's six.
 - **Place search source, an OmniCore setting.** City search
   (`searchCities` in `core/location-service.js`) uses only Open-Meteo, which
   has no record of small places (nothing for Bekkestua; Bærum only as the

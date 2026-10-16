@@ -470,6 +470,13 @@ const showing = omni.visible(config.fieldOrder, richness);
 returns the ones to show, **in the user's order**. Whatever they put at the
 top survives the smallest tile. `modules/weather` is the worked example.
 
+How OmniCore draws it depends on how many `options` you declare. Four or
+fewer: the rows, right there to drag, in a box of their own on the widget's
+page. More than four: a button with the order in short form, which opens the
+whole list in a pop-up. Nothing to do on your side either way; the `label`
+you give is the box's heading or the pop-up's title, and your `help` is
+shown with it.
+
 **This is not right for every module.** If every row you emit is the same
 kind of thing -- one event, one container, one message -- there is nothing
 meaningful to reorder, and a priority setting would be a second way to do a

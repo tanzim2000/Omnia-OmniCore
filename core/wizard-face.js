@@ -39,6 +39,7 @@ const {
 	REFRESH_FLOOR
 } = require("./module-config");
 const widgetTypes = require("./widget-types");
+const priorityUi = require("./priority-ui");
 const { searchCities } = require("./location-service");
 const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
 const { uiStyles, rememberUiMode, DIALOG_SCRIPT } = require("./ui-theme");
@@ -316,45 +317,8 @@ const styles = `
 
 	.review-row span { color: var(--fg-muted); }
 
-	/* A reorderable priority list */
-	.priority-row {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 0.6579em 0.7895em;
-		border: 1px solid var(--segment-border);
-		border-radius: 0.6579em;
-		margin-bottom: 8px;
-		font-size: 0.95em;
-	}
-
-	.priority-rank {
-		color: var(--fg-muted);
-		font-size: 0.8em;
-		min-width: 16px;
-		text-align: right;
-	}
-
-	.priority-name { flex: 1; }
-
-	.priority-move {
-		appearance: none;
-		-webkit-appearance: none;
-		width: 32px;
-		height: 32px;
-		padding: 0;
-		flex: none;
-		font-size: 0.85em;
-		line-height: 1;
-		cursor: pointer;
-		color: inherit;
-		border-radius: 0.5882em;
-		border: 1px solid var(--segment-border);
-		background: var(--glass-bg);
-	}
-
-	.priority-move:hover:not(:disabled) { background: var(--glass-bg-hover); }
-	.priority-move:disabled { opacity: 0.2; cursor: default; }
+	/* Info order lists, short and long: see priority-ui.js */
+	${priorityUi.PRIORITY_CSS}
 `;
 
 
@@ -921,66 +885,13 @@ function renderWizard(data) {
 			return kept;
 		}
 
-		// Rewrite the hidden input a priority list is stored in, and keep
-		// the numbering and the disabled arrows honest
-		function syncPriority(container) {
-			const rows = Array.prototype.slice.call(
-				container.querySelectorAll("[data-priority-item]")
-			);
-			const store = container.querySelector("[data-type='priority']");
-
-			if (store) {
-				store.value = JSON.stringify(rows.map(function (row) {
-					return row.dataset.priorityItem;
-				}));
-			}
-
-			rows.forEach(function (row, index) {
-				const rank = row.querySelector("[data-priority-rank]");
-				if (rank) rank.textContent = index + 1;
-
-				const up = row.querySelector("[data-priority-move='up']");
-				const down = row.querySelector("[data-priority-move='down']");
-
-				if (up) up.disabled = index === 0;
-				if (down) down.disabled = index === rows.length - 1;
-			});
-		}
-
-		function syncAllPriorities() {
-			for (const container of document.querySelectorAll("[data-priority]")) {
-				syncPriority(container);
-			}
-		}
-
-		// One listener for every list on the page. The wizard rebuilds its
-		// form on each step, so delegation is what keeps this working —
-		// per-button listeners would be thrown away on the next render.
-		document.addEventListener("click", function (event) {
-			const button = event.target.closest("[data-priority-move]");
-			if (!button) return;
-
-			event.preventDefault();
-
-			const container = button.closest("[data-priority]");
-			const row = button.closest("[data-priority-item]");
-			const rows = Array.prototype.slice.call(
-				container.querySelectorAll("[data-priority-item]")
-			);
-			const index = rows.indexOf(row);
-			const target =
-				button.dataset.priorityMove === "up" ? index - 1 : index + 1;
-
-			if (target < 0 || target >= rows.length) return;
-
-			if (target < index) {
-				container.insertBefore(row, rows[target]);
-			} else {
-				container.insertBefore(rows[target], row);
-			}
-
-			syncPriority(container);
-		});
+		// Info order lists: the arrows, dragging, and the pop-up for a
+		// long list, along with the function that draws one. OmniCore's
+		// own code, handed over as source like the widget types above, so
+		// the wizard and a widget's page work the same. See
+		// core/priority-ui.js.
+		${priorityUi.PRIORITY_SCRIPT}
+		${priorityUi.priorityFieldHtml.toString()}
 
 		// One settings field. Shared by the module step and the theme step,
 		// so both look identical — which is the point of declaring settings
@@ -1088,27 +999,12 @@ function renderWizard(data) {
 					// the smallest tile; the rest appear as it gets bigger.
 					const order = priorityOrder(value, field.options);
 
-					const rows = order.map(function (item, index) {
-						return '<div class="priority-row" data-priority-item="' +
-							escapeHtml(item) + '">' +
-							'<span class="priority-rank" data-priority-rank>' +
-								(index + 1) + "</span>" +
-							'<span class="priority-name">' + escapeHtml(item) + "</span>" +
-							'<button type="button" class="priority-move" ' +
-								'data-priority-move="up" title="Move up">↑</button>' +
-							'<button type="button" class="priority-move" ' +
-								'data-priority-move="down" title="Move down">↓</button>' +
-						"</div>";
-					}).join("");
-
-					// The order lives in a hidden input so the step's collect
-					// loop reads it like any other field — off .value
-					input = '<div data-priority>' +
-						'<input type="hidden" data-key="' + escapeHtml(field.key) +
-							'" data-scope="' + owner + '" data-type="priority" value="' +
-							escapeHtml(JSON.stringify(order)) + '">' +
-						rows +
-					"</div>";
+					// Up to four: the rows themselves. More: a button
+					// saying the order in short form, which opens the
+					// whole list in a pop-up. The order lives in a hidden
+					// input either way, so the step's collect loop reads
+					// it like any other field, off .value.
+					input = priorityFieldHtml(field, order, owner, escapeHtml);
 				} else if (field.type === "boolean") {
 					input = '<input type="checkbox" data-key="' +
 						escapeHtml(field.key) + '" data-scope="' + owner +

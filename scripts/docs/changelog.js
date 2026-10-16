@@ -16,9 +16,19 @@
 // just written, and the tag comes after), the day its "## v..." line was
 // added to CHANGELOG.md. With no git history at all, the date is simply
 // left off.
+//
+// Work that isn't released yet (a branch like v2, built over many commits
+// before it gets a version) goes at the top under "## Unreleased", in the
+// same shape. It's drawn above the releases, under "In progress", with
+// no date, and it isn't counted as a release. When the version is
+// picked, the heading becomes "## v2.0.0" and it's an ordinary release.
 
 const { execFileSync } = require("child_process");
 const { esc } = require("./layout");
+
+// The heading work that isn't released yet goes under. Matched without
+// caring about capitals, so "## unreleased" works too.
+const isUnreleased = (release) => /^unreleased$/i.test(release.version);
 
 // "v1.19.4" -> "v1-19-4", the id a link to that release uses. Dots become
 // hyphens rather than being dropped, so v1.1.0 and v1.10 can never collide.
@@ -46,6 +56,8 @@ const TIMELINE_CSS = `
 		background: var(--bg); border: 2px solid var(--fg-muted);
 	}
 	.release.latest::before { background: var(--success); border-color: var(--success); }
+	/* Not released yet: a hollow, dashed dot, ahead of the line's newest end */
+	.release.unreleased::before { border-style: dashed; border-color: var(--fg); }
 	.release summary {
 		list-style: none; cursor: pointer; padding: 1em 1.2em; border-radius: var(--radius);
 		display: grid; grid-template-columns: auto 1fr auto; gap: 0.2em 1em; align-items: baseline;
@@ -129,7 +141,12 @@ function parseChangelog(source) {
 //   cwd         the repo, for reading tag dates
 //   file        this page's file name, for search results
 function renderChangelog({ source, renderMd, cwd, file }) {
-	const releases = parseChangelog(source);
+	const entries = parseChangelog(source);
+
+	// Work not released yet is kept apart: it has no date, isn't counted,
+	// and isn't "the latest release"
+	const unreleased = entries.find(isUnreleased) || null;
+	const releases = entries.filter((entry) => !isUnreleased(entry));
 	const dates = tagDates(cwd);
 
 	// A version that isn't tagged yet: the day it was written down instead
@@ -154,7 +171,8 @@ function renderChangelog({ source, renderMd, cwd, file }) {
 
 	const card = (release, isLatest) => {
 		const id = idFor(release.version);
-		const date = prettyDate(dates[release.version]);
+		const pending = isUnreleased(release);
+		const date = pending ? "" : prettyDate(dates[release.version]);
 		// The intro's first paragraph is the one-line summary shown when
 		// the release is closed; anything after it (a warning, say) goes
 		// inside with the details
@@ -171,15 +189,15 @@ function renderChangelog({ source, renderMd, cwd, file }) {
 		].join("");
 
 		searchEntries.push({
-			t: release.version + (date ? ` (${date})` : ""),
+			t: pending ? "Unreleased" : release.version + (date ? ` (${date})` : ""),
 			u: `${file}#${id}`,
 			x: renderMd(release.intro + "\n\n" + release.sections.map((s) => s.markdown).join("\n\n")).sections.map((s) => s.text).join(" ")
 		});
 
 		return `
-<details class="segment release${isLatest ? " latest" : ""}" id="${esc(id)}"${isLatest ? " open" : ""}>
+<details class="segment release${isLatest ? " latest" : ""}${pending ? " unreleased" : ""}" id="${esc(id)}"${isLatest || pending ? " open" : ""}>
 	<summary>
-		<span class="version">${esc(release.version)}</span>
+		<span class="version">${esc(pending ? "Unreleased" : release.version)}</span>
 		<span class="date">${esc(date)}</span>
 		<span class="chevron" aria-hidden="true">›</span>
 		<span class="tagline">${renderMd(tagline).html.replace(/^<p>|<\/p>\s*$/g, "")}</span>
@@ -207,7 +225,7 @@ function renderChangelog({ source, renderMd, cwd, file }) {
 	const body = `
 <div class="page-head">
 	<h1>Changelog</h1>
-	<p class="lede">Every OmniCore release, newest first: how it grew, one step at a time. Open a release to see everything in it. Written in <code>CHANGELOG.md</code>; each date is when that version was tagged, or written down if it isn't tagged yet.</p>
+	<p class="lede">Every OmniCore release, newest first: how it grew, one step at a time. Open a release to see everything in it. Written in <code>CHANGELOG.md</code>; each date is when that version was tagged, or written down if it isn't tagged yet. Work that's done but not in a release yet is at the top, under Unreleased.</p>
 </div>
 <div class="stats">${stats.map(([big, small]) => `<div class="segment stat"><b>${big}</b><span>${small}</span></div>`).join("")}</div>
 <div class="timeline-tools">
@@ -215,6 +233,9 @@ function renderChangelog({ source, renderMd, cwd, file }) {
 	<button type="button" class="glass" id="close-all" style="padding:0.5em 1.1em">Close all</button>
 </div>
 <div class="timeline">
+	${unreleased ? `
+	<div class="series" id="in-progress">In progress</div>
+	${card(unreleased, false)}` : ""}
 	${series.map((group, gi) => `
 	<div class="series" id="${esc(idFor(group.key))}">${esc(group.key)}.x</div>
 	${group.releases.map((release, ri) => card(release, gi === 0 && ri === 0)).join("")}`).join("")}
@@ -240,11 +261,14 @@ function renderChangelog({ source, renderMd, cwd, file }) {
 
 	return {
 		body,
-		outline: series.map((group) => ({ id: idFor(group.key), text: `${group.key}.x` })),
+		outline: [
+			...(unreleased ? [{ id: "in-progress", text: "In progress" }] : []),
+			...series.map((group) => ({ id: idFor(group.key), text: `${group.key}.x` }))
+		],
 		searchEntries,
 		head: `<style>${TIMELINE_CSS}</style>`,
 		scripts
 	};
 }
 
-module.exports = { renderChangelog, parseChangelog };
+module.exports = { renderChangelog, parseChangelog, isUnreleased };

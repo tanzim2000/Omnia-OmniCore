@@ -90,6 +90,12 @@ test("changelog: an entry is cut out between its heading and the next", () => {
 	assert.equal(coreUpdater.changelogEntry(zs, "2.0.0"), "Zebra notes and Zones");
 	assert.equal(coreUpdater.changelogEntry(zs, "1.0.0"), "Oldest, by Zed");
 
+	// Work not released yet is found by its heading too, and ends at the
+	// first release
+	const pending = "## Unreleased\n\nComing\n\n## v1.0.0\n\nOld\n";
+	assert.equal(coreUpdater.changelogEntry(pending, "Unreleased"), "Coming");
+	assert.equal(coreUpdater.changelogEntry(pending, "1.0.0"), "Old");
+
 	// The real file has an entry for the version the source claims to be
 	assert.ok(coreUpdater.localChangelogEntry(sourceVersion), "this version's own notes");
 	assert.equal(coreUpdater.localChangelogEntry("0.0.1"), null);
@@ -206,6 +212,22 @@ test("dev build: the Updates page has nothing about checking, and shows this bui
 		assert.ok(html.includes('<div class="changelog">'), "the notes themselves");
 		assert.ok(!html.includes("has no notes for its version"), "not the fallback line");
 		assert.ok(!html.includes("What's in dev"));
+
+		// Work not released yet, from the same file, above the version's
+		// own notes, when the file has any
+		const pending = coreUpdater.localChangelogEntry("Unreleased");
+		if (pending) {
+			assert.ok(html.includes("<h2>Not released yet</h2>"));
+			const notes = html.slice(html.indexOf("<h2>Not released yet</h2>"), html.indexOf(`What's in ${sourceVersion}`));
+			assert.ok(!notes.includes("`"), "`code` is drawn as code, not left as backticks");
+			assert.ok(html.indexOf("Not released yet") < html.indexOf(`What's in ${sourceVersion}`));
+		}
+	}));
+
+test("release: a release never shows work not released yet", () =>
+	withVersion("v1.19.3", async () => {
+		const { html } = await get("/updates");
+		assert.ok(!html.includes("Not released yet"));
 	}));
 
 test("release: the Updates page is unchanged, and has no badge", () =>
