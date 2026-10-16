@@ -407,7 +407,10 @@ const SETTINGS_HOME_CSS = `
 		gap: 1em;
 		max-width: 70em;
 		margin: 0 auto;
-		align-items: stretch;
+		/* Each box its own height, so a short one beside a tall one isn't
+		   stretched into an empty frame; a box two rows tall (r2) fills
+		   both */
+		align-items: start;
 	}
 
 	.home-bento > .segment { margin: 0; min-width: 0; }
@@ -415,7 +418,7 @@ const SETTINGS_HOME_CSS = `
 	.home-bento .c3 { grid-column: span 3; }
 	.home-bento .c4 { grid-column: span 4; }
 	.home-bento .c6 { grid-column: 1 / -1; }
-	.home-bento .r2 { grid-row: span 2; }
+	.home-bento .r2 { grid-row: span 2; align-self: stretch; }
 
 	/* A whole box that is a link (Resources) */
 	.home-tile {

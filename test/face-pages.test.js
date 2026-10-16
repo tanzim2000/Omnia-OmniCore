@@ -221,25 +221,19 @@ test("faces list: heading on the page, the list, and the button where the capsul
 	assert.ok(!html.includes('<div class="segment">'), "no segments on this page");
 });
 
-// --- The Updates page -------------------------------------------------------
+// --- Updates, on the About tab ---------------------------------------------
 
-test("updates: a development build stacks its segments, whatever the screen", () =>
-	withVersion(undefined, async () => {
-		const { html } = await get(ADMIN, "/updates");
+test("updates: the About tab has the version, the updates, and a box for the notes", async () => {
+	const { html } = await get(ADMIN, "/");
+	const about = html.slice(html.indexOf('data-pane="about"'));
+	assert.match(about, /<div class="segment c2">\s*<h2>OmniCore<\/h2>/);
+	assert.match(about, /<div class="segment c4">\s*<h2>Updates<\/h2>/);
+	assert.match(about, /<div class="segment c6" id="release-notes">/);
+	assert.ok(html.includes('fetch("/updates/notes"'), "the notes come after the page is up");
+});
 
-		assert.ok(html.includes('<div class="bento-row">'), "one column");
-		assert.ok(!/bento-row (two|three)/.test(html.replace(/\/\*[\s\S]*?\*\//g, "").split("<body")[1]), "never side by side");
-	}));
-
-test("updates: a release keeps its segments side by side", () =>
-	withVersion("v1.19.3", async () => {
-		const { html } = await get(ADMIN, "/updates");
-
-		assert.ok(html.includes('<div class="bento-row two top">'));
-	}));
-
-test("updates: the notes scroll inside their segment", async () => {
-	const { html } = await get(ADMIN, "/updates");
+test("updates: the notes scroll inside their box", async () => {
+	const { html } = await get(ADMIN, "/");
 	const rule = html.match(/\.changelog \{([^}]*)\}/);
 
 	assert.ok(rule, "the notes have a rule of their own");

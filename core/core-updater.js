@@ -11,7 +11,7 @@
 // tells you an update exists — it just can't install it for you anymore.
 //
 // Two things can ask for an update to be applied: the scheduler (every
-// six hours) and the "Update now" button on the Updates page. Both come
+// six hours) and the "Update now" button on Settings' About tab. Both come
 // through applyUpdate(), and applyUpdate() lets only one run at a time
 // -- see "One update at a time" below.
 
@@ -431,7 +431,7 @@ function dockerSocketSource(info) {
 // same container names, so only the first gets to run; anything asking
 // while it does is told an update is already under way.
 //
-// `progress` is what the Updates page shows while it waits:
+// `progress` is what Settings' About tab shows while it waits:
 //
 //   phase   "idle"         nothing happening
 //           "downloading"  pulling the new image (the slow part)
@@ -460,7 +460,7 @@ function currentProgress() {
 // release to swap to, and swapping out a container someone is working
 // on would be harmful), and no way to reach Docker (the socket line was
 // taken out of docker-compose.yml, or OmniCore isn't in a container at
-// all). Both are legitimate setups, not faults -- the Updates page says
+// all). Both are legitimate setups, not faults -- the About tab says
 // which one it is instead of offering a button that can only fail.
 async function applyReadiness() {
 	if (omnicoreVersion.isDevBuild()) {
@@ -821,7 +821,7 @@ exit 0
 // "healthy", "unhealthy" -- or null when there's no way to know (no
 // Docker socket, or not in a container at all).
 //
-// The Updates page asks for this while it waits for a new version to
+// Settings' About tab asks for this while it waits for a new version to
 // come up. A new version answering isn't enough on its own: it's only
 // kept once Docker calls it healthy, and until then it can still be
 // rolled back.

@@ -416,25 +416,31 @@ test("pages: /geocode on the admin pages and in the wizard gives the matches, wh
 	}
 });
 
-test("pages: the Place search page, linked from Settings, with keys never on it", async () => {
+test("pages: Place search on Settings' General tab, with keys never on it", async () => {
 	writeSettings({ placeSearchPrimary: "geonames", placeSearchSecondary: "nominatim", placeSearchKeys: { geonames: "my-geonames-user" } });
 
-	const home = await get(3000, "/");
-	assert.ok(home.text.includes('href="/place-search"'), "linked from Settings");
+	// Its page from earlier in v2 opens the tab now
+	const old = await fetch("http://127.0.0.1:3000/place-search", { headers: { cookie }, redirect: "manual" });
+	assert.equal(old.status, 302);
+	assert.equal(old.headers.get("location"), "/#general");
 
-	const { status, text } = await get(3000, "/place-search");
+	const { status, text } = await get(3000, "/");
 	assert.equal(status, 200);
+	const general = text.slice(text.indexOf('data-pane="general"'), text.indexOf('data-pane="appearance"'));
+	assert.ok(general.includes('<div class="segment c2" id="place-search">'), "on the General tab");
 	assert.ok(!text.includes("my-geonames-user"), "the saved key isn't on the page");
-	assert.match(text, /<option value="geonames" selected>GeoNames \(needs a username\)<\/option>/);
-	assert.ok(text.includes('data-remove-key="geonames"'), "a saved key can be removed");
-	assert.ok(text.includes("Saved. Type a new username to replace it"));
-	assert.ok(text.includes("https://operations.osmfoundation.org/policies/nominatim/"), "Nominatim's rules are linked");
-	assert.ok(text.includes("Only what you type is sent"), "says what leaves the machine");
-	assert.ok(text.includes('id="warning" hidden'), "nothing to warn about");
-	assertScriptsParse(text, "the Place search page");
+	assert.match(general, /<option value="geonames" selected>GeoNames \(needs a username\)<\/option>/);
+	assert.match(general, /data-remove-key="geonames"\s+style="[^"]*">Remove<\/button>/, "a saved key can be removed");
+	assert.match(general, /data-remove-key="google"\s+style="[^"]*" hidden>Remove<\/button>/, "nothing to remove without one");
+	assert.ok(general.includes("Saved. Type a new username to replace it"));
+	assert.ok(general.includes("https://operations.osmfoundation.org/policies/nominatim/"), "Nominatim's rules are linked");
+	assert.ok(general.includes("Only what you type is sent"), "says what leaves the machine");
+	assert.ok(general.includes('id="place-warning" hidden'), "nothing to warn about");
+	assert.ok(general.includes('id="try-search"'), "a box to try a search");
+	assertScriptsParse(text, "Settings");
 
 	writeSettings({ placeSearchKeys: {} });
-	const warned = await get(3000, "/place-search");
+	const warned = await get(3000, "/");
 	assert.ok(warned.text.includes("GeoNames has no key saved, so every search goes straight to Nominatim (OpenStreetMap)."));
 });
 
@@ -458,9 +464,7 @@ test("pages: saving the setting, and nothing that answers carries a key", async 
 	assert.ok(!location.text.includes("pk.secret-123"));
 	assert.ok(!location.text.includes("placeSearchKeys"));
 
-	for (const address of ["/", "/place-search"]) {
-		assert.ok(!(await get(3000, address)).text.includes("pk.secret-123"), `${address} doesn't show it`);
-	}
+	assert.ok(!(await get(3000, "/")).text.includes("pk.secret-123"), "Settings doesn't show it");
 
 	writeSettings({ placeSearchPrimary: "open-meteo", placeSearchSecondary: "nominatim", placeSearchKeys: {} });
 });

@@ -48,8 +48,11 @@ everything up. You'll see a lot of text scroll by; that's normal.
 http://localhost:3000
 ```
 
-Create your account, then click **Marketplace** to install a theme and
-some modules -- weather, a calendar, whatever you want on your dashboard.
+Create your account. Settings has four tabs, picked from the black notch
+at the top of the screen: General, Appearance, Resources and About. Open
+**Resources** (the third icon) and click **Marketplace** to install a theme
+and some modules -- weather, a calendar, whatever you want on your
+dashboard.
 
 **6. Go to:**
 
@@ -103,7 +106,7 @@ others:
 
 Because they're genuinely separate, any theme can display any module.
 Everything beyond the basics -- new modules, new themes -- comes from the
-**Marketplace**, built into the account page you created in step 5. Each
+**Marketplace**, on the Resources tab of the settings you opened in step 5. Each
 one is reviewed before it's listed, so you're not installing random code
 off the internet.
 
@@ -122,8 +125,10 @@ node start.OmniCore
 ```
 
 Requires Node 20 or newer. Same pages afterward: port 3000 for the
-account and Marketplace, port 3999 for the setup wizard, and port 4000
-to pick which dashboard to show.
+settings and Marketplace, port 3999 for the setup wizard, and port 4000
+to pick which dashboard to show. Run this way it's a development build:
+its version has a `dev` badge, it never updates itself, and Settings'
+About tab shows what's in it, including work not released yet.
 
 ## Known limitations
 

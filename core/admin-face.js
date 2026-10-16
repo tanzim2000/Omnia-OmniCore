@@ -493,7 +493,7 @@ const styles = `
 		.dock-button { width: 30em; max-width: 30em; }
 	}
 
-	/* The Updates page while an update is being installed: one line
+	/* Settings' About tab while an update is being installed: one line
 	   saying what's happening, one quieter line under it saying what to
 	   expect. The dot pulses while something is still going on. */
 	.update-progress {
@@ -531,8 +531,6 @@ const styles = `
 	.update-progress .hint { margin: 4px 0 0 0; }
 	.update-progress .glass { margin-top: 12px; }
 
-	/* Space above the Update now button, matching the gap above Check now */
-	#apply { margin-top: 10px; }
 
 
 	a { color: var(--fg); text-decoration: none; }
@@ -579,6 +577,16 @@ const styles = `
 	${PLACE_SEARCH_CSS}
 
 	${settingsHome.SETTINGS_HOME_CSS}
+
+	/* The About tab: Check now and Update now side by side */
+	.update-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+	.update-buttons { align-items: center; }
+	.update-buttons .glass-block { flex: 1 1 12em; width: auto; margin: 0; }
+	.update-buttons + .hint, #apply + .hint { flex-basis: 100%; }
+
+	/* Its release notes: each part side by side when there's room */
+	#notes-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(20em, 1fr)); gap: 1.5em; }
+	.notes-part h3 { margin: 0 0 0.6em; font-size: 1em; }
 
 	/* Location Service's own boxes, under "Set it myself" */
 	.location-manual { margin-top: 14px; }
@@ -2099,6 +2107,763 @@ function backgroundPanel(settings) {
 	return { backgroundBox, glassBox, script };
 }
 
+// The About tab's updates. Until v2 they were a page of their own,
+// /updates; that address now opens the tab:
+//
+//   aboutBox    which OmniCore this is: version, port, data folder, and
+//               since when it's been running
+//   updatesBox  what the last check found, Check now, Update now, and the
+//               install followed through OmniCore restarting
+//   notesBox    the release notes, filled in after the page has opened
+//               from /updates/notes, so opening Settings never waits on
+//               GitHub
+//
+// A development build (npm start from a clone, or a :dev image) isn't a
+// release: there's nothing for it to be compared with, so it has no
+// checking, only what's in it. Its version is the source's own.
+async function updatesPanel() {
+	const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
+	const last = updateStore.lastResult(running);
+	const offered = Boolean(last.updateAvailable && last.latestVersion);
+	const dev = omnicoreVersion.isDevBuild();
+
+	const [since, readiness] = await Promise.all([
+		dev ? Promise.resolve(null) : coreUpdater.runningSince(),
+		offered ? coreUpdater.applyReadiness() : Promise.resolve(null)
+	]);
+
+	// An update already under way when the page opened -- started by
+	// the scheduler, or from another tab. The page picks it up and
+	// follows it rather than offering to start a second one.
+	const underWay = coreUpdater.currentProgress().busy;
+
+	const when = (iso) => (iso ? localTime(iso) : "Unknown");
+
+	const status = dev
+		? `<p class="lede">A development build doesn't check for updates. Its notes below say what's in it, and what isn't released yet.</p>`
+		: !last.lastCheckedAt
+		? `<p class="lede">No check has run yet.</p>`
+		: !last.lastCheckSucceeded
+		? `<p class="lede">Last check failed: ${escapeHtml(
+				last.lastCheckError || "unknown error"
+		  )}</p>`
+		: offered
+		? `<p class="lede update-ready"><strong>Version ${escapeHtml(
+				last.latestVersion
+		  )} is available.</strong> It installs on its own, usually within six hours, or you can install it now.</p>`
+		: `<p class="lede">This is the newest version.</p>`;
+
+	// Only when there's something to install. Without the Docker
+	// socket it's there but can't be pressed, with the reason under it,
+	// so it's clear why the update hasn't happened rather than looking
+	// forgotten.
+	const applyButton = !offered
+		? ""
+		: readiness && readiness.ready
+		? `<button class="glass glass-block" id="apply">Update to ${escapeHtml(
+				last.latestVersion
+		  )} now</button>`
+		: `<button class="glass glass-block" id="apply" disabled>Update to ${escapeHtml(
+				last.latestVersion
+		  )} now</button>
+		  <span class="hint">${escapeHtml(
+				(readiness && readiness.reason) || "This OmniCore can't install updates itself."
+		  )}</span>`;
+
+	const aboutBox = `
+		<div class="segment c2">
+			<h2>OmniCore</h2>
+			<div class="fact"><span>Version</span><span>OmniCore ${versionHtml()}</span></div>
+			<div class="fact"><span>Port</span><span>${ADMIN_PORT}</span></div>
+			<div class="fact"><span>Data folder</span><span>${escapeHtml(paths.dataDir())}</span></div>
+			${dev ? "" : `<div class="fact"><span>Running since</span><span>${when(since)}</span></div>`}
+			<div class="button-row">
+				<a class="glass" id="about-link" href="#">System info</a>
+			</div>
+		</div>`;
+
+	const updatesBox = `
+		<div class="segment c4">
+			<h2>Updates</h2>
+			${status}
+			${
+				dev
+					? ""
+					: `<p class="hint">Last checked: ${when(last.lastCheckedAt)}</p>
+			<div class="update-buttons">
+				<button class="glass glass-block" id="check">Check now</button>
+				${applyButton}
+			</div>
+			<p class="status" id="check-status"></p>
+
+			<div class="update-progress working" id="progress" hidden aria-live="polite">
+				<span class="update-progress-dot"></span>
+				<div>
+					<strong id="progress-text"></strong>
+					<span class="hint" id="progress-hint"></span>
+					<button class="glass glass-block" id="progress-action" hidden></button>
+				</div>
+			</div>`
+			}
+		</div>`;
+
+	const notesBox = `
+		<div class="segment c6" id="release-notes">
+			<h2>Release notes</h2>
+			<div id="notes-body" aria-live="polite"><p class="hint">Loading the notes...</p></div>
+		</div>`;
+
+	// The notes, fetched once the page is up
+	const notesScript = `
+		(async function () {
+			var box = document.getElementById("notes-body");
+			try {
+				var response = await fetch("/updates/notes", { cache: "no-store" });
+				var data = await response.json();
+				box.innerHTML = data.sections.map(function (section) {
+					return '<section class="notes-part"><h3>' + section.heading + "</h3>" + section.html + "</section>";
+				}).join("");
+			} catch (error) {
+				box.innerHTML = '<p class="hint">The notes couldn\\'t be loaded.</p>';
+			}
+		})();
+	`;
+
+	// Nothing about checking or installing on a development build
+	const script = notesScript + (dev ? "" : `
+	(function () {
+		var checkButton = document.getElementById("check");
+		var applyButton = document.getElementById("apply");
+		var checkStatus = document.getElementById("check-status");
+
+		checkButton.addEventListener("click", async function () {
+			checkButton.disabled = true;
+			checkStatus.className = "status";
+			checkStatus.textContent = "Checking...";
+
+			try {
+				const response = await fetch("/updates/check", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: "{}"
+				});
+				const data = await response.json();
+
+				if (!response.ok) {
+					checkStatus.className = "status bad";
+					checkStatus.textContent = data.error || "Couldn't reach GitHub.";
+					checkButton.disabled = false;
+					return;
+				}
+
+				// Reload rather than patching the page: a check can
+				// change the status line, both changelog sections and
+				// the timestamps at once, and re-rendering is simpler
+				// than keeping four things in sync by hand.
+				location.reload();
+			} catch (error) {
+				checkStatus.className = "status bad";
+				checkStatus.textContent = "Couldn't reach GitHub.";
+				checkButton.disabled = false;
+			}
+		});
+
+		// -------------------------------------------------------------
+		// Update now
+		//
+		// Three stages, each watched a different way:
+		//
+		//   1. Downloading. This OmniCore is still here and says how
+		//      it's going at /updates/progress.
+		//   2. Restarting. This OmniCore stops answering, or starts
+		//      answering as a different start of OmniCore (bootId).
+		//   3. Coming up. The new version answers /version, but isn't
+		//      kept until Docker calls it healthy -- until then it can
+		//      still be rolled back, and the page waits to see which.
+		//
+		// /version is open on purpose: the restart signs everyone out.
+		// -------------------------------------------------------------
+		var fromVersion = ${JSON.stringify(running)};
+		var target = ${JSON.stringify(last.latestVersion || "")};
+		var bootId = ${JSON.stringify(BOOT_ID)};
+
+		var progressBox = document.getElementById("progress");
+		var progressText = document.getElementById("progress-text");
+		var progressHint = document.getElementById("progress-hint");
+		var progressAction = document.getElementById("progress-action");
+
+		// Longest the page waits for OmniCore to come back before
+		// saying something's off. A restart is normally well under a
+		// minute; a rollback adds at most another ninety seconds.
+		var GIVE_UP_MS = 5 * 60 * 1000;
+
+		function show(kind, text, hint, action) {
+			progressBox.hidden = false;
+			progressBox.className = "update-progress " + kind;
+			progressText.textContent = text;
+			progressHint.textContent = hint || "";
+
+			if (action) {
+				progressAction.hidden = false;
+				progressAction.textContent = action.label;
+				progressAction.onclick = action.run;
+			} else {
+				progressAction.hidden = true;
+				progressAction.onclick = null;
+			}
+		}
+
+		// Both buttons stay off while an update runs -- a check or a
+		// second update in the middle of one would only confuse things
+		function setButtons(enabled) {
+			checkButton.disabled = !enabled;
+			if (applyButton && !applyButton.hasAttribute("data-unready")) {
+				applyButton.disabled = !enabled;
+			}
+		}
+
+		function wait(ms) {
+			return new Promise(function (resolve) { setTimeout(resolve, ms); });
+		}
+
+		// A JSON answer, or a throw for anything else. A signed-out
+		// OmniCore answers a protected address with the sign-in page
+		// (HTML), which counts as "not the OmniCore that was here".
+		async function getJson(url) {
+			const response = await fetch(url, { cache: "no-store" });
+			const type = response.headers.get("content-type") || "";
+
+			if (!response.ok || type.indexOf("application/json") === -1) {
+				throw new Error("Not answering");
+			}
+
+			return response.json();
+		}
+
+		async function follow() {
+			setButtons(false);
+			show(
+				"working",
+				target ? "Downloading " + target + "..." : "Installing the update...",
+				"OmniCore keeps running while it downloads. This can take a few minutes on a slow connection."
+			);
+
+			// 1. Downloading, while this OmniCore is still the one answering.
+			// Not answering counts as "it's restarting" once it said it
+			// was switching -- before that, only after a few misses in a
+			// row, so a dropped request on a busy network isn't mistaken
+			// for the restart.
+			var lastPhase = "downloading";
+			var misses = 0;
+
+			while (true) {
+				var progress;
+
+				try {
+					progress = await getJson("/updates/progress");
+					misses = 0;
+				} catch (error) {
+					misses += 1;
+
+					if (lastPhase === "switching" || misses >= 3) {
+						break; // gone: it's restarting
+					}
+
+					await wait(2000);
+					continue;
+				}
+
+				lastPhase = progress.phase;
+
+				if (progress.phase === "failed") {
+					show("bad", "The update couldn't be installed.", progress.error || "");
+					setButtons(true);
+					return;
+				}
+
+				if (!progress.busy) {
+					// Finished without swapping: there was nothing newer
+					// to download after all
+					show(
+						"bad",
+						"Nothing was installed.",
+						progress.note || "OmniCore is already running the newest version."
+					);
+					setButtons(true);
+					return;
+				}
+
+				if (progress.phase === "switching") {
+					show(
+						"working",
+						"Switching to " + (target || "the new version") + "...",
+						"OmniCore restarts now. Screens go blank for a moment, and this page reconnects on its own."
+					);
+				}
+
+				await wait(2000);
+			}
+
+			// 2 and 3. Restarting, then coming up
+			show(
+				"working",
+				"Restarting...",
+				"Waiting for OmniCore to come back. This usually takes under a minute."
+			);
+
+			var started = Date.now();
+
+			while (Date.now() - started < GIVE_UP_MS) {
+				await wait(3000);
+
+				var answer;
+
+				try {
+					answer = await getJson("/version");
+				} catch (error) {
+					continue; // still down
+				}
+
+				if (answer.bootId === bootId) {
+					// Still the old one. Either it hasn't been stopped yet,
+					// or the swap never started -- which its progress says
+					var still = null;
+
+					try {
+						still = await getJson("/updates/progress");
+					} catch (error) {
+						// Not signed in any more, or just busy: keep waiting
+					}
+
+					if (still && still.phase === "failed") {
+						show("bad", "The update couldn't be installed.", still.error || "");
+						setButtons(true);
+						return;
+					}
+
+					continue;
+				}
+
+				if (answer.version === fromVersion) {
+					show(
+						"bad",
+						(target || "The new version") + " didn't start properly, so OmniCore went back to " + fromVersion + ".",
+						"Nothing was lost. What went wrong is in the log of the omnicore-updater-... container on the server (docker ps -a lists it). You'll need to sign in again.",
+						{ label: "Sign in", run: function () { location.reload(); } }
+					);
+					return;
+				}
+
+				if (answer.health === "healthy" || answer.health === null) {
+					show(
+						"good",
+						"Updated to " + answer.version + ".",
+						"The restart signed you out, so sign in again to carry on.",
+						{ label: "Sign in", run: function () { location.reload(); } }
+					);
+					return;
+				}
+
+				show(
+					"working",
+					"Starting " + answer.version + "...",
+					"Making sure it came up properly. If it didn't, the old version is put back on its own."
+				);
+			}
+
+			show(
+				"bad",
+				"This is taking longer than it should.",
+				"Reload this page in a minute. If OmniCore doesn't come back, check it on the server with: docker ps -a",
+				{ label: "Reload", run: function () { location.reload(); } }
+			);
+		}
+
+		if (applyButton) {
+			if (applyButton.disabled) {
+				applyButton.setAttribute("data-unready", "");
+			}
+
+			applyButton.addEventListener("click", async function () {
+				const go = await confirmDialog({
+					title: "Update to " + target + "?",
+					text:
+						"OmniCore downloads " + target + ", then restarts on it. Screens go blank " +
+						"for about a minute and you'll be signed out. If the new version doesn't " +
+						"start properly, the current one is put back automatically.",
+					confirm: "Update now"
+				});
+
+				if (!go) return;
+
+				setButtons(false);
+				checkStatus.className = "status";
+				checkStatus.textContent = "";
+
+				try {
+					const response = await fetch("/updates/apply", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ version: target })
+					});
+					const data = await response.json();
+
+					// Another tab or the scheduler got there first: follow
+					// that one instead
+					if (!response.ok && !data.busy) {
+						checkStatus.className = "status bad";
+						checkStatus.textContent = data.error || "Couldn't start the update.";
+						setButtons(true);
+						return;
+					}
+				} catch (error) {
+					checkStatus.className = "status bad";
+					checkStatus.textContent = "Couldn't reach OmniCore.";
+					setButtons(true);
+					return;
+				}
+
+				follow();
+			});
+		}
+
+		${underWay ? "follow();" : ""}
+
+	})();
+	`);
+
+	return { aboutBox, updatesBox, notesBox, script, updateReady: offered };
+}
+
+// The release notes for the About tab, as headings and HTML, in the order
+// they're shown: what a newer version brings, what isn't released yet (a
+// development build only), and what's in this one
+async function releaseNotes() {
+	const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
+	const last = updateStore.lastResult(running);
+	const offered = Boolean(last.updateAvailable && last.latestVersion);
+	const dev = omnicoreVersion.isDevBuild();
+	const shown = omnicoreVersion.displayVersion();
+
+	const [currentNotes, upcomingNotes] = await Promise.all([
+		dev
+			? Promise.resolve(shown.number ? coreUpdater.localChangelogEntry(shown.number) : null)
+			: coreUpdater.fetchChangelogEntry(`v${running}`),
+		offered
+			? coreUpdater.fetchChangelogEntry(`v${last.latestVersion}`)
+			: Promise.resolve(null)
+	]);
+
+	// A development build of a branch with work not in a release yet
+	// (v2, say) shows that too, above its version's own notes. Read from
+	// the "## Unreleased" section of its own CHANGELOG.md, and only on a
+	// development build: a release has none.
+	const unreleasedNotes = dev ? coreUpdater.localChangelogEntry("Unreleased") : null;
+
+	const part = (heading, notes, fallback) => ({
+		heading: escapeHtml(heading),
+		html: notes
+			? `<div class="changelog">${renderNotes(notes)}</div>`
+			: `<p class="lede">${escapeHtml(fallback)}</p>`
+	});
+
+	return [
+		offered ? part(`What's new in ${last.latestVersion}`, upcomingNotes, "Release notes for that version couldn't be fetched.") : null,
+		unreleasedNotes ? part("Not released yet", unreleasedNotes, "") : null,
+		part(
+			`What's in ${dev ? shown.number || "this build" : running}`,
+			currentNotes,
+			dev
+				? "This build's CHANGELOG.md has no notes for its version."
+				: "Release notes for this version couldn't be fetched."
+		)
+	].filter(Boolean);
+}
+
+// The General tab's Place search (since v2 it had a page of its own; it's
+// on the settings home now, and /place-search opens the tab). Which
+// service a "Search for a city" box asks, the keys for the ones that need
+// one, what each service is like, and a box to try a search. See
+// place-search.js.
+//
+//   placeBox      Primary, Secondary, the warning, Try it
+//   keysBox       a row per service that takes a key: whether one is
+//                 saved (never the key itself), a box to type a new one,
+//                 Remove
+//   servicesBox   one line on each service
+//
+// Saved as it changes, like the rest of the settings home: a choice when
+// it's picked, a key when its box is left.
+function placeSearchPanel(settings) {
+	const { primary, secondary } = placeSearch.chosen(settings);
+	const services = placeSearch.servicesForPage(settings);
+	const warning = placeSearch.warningFor(settings);
+
+	const option = (service, picked) =>
+		`<option value="${escapeHtml(service.id)}"${picked ? " selected" : ""}>${escapeHtml(service.name)}${
+			service.key ? ` (needs ${escapeHtml(service.key === "username" ? "a username" : "an API key")})` : ""
+		}</option>`;
+
+	const placeholder = (service) =>
+		service.keySaved
+			? `Saved. Type a new ${service.key === "username" ? "username" : "key"} to replace it`
+			: service.key === "username"
+			? "Your GeoNames username"
+			: "Paste the API key";
+
+	const keyRows = services
+		.filter((service) => service.key)
+		.map(
+			(service) => `
+			<div class="field key-row" data-key-row="${escapeHtml(service.id)}">
+				<label for="key-${escapeHtml(service.id)}">${escapeHtml(service.name)}</label>
+				<div class="search-row">
+					${passwordField(
+						`<input type="password" id="key-${escapeHtml(service.id)}" data-key-for="${escapeHtml(service.id)}" ` +
+							`autocomplete="off" spellcheck="false" placeholder="${escapeHtml(placeholder(service))}">`
+					)}
+					<button type="button" class="glass" data-remove-key="${escapeHtml(service.id)}"
+						style="flex:none;padding:0.75em 1.1em"${service.keySaved ? "" : " hidden"}>Remove</button>
+				</div>
+				<div class="help">
+					<span class="key-state ${service.keySaved ? "saved" : ""}">${service.keySaved ? "Saved" : "Not saved"}</span>
+					· <a href="${escapeHtml(service.signUp)}" target="_blank" rel="noopener noreferrer">Get one</a>
+				</div>
+			</div>`
+		)
+		.join("");
+
+	const aboutList = services
+		.map(
+			(service) => `
+			<div class="service-row">
+				<strong>${escapeHtml(service.name)}</strong>
+				<span>${escapeHtml(service.about)}${
+					service.terms
+						? ` <a href="${escapeHtml(service.terms)}" target="_blank" rel="noopener noreferrer">Its rules</a>`
+						: ""
+				}</span>
+			</div>`
+		)
+		.join("");
+
+	const placeBox = `
+		<div class="segment c2" id="place-search">
+			<h2>Place search</h2>
+			<p class="lede">
+				Where a search for a city looks: in the Location Service, on a
+				widget's page and in the setup wizard. Only what you type is sent,
+				to the service picked here, when you press Search.
+			</p>
+			<p class="place-warning" id="place-warning"${warning ? "" : " hidden"}>${escapeHtml(warning || "")}</p>
+
+			<div class="field">
+				<label for="primary">Primary</label>
+				<select id="primary">
+					${services.map((service) => option(service, service.id === primary.id)).join("")}
+				</select>
+				<div class="help">Asked first.</div>
+			</div>
+
+			<div class="field">
+				<label for="secondary">Secondary</label>
+				<select id="secondary">
+					<option value="none"${secondary ? "" : " selected"}>None</option>
+					${services.map((service) => option(service, secondary && service.id === secondary.id)).join("")}
+				</select>
+				<div class="help">Asked when the Primary finds nothing, can't be reached, refuses its key or has none saved.</div>
+			</div>
+			<p class="status" id="place-status" aria-live="polite"></p>
+
+			<div class="field">
+				<label for="try">Try it</label>
+				<div class="search-row">
+					<input type="text" id="try" placeholder="Bekkestua">
+					<button type="button" class="glass" id="try-search" style="flex:none;padding:0.75em 1.1em">Search</button>
+				</div>
+				<div id="try-results"></div>
+			</div>
+		</div>`;
+
+	const keysBox = `
+		<div class="segment c3">
+			<h2>Place search keys</h2>
+			<p class="lede">
+				For the services that need one. Kept by OmniCore and only ever sent
+				to the service it belongs to; once saved, it isn't shown again.
+			</p>
+			${keyRows}
+		</div>`;
+
+	const servicesBox = `
+		<div class="segment c3">
+			<h2>The services</h2>
+			<div class="service-list">${aboutList}</div>
+		</div>`;
+
+	const script = `
+	(function () {
+		// What each service needs, for the questions below. Whether a key
+		// is saved, never the key.
+		let SERVICES = ${JSON.stringify(services).replace(/</g, "\\u003c")};
+		const byId = function (id) {
+			return SERVICES.find(function (service) { return service.id === id; });
+		};
+
+		const primary = document.getElementById("primary");
+		const secondary = document.getElementById("secondary");
+		const status = document.getElementById("place-status");
+
+		// What came back from a save: the warning, and which keys are saved
+		function saved(answer) {
+			SERVICES = answer.services;
+			const warning = document.getElementById("place-warning");
+			warning.hidden = !answer.warning;
+			warning.textContent = answer.warning || "";
+
+			for (const service of SERVICES) {
+				const row = document.querySelector('[data-key-row="' + service.id + '"]');
+				if (!row) continue;
+				const box = row.querySelector("[data-key-for]");
+				const state = row.querySelector(".key-state");
+				box.value = "";
+				box.placeholder = service.keySaved
+					? "Saved. Type a new " + (service.key === "username" ? "username" : "key") + " to replace it"
+					: (service.key === "username" ? "Your GeoNames username" : "Paste the API key");
+				state.textContent = service.keySaved ? "Saved" : "Not saved";
+				state.classList.toggle("saved", service.keySaved);
+				row.querySelector("[data-remove-key]").hidden = !service.keySaved;
+			}
+		}
+
+		async function save(change) {
+			status.className = "status";
+			status.textContent = "";
+			try {
+				const response = await fetch("/place-search", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(change)
+				});
+				if (!response.ok) throw new Error();
+				saved(await response.json());
+				status.textContent = "Saved.";
+				return true;
+			} catch (error) {
+				status.className = "status bad";
+				status.textContent = "Couldn't save.";
+				return false;
+			}
+		}
+
+		// The Secondary can't be the Primary: that option is switched off
+		// there, and if it was picked, the Secondary becomes None
+		function matchSecondary() {
+			for (const option of secondary.options) {
+				option.disabled = option.value === primary.value;
+			}
+			if (secondary.value === primary.value) secondary.value = "none";
+		}
+
+		// Picking a service that needs a key, with none saved, asks for it,
+		// the same way a weather service does. No, or Cancel, puts the
+		// choice back. Resolves to the key, "" when none is needed, or null
+		// for no.
+		async function askForKey(select) {
+			const service = byId(select.value);
+			if (!service || !service.key || service.keySaved) return "";
+
+			const what = service.key === "username" ? "username" : "API key";
+			const yes = await confirmDialog({
+				title: "Do you have " + (service.key === "username" ? "a " : "an ") + service.name + " " + what + "?",
+				text: service.about,
+				confirm: "Yes",
+				cancel: "No"
+			});
+			return yes
+				? await askDialog({
+						title: "Your " + service.name + " " + what,
+						placeholder: service.key === "username" ? "Username" : "API key",
+						secret: true,
+						confirm: "Use it"
+				  })
+				: null;
+		}
+
+		async function picked(select) {
+			matchSecondary();
+			const key = await askForKey(select);
+
+			if (key === null) {
+				select.value = select.dataset.was;
+				matchSecondary();
+				return;
+			}
+
+			const change = { primary: primary.value, secondary: secondary.value };
+			if (key) {
+				change.keys = {};
+				change.keys[select.value] = key;
+			}
+
+			if (await save(change)) {
+				primary.dataset.was = primary.value;
+				secondary.dataset.was = secondary.value;
+			}
+		}
+
+		primary.dataset.was = primary.value;
+		secondary.dataset.was = secondary.value;
+		matchSecondary();
+
+		primary.addEventListener("change", function () { picked(primary); });
+		secondary.addEventListener("change", function () { picked(secondary); });
+
+		// A key typed into its box is saved when the box is left (or on
+		// Enter)
+		for (const box of document.querySelectorAll("[data-key-for]")) {
+			box.addEventListener("change", function () {
+				if (!box.value.trim()) return;
+				const keys = {};
+				keys[box.dataset.keyFor] = box.value.trim();
+				save({ keys: keys });
+			});
+		}
+
+		for (const button of document.querySelectorAll("[data-remove-key]")) {
+			button.addEventListener("click", async function () {
+				const service = byId(button.dataset.removeKey);
+				const sure = await confirmDialog({
+					title: "Remove the " + service.name + " key?",
+					text: "OmniCore forgets it. Searches that need it go to the Secondary, if there is one.",
+					confirm: "Remove",
+					danger: true
+				});
+				if (sure) save({ removeKeys: [service.id] });
+			});
+		}
+
+		function trySearch() {
+			findPlaces(
+				document.getElementById("try").value,
+				document.getElementById("try-results"),
+				function () {}
+			);
+		}
+
+		document.getElementById("try-search").addEventListener("click", trySearch);
+		document.getElementById("try").addEventListener("keydown", function (event) {
+			if (event.key === "Enter") {
+				event.preventDefault();
+				trySearch();
+			}
+		});
+	})();
+	`;
+
+	return { placeBox, keysBox, servicesBox, script };
+}
+
 // The routes that take a file as it is rather than JSON. See the JSON
 // check in startAdminFace.
 const RAW_UPLOADS = ["/background/upload", "/background/still"];
@@ -2121,7 +2886,7 @@ function startAdminFace() {
 
 	// Which OmniCore is answering: its version, a name for this particular
 	// start of it, and how healthy Docker thinks it is. Open, because the
-	// Updates page asks it while an update restarts OmniCore -- and a
+	// About tab asks it while an update restarts OmniCore -- and a
 	// restart signs everyone out (sessions live in memory), so by the
 	// time the new version answers, the page asking isn't signed in any
 	// more. Nothing here is secret: the About face shows the version and
@@ -2254,8 +3019,6 @@ function startAdminFace() {
 	app.get("/", async (req, res) => {
 		const settings = readSettings();
 		const installedFont = fontService.installedFont();
-		const update = updateStore.lastResult(process.env.OMNICORE_VERSION);
-		const dev = omnicoreVersion.isDevBuild();
 
 		// Location: show what OmniCore currently believes, so it's
 		// obvious whether automatic detection actually worked
@@ -2361,23 +3124,8 @@ function startAdminFace() {
 				</div>
 			</div>`;
 
-		// Place search: which services, at a glance. The keys and the
-		// rest are on its own page.
-		const placeChoice = placeSearch.chosen(settings);
-		const placeWarning = placeSearch.warningFor(settings);
-		const placeBox = `
-			<div class="segment c2">
-				<h2>Place search</h2>
-				<p class="lede">Where a search for a city is sent.</p>
-				<div class="fact"><span>Primary</span><span>${escapeHtml(placeChoice.primary.name)}</span></div>
-				<div class="fact"><span>Secondary</span><span>${
-					placeChoice.secondary ? escapeHtml(placeChoice.secondary.name) : "None"
-				}</span></div>
-				${placeWarning ? `<p class="place-warning">${escapeHtml(placeWarning)}</p>` : ""}
-				<div class="button-row">
-					<a class="glass" href="/place-search">Change</a>
-				</div>
-			</div>`;
+		// Place search, all of it: the choice, the keys, the services
+		const places = placeSearchPanel(settings);
 
 		// --- Appearance -----------------------------------------------------
 
@@ -2486,59 +3234,16 @@ function startAdminFace() {
 
 		// --- About ----------------------------------------------------------
 
-		const aboutBox = `
-			<div class="segment c2">
-				<h2>OmniCore</h2>
-				<div class="fact"><span>Version</span><span>OmniCore ${versionHtml()}</span></div>
-				<div class="fact"><span>Port</span><span>${ADMIN_PORT}</span></div>
-				<div class="fact"><span>Data folder</span><span>${escapeHtml(paths.dataDir())}</span></div>
-				<div class="button-row">
-					<a class="glass" id="about-link" href="#">System info</a>
-				</div>
-			</div>`;
-
-		// The updates: what the last check found, Check now, and the way
-		// to install one. Installing is followed on the Updates page, which
-		// shows it all the way through OmniCore restarting.
-		const updateLine = dev
-			? "A development build doesn't check for updates. See what's in it, and what isn't released yet."
-			: !update.lastCheckedAt
-			? "No check has run yet."
-			: !update.lastCheckSucceeded
-			? `The last check failed: ${update.lastCheckError || "unknown error"}`
-			: update.updateAvailable
-			? `Version ${update.latestVersion} is available. It installs on its own, usually within six hours, or you can install it now.`
-			: "This is the newest version.";
-
-		const updatesBox = `
-			<div class="segment c4">
-				<h2>Updates</h2>
-				<p class="lede${update.updateAvailable ? " update-ready" : ""}">${escapeHtml(updateLine)}</p>
-				${
-					dev || !update.lastCheckedAt
-						? ""
-						: `<p class="hint">Last checked: ${localTime(update.lastCheckedAt)}</p>`
-				}
-				<div class="button-row">
-					${
-						update.updateAvailable
-							? `<a class="glass" href="/updates">Update to ${escapeHtml(update.latestVersion)}</a>`
-							: ""
-					}
-					${dev ? "" : `<button type="button" class="glass" id="check-now">Check now</button>`}
-					<a class="glass" href="/updates">${dev ? "What's in this build" : "Release notes"}</a>
-				</div>
-				<p class="status" id="check-status" aria-live="polite"></p>
-			</div>`;
+		const updates = await updatesPanel();
 
 		const body = settingsHome.homeHtml(
 			{
-				general: locationBox + placeBox,
+				general: locationBox + places.placeBox + places.keysBox + places.servicesBox,
 				appearance: glassParts.backgroundBox + modeBox + cornerBox + glassParts.glassBox + textBox,
 				resources: resourcesPane,
-				about: aboutBox + updatesBox
+				about: updates.aboutBox + updates.updatesBox + updates.notesBox
 			},
-			update.updateAvailable
+			updates.updateReady
 		) + `
 			<div class="modal-backdrop" id="font-modal" hidden>
 				<div class="modal">
@@ -2568,6 +3273,8 @@ function startAdminFace() {
 			localTimeScript +
 			settingsHome.HOME_SCRIPT +
 			glassParts.script +
+			updates.script +
+			places.script +
 			`
 			// --- Pop-ups --------------------------------------------
 			function openModal(id) {
@@ -2607,30 +3314,6 @@ function startAdminFace() {
 				event.preventDefault();
 				omniGo(faceUrl(1303));
 			});
-
-			const checkNow = document.getElementById("check-now");
-			if (checkNow) {
-				checkNow.addEventListener("click", async function () {
-					const status = document.getElementById("check-status");
-					checkNow.disabled = true;
-					status.className = "status";
-					status.textContent = "Checking...";
-					try {
-						const response = await fetch("/updates/check", {
-							method: "POST",
-							headers: { "Content-Type": "application/json" },
-							body: "{}"
-						});
-						const data = await response.json();
-						if (!response.ok) throw new Error(data.error || "Couldn't reach GitHub.");
-						location.reload();
-					} catch (error) {
-						status.className = "status bad";
-						status.textContent = error.message;
-						checkNow.disabled = false;
-					}
-				});
-			}
 
 			// --- Location -------------------------------------------
 			const enabled = document.getElementById("enabled");
@@ -3076,284 +3759,10 @@ function startAdminFace() {
 	// Which service a "Search for a city" box asks, and the keys for the
 	// ones that need one. See place-search.js. Reached from the settings
 	// page.
+	// Place search had a page of its own until the settings home had tabs;
+	// that address now opens the General tab
 	app.get("/place-search", (req, res) => {
-		const settings = readSettings();
-		const { primary, secondary } = placeSearch.chosen(settings);
-		const services = placeSearch.servicesForPage(settings);
-		const warning = placeSearch.warningFor(settings);
-
-		const option = (service, picked) =>
-			`<option value="${escapeHtml(service.id)}"${picked ? " selected" : ""}>${escapeHtml(service.name)}${
-				service.key ? ` (needs ${escapeHtml(service.key === "username" ? "a username" : "an API key")})` : ""
-			}</option>`;
-
-		// A row for each service that takes a key. The key itself is never
-		// put on the page: only whether one is saved. Typing a new one
-		// replaces it; Remove forgets it.
-		const keyRows = services
-			.filter((service) => service.key)
-			.map(
-				(service) => `
-				<div class="field key-row" data-key-row="${escapeHtml(service.id)}">
-					<label for="key-${escapeHtml(service.id)}">${escapeHtml(service.name)}</label>
-					<div class="search-row">
-						${passwordField(
-							`<input type="password" id="key-${escapeHtml(service.id)}" data-key-for="${escapeHtml(service.id)}" ` +
-								`autocomplete="off" spellcheck="false" placeholder="${
-									service.keySaved
-										? `Saved. Type a new ${service.key === "username" ? "username" : "key"} to replace it`
-										: service.key === "username"
-										? "Your GeoNames username"
-										: "Paste the API key"
-								}">`
-						)}
-						${
-							service.keySaved
-								? `<button type="button" class="glass" data-remove-key="${escapeHtml(service.id)}" style="flex:none;padding:0.75em 1.1em">Remove</button>`
-								: ""
-						}
-					</div>
-					<div class="help">
-						<span class="key-state ${service.keySaved ? "saved" : ""}">${service.keySaved ? "Saved" : "Not saved"}</span>
-						· <a href="${escapeHtml(service.signUp)}" target="_blank" rel="noopener noreferrer">Get one</a>
-					</div>
-				</div>`
-			)
-			.join("");
-
-		const aboutList = services
-			.map(
-				(service) => `
-				<div class="service-row">
-					<strong>${escapeHtml(service.name)}</strong>
-					<span>${escapeHtml(service.about)}${
-						service.terms
-							? ` <a href="${escapeHtml(service.terms)}" target="_blank" rel="noopener noreferrer">Its rules</a>`
-							: ""
-					}</span>
-				</div>`
-			)
-			.join("");
-
-		const body = `
-			<div class="settings-head">
-				<h1>Place search</h1>
-			</div>
-
-			<div class="bento">
-				<div class="segment">
-					<p class="lede" style="margin:0">
-						Where &ldquo;Search for a city&rdquo; looks places up: in the
-						Location Service, on a widget's page and in the setup wizard.
-						Only what you type is sent, to the service picked here, and only
-						when you press Search. Nothing about where OmniCore is goes
-						with it.
-					</p>
-					<p class="place-warning" id="warning"${warning ? "" : " hidden"}>${escapeHtml(warning || "")}</p>
-				</div>
-
-				<div class="bento-row two top">
-					<div class="segment">
-						<h2>Primary</h2>
-						<p class="lede">Asked first.</p>
-						<select id="primary">
-							${services.map((service) => option(service, service.id === primary.id)).join("")}
-						</select>
-					</div>
-
-					<div class="segment">
-						<h2>Secondary</h2>
-						<p class="lede">
-							Asked when the Primary finds nothing, can't be reached,
-							refuses its key or has none saved.
-						</p>
-						<select id="secondary">
-							<option value="none"${secondary ? "" : " selected"}>None</option>
-							${services.map((service) => option(service, secondary && service.id === secondary.id)).join("")}
-						</select>
-					</div>
-				</div>
-
-				<div class="bento-row two top">
-					<div class="segment">
-						<h2>Keys</h2>
-						<p class="lede">
-							For the services that need one. Kept by OmniCore and only
-							ever sent to the service it belongs to; once saved, it isn't
-							shown again.
-						</p>
-						${keyRows}
-					</div>
-
-					<div class="segment">
-						<h2>The services</h2>
-						<div class="service-list">${aboutList}</div>
-					</div>
-				</div>
-
-				<div class="segment">
-					<h2>Try it</h2>
-					<p class="lede">Searches with what's saved.</p>
-					<div class="search-row">
-						<input type="text" id="try" placeholder="Bekkestua">
-						<button type="button" class="glass" id="try-search" style="flex:none;padding:0.75em 1.25em">Search</button>
-					</div>
-					<div id="try-results"></div>
-				</div>
-			</div>
-
-			<div class="page-dock">
-				<div class="dock">
-					<button type="button" id="save">Save</button>
-				</div>
-				<p class="status" id="status"></p>
-			</div>`;
-
-		const script = `
-			${PLACE_SEARCH_SCRIPT}
-
-			// What each service needs, for the questions below. Whether a key
-			// is saved, never the key.
-			const SERVICES = ${JSON.stringify(services).replace(/</g, "\\u003c")};
-			const byId = function (id) {
-				return SERVICES.find(function (service) { return service.id === id; });
-			};
-
-			const primary = document.getElementById("primary");
-			const secondary = document.getElementById("secondary");
-			const removed = [];
-
-			// The Secondary can't be the Primary: that option is switched
-			// off there, and if it was picked, the Secondary becomes None
-			function matchSecondary() {
-				for (const option of secondary.options) {
-					option.disabled = option.value === primary.value;
-				}
-				if (secondary.value === primary.value) secondary.value = "none";
-			}
-
-			// Picking a service that needs a key, with none saved or typed,
-			// asks for it, the same way a weather service does. No, or
-			// Cancel, puts the choice back.
-			async function askForKey(select) {
-				const service = byId(select.value);
-				const box = service && document.querySelector('[data-key-for="' + service.id + '"]');
-
-				if (!service || !service.key || service.keySaved || (box && box.value.trim())) {
-					select.dataset.was = select.value;
-					return;
-				}
-
-				const what = service.key === "username" ? "username" : "API key";
-				const yes = await confirmDialog({
-					title: "Do you have " + (service.key === "username" ? "a " : "an ") + service.name + " " + what + "?",
-					text: service.about,
-					confirm: "Yes",
-					cancel: "No"
-				});
-				const key = yes
-					? await askDialog({
-							title: "Your " + service.name + " " + what,
-							placeholder: service.key === "username" ? "Username" : "API key",
-							secret: true,
-							confirm: "Use it"
-					  })
-					: null;
-
-				if (!key) {
-					select.value = select.dataset.was || "none";
-					matchSecondary();
-					return;
-				}
-
-				box.value = key;
-				select.dataset.was = select.value;
-			}
-
-			primary.dataset.was = primary.value;
-			secondary.dataset.was = secondary.value;
-			matchSecondary();
-
-			primary.addEventListener("change", async function () {
-				matchSecondary();
-				await askForKey(primary);
-				matchSecondary();
-			});
-			secondary.addEventListener("change", function () {
-				askForKey(secondary);
-			});
-
-			for (const button of document.querySelectorAll("[data-remove-key]")) {
-				button.addEventListener("click", async function () {
-					const service = byId(button.dataset.removeKey);
-					const sure = await confirmDialog({
-						title: "Remove the " + service.name + " key?",
-						text: "OmniCore forgets it when you save. Searches that need it go to the Secondary, if there is one.",
-						confirm: "Remove",
-						danger: true
-					});
-					if (!sure) return;
-					removed.push(service.id);
-					const row = button.closest("[data-key-row]");
-					row.querySelector(".key-state").textContent = "Removed when you save";
-					row.querySelector(".key-state").classList.remove("saved");
-					button.remove();
-				});
-			}
-
-			document.getElementById("save").addEventListener("click", async function () {
-				const button = this;
-				const status = document.getElementById("status");
-				const keys = {};
-
-				for (const box of document.querySelectorAll("[data-key-for]")) {
-					if (box.value.trim()) keys[box.dataset.keyFor] = box.value.trim();
-				}
-
-				button.disabled = true;
-				status.className = "status";
-				status.textContent = "";
-
-				try {
-					const response = await fetch("/place-search", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							primary: primary.value,
-							secondary: secondary.value,
-							keys: keys,
-							removeKeys: removed
-						})
-					});
-					if (!response.ok) throw new Error();
-					status.textContent = "Saved.";
-					// Drawn again, so what's saved is what's shown
-					setTimeout(function () { location.reload(); }, 600);
-				} catch (error) {
-					status.className = "status bad";
-					status.textContent = "Couldn't save.";
-					button.disabled = false;
-				}
-			});
-
-			function trySearch() {
-				findPlaces(
-					document.getElementById("try").value,
-					document.getElementById("try-results"),
-					function () {}
-				);
-			}
-
-			document.getElementById("try-search").addEventListener("click", trySearch);
-			document.getElementById("try").addEventListener("keydown", function (event) {
-				if (event.key === "Enter") {
-					event.preventDefault();
-					trySearch();
-				}
-			});
-		`;
-
-		res.send(page("Place search", body, script, "", "/", "Settings"));
+		res.redirect("/#general");
 	});
 
 	app.post("/place-search", (req, res) => {
@@ -4098,461 +4507,15 @@ function startAdminFace() {
 	// through the same coreUpdater.applyUpdate(), started on purpose. The
 	// page then follows it all the way: downloading, OmniCore restarting,
 	// and the new version coming up healthy (or being rolled back).
-	app.get("/updates", async (req, res) => {
-		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
-		const last = updateStore.lastResult(running);
-		const offered = Boolean(last.updateAvailable && last.latestVersion);
+	// The Updates page moved onto the settings home's About tab (v2)
+	app.get("/updates", (req, res) => {
+		res.redirect("/#about");
+	});
 
-		// A development build (npm start from a clone) isn't a release:
-		// there's nothing for it to be compared with, and it never started
-		// from an image, so the page leaves out everything about checking
-		// and shows only what's in it. Its version is the source's own.
-		const dev = omnicoreVersion.isDevBuild();
-		const shown = omnicoreVersion.displayVersion();
-
-		// Read, never checked live: opening a page should not cost a
-		// call to GitHub. The button below is how a check happens on
-		// purpose.
-		const [currentNotes, upcomingNotes, since, readiness] = await Promise.all([
-			dev
-				? Promise.resolve(shown.number ? coreUpdater.localChangelogEntry(shown.number) : null)
-				: coreUpdater.fetchChangelogEntry(`v${running}`),
-			offered
-				? coreUpdater.fetchChangelogEntry(`v${last.latestVersion}`)
-				: Promise.resolve(null),
-			dev ? Promise.resolve(null) : coreUpdater.runningSince(),
-			offered ? coreUpdater.applyReadiness() : Promise.resolve(null)
-		]);
-
-		// A development build of a branch with work not in a release yet
-		// (v2, say) shows that too, above its version's own notes: it's
-		// what the build has that the version number doesn't say. Read
-		// from the "## Unreleased" section of its own CHANGELOG.md, and
-		// only on a development build: a release has none.
-		const unreleasedNotes = dev
-			? coreUpdater.localChangelogEntry("Unreleased")
-			: null;
-
-		// An update already under way when the page opened -- started by
-		// the scheduler, or from another tab. The page picks it up and
-		// follows it rather than offering to start a second one.
-		const underWay = coreUpdater.currentProgress().busy;
-
-		const when = (iso) => (iso ? localTime(iso) : "Unknown");
-
-		const status = dev
-			? ""
-			: !last.lastCheckedAt
-			? `<p class="lede">No check has run yet.</p>`
-			: !last.lastCheckSucceeded
-			? `<p class="lede">Last check failed: ${escapeHtml(
-					last.lastCheckError || "unknown error"
-			  )}</p>`
-			: offered
-			? `<p class="lede"><strong>Version ${escapeHtml(
-					last.latestVersion
-			  )} is available.</strong> It installs on its own, usually within six hours, or you can install it now.</p>`
-			: `<p class="lede">This is the newest version.</p>`;
-
-		// Only when there's something to install. Without the Docker
-		// socket, or on a development build, it's there but can't be
-		// pressed, with the reason under it -- so it's clear why the
-		// update hasn't happened rather than looking forgotten.
-		const applyButton = !offered
-			? ""
-			: readiness && readiness.ready
-			? `<button class="glass glass-block" id="apply">Update to ${escapeHtml(
-					last.latestVersion
-			  )} now</button>`
-			: `<button class="glass glass-block" id="apply" disabled>Update to ${escapeHtml(
-					last.latestVersion
-			  )} now</button>
-			  <span class="hint">${escapeHtml(
-					(readiness && readiness.reason) || "This OmniCore can't install updates itself."
-			  )}</span>`;
-
-		// Side by side on a release (two segments, or three when a newer
-		// version's notes are shown too). On a development build always
-		// one above the other, whatever the screen: there's no checking to
-		// show beside the notes, so the Running segment is only a line, and
-		// a column of its own next to a long changelog would be mostly
-		// empty space.
-		const layout = dev ? "bento-row" : `bento-row ${offered ? "three" : "two"} top`;
-
-		const notesSection = (heading, notes, fallback) => `
-			<div class="segment">
-				<h2>${escapeHtml(heading)}</h2>
-				${
-					notes
-						? `<div class="changelog">${renderNotes(notes)}</div>`
-						: `<p class="lede">${escapeHtml(fallback)}</p>`
-				}
-			</div>`;
-
-		const body = `
-			<div class="settings-head">
-				<h1>Updates</h1>
-			</div>
-
-			<div class="bento">
-			<div class="${layout}">
-			<div class="segment">
-				<div class="field">
-					<strong>Running</strong>
-					<div class="stat-value" style="font-size:1.4em;margin-top:4px">
-						OmniCore ${versionHtml()}
-					</div>
-				</div>
-				${
-					dev
-						? ""
-						: `${status}
-				<div class="field">
-					<span class="hint">Last checked: ${when(last.lastCheckedAt)}</span>
-					<span class="hint">Running since: ${when(since)}</span>
-				</div>
-				<button class="glass glass-block" id="check">Check now</button>
-				${applyButton}
-				<p class="status" id="check-status"></p>
-
-				<div class="update-progress working" id="progress" hidden aria-live="polite">
-					<span class="update-progress-dot"></span>
-					<div>
-						<strong id="progress-text"></strong>
-						<span class="hint" id="progress-hint"></span>
-						<button class="glass glass-block" id="progress-action" hidden></button>
-					</div>
-				</div>`
-				}
-			</div>
-
-			${
-				offered
-					? notesSection(
-							`What's new in ${last.latestVersion}`,
-							upcomingNotes,
-							"Release notes for that version couldn't be fetched."
-					  )
-					: ""
-			}
-
-			${
-				unreleasedNotes
-					? notesSection("Not released yet", unreleasedNotes, "")
-					: ""
-			}
-
-			${notesSection(
-				`What's in ${dev ? shown.number || "this build" : running}`,
-				currentNotes,
-				dev
-					? "This build's CHANGELOG.md has no notes for its version."
-					: "Release notes for this version couldn't be fetched."
-			)}
-			</div>
-			</div>`;
-
-		// Nothing on a development build's page does anything
-		const script = dev ? "" : localTimeScript + `
-			var checkButton = document.getElementById("check");
-			var applyButton = document.getElementById("apply");
-			var checkStatus = document.getElementById("check-status");
-
-			checkButton.addEventListener("click", async function () {
-				checkButton.disabled = true;
-				checkStatus.className = "status";
-				checkStatus.textContent = "Checking...";
-
-				try {
-					const response = await fetch("/updates/check", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: "{}"
-					});
-					const data = await response.json();
-
-					if (!response.ok) {
-						checkStatus.className = "status bad";
-						checkStatus.textContent = data.error || "Couldn't reach GitHub.";
-						checkButton.disabled = false;
-						return;
-					}
-
-					// Reload rather than patching the page: a check can
-					// change the status line, both changelog sections and
-					// the timestamps at once, and re-rendering is simpler
-					// than keeping four things in sync by hand.
-					location.reload();
-				} catch (error) {
-					checkStatus.className = "status bad";
-					checkStatus.textContent = "Couldn't reach GitHub.";
-					checkButton.disabled = false;
-				}
-			});
-
-			// -------------------------------------------------------------
-			// Update now
-			//
-			// Three stages, each watched a different way:
-			//
-			//   1. Downloading. This OmniCore is still here and says how
-			//      it's going at /updates/progress.
-			//   2. Restarting. This OmniCore stops answering, or starts
-			//      answering as a different start of OmniCore (bootId).
-			//   3. Coming up. The new version answers /version, but isn't
-			//      kept until Docker calls it healthy -- until then it can
-			//      still be rolled back, and the page waits to see which.
-			//
-			// /version is open on purpose: the restart signs everyone out.
-			// -------------------------------------------------------------
-			var fromVersion = ${JSON.stringify(running)};
-			var target = ${JSON.stringify(last.latestVersion || "")};
-			var bootId = ${JSON.stringify(BOOT_ID)};
-
-			var progressBox = document.getElementById("progress");
-			var progressText = document.getElementById("progress-text");
-			var progressHint = document.getElementById("progress-hint");
-			var progressAction = document.getElementById("progress-action");
-
-			// Longest the page waits for OmniCore to come back before
-			// saying something's off. A restart is normally well under a
-			// minute; a rollback adds at most another ninety seconds.
-			var GIVE_UP_MS = 5 * 60 * 1000;
-
-			function show(kind, text, hint, action) {
-				progressBox.hidden = false;
-				progressBox.className = "update-progress " + kind;
-				progressText.textContent = text;
-				progressHint.textContent = hint || "";
-
-				if (action) {
-					progressAction.hidden = false;
-					progressAction.textContent = action.label;
-					progressAction.onclick = action.run;
-				} else {
-					progressAction.hidden = true;
-					progressAction.onclick = null;
-				}
-			}
-
-			// Both buttons stay off while an update runs -- a check or a
-			// second update in the middle of one would only confuse things
-			function setButtons(enabled) {
-				checkButton.disabled = !enabled;
-				if (applyButton && !applyButton.hasAttribute("data-unready")) {
-					applyButton.disabled = !enabled;
-				}
-			}
-
-			function wait(ms) {
-				return new Promise(function (resolve) { setTimeout(resolve, ms); });
-			}
-
-			// A JSON answer, or a throw for anything else. A signed-out
-			// OmniCore answers a protected address with the sign-in page
-			// (HTML), which counts as "not the OmniCore that was here".
-			async function getJson(url) {
-				const response = await fetch(url, { cache: "no-store" });
-				const type = response.headers.get("content-type") || "";
-
-				if (!response.ok || type.indexOf("application/json") === -1) {
-					throw new Error("Not answering");
-				}
-
-				return response.json();
-			}
-
-			async function follow() {
-				setButtons(false);
-				show(
-					"working",
-					target ? "Downloading " + target + "..." : "Installing the update...",
-					"OmniCore keeps running while it downloads. This can take a few minutes on a slow connection."
-				);
-
-				// 1. Downloading, while this OmniCore is still the one answering.
-				// Not answering counts as "it's restarting" once it said it
-				// was switching -- before that, only after a few misses in a
-				// row, so a dropped request on a busy network isn't mistaken
-				// for the restart.
-				var lastPhase = "downloading";
-				var misses = 0;
-
-				while (true) {
-					var progress;
-
-					try {
-						progress = await getJson("/updates/progress");
-						misses = 0;
-					} catch (error) {
-						misses += 1;
-
-						if (lastPhase === "switching" || misses >= 3) {
-							break; // gone: it's restarting
-						}
-
-						await wait(2000);
-						continue;
-					}
-
-					lastPhase = progress.phase;
-
-					if (progress.phase === "failed") {
-						show("bad", "The update couldn't be installed.", progress.error || "");
-						setButtons(true);
-						return;
-					}
-
-					if (!progress.busy) {
-						// Finished without swapping: there was nothing newer
-						// to download after all
-						show(
-							"bad",
-							"Nothing was installed.",
-							progress.note || "OmniCore is already running the newest version."
-						);
-						setButtons(true);
-						return;
-					}
-
-					if (progress.phase === "switching") {
-						show(
-							"working",
-							"Switching to " + (target || "the new version") + "...",
-							"OmniCore restarts now. Screens go blank for a moment, and this page reconnects on its own."
-						);
-					}
-
-					await wait(2000);
-				}
-
-				// 2 and 3. Restarting, then coming up
-				show(
-					"working",
-					"Restarting...",
-					"Waiting for OmniCore to come back. This usually takes under a minute."
-				);
-
-				var started = Date.now();
-
-				while (Date.now() - started < GIVE_UP_MS) {
-					await wait(3000);
-
-					var answer;
-
-					try {
-						answer = await getJson("/version");
-					} catch (error) {
-						continue; // still down
-					}
-
-					if (answer.bootId === bootId) {
-						// Still the old one. Either it hasn't been stopped yet,
-						// or the swap never started -- which its progress says
-						var still = null;
-
-						try {
-							still = await getJson("/updates/progress");
-						} catch (error) {
-							// Not signed in any more, or just busy: keep waiting
-						}
-
-						if (still && still.phase === "failed") {
-							show("bad", "The update couldn't be installed.", still.error || "");
-							setButtons(true);
-							return;
-						}
-
-						continue;
-					}
-
-					if (answer.version === fromVersion) {
-						show(
-							"bad",
-							(target || "The new version") + " didn't start properly, so OmniCore went back to " + fromVersion + ".",
-							"Nothing was lost. What went wrong is in the log of the omnicore-updater-... container on the server (docker ps -a lists it). You'll need to sign in again.",
-							{ label: "Sign in", run: function () { location.reload(); } }
-						);
-						return;
-					}
-
-					if (answer.health === "healthy" || answer.health === null) {
-						show(
-							"good",
-							"Updated to " + answer.version + ".",
-							"The restart signed you out, so sign in again to carry on.",
-							{ label: "Sign in", run: function () { location.reload(); } }
-						);
-						return;
-					}
-
-					show(
-						"working",
-						"Starting " + answer.version + "...",
-						"Making sure it came up properly. If it didn't, the old version is put back on its own."
-					);
-				}
-
-				show(
-					"bad",
-					"This is taking longer than it should.",
-					"Reload this page in a minute. If OmniCore doesn't come back, check it on the server with: docker ps -a",
-					{ label: "Reload", run: function () { location.reload(); } }
-				);
-			}
-
-			if (applyButton) {
-				if (applyButton.disabled) {
-					applyButton.setAttribute("data-unready", "");
-				}
-
-				applyButton.addEventListener("click", async function () {
-					const go = await confirmDialog({
-						title: "Update to " + target + "?",
-						text:
-							"OmniCore downloads " + target + ", then restarts on it. Screens go blank " +
-							"for about a minute and you'll be signed out. If the new version doesn't " +
-							"start properly, the current one is put back automatically.",
-						confirm: "Update now"
-					});
-
-					if (!go) return;
-
-					setButtons(false);
-					checkStatus.className = "status";
-					checkStatus.textContent = "";
-
-					try {
-						const response = await fetch("/updates/apply", {
-							method: "POST",
-							headers: { "Content-Type": "application/json" },
-							body: JSON.stringify({ version: target })
-						});
-						const data = await response.json();
-
-						// Another tab or the scheduler got there first: follow
-						// that one instead
-						if (!response.ok && !data.busy) {
-							checkStatus.className = "status bad";
-							checkStatus.textContent = data.error || "Couldn't start the update.";
-							setButtons(true);
-							return;
-						}
-					} catch (error) {
-						checkStatus.className = "status bad";
-						checkStatus.textContent = "Couldn't reach OmniCore.";
-						setButtons(true);
-						return;
-					}
-
-					follow();
-				});
-			}
-
-			${underWay ? "follow();" : ""}
-		`;
-
-		res.send(page("Updates", body, script, "", "/"));
+	// The About tab's release notes, fetched once the page is up
+	app.get("/updates/notes", async (req, res) => {
+		res.setHeader("Cache-Control", "no-store");
+		res.json({ sections: await releaseNotes() });
 	});
 
 	// Runs a check on demand and records it, exactly as the scheduled
@@ -4618,13 +4581,13 @@ function startAdminFace() {
 			.then((result) => {
 				if (result.updated) {
 					console.log(
-						`  Core update started from the Updates page: ${result.from} → ${result.to}. ` +
+						`  Core update started from Settings: ${result.from} → ${result.to}. ` +
 							`What happened next: ${result.log}`
 					);
 				}
 			})
 			.catch((error) => {
-				console.log(`  Core update from the Updates page failed: ${error.message}`);
+				console.log(`  Core update from Settings failed: ${error.message}`);
 			});
 
 		res.status(202).json({ ok: true });

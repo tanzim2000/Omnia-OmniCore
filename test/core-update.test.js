@@ -287,21 +287,21 @@ test("/version: open without signing in, and says which start of OmniCore this i
 	assert.equal(first.health, "healthy");
 });
 
-test("updates page: no Update now button without an update", async () => {
+test("about tab: no Update now button without an update", async () => {
 	process.env.OMNICORE_VERSION = "v1.19.1";
 	updateStore.recordCheck({ latestVersion: "1.19.1", updateAvailable: false });
 
-	const html = await (await get("/updates")).text();
+	const html = await (await get("/")).text(); // the About tab, since v2
 
 	assert.ok(html.includes("This is the newest version"));
 	assert.ok(!html.includes('id="apply"'), "nothing to install, so no button");
 });
 
-test("updates page: an update with Docker reachable can be installed", async () => {
+test("about tab: an update with Docker reachable can be installed", async () => {
 	process.env.OMNICORE_VERSION = "v1.19.1";
 	updateStore.recordCheck({ latestVersion: "1.20.0", updateAvailable: true });
 
-	const html = await (await get("/updates")).text();
+	const html = await (await get("/")).text(); // the About tab, since v2
 
 	assert.ok(html.includes("Update to 1.20.0 now"));
 	assert.match(html, /<button class="glass glass-block" id="apply">/, "pressable");
@@ -312,13 +312,13 @@ test("updates page: an update with Docker reachable can be installed", async () 
 	assert.ok(!/[^.\w]confirm\(/.test(html.replace(/function confirmDialog[\s\S]*$/, "")), "no browser confirm()");
 });
 
-test("updates page: without Docker the button is there but can't be pressed, and says why", async () => {
+test("about tab: without Docker the button is there but can't be pressed, and says why", async () => {
 	await stopFakeDocker();
 
 	process.env.OMNICORE_VERSION = "v1.19.1";
 	updateStore.recordCheck({ latestVersion: "1.20.0", updateAvailable: true });
 
-	const html = await (await get("/updates")).text();
+	const html = await (await get("/")).text(); // the About tab, since v2
 
 	assert.match(html, /id="apply" disabled/);
 	assert.ok(html.includes("can&#39;t reach Docker") || html.includes("can't reach Docker"));

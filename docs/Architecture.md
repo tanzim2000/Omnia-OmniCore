@@ -72,7 +72,7 @@ administrative label; `title` is decoration on the screen itself.
 
 | Port    | Purpose                                                                                                                                             |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `1303`  | The About face. What OmniCore is and real system facts; its version tile leads to the Updates page on 3000. Unauthenticated.                        |
+| `1303`  | The About face. What OmniCore is and real system facts; its version tile shows a dot when an update is ready (Settings' About tab has it). Unauthenticated.                        |
 | `3000`  | The admin face. Settings, faces, installed resources. OmniCore's own UI; no third-party code ever runs here.                                        |
 | `3999`  | The setup wizard, on its own port since v1.12.0.                                                                                                    |
 | `4000`  | The control face. Face creation, and the registry OmniView will read.                                                                               |
@@ -156,7 +156,7 @@ until the Marketplace puts something in them.
 | `qr.js`                    | Turns a string into a QR code SVG. Used for `qr` content blocks and for a notification's link.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `fallback-page.js`         | The built-in "pick a theme" screen shown when a face has no usable theme. Not part of any theme. Carries the same live connection as a theme page, so it swaps itself for a theme picked in Settings and is counted as a screen.                                                                                                                                                                                                                                                                                                                                                                                 |
 | `control-face.js`          | Port 4000. Face registry API, and the face setup wizard.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `admin-face.js`            | Port 3000. All settings UI, built from the Default UI's segments. Renders every settings form from declared schemas. The Updates page and its Update now button.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `admin-face.js`            | Port 3000. All settings UI, built from the Default UI's segments. Renders every settings form from declared schemas. The settings home's four tabs (with `settings-home.js`), including the updates and Update now on the About tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `admin-auth.js`            | Admin account and sessions. scrypt hashing, constant-time comparison, in-memory sessions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `module-loader.js`         | Finds modules, loads their function. **The module contract is documented here.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `module-config.js`         | Reads a module's `module.json` and `settings.json` (through `schema-fields.js`). Applies defaults, cleans submitted values. Spots the refresh setting (`refreshMinutes`) and holds it to a floor of a minute.                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -185,7 +185,7 @@ until the Marketplace puts something in them.
 | `settings-store.js`        | OmniCore's own install-wide settings (`data/settings.json`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `paths.js`                 | Resolves where `data/`, `modules/` and `themes/` actually live. Honours `OMNICORE_*_DIR` overrides, which is what lets the test suite use a sandbox.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `content-tag.js`           | Builds the `ETag` standing for a tile's content, so a theme can tell new data from the same data again. See Content tagging in §8.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `about-face.js`            | Port 1303. What OmniCore is and real system facts. Its version tile links to the Updates page. Unauthenticated by design. Its pill under the wordmark says "All systems healthy" (the `/health` check), or "Development build" on a dev build.                                                                                                                                                                                                                                                                                                                                                                   |
+| `about-face.js`            | Port 1303. What OmniCore is and real system facts. Its version tile shows a dot when an update is ready. Unauthenticated by design. Its pill under the wordmark says "All systems healthy" (the `/health` check), or "Development build" on a dev build.                                                                                                                                                                                                                                                                                                                                                                   |
 | `system-info.js`           | Reads the real facts the About face reports: host OS, container runtime, resource counts. Every one fails soft rather than showing a blank.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `wizard-face.js`           | Port 3999. The setup wizard, on its own port since v1.12.0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `face-links.js`            | The cross-port link helper. A face on one port cannot assume the host name another is reached on, so links are resolved in the browser. Also the port numbers other faces link to (welcome, wizard, admin).                                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -1345,7 +1345,7 @@ than each module working it out, OmniCore establishes it once.
 
 - **Settings → Location service.** On by default. Automatic (IP-based, via
   `ipwho.is` over HTTPS) or manual with city search.
-- **Settings → Place search** (since v2) picks where every "Search for a
+- **Settings, General tab → Place search** (since v2) picks where every "Search for a
   city" box looks places up: the Location Service, a widget's location
   setting and the setup wizard all go through `/geocode` and
   `place-search.js`. A **Primary** is asked first; a **Secondary** (or
@@ -1358,7 +1358,7 @@ than each module working it out, OmniCore establishes it once.
   - Answers are kept for a day. Nominatim and Geocode.maps.co are never
     asked twice within a second.
   - Keys live in `settings.json` (`placeSearchKeys`). No page and no
-    answer ever carries one back; the settings page only says whether one
+    answer ever carries one back; Settings only says whether one
     is saved.
   - Under the matches: a note when the Secondary was asked and why, and
     the credit for whoever answered, linked, plus "© OpenStreetMap
@@ -1380,7 +1380,7 @@ today, and shouldn't be described as one.
 ### Background and glass
 
 Since v2, a picture, an animation or a video can go behind OmniCore's own
-pages (Settings, Background and glass): the admin face, the setup wizard,
+pages (Settings, Appearance tab): the admin face, the setup wizard,
 the welcome face, About, an Inport's page and a face with no theme. A face
 with a theme keeps its theme's background.
 
@@ -1438,10 +1438,16 @@ dot on About means an update is ready.
   icons are links down it.
 - The boxes are a six-column grid with mixed widths and heights; one
   column on a phone held upright.
-- `/background` (commit 3's page) now opens the Appearance tab. Place
-  search keeps its own page (the keys); its box on General shows the
-  choice and links there. Installing an update is still followed on the
-  Updates page; the About tab checks, says what was found and links to it.
+- Everything is on the tabs; there are no settings pages of their own any
+  more. Place search (the choice, the keys, the services, a box to try a
+  search) is on General; Background and Frosted glass on Appearance; the
+  updates on About: what the last check found, Check now, Update now
+  followed through OmniCore restarting, and the release notes, which load
+  after the page has opened (`GET /updates/notes`) so Settings never waits
+  on GitHub. The old addresses open their tab: `/place-search` General,
+  `/background` Appearance, `/updates` About.
+- Settings save as they change, as before: a choice when it's picked, a
+  slider when it's let go, a key when its box is left.
 
 Every page fades out to its base colour and the next fades in
 (`page-motion.js`): Settings, the wizard, the welcome face, About, Inports,
@@ -1537,7 +1543,7 @@ light.
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Themes**                  | Untrusted. Static files, no server side, no write endpoints. Structurally sandboxed.                                                                                                                                                                                                                                |
 | **Modules**                 | Reviewed before listing (§5b), then trusted like any dependency you'd install -- full Node access, narrowed only by what `omni` actually hands over (§5a).                                                                                                                                                          |
-| **Admin face (3xxx)**       | Behind login. Where essentially everything is written; a POST must be JSON (or, on the two background upload routes only, `application/octet-stream`), so a page on another port (a theme's script) can't send one. Open reads: `GET /version` (version, a per-start id, Docker's health verdict), so the Updates page can follow an update through the restart that signs everyone out; the UI font; and the background picture, which the sign-in page shows. |
+| **Admin face (3xxx)**       | Behind login. Where essentially everything is written; a POST must be JSON (or, on the two background upload routes only, `application/octet-stream`), so a page on another port (a theme's script) can't send one. Open reads: `GET /version` (version, a per-start id, Docker's health verdict), so the About tab can follow an update through the restart that signs everyone out; the UI font; and the background picture, which the sign-in page shows. |
 | **Control face (4000)**     | Unauthenticated. Face creation and city lookup live here. Worth revisiting.                                                                                                                                                                                                                                         |
 | **Dashboard faces (4001+)** | Unauthenticated. Serves data, `GET /time`, and static files, plus one write: `POST /select-theme`, used by the no-theme fallback screen.                                                                                                                                                                            |
 | **Inports (2001+)**         | Unauthenticated. One write: `POST /<instance-id>/input`, reaching a module's `onInput`. Not yet solved -- see §5c; planned to be covered by the same future auth work as the control face. Because an Inport belongs to a face rather than an instance, that auth will cover every module behind it at once.        |
@@ -1572,7 +1578,7 @@ one thing afterwards**. A wizard is the wrong shape for editing.
 
 Two ways in, one way through. Every six hours `core-update-scheduler.js`
 checks GitHub's release tags for a newer version of the same major and
-installs it. The Updates page (admin face, `/updates`) offers **Update
+installs it. Settings' About tab (admin face, `/#about`) offers **Update
 now** for the same install, started on purpose; the button appears only
 once a check has found something, and asks first. Both call
 `coreUpdater.applyUpdate()`, which lets one update run at a time: a second
@@ -1691,6 +1697,14 @@ over one shared stream per server, notifies only on messages that arrive
 while it's running, and keeps a tile of three facts: how many came in the
 window, when the latest came, and its priority.
 
+**v2** (on the `v2` branch, not released yet): the settings home in four
+tabs under a notch, with Updates, Place search and Background and glass on
+the tabs rather than pages of their own; a picture, an animation or a
+video behind OmniCore's pages under frosted glass; page fades, with a
+signal for a theme's entrance; place search from eight services; Info
+order lists dragged into place. See "The settings home and page fades",
+"Background and glass" and "Location" in §8, and the CHANGELOG.
+
 **Widget types** (v1.18.0): a module can offer more than one shape for
 its data, picked per instance from a row of buttons at the top of its
 settings. Themes never learn which shape a tile shows; each shape copes
@@ -1708,7 +1722,6 @@ their own fixed steps.
 
 - **Auto start/shutdown.**
 - **OmniView** -- the display client.
-- **Container image** -- the intended primary distribution.
 
 ### Known gaps
 

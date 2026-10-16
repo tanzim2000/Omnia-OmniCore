@@ -1,8 +1,9 @@
 # Backlog
 
 What is left to do, and what was deliberately put off. Last cleaned up
-after v1.19.9 (Oct 2026). Anything already built has been
-removed from here; the CHANGELOG is the record of what shipped.
+when v2 was finished on its branch (Oct 2026). Anything already built has
+been removed from here; the CHANGELOG is the record of what shipped (v2's
+under Unreleased until it has a version).
 
 If you are picking this back up after a break, this file plus
 `docs/Architecture.md` should be enough to re-orient.
@@ -66,8 +67,7 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
     Resources shows the same version.
 - **A manual Update button for a module or theme.** Today they only update
   in the background after a check. Nothing lets a person press Update on
-  one module. (OmniCore itself already has Update now on its Updates page,
-  which moves into the About tab in v2.)
+  one module. (OmniCore itself has Update now, on Settings' About tab.)
 - **No uninstall in the UI.** Removing a module or theme still means
   deleting its folder.
 - **Test CI.** `npm test` has 29 test files, but nothing runs them on a
@@ -77,100 +77,54 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
 - **Updates are only noticed for tagged releases.** An untagged version
   bump is invisible to the updater. Always tag.
 
-## v2: how it is built
+## v2: releasing it
 
-`main` holds the released version. v1.19.9 sealed the fixes found while
-testing Weather (see the CHANGELOG). Everything below is built on the
-branch **`v2`**:
+v2 is built on the branch **`v2`**: the settings home in tabs, the
+background and glass, page fades, place search and Info order (see the
+CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
 
-- The version stays as it is in `package.json` and nothing is tagged
-  while v2 is built, so released installs never see it. The CHANGELOG
-  gets an **Unreleased** section that grows as v2 does.
 - Nothing publishes from `v2`: the image workflow runs only on `v*` tags,
-  the docs site only on pushes to `main`. For a throwaway `:dev` image of
-  `v2`, run the image workflow by hand from the Actions tab and pick the
-  branch.
-- A fix that has to reach people before v2 goes on `main`, is released and
+  the docs site only on pushes to `main`. To try it on the server, run the
+  image workflow by hand from the Actions tab and pick `v2`; that `:dev`
+  image is a development build.
+- A fix that has to reach people first goes on `main`, is released and
   tagged there, then `main` is merged into `v2`.
-- When v2 is ready: merge `v2` into `main`, pick the version, tag.
+- When v2 is judged ready: merge `v2` into `main`, pick the version (in
+  `package.json` and `package-lock.json`), turn `## Unreleased` into
+  `## v<version>`, push, then tag. More problems are expected once it's
+  used; fix them as they come, one small commit at a time.
 
-Five commits, each with its tests passing and its part of the
-Unreleased entry in the CHANGELOG. The version is bumped only when v2 is
-judged ready, not as part of any of these.
+## v2: left to check
 
-1. **Done.** The Unreleased section (docs site, and a development build's
-   Updates page), and Info order lists: dragged into place, a box of its
-   own when short, a button and a pop-up when longer than four.
-2. **Done.** Place search: eight services, Primary then Secondary, the
-   setting with its key prompts, the credit line on the three pages that
-   search. With it, the `:dev` image fix (a hand-run image is a
-   development build, with the CHANGELOG in it).
-3. **Done.** Glass and backgrounds: frosted segments everywhere; a
-   picture, GIF, animated WebP or video behind OmniCore's pages (checked
-   upload, the fixed layer, the automatic veil, Brightness); the tint with
-   presets, a picker and Match the picture; a still frame for reduced
-   motion, and a video paused when its tab is hidden. With it, the
-   wizard's missing font route.
-4. **Done.** The settings home and movement: four tabs in the notch, one
-   page, the remembered tab, the asymmetric bento, the About tab with the
-   updates; the tab-linked pan with the picture moving a quarter as far;
-   page fades on every page and the notch hiding; the theme intro signal
-   and the `theme.json` opt-out, documented.
-5. A docs pass, this Backlog cleaned up, the final Unreleased entry.
+- **Place search's keyed services.** GeoNames, LocationIQ, Geoapify,
+  Geocode.maps.co and Google are tested only against answers written from
+  their documentation (`test/fixtures/place-search/README.md`). Try each
+  with a real key, and replace those files with real answers. GeoNames did
+  answer live, refusing a made-up username, and that was handled.
+- **Google's terms** ask that Geocoding results be shown on a Google Map
+  and limit how long they're kept. OmniCore credits Google under the
+  matches, but a picked place's coordinates are saved for as long as the
+  setting stands. Decide whether to keep Google as a choice.
+- **Nominatim's policy** asks that an application can stop using it if the
+  OpenStreetMap Foundation asks, without an update. Today that means each
+  install picks another service on the General tab.
+- **An MP4 background in a real browser.** The browser used while building
+  has no H.264, so MP4 was tested on the server side only; try one in
+  Chrome, Edge or Safari. Video plays only in formats the browser plays
+  (H.264 MP4, VP9 WebM); anything else is refused when it's picked.
+- **Update now through a real restart.** The About tab's Update now is the
+  Updates page's own code, moved; it has only been run against tests and a
+  fake Docker. The first real release after v2 will show it working.
 
-## v2: features
+## v2: ideas left from the design
 
-- **Place search: left to check.**
-  - The five services that need a key (GeoNames, LocationIQ, Geoapify,
-    Geocode.maps.co, Google) are tested only against answers written from
-    their documentation (`test/fixtures/place-search/README.md`). Try each
-    with a real key, and replace those files with real answers. GeoNames
-    did answer live, refusing a made-up username, and that was handled.
-  - Google's terms ask that Geocoding results be shown on a Google Map and
-    limit how long they're kept. OmniCore credits Google under the matches,
-    but a picked place's coordinates are saved for as long as the setting
-    stands. Decide whether to keep Google as a choice.
-  - Nominatim's policy asks that an application can stop using it if the
-    OpenStreetMap Foundation asks, without an update. Today that means
-    each install picks another service in the setting.
-
-## v2: the design
-
-A heavy rework of the settings pages, and of how OmniCore itself looks.
-Designed in conversation and in a clickable mockup (Oct 2026): the Design
-canvas "OmniCore Settings Home Mockup",
-https://claude.ai/artifact/LveFSPbVeF9ScADgdPWFhP (desktop and phone
-upright; its wallpapers and search results are stand-ins). OmniCore v2 is
-aimed at capable machines, so it does not need to be designed around slow
-ones. Everything below is opt-in: anyone who changes nothing sees no
-change. More problems are expected once it is built and used; fix them
-as they come, one small commit at a time.
-
-Settings home: built (commit 4, see the CHANGELOG). Left from the design,
-not built:
-
-- **Update now on the About tab.** The About tab checks and says what was
-  found; installing is still started and followed on the Updates page,
-  which has the progress through OmniCore restarting. Move it in once the
-  progress view is its own piece.
-- **Place search on the General tab** is a box with the choice and a link
-  to its own page (the keys, the list of services). The design had the
-  whole setting in the box.
-- The Background box offers Choose a file; the mockup's ready-made
-  pictures were stand-ins, and none ship.
-
-Background and glass: built (commit 3, see the CHANGELOG). Left from the
-design, not built:
+From the conversation and the mockup (Oct 2026,
+https://claude.ai/artifact/LveFSPbVeF9ScADgdPWFhP). Not needed for v2:
 
 - A background per browser rather than one for the whole install.
 - A faint grain over the glass.
-- Video plays only in the formats the browser can play: H.264 MP4 or VP9
-  WebM. The test browser used while building has no H.264, so MP4 was
-  tested on the server side only; try one in Chrome, Edge or Safari.
-
-Motion: built (commit 4). Faces fade in from Core's curtain and themes
-hear `omnicore:revealed`; the Windows 8 theme doesn't use it yet (its
-rebuild will).
+- A few ready-made pictures to pick from beside Choose a file (the
+  mockup's were stand-ins; none ship).
 
 Settled, so not to be reopened by accident:
 
@@ -178,8 +132,8 @@ Settled, so not to be reopened by accident:
   judged too much work for a system UI (it changes how every surface is
   drawn, not only its colours). It is kept for a face theme instead (see
   **Neumorphic bento face theme** below). OmniCore's own pages stay glass,
-  and the old ideas of a modern system UI theme and a choice of system themes
-  are dropped in favour of the background and tint above.
+  and the old ideas of a modern system UI theme and a choice of system
+  themes are dropped in favour of the background and tint.
 
 ## Deferred, with why
 
@@ -211,7 +165,8 @@ registry wins. Reasoned about, never tested.
 Calendar rework.
 
 **Windows 8 theme.** Needs a pass, and does not draw `time` blocks as
-clocks yet (it falls back to plain text). It draws `data-source` (Wide and
+clocks yet (it falls back to plain text). Its tiles flying in should start
+on `omnicore:revealed` (v2), so they don't play behind the fade. It draws `data-source` (Wide and
 Large at the foot, Medium as a page of its own, Small not at all).
 The credit line does not fit well yet: a long one, such as "Based on
 Environment and Climate Change Canada data" from the Weather module, wraps

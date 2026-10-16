@@ -160,9 +160,15 @@ async function asRelease(version, run) {
 	}
 }
 
-test("updates: the page renders and reports never having checked", async () => {
+test("updates: the About tab reports never having checked", async () => {
 	await asRelease("v1.0.0", async () => {
-		const response = await fetch(`http://127.0.0.1:${PORT}/updates`, {
+		// The Updates page is on the settings home's About tab since v2,
+		// and its old address opens the tab
+		const old = await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie }, redirect: "manual" });
+		assert.equal(old.status, 302);
+		assert.equal(old.headers.get("location"), "/#about");
+
+		const response = await fetch(`http://127.0.0.1:${PORT}/`, {
 			headers: { cookie }
 		});
 
@@ -185,7 +191,7 @@ test("updates: a failed check is reported, not hidden", async () => {
 
 	await asRelease("v1.0.0", async () => {
 		const html = await (
-			await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
+			await fetch(`http://127.0.0.1:${PORT}/`, { headers: { cookie } })
 		).text();
 
 		assert.ok(html.includes("Last check failed"), "a failure must be visible");
@@ -207,12 +213,18 @@ test("updates: an available version is announced with its notes", async () => {
 
 	try {
 		const html = await (
-			await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
+			await fetch(`http://127.0.0.1:${PORT}/`, { headers: { cookie } })
 		).text();
 
 		assert.ok(html.includes("Version 99.0.0 is available"));
+		assert.ok(html.includes('class="nb-dot"'), "a dot on About in the notch");
+
+		// The notes come after the page is up, from their own address
+		const notes = await (
+			await fetch(`http://127.0.0.1:${PORT}/updates/notes`, { headers: { cookie } })
+		).json();
 		assert.ok(
-			html.includes("What's new in 99.0.0"),
+			notes.sections.some((section) => section.heading === "What&#39;s new in 99.0.0" || section.heading === "What's new in 99.0.0"),
 			"should offer the upcoming version's notes section"
 		);
 	} finally {
@@ -231,7 +243,7 @@ test("updates: changelog rendering neutralises hostile markup", async () => {
 	updateStore.recordCheck({ updateAvailable: false });
 
 	const html = await (
-		await fetch(`http://127.0.0.1:${PORT}/updates`, { headers: { cookie } })
+		await fetch(`http://127.0.0.1:${PORT}/updates/notes`, { headers: { cookie } })
 	).text();
 
 	assert.ok(!html.includes("<script>alert"), "no injected script survived");

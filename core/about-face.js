@@ -116,8 +116,7 @@ function systemRow(icon, label, value) {
 		</div>`;
 }
 
-// The version card, which is also the way through to the updates page
-// on the admin face. Deliberately looks identical to the cards beside
+// The version card. Deliberately looks identical to the cards beside
 // it whether or not there's anything to find -- the only tell is a
 // small dot when an update is genuinely waiting.
 //

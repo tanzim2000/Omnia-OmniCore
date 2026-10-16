@@ -128,7 +128,7 @@ const sections = [
 <tr><td><code>--font-size</code></td><td>Base size in px (16 unless changed in Settings). Almost everything is sized in <code>em</code>, so this scales the whole UI.</td></tr>
 <tr><td><code>--radius</code></td><td>0.75em. The corners of segments, lists, tabs and glass buttons.</td></tr>
 <tr><td><code>--segment-blur</code></td><td>Frosted glass, on since v2: <code>blur(var(--glass-blur)) saturate(var(--glass-saturate))</code>. Every segment blurs what's behind it.</td></tr>
-<tr><td><code>--glass-blur</code></td><td>How much, in px: 20 unless changed under Settings, Background and glass (0 to 40).</td></tr>
+<tr><td><code>--glass-blur</code></td><td>How much, in px: 20 unless changed on Settings' Appearance tab (0 to 40).</td></tr>
 <tr><td><code>--glass-saturate</code></td><td>1, or 1.4 over a picture, so the colour showing through the glass isn't washed out.</td></tr>
 <tr><td><code>--glass-tint</code></td><td>A colour laid over every segment's fill, a little of it (at most 35%). <code>transparent</code> until one is picked; "Match the picture" uses the picture's own main colour.</td></tr>
 <tr><td><code>--segment-edge</code></td><td>The thin light line along a segment's top edge. Transparent with the plain background, there over a picture.</td></tr>
@@ -151,7 +151,7 @@ const sections = [
 				id: "backdrop",
 				title: "Picture behind the page",
 				sel: ".omni-backdrop",
-				desc: "Since v2, a picture, an animated GIF or WebP, or a looping video can be set behind OmniCore's own pages (Settings, Background and glass). It's drawn as the first thing inside <code>&lt;body&gt;</code>, fixed to the screen behind everything, with a veil over it (<code>::after</code>, <code>--backdrop-dim</code>) so text stays readable. Nothing is drawn with the plain background. A page doesn't write this itself: <code>backdropHtml()</code> in <code>core/backdrop.js</code> does, and the page's port serves the file at <code>/backdrop/…</code>.",
+				desc: "Since v2, a picture, an animated GIF or WebP, or a looping video can be set behind OmniCore's own pages (Settings, Appearance tab). It's drawn as the first thing inside <code>&lt;body&gt;</code>, fixed to the screen behind everything, with a veil over it (<code>::after</code>, <code>--backdrop-dim</code>) so text stays readable. Nothing is drawn with the plain background. A page doesn't write this itself: <code>backdropHtml()</code> in <code>core/backdrop.js</code> does, and the page's port serves the file at <code>/backdrop/…</code>.",
 				demo: `<div style="position:relative;height:140px;border-radius:var(--radius);overflow:hidden;background:linear-gradient(135deg,#3a6df0,#c46cd8 55%,#f2a65a)">
 <div style="position:absolute;inset:0;background:rgba(0,0,0,0.35)"></div>
 <div class="segment" style="position:absolute;left:1em;right:1em;top:1.5em;backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)">A segment over a picture</div>

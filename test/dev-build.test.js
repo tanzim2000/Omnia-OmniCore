@@ -185,27 +185,28 @@ test("faces: the pages say Face 001 and Outport 4001, never Face 4001", async ()
 	assert.equal(faceStore.findFace(4001).name, "Face 4001");
 });
 
-test("dev build: Settings and Updates show the version with a dev badge", () =>
+test("dev build: Settings' About tab shows the version with a dev badge", () =>
 	withVersion(undefined, async () => {
 		const settings = await get("/");
 		assert.ok(settings.html.includes(`OmniCore ${sourceVersion} <span class="badge">dev</span>`));
-
-		const updates = await get("/updates");
-		assert.equal(updates.status, 200);
-		assert.ok(updates.html.includes(`OmniCore ${sourceVersion} <span class="badge">dev</span>`));
 	}));
 
-test("dev build: the Updates page has nothing about checking, and shows this build's notes", () =>
-	withVersion(undefined, async () => {
-		const { html } = await get("/updates");
+// The release notes, as the About tab gets them after it opens, put
+// together as one page of HTML for the checks below
+async function notesHtml() {
+	const { html } = await get("/updates/notes");
+	return JSON.parse(html).sections.map((section) => `<h2>${section.heading}</h2>${section.html}`).join("");
+}
 
-		// Looked for as page text and markup, not as bare words: the
-		// shared stylesheet mentions "Check now" in a comment, and this
-		// build's own release notes (shown on this page) mention
-		// "Development build", which is the About page's pill
-		for (const gone of ["Last checked:", "Running since:", "No check has run yet", 'id="check"', ">Check now<", 'id="apply"', ">Development build<"]) {
-			assert.ok(!html.includes(gone), `${gone} should not be on a dev build's page`);
+test("dev build: the About tab has nothing about checking, and shows this build's notes", () =>
+	withVersion(undefined, async () => {
+		const page = (await get("/")).html;
+		const about = page.slice(page.indexOf('data-pane="about"'));
+		for (const gone of ["Last checked:", "Running since", 'id="check"', ">Check now<", 'id="apply"']) {
+			assert.ok(!about.includes(gone), `${gone} should not be on a dev build's About tab`);
 		}
+
+		const html = await notesHtml();
 
 		// What's in this build, from its own CHANGELOG.md
 		assert.ok(html.includes(`What's in ${sourceVersion}`));
@@ -226,19 +227,15 @@ test("dev build: the Updates page has nothing about checking, and shows this bui
 
 test("release: a release never shows work not released yet", () =>
 	withVersion("v1.19.3", async () => {
-		const { html } = await get("/updates");
+		const html = await notesHtml();
 		assert.ok(!html.includes("Not released yet"));
 	}));
 
-test("release: the Updates page is unchanged, and has no badge", () =>
+test("release: the About tab checks, says when, and has no badge", () =>
 	withVersion("v1.19.3", async () => {
-		const settings = await get("/");
-		assert.ok(settings.html.includes("OmniCore 1.19.3"));
-		assert.ok(!settings.html.includes('<span class="badge">'));
-
-		const { html } = await get("/updates");
+		const { html } = await get("/");
 		assert.ok(html.includes("OmniCore 1.19.3"));
-		assert.ok(html.includes("Last checked:") && html.includes("Running since:"));
-		assert.ok(html.includes('id="check"'));
 		assert.ok(!html.includes('<span class="badge">'));
+		assert.ok(html.includes("Last checked:") && html.includes("Running since"));
+		assert.ok(html.includes('id="check"'));
 	}));

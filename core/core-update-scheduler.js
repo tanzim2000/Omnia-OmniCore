@@ -6,7 +6,7 @@
 // them into one file would make it harder to reason about which failure
 // belongs to which.
 //
-// The "Update now" button on the Updates page applies an update the same
+// The "Update now" button on Settings' About tab applies an update the same
 // way, through the same coreUpdater.applyUpdate(). That function lets
 // only one update run at a time, so the button and this timer can never
 // both be swapping the container at once.
@@ -31,7 +31,7 @@ async function runOnce() {
 	try {
 		status = await coreUpdater.checkForUpdate();
 	} catch (error) {
-		// Recorded even in failure, so the updates page can say "we
+		// Recorded even in failure, so Settings' About tab can say "we
 		// tried and couldn't reach GitHub" rather than looking
 		// identical to never having checked at all.
 		updateStore.recordCheck({ error: error.message });

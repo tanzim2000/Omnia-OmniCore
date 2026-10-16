@@ -239,7 +239,8 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 		["general", ["Location Service", "Place search"]],
 		["appearance", ["Background", "Appearance Mode", "Back Button Position", "Frosted glass", "Text Size"]],
 		["resources", ["Manage Faces", "Marketplace", "Installed Resources"]],
-		["about", ["OmniCore 1.19.", "Data folder", "Updates"]]
+		["about", ["OmniCore 1.19.", "Data folder", "Updates", "Release notes"]],
+		["general", ["Place search keys", "The services", "Try it"]]
 	]) {
 		for (const box of boxes) assert.ok(pane(id).includes(box), `${box} on ${id}`);
 	}
@@ -261,6 +262,7 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 test("pages: a development build's Updates box says it doesn't check", async () => {
 	const { text } = await get(3000, "/");
 	assert.ok(text.includes("A development build doesn't check for updates."));
-	assert.ok(!text.includes('id="check-now"'), "nothing to check");
-	assert.ok(text.includes('href="/updates">What\'s in this build</a>'));
+	assert.ok(!text.includes('id="check"'), "nothing to check");
+	assert.ok(!text.includes('id="apply"'), "nothing to install");
+	assert.ok(text.includes('<div class="segment c6" id="release-notes">'), "its notes instead");
 });
