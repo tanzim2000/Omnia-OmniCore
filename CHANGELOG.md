@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-OmniCore v2, being built on the `v2` branch: Info order lists that are dragged into place, and a long one in a pop-up
+OmniCore v2, being built on the `v2` branch: Info order lists that are dragged into place, a long one in a pop-up, and a city search that finds small places, from the service you pick
 
 ### Added
 
@@ -11,9 +11,20 @@ OmniCore v2, being built on the `v2` branch: Info order lists that are dragged i
 - **A short Info order gets a box of its own** on a widget's page, beside the settings, with its rows right there to drag. Four items or fewer.
 - **Work not released yet has a place in the changelog.** `CHANGELOG.md` can start with a `## Unreleased` section, written like any release. The docs site shows it above the releases, under "In progress", with no date, and doesn't count it as a release. When the version is picked, its heading becomes the version.
 - **A development build shows what isn't released yet.** Its Updates page shows the `## Unreleased` notes from its own `CHANGELOG.md` under "Not released yet", above its version's notes.
+- **Place search: pick where a city search looks.** Every "Search for a city" box (the Location Service, a widget's location setting, the setup wizard) now asks the service picked under **Settings → Place search**. A **Primary** is asked first, and a **Secondary** when the Primary finds nothing, can't be reached, refuses its key, or needs a key that isn't saved. The Secondary can be None. Eight services: Open-Meteo, Nominatim (OpenStreetMap) and Photon need nothing; GeoNames needs a free account's username; LocationIQ, Geoapify, Geocode.maps.co and Google each need an API key. A fresh install asks Open-Meteo, then Nominatim, so a village like Bekkestua, which Open-Meteo doesn't know, is found without signing up for anything.
+- **Picking a service that needs a key asks for it**, the way a weather service does: "Do you have a GeoNames username?" No, or Cancel, puts the choice back. Keys can be replaced or removed later. A saved key is never shown again, never sent back to a page, and only ever sent to its own service.
+- **The settings page says when the choice won't work as it reads**, such as a Primary that needs a key with none saved ("GeoNames has no key saved, so every search goes straight to Nominatim"). It also lists what each service is like and what it costs, and has a box to try a search.
+- **Under the matches: who found them, and why.** A small line credits the service that answered, linked, with "© OpenStreetMap contributors" for the ones built on OpenStreetMap (several only allow their results to be shown with it). When the Secondary was asked, another line says why ("Open-Meteo found nothing, so Nominatim (OpenStreetMap) was asked."). The credit stays after a place is picked.
+- **Only what you type leaves the machine**, to the service picked, and only when Search is pressed, never while typing. Each answer is kept for a day, so the same search twice is one request, and Nominatim and Geocode.maps.co are never asked more than once a second, as their rules ask.
+
+### Changed
+
+- **An image built by hand is a development build.** Running the image workflow from the Actions tab (the throwaway `:dev` image) used to give the image the branch's name as its version: "v2", which OmniCore read as 2.0.0, so every module counted as compatible and the Updates page looked for notes that weren't there. It now gets `dev`, like a build from a clone: the source's version with the dev badge, no update checks, and the notes from its own `CHANGELOG.md`, which is now part of the image, including what isn't released yet.
 
 ### Fixed
 
+- **Saving the location no longer sends all of OmniCore's settings back to the page.** It sent the whole settings file in its answer. Nothing secret was in it before, but the place search keys now are, so the answer is only the location that was saved.
+- **The Set the location pop-up scrolls** when the matches make it taller than the window, rather than cutting off Save.
 - **Release notes on the Updates page show code as code.** A name written between backticks in the notes (`CHANGELOG.md`, say) was shown with the backticks around it. It's now drawn like code, as on the docs site.
 
 ### Notes

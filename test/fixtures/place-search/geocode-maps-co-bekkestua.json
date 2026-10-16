@@ -1,0 +1,25 @@
+[
+	{
+		"place_id": 289304822,
+		"licence": "Data © OpenStreetMap contributors, ODbL 1.0. https://osm.org/copyright",
+		"osm_type": "node",
+		"osm_id": 127898219,
+		"lat": "59.9177484",
+		"lon": "10.5873302",
+		"category": "place",
+		"type": "village",
+		"place_rank": 19,
+		"importance": 0.2,
+		"addresstype": "village",
+		"name": "Bekkestua",
+		"display_name": "Bekkestua, Bærum, Akershus, 1357, Norway",
+		"address": {
+			"village": "Bekkestua",
+			"municipality": "Bærum",
+			"county": "Akershus",
+			"postcode": "1357",
+			"country": "Norway",
+			"country_code": "no"
+		}
+	}
+]

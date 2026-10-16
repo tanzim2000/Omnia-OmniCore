@@ -5,6 +5,8 @@ themes
 .git
 .gitignore
 *.md
+# ...but the CHANGELOG goes in: a development build's Updates page reads
+# its own notes from it, including what isn't released yet
+!CHANGELOG.md
 docs/
 BACKLOG.md
-CHANGELOG.md

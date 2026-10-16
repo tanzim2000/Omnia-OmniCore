@@ -1,0 +1,41 @@
+{
+	"totalResultsCount": 2,
+	"geonames": [
+		{
+			"adminCode1": "32",
+			"lng": "10.58733",
+			"geonameId": 3162129,
+			"toponymName": "Bekkestua",
+			"countryId": "3144096",
+			"fcl": "P",
+			"population": 0,
+			"countryCode": "NO",
+			"name": "Bekkestua",
+			"fclName": "city, village,...",
+			"adminCodes1": {
+				"ISO3166_2": "32"
+			},
+			"countryName": "Norway",
+			"fcodeName": "populated place",
+			"adminName1": "Akershus",
+			"lat": "59.91775",
+			"fcode": "PPL"
+		},
+		{
+			"adminCode1": "32",
+			"lng": "10.59005",
+			"geonameId": 9999901,
+			"toponymName": "Bekkestua stasjon",
+			"countryId": "3144096",
+			"fcl": "S",
+			"population": 0,
+			"countryCode": "NO",
+			"name": "Bekkestua stasjon",
+			"countryName": "Norway",
+			"fcodeName": "railroad station",
+			"adminName1": "Akershus",
+			"lat": "59.91731",
+			"fcode": "RSTN"
+		}
+	]
+}

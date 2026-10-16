@@ -125,7 +125,13 @@ jobs:
           build-args: |
             # Baked into the image so a running OmniCore can report which
             # version it actually is — the basis for "am I out of date?".
-            OMNICORE_VERSION=${{ github.ref_name }}
+            # A tag gives its own name ("v1.19.9"). A hand-run build gives
+            # "dev", whichever branch it was run from: a branch name isn't
+            # a version ("v2" would be read as 2.0.0, "main" as nothing),
+            # and "dev" makes OmniCore treat it as a development build,
+            # showing the source's version with the dev badge, never
+            # checking for updates, and showing what isn't released yet.
+            OMNICORE_VERSION=${{ github.event_name == 'workflow_dispatch' && 'dev' || github.ref_name }}
           # Reuses layers between runs so repeat builds are much faster.
           cache-from: type=gha
           cache-to: type=gha,mode=max

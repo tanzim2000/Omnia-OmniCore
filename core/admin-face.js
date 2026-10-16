@@ -47,7 +47,9 @@ const widgetTypes = require("./widget-types");
 const marketplace = require("./marketplace");
 const imageProxy = require("./image-proxy");
 const { readSettings, writeSettings } = require("./settings-store");
-const { getLocation, searchCities } = require("./location-service");
+const { getLocation } = require("./location-service");
+const placeSearch = require("./place-search");
+const { PLACE_SEARCH_SCRIPT, PLACE_SEARCH_CSS } = require("./place-search-ui");
 const { ownLabel, suggestedLabel, labelsFor } = require("./instance-label");
 const faceStore = require("./face-store");
 const omnicoreVersion = require("./version");
@@ -596,6 +598,39 @@ const styles = `
 
 	/* Info order lists, short and long: see priority-ui.js */
 	${priorityUi.PRIORITY_CSS}
+	/* Under place search matches: see place-search-ui.js */
+	${PLACE_SEARCH_CSS}
+
+	/* Set the location: with the matches, the note and the credit
+	   under the search box, it can be taller than the window, so it
+	   scrolls rather than cutting Save off */
+	#location-modal .modal { overflow-y: auto; }
+
+	/* The Place search page: what's saved won't work as it reads */
+	.place-warning {
+		margin: 12px 0 0;
+		padding: 0.7em 0.9em;
+		border-radius: 0.6em;
+		background: var(--well-bg);
+		border: 1px solid var(--segment-border);
+		color: var(--fg);
+		font-size: 0.9em;
+		line-height: 1.5;
+	}
+
+	.place-warning[hidden] { display: none; }
+
+	/* Its keys: whether one is saved, and where to get one */
+	.key-row .search-row > :first-child { flex: 1; min-width: 0; }
+	.key-row .help { margin-top: 6px; }
+	.key-row .help a { color: inherit; }
+	.key-state.saved { color: var(--success); }
+
+	/* Its list of the services, one line each */
+	.service-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+	.service-row { display: flex; flex-direction: column; gap: 2px; font-size: 0.9em; line-height: 1.5; }
+	.service-row span { color: var(--fg-muted); }
+	.service-row a { color: inherit; }
 
 
 
@@ -1144,52 +1179,20 @@ const conditionalScript = `
 
 const locationScript = `
 	// Look a city up and offer the matches. Clicking one fills in the
-	// coordinate boxes — the stored value is still just coordinates.
-	async function searchCity(key) {
+	// coordinate boxes — the stored value is still just coordinates. The
+	// matches, the note and the credit are drawn by findPlaces
+	// (place-search-ui.js), shared with the settings page and the wizard.
+	${PLACE_SEARCH_SCRIPT}
+
+	function searchCity(key) {
 		const query = document.querySelector('[data-loc-query="' + key + '"]').value;
 		const results = document.querySelector('[data-loc-results="' + key + '"]');
 
-		results.innerHTML = '<div class="empty" style="margin-top:8px">Searching…</div>';
-
-		try {
-			const found = await (
-				await fetch("/geocode?q=" + encodeURIComponent(query))
-			).json();
-
-			if (!found.length) {
-				results.innerHTML =
-					'<div class="empty" style="margin-top:8px">Nothing found.</div>';
-				return;
-			}
-
-			window["cities_" + key] = found;
-
-			results.innerHTML = found.map(function (place, index) {
-				const safe = place.label
-					.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-				return '<button class="result" data-loc-pick="' + key +
-					'" data-index="' + index + '">' + safe + "</button>";
-			}).join("");
-
-			// Wire the results up rather than relying on inline handlers
-			for (const button of results.querySelectorAll("[data-loc-pick]")) {
-				button.addEventListener("click", function () {
-					pickCity(this.dataset.locPick, Number(this.dataset.index));
-				});
-			}
-		} catch (error) {
-			results.innerHTML =
-				'<div class="empty" style="margin-top:8px">Search failed.</div>';
-		}
-	}
-
-	function pickCity(key, index) {
-		const place = window["cities_" + key][index];
-
-		document.querySelector('[data-loc-lat="' + key + '"]').value = place.latitude;
-		document.querySelector('[data-loc-lon="' + key + '"]').value = place.longitude;
-		document.querySelector('[data-loc-query="' + key + '"]').value = place.label;
-		document.querySelector('[data-loc-results="' + key + '"]').innerHTML = "";
+		return findPlaces(query, results, function (place) {
+			document.querySelector('[data-loc-lat="' + key + '"]').value = place.latitude;
+			document.querySelector('[data-loc-lon="' + key + '"]').value = place.longitude;
+			document.querySelector('[data-loc-query="' + key + '"]').value = place.label;
+		});
 	}
 
 	for (const box of document.querySelectorAll("[data-loc-query]")) {
@@ -1724,7 +1727,7 @@ function startAdminFace() {
 	// City lookup, used by every location field. Goes through OmniCore
 	// rather than letting the browser call out directly.
 	app.get("/geocode", async (req, res) => {
-		res.json(await searchCities(req.query.q || ""));
+		res.json(await placeSearch.searchPlaces(req.query.q || "", readSettings()));
 	});
 
 	// Settings — the sections of OmniCore you can change.
@@ -1905,6 +1908,10 @@ function startAdminFace() {
 					</div>
 
 					<div class="segment link-segment">
+						<a class="link-row" href="/place-search">
+							<strong>Place search</strong>
+							<span>Where a search for a city is sent</span>
+						</a>
 						<a class="link-row" href="/faces">
 							<strong>Manage Faces (Dashboards)</strong>
 							<span>Create, edit and remove dashboards</span>
@@ -2092,46 +2099,20 @@ function startAdminFace() {
 				}
 			}
 
-			let matches = [];
+			// The matches, the note and the credit line: findPlaces, shared
+			// with a widget's page and the wizard (place-search-ui.js)
+			${PLACE_SEARCH_SCRIPT}
 
-			async function runSearch() {
-				const results = document.getElementById("results");
-				const query = document.getElementById("city").value;
-
-				results.innerHTML = '<div class="empty" style="margin-top:8px">Searching…</div>';
-
-				try {
-					matches = await (
-						await fetch("/geocode?q=" + encodeURIComponent(query))
-					).json();
-
-					if (!matches.length) {
-						results.innerHTML =
-							'<div class="empty" style="margin-top:8px">Nothing found.</div>';
-						return;
+			function runSearch() {
+				return findPlaces(
+					document.getElementById("city").value,
+					document.getElementById("results"),
+					function (place) {
+						document.getElementById("latitude").value = place.latitude;
+						document.getElementById("longitude").value = place.longitude;
+						document.getElementById("label").value = place.label;
 					}
-
-					results.innerHTML = matches.map(function (place, index) {
-						const safe = place.label
-							.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-						return '<button class="result" data-pick="' + index + '">' +
-							safe + "</button>";
-					}).join("");
-
-					for (const button of results.querySelectorAll("[data-pick]")) {
-						button.addEventListener("click", function () {
-							const place = matches[Number(this.dataset.pick)];
-
-							document.getElementById("latitude").value = place.latitude;
-							document.getElementById("longitude").value = place.longitude;
-							document.getElementById("label").value = place.label;
-							results.innerHTML = "";
-						});
-					}
-				} catch (error) {
-					results.innerHTML =
-						'<div class="empty" style="margin-top:8px">Search failed.</div>';
-				}
+				);
 			}
 
 			document.getElementById("search").addEventListener("click", runSearch);
@@ -2399,19 +2380,321 @@ function startAdminFace() {
 		const latitude = Number(req.body.latitude);
 		const longitude = Number(req.body.longitude);
 
-		res.json(
-			writeSettings({
-				locationEnabled: Boolean(req.body.locationEnabled),
-				locationMode:
-					req.body.locationMode === "manual" ? "manual" : "auto",
-				locationLabel: req.body.locationLabel || "",
-				// Blank or unparseable coordinates are stored as "none"
-				// rather than NaN
-				latitude: Number.isNaN(latitude) || req.body.latitude === "" ? null : latitude,
-				longitude:
-					Number.isNaN(longitude) || req.body.longitude === "" ? null : longitude
-			})
-		);
+		const location = {
+			locationEnabled: Boolean(req.body.locationEnabled),
+			locationMode:
+				req.body.locationMode === "manual" ? "manual" : "auto",
+			locationLabel: req.body.locationLabel || "",
+			// Blank or unparseable coordinates are stored as "none"
+			// rather than NaN
+			latitude: Number.isNaN(latitude) || req.body.latitude === "" ? null : latitude,
+			longitude:
+				Number.isNaN(longitude) || req.body.longitude === "" ? null : longitude
+		};
+
+		writeSettings(location);
+
+		// Only what was saved goes back. Until v2 this sent the whole
+		// settings file, which since v2 holds the place search keys:
+		// those never go back to a page.
+		res.json(location);
+	});
+
+	// ---- place search ---------------------------------------------------
+	//
+	// Which service a "Search for a city" box asks, and the keys for the
+	// ones that need one. See place-search.js. Reached from the settings
+	// page.
+	app.get("/place-search", (req, res) => {
+		const settings = readSettings();
+		const { primary, secondary } = placeSearch.chosen(settings);
+		const services = placeSearch.servicesForPage(settings);
+		const warning = placeSearch.warningFor(settings);
+
+		const option = (service, picked) =>
+			`<option value="${escapeHtml(service.id)}"${picked ? " selected" : ""}>${escapeHtml(service.name)}${
+				service.key ? ` (needs ${escapeHtml(service.key === "username" ? "a username" : "an API key")})` : ""
+			}</option>`;
+
+		// A row for each service that takes a key. The key itself is never
+		// put on the page: only whether one is saved. Typing a new one
+		// replaces it; Remove forgets it.
+		const keyRows = services
+			.filter((service) => service.key)
+			.map(
+				(service) => `
+				<div class="field key-row" data-key-row="${escapeHtml(service.id)}">
+					<label for="key-${escapeHtml(service.id)}">${escapeHtml(service.name)}</label>
+					<div class="search-row">
+						${passwordField(
+							`<input type="password" id="key-${escapeHtml(service.id)}" data-key-for="${escapeHtml(service.id)}" ` +
+								`autocomplete="off" spellcheck="false" placeholder="${
+									service.keySaved
+										? `Saved. Type a new ${service.key === "username" ? "username" : "key"} to replace it`
+										: service.key === "username"
+										? "Your GeoNames username"
+										: "Paste the API key"
+								}">`
+						)}
+						${
+							service.keySaved
+								? `<button type="button" class="glass" data-remove-key="${escapeHtml(service.id)}" style="flex:none;padding:0.75em 1.1em">Remove</button>`
+								: ""
+						}
+					</div>
+					<div class="help">
+						<span class="key-state ${service.keySaved ? "saved" : ""}">${service.keySaved ? "Saved" : "Not saved"}</span>
+						· <a href="${escapeHtml(service.signUp)}" target="_blank" rel="noopener noreferrer">Get one</a>
+					</div>
+				</div>`
+			)
+			.join("");
+
+		const aboutList = services
+			.map(
+				(service) => `
+				<div class="service-row">
+					<strong>${escapeHtml(service.name)}</strong>
+					<span>${escapeHtml(service.about)}${
+						service.terms
+							? ` <a href="${escapeHtml(service.terms)}" target="_blank" rel="noopener noreferrer">Its rules</a>`
+							: ""
+					}</span>
+				</div>`
+			)
+			.join("");
+
+		const body = `
+			<div class="settings-head">
+				<h1>Place search</h1>
+			</div>
+
+			<div class="bento">
+				<div class="segment">
+					<p class="lede" style="margin:0">
+						Where &ldquo;Search for a city&rdquo; looks places up: in the
+						Location Service, on a widget's page and in the setup wizard.
+						Only what you type is sent, to the service picked here, and only
+						when you press Search. Nothing about where OmniCore is goes
+						with it.
+					</p>
+					<p class="place-warning" id="warning"${warning ? "" : " hidden"}>${escapeHtml(warning || "")}</p>
+				</div>
+
+				<div class="bento-row two top">
+					<div class="segment">
+						<h2>Primary</h2>
+						<p class="lede">Asked first.</p>
+						<select id="primary">
+							${services.map((service) => option(service, service.id === primary.id)).join("")}
+						</select>
+					</div>
+
+					<div class="segment">
+						<h2>Secondary</h2>
+						<p class="lede">
+							Asked when the Primary finds nothing, can't be reached,
+							refuses its key or has none saved.
+						</p>
+						<select id="secondary">
+							<option value="none"${secondary ? "" : " selected"}>None</option>
+							${services.map((service) => option(service, secondary && service.id === secondary.id)).join("")}
+						</select>
+					</div>
+				</div>
+
+				<div class="bento-row two top">
+					<div class="segment">
+						<h2>Keys</h2>
+						<p class="lede">
+							For the services that need one. Kept by OmniCore and only
+							ever sent to the service it belongs to; once saved, it isn't
+							shown again.
+						</p>
+						${keyRows}
+					</div>
+
+					<div class="segment">
+						<h2>The services</h2>
+						<div class="service-list">${aboutList}</div>
+					</div>
+				</div>
+
+				<div class="segment">
+					<h2>Try it</h2>
+					<p class="lede">Searches with what's saved.</p>
+					<div class="search-row">
+						<input type="text" id="try" placeholder="Bekkestua">
+						<button type="button" class="glass" id="try-search" style="flex:none;padding:0.75em 1.25em">Search</button>
+					</div>
+					<div id="try-results"></div>
+				</div>
+			</div>
+
+			<div class="page-dock">
+				<div class="dock">
+					<button type="button" id="save">Save</button>
+				</div>
+				<p class="status" id="status"></p>
+			</div>`;
+
+		const script = `
+			${PLACE_SEARCH_SCRIPT}
+
+			// What each service needs, for the questions below. Whether a key
+			// is saved, never the key.
+			const SERVICES = ${JSON.stringify(services).replace(/</g, "\\u003c")};
+			const byId = function (id) {
+				return SERVICES.find(function (service) { return service.id === id; });
+			};
+
+			const primary = document.getElementById("primary");
+			const secondary = document.getElementById("secondary");
+			const removed = [];
+
+			// The Secondary can't be the Primary: that option is switched
+			// off there, and if it was picked, the Secondary becomes None
+			function matchSecondary() {
+				for (const option of secondary.options) {
+					option.disabled = option.value === primary.value;
+				}
+				if (secondary.value === primary.value) secondary.value = "none";
+			}
+
+			// Picking a service that needs a key, with none saved or typed,
+			// asks for it, the same way a weather service does. No, or
+			// Cancel, puts the choice back.
+			async function askForKey(select) {
+				const service = byId(select.value);
+				const box = service && document.querySelector('[data-key-for="' + service.id + '"]');
+
+				if (!service || !service.key || service.keySaved || (box && box.value.trim())) {
+					select.dataset.was = select.value;
+					return;
+				}
+
+				const what = service.key === "username" ? "username" : "API key";
+				const yes = await confirmDialog({
+					title: "Do you have " + (service.key === "username" ? "a " : "an ") + service.name + " " + what + "?",
+					text: service.about,
+					confirm: "Yes",
+					cancel: "No"
+				});
+				const key = yes
+					? await askDialog({
+							title: "Your " + service.name + " " + what,
+							placeholder: service.key === "username" ? "Username" : "API key",
+							secret: true,
+							confirm: "Use it"
+					  })
+					: null;
+
+				if (!key) {
+					select.value = select.dataset.was || "none";
+					matchSecondary();
+					return;
+				}
+
+				box.value = key;
+				select.dataset.was = select.value;
+			}
+
+			primary.dataset.was = primary.value;
+			secondary.dataset.was = secondary.value;
+			matchSecondary();
+
+			primary.addEventListener("change", async function () {
+				matchSecondary();
+				await askForKey(primary);
+				matchSecondary();
+			});
+			secondary.addEventListener("change", function () {
+				askForKey(secondary);
+			});
+
+			for (const button of document.querySelectorAll("[data-remove-key]")) {
+				button.addEventListener("click", async function () {
+					const service = byId(button.dataset.removeKey);
+					const sure = await confirmDialog({
+						title: "Remove the " + service.name + " key?",
+						text: "OmniCore forgets it when you save. Searches that need it go to the Secondary, if there is one.",
+						confirm: "Remove",
+						danger: true
+					});
+					if (!sure) return;
+					removed.push(service.id);
+					const row = button.closest("[data-key-row]");
+					row.querySelector(".key-state").textContent = "Removed when you save";
+					row.querySelector(".key-state").classList.remove("saved");
+					button.remove();
+				});
+			}
+
+			document.getElementById("save").addEventListener("click", async function () {
+				const button = this;
+				const status = document.getElementById("status");
+				const keys = {};
+
+				for (const box of document.querySelectorAll("[data-key-for]")) {
+					if (box.value.trim()) keys[box.dataset.keyFor] = box.value.trim();
+				}
+
+				button.disabled = true;
+				status.className = "status";
+				status.textContent = "";
+
+				try {
+					const response = await fetch("/place-search", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							primary: primary.value,
+							secondary: secondary.value,
+							keys: keys,
+							removeKeys: removed
+						})
+					});
+					if (!response.ok) throw new Error();
+					status.textContent = "Saved.";
+					// Drawn again, so what's saved is what's shown
+					setTimeout(function () { location.reload(); }, 600);
+				} catch (error) {
+					status.className = "status bad";
+					status.textContent = "Couldn't save.";
+					button.disabled = false;
+				}
+			});
+
+			function trySearch() {
+				findPlaces(
+					document.getElementById("try").value,
+					document.getElementById("try-results"),
+					function () {}
+				);
+			}
+
+			document.getElementById("try-search").addEventListener("click", trySearch);
+			document.getElementById("try").addEventListener("keydown", function (event) {
+				if (event.key === "Enter") {
+					event.preventDefault();
+					trySearch();
+				}
+			});
+		`;
+
+		res.send(page("Place search", body, script, "", "/", "Settings"));
+	});
+
+	app.post("/place-search", (req, res) => {
+		const changes = placeSearch.cleanSetting(req.body, readSettings());
+		const saved = writeSettings(changes);
+
+		// What the page needs to know, never the keys
+		res.json({
+			ok: true,
+			warning: placeSearch.warningFor(saved),
+			services: placeSearch.servicesForPage(saved)
+		});
 	});
 
 	// Every dashboard face

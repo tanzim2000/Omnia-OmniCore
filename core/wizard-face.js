@@ -40,7 +40,9 @@ const {
 } = require("./module-config");
 const widgetTypes = require("./widget-types");
 const priorityUi = require("./priority-ui");
-const { searchCities } = require("./location-service");
+const { searchPlaces } = require("./place-search");
+const { PLACE_SEARCH_SCRIPT, PLACE_SEARCH_CSS } = require("./place-search-ui");
+const { readSettings } = require("./settings-store");
 const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
 const { uiStyles, rememberUiMode, DIALOG_SCRIPT } = require("./ui-theme");
 const { ASK_FIRST_SCRIPT } = require("./ask-first");
@@ -319,6 +321,8 @@ const styles = `
 
 	/* Info order lists, short and long: see priority-ui.js */
 	${priorityUi.PRIORITY_CSS}
+	/* Under place search matches: see place-search-ui.js */
+	${PLACE_SEARCH_CSS}
 `;
 
 
@@ -425,8 +429,11 @@ function startWizardFace() {
 	// City lookup for the location fields. Goes through OmniCore rather
 	// than letting the browser call out directly, so the only thing talking
 	// to the outside world is the server.
+	//
+	// Which service is asked is OmniCore's Place search setting (see
+	// place-search.js), the same as on the admin pages.
 	app.get("/geocode", async (req, res) => {
-		res.json(await searchCities(req.query.q || ""));
+		res.json(await searchPlaces(req.query.q || "", readSettings()));
 	});
 
 	// The setup wizard
@@ -893,6 +900,10 @@ function renderWizard(data) {
 		${priorityUi.PRIORITY_SCRIPT}
 		${priorityUi.priorityFieldHtml.toString()}
 
+		// Place search: drawing the matches of a "Search for a city" box.
+		// See core/place-search-ui.js.
+		${PLACE_SEARCH_SCRIPT}
+
 		// One settings field. Shared by the module step and the theme step,
 		// so both look identical — which is the point of declaring settings
 		// rather than shipping a form.
@@ -1240,50 +1251,17 @@ function renderWizard(data) {
 
 		// Look a city up and offer the matches. Clicking one fills in the
 		// coordinate boxes — the stored value is still just coordinates.
-		window.searchCity = async function (key) {
+		// The matches, the note and the credit line are drawn by
+		// findPlaces, shared with the admin pages (core/place-search-ui.js)
+		window.searchCity = function (key) {
 			const query = document.querySelector('[data-loc-query="' + key + '"]').value;
 			const results = document.querySelector('[data-loc-results="' + key + '"]');
 
-			results.innerHTML = '<div class="empty" style="margin-top:8px">Searching…</div>';
-
-			try {
-				const found = await (
-					await fetch("/geocode?q=" + encodeURIComponent(query))
-				).json();
-
-				if (!found.length) {
-					results.innerHTML =
-						'<div class="empty" style="margin-top:8px">Nothing found.</div>';
-					return;
-				}
-
-				window["cities_" + key] = found;
-
-				results.innerHTML = found.map(function (place, index) {
-					return '<button class="result" data-loc-pick="' + key +
-						'" data-index="' + index + '">' +
-						escapeHtml(place.label) + "</button>";
-				}).join("");
-
-				// Wire the results up rather than relying on inline handlers
-				for (const button of results.querySelectorAll("[data-loc-pick]")) {
-					button.addEventListener("click", function () {
-						pickCity(this.dataset.locPick, Number(this.dataset.index));
-					});
-				}
-			} catch (error) {
-				results.innerHTML =
-					'<div class="empty" style="margin-top:8px">Search failed.</div>';
-			}
-		};
-
-		window.pickCity = function (key, index) {
-			const place = window["cities_" + key][index];
-
-			document.querySelector('[data-loc-lat="' + key + '"]').value = place.latitude;
-			document.querySelector('[data-loc-lon="' + key + '"]').value = place.longitude;
-			document.querySelector('[data-loc-query="' + key + '"]').value = place.label;
-			document.querySelector('[data-loc-results="' + key + '"]').innerHTML = "";
+			return findPlaces(query, results, function (place) {
+				document.querySelector('[data-loc-lat="' + key + '"]').value = place.latitude;
+				document.querySelector('[data-loc-lon="' + key + '"]').value = place.longitude;
+				document.querySelector('[data-loc-query="' + key + '"]').value = place.label;
+			});
 		};
 
 		window.addInstance = function (moduleId) {

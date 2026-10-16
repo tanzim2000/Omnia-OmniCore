@@ -116,38 +116,8 @@ async function resolveLocations(moduleId, config) {
 	return config;
 }
 
-// Look up cities by name, so nobody has to go and find coordinates by
-// hand. Same provider as the weather module, free and keyless.
-//
-// This works even with location services switched off — it's the user
-// typing a place name, not OmniCore working out where it is.
-async function searchCities(query) {
-	if (!query || query.trim().length < 2) {
-		return [];
-	}
+// Looking a city up by name used to live here (searchCities, Open-Meteo
+// only). Since v2 it's place-search.js, which can ask any of eight
+// services, picked under Settings -> Place search.
 
-	const url =
-		"https://geocoding-api.open-meteo.com/v1/search?count=6&name=" +
-		encodeURIComponent(query.trim());
-
-	const { data } = await fetchCached(url, {
-		cacheSeconds: 24 * 60 * 60, // place coordinates don't move
-		timeoutSeconds: 5
-	});
-
-	if (!data || !Array.isArray(data.results)) {
-		return [];
-	}
-
-	return data.results.map((place) => ({
-		// admin1 is the state or province — worth showing, since plenty of
-		// city names repeat across a country
-		label: [place.name, place.admin1, place.country]
-			.filter(Boolean)
-			.join(", "),
-		latitude: place.latitude,
-		longitude: place.longitude
-	}));
-}
-
-module.exports = { getLocation, resolveLocations, searchCities };
+module.exports = { getLocation, resolveLocations };

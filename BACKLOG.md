@@ -70,22 +70,12 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
   which moves into the About tab in v2.)
 - **No uninstall in the UI.** Removing a module or theme still means
   deleting its folder.
-- **Test CI.** `npm test` has 26 test files, but nothing runs them on a
+- **Test CI.** `npm test` has 27 test files, but nothing runs them on a
   push. The workflows only publish the image and the docs site.
 - **Tag workflow concurrency.** Two `v*` tags pushed together can run the
   image publish at once. Push tags one at a time, or add `concurrency`.
 - **Updates are only noticed for tagged releases.** An untagged version
   bump is invisible to the updater. Always tag.
-- **A `:dev` image reports the branch as its version.** The image
-  workflow bakes in `OMNICORE_VERSION=${{ github.ref_name }}`, so an image
-  built by hand from `v2` says it's version "v2", which OmniCore reads as
-  2.0.0: every module counts as compatible, and its Updates page looks for
-  release notes under a `## v2` heading that isn't there. Built from `main`
-  it's "main", which isn't a version at all. Proposed: a hand-run build
-  gets `dev`, so it's a development build (the source's version with the
-  dev badge, no update checks), and `CHANGELOG.md` stops being left out of
-  the image (`.dockerignore`), so the Updates page can show what isn't
-  released yet.
 
 ## v2: how it is built
 
@@ -111,9 +101,10 @@ judged ready, not as part of any of these.
 1. **Done.** The Unreleased section (docs site, and a development build's
    Updates page), and Info order lists: dragged into place, a box of its
    own when short, a button and a pop-up when longer than four.
-2. Place search: the engine (eight providers, Primary then Secondary,
-   caching, tests with saved answers), its setting, the key prompts, the
-   credit line on the three pages that search.
+2. **Done.** Place search: eight services, Primary then Secondary, the
+   setting with its key prompts, the credit line on the three pages that
+   search. With it, the `:dev` image fix (a hand-run image is a
+   development build, with the CHANGELOG in it).
 3. Glass and backgrounds: real frosted segments everywhere, tuned in light
    and dark; pictures (safe upload, the fixed layer, dimming, tint and
    blur, Match the picture); animated backgrounds (GIF, animated WebP,
@@ -128,32 +119,23 @@ judged ready, not as part of any of these.
 
 ## v2: features
 
-- **Place search source, an OmniCore setting.** City search
-  (`searchCities` in `core/location-service.js`) uses only Open-Meteo, which
-  has no record of small places (nothing for Bekkestua; Bærum only as the
-  village Bærums verk). Add a **Primary** and a **Secondary** source (Secondary can be
-  None, and cannot equal the Primary); the Secondary is asked when the
-  Primary finds nothing or cannot be reached. Default: Open-Meteo, then
-  Nominatim, both without a key. One function serves the widget page, the
-  wizard and OmniCore settings, so one change covers them. Sources:
-  - No key: Open-Meteo, Nominatim (OpenStreetMap; at most 1 request a
-    second, an identifying User-Agent, no search as you type, so only on
-    pressing Search), Photon (Komoot; finds Bekkestua, terms page could not
-    be read, check them first).
-  - Key needed, asked for the way Weather asks (a `password` setting, the
-    key kept secret, never shown or logged): GeoNames (a free account
-    name, limits not verified), LocationIQ (5,000 a day, needs a "Search by
-    LocationIQ.com" link), Geoapify (3,000 a day, needs "Powered by
-    Geoapify"), Geocode.maps.co (25,000 requests then 1 a second), Google
-    (billing must be enabled on the project, 10,000 free a month).
-  - Left out: OpenCage (its free plan is for testing only).
-  - A keyed Primary with no key saved falls back to the Secondary, and the
-    settings page says so.
-  - Show a small credit under the results naming the source that answered
-    (and "(c) OpenStreetMap contributors" for Nominatim and Photon). The
-    setting's text says what leaves the machine and to whom.
-  - Needs tests with saved answers; nothing is checked live in the
-    sandbox for the keyed ones.
+- **Place search: left to check.**
+  - The five services that need a key (GeoNames, LocationIQ, Geoapify,
+    Geocode.maps.co, Google) are tested only against answers written from
+    their documentation (`test/fixtures/place-search/README.md`). Try each
+    with a real key, and replace those files with real answers. GeoNames
+    did answer live, refusing a made-up username, and that was handled.
+  - The default order doesn't fix "Bærum": Open-Meteo finds Bærums verk,
+    which counts as finding something, so Nominatim is never asked. Either
+    make Nominatim the default Primary, or leave the default and let people
+    switch. To decide.
+  - Google's terms ask that Geocoding results be shown on a Google Map and
+    limit how long they're kept. OmniCore credits Google under the matches,
+    but a picked place's coordinates are saved for as long as the setting
+    stands. Decide whether to keep Google as a choice.
+  - Nominatim's policy asks that an application can stop using it if the
+    OpenStreetMap Foundation asks, without an update. Today that means
+    each install picks another service in the setting.
 
 ## v2: the design
 

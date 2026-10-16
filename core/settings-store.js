@@ -29,6 +29,18 @@ const DEFAULTS = {
 	longitude: null,
 	locationLabel: "",
 
+	// --- Place search (since v2) ---------------------------------------
+	// Which service a "Search for a city" box asks: the Primary first,
+	// the Secondary when the Primary finds nothing, can't be reached, or
+	// needs a key that isn't saved. "none" for no Secondary. Both default
+	// to services that need no key. See place-search.js.
+	placeSearchPrimary: "open-meteo",
+	placeSearchSecondary: "nominatim",
+
+	// Keys for the services that need one, by service: { geonames: "..." }.
+	// Never sent back to a page once saved, never logged.
+	placeSearchKeys: {},
+
 	// Registries to check for installable modules and themes, beyond the
 	// project's own built-in one — which is never in this list, and is
 	// never removable. Adding a source means trusting whoever runs it to

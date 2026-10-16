@@ -84,6 +84,11 @@ COPY package.json package-lock.json ./
 COPY core/ ./core/
 COPY start.OmniCore ./
 
+# What's in this build, for its Updates page. A release reads its notes
+# from GitHub; a development build (a hand-run ":dev" image) reads them
+# from here, along with what isn't released yet.
+COPY CHANGELOG.md ./
+
 # 3000 admin, 3999 setup wizard, 4000 welcome face. Dashboard faces
 # (4001+) and input faces (5001+) are published by docker-compose.yml,
 # since how many exist depends on what's been configured.

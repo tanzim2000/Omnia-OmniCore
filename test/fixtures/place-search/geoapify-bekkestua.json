@@ -1,0 +1,32 @@
+{
+	"results": [
+		{
+			"datasource": {
+				"sourcename": "openstreetmap",
+				"attribution": "© OpenStreetMap contributors",
+				"license": "Open Database License",
+				"url": "https://www.openstreetmap.org/copyright"
+			},
+			"name": "Bekkestua",
+			"country": "Norway",
+			"country_code": "no",
+			"state": "Akershus",
+			"city": "Bærum",
+			"postcode": "1357",
+			"lon": 10.5873302,
+			"lat": 59.9177484,
+			"result_type": "suburb",
+			"formatted": "Bekkestua, 1357 Bærum, Norway",
+			"address_line1": "Bekkestua",
+			"address_line2": "1357 Bærum, Norway",
+			"place_id": "51abc"
+		}
+	],
+	"query": {
+		"text": "Bekkestua",
+		"parsed": {
+			"city": "bekkestua",
+			"expected_type": "unknown"
+		}
+	}
+}
