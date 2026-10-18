@@ -154,16 +154,15 @@ const PALETTES = {
 		// The green BUTTON ("Installed", "Go back") has its own colours,
 		// separate from `success` above. `success` is also the colour of
 		// "good" status text and of a switch that's turned on, and those
-		// need to stay bright to read against black. The button sits a
-		// couple of steps darker so a row of them doesn't shout louder
-		// than the buttons you can still press. Glossy here, like every
-		// other button in dark mode.
-		successButton: "linear-gradient(to bottom, #1f9a53, #177a41)",
-		successButtonHover: "linear-gradient(to bottom, #23a85b, #1a8549)",
-		successButtonBorder: "#177a41",
-		successButtonText: "#eafff2",
-		successButtonShadow:
-			"inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 6px rgba(0, 0, 0, 0.35)",
+		// need to stay bright to read against black. Since v2 the button
+		// is glass with a green tint and green words, see-through like
+		// every other box and button, rather than a solid green block
+		// that stood out from everything around it.
+		successButton: "rgba(46, 196, 110, 0.16)",
+		successButtonHover: "rgba(46, 196, 110, 0.26)",
+		successButtonBorder: "rgba(62, 214, 122, 0.45)",
+		successButtonText: "#86f0b2",
+		successButtonShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.12)",
 
 		disabled: "#2c2c2c",
 		disabledText: "#545454"
@@ -214,10 +213,10 @@ const PALETTES = {
 		// The green button in light mode is flat: one lighter green, white
 		// text, no bevel and no shadow. The glossy dark-mode version went
 		// a heavy dark green here, with dark text that was hard to read.
-		successButton: "#2fae63",
-		successButtonHover: "#28a35c",
-		successButtonBorder: "#2fae63",
-		successButtonText: "#fff",
+		successButton: "rgba(31, 154, 83, 0.14)",
+		successButtonHover: "rgba(31, 154, 83, 0.22)",
+		successButtonBorder: "rgba(31, 154, 83, 0.45)",
+		successButtonText: "#17733e",
 		successButtonShadow: "none",
 
 		disabled: "#d6d6d8",
@@ -325,9 +324,11 @@ function modeRules(light) {
 	.segment.clickable:hover,
 	.segment.clickable:focus-visible {
 		transform: scale(1.02);
-		background: var(--glass-bg-hover);
-		box-shadow: none;
-	}`;
+		background-color: var(--glass-bg-hover);
+	}
+
+	/* A pop-up's shade: see .modal */
+	.modal { --modal-shade: rgba(255, 255, 255, 0.4); }`;
 	}
 
 	return `
@@ -339,11 +340,16 @@ function modeRules(light) {
 	.segment.clickable:hover,
 	.segment.clickable:focus-visible {
 		transform: none;
-		box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.55),
+		box-shadow:
+			inset 0 1px 0 var(--segment-edge),
+			0 0 0 1px rgba(255, 255, 255, 0.55),
 			0 0 32px rgba(255, 255, 255, 0.45),
 			0 0 70px rgba(255, 255, 255, 0.2);
-		background: var(--glass-bg-hover);
-	}`;
+		background-color: var(--glass-bg-hover);
+	}
+
+	/* A pop-up's shade: see .modal */
+	.modal { --modal-shade: rgba(8, 10, 14, 0.4); }`;
 }
 
 // Everything above, plus the components, as one stylesheet. Pages drop
@@ -509,6 +515,25 @@ function uiStyles(options) {
 
 	.glass:active { transform: scale(0.97); }
 
+	/* Everything else you can point at fades its colours too, rather
+	   than snapping, unless its own rule says how. :where() counts for
+	   nothing against another rule, so any element with a transition of
+	   its own keeps it. Colours only: things that move (a row being
+	   dragged, a sliding tab) are left alone. */
+	:where(a, button, input, select, textarea, summary, label,
+		[role="button"], .option, .widget-choice, .result, .tab-btn) {
+		transition: color 0.2s ease, background-color 0.2s ease,
+			border-color 0.2s ease, box-shadow 0.25s ease, opacity 0.2s ease;
+	}
+
+	/* With reduced motion asked for, nothing grows or shrinks; colours
+	   still fade, which isn't movement */
+	@media (prefers-reduced-motion: reduce) {
+		.segment.clickable:hover,
+		.segment.clickable:focus-visible,
+		.glass:active { transform: none; }
+	}
+
 	/* A button that can't be pressed right now (Update now without
 	   Docker, Save while saving) has to look like it, or it reads as
 	   broken when nothing happens. Faded, no glow, no press. */
@@ -541,7 +566,8 @@ function uiStyles(options) {
 	/* ---------------------------------------------------------------
 	   Coloured buttons — for the few moments that should stand out from
 	   the plain glass buttons: "Installed" in the Marketplace, and "Go
-	   back" / "I understand" before a third-party source is added.
+	   back" / "I understand" before a third-party source is added. Glass
+	   too since v2: the green is a tint, not a solid block.
 
 	     .btn-glossy .btn-glossy-green     the safe or finished choice
 	     .btn-glossy .btn-glossy-neutral   the grey, second choice
@@ -583,18 +609,21 @@ function uiStyles(options) {
 		background: var(--success-button);
 		border-color: var(--success-button-border);
 		box-shadow: var(--success-button-shadow);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 	}
 
 	.btn-glossy-green:hover:not(:disabled) { background: var(--success-button-hover); }
 
+	/* The second choice: plain glass, like the glass buttons */
 	.btn-glossy-neutral {
 		color: var(--fg);
-		background: linear-gradient(to bottom, var(--disabled-text), var(--disabled));
+		background: var(--glass-bg);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
 	}
 
-	.btn-glossy-neutral:hover:not(:disabled) {
-		background: linear-gradient(to bottom, var(--disabled-text), var(--border));
-	}
+	.btn-glossy-neutral:hover:not(:disabled) { background: var(--glass-bg-hover); }
 
 	/* ---------------------------------------------------------------
 	   Toolbar — one row of controls for a list: a search box, a
@@ -656,8 +685,12 @@ function uiStyles(options) {
 	   --------------------------------------------------------------- */
 	.segment {
 		/* The tint (a colour, a little of it) over the glass's own fill.
-		   --glass-tint is transparent until one is picked. */
-		background: linear-gradient(var(--glass-tint), var(--glass-tint)), var(--segment-bg);
+		   --glass-tint is transparent until one is picked. Written as
+		   two parts rather than one background, so a hover can change
+		   the fill (a colour, which can fade) and keep the tint (a
+		   gradient, which can't). */
+		background-color: var(--segment-bg);
+		background-image: linear-gradient(var(--glass-tint), var(--glass-tint));
 		border: 1px solid var(--segment-border);
 		border-radius: var(--radius);
 		padding: 1.25em;
@@ -668,10 +701,19 @@ function uiStyles(options) {
 		-webkit-backdrop-filter: var(--segment-blur);
 	}
 
+	/* At rest a clickable box carries its glow already, fully
+	   transparent, so a hover only changes colours. A browser can fade
+	   between two shadows only when both have the same parts in the same
+	   order; written any other way the glow just jumps on. */
 	.segment.clickable {
 		cursor: pointer;
-		transition: box-shadow 0.25s ease, transform 0.25s ease,
-			background 0.25s ease;
+		box-shadow:
+			inset 0 1px 0 var(--segment-edge),
+			0 0 0 1px transparent,
+			0 0 32px transparent,
+			0 0 70px transparent;
+		transition: box-shadow 0.3s ease, transform 0.3s ease,
+			background-color 0.3s ease;
 	}
 
 	/* How a clickable segment answers a hover differs between light
@@ -710,20 +752,43 @@ function uiStyles(options) {
 		border-radius: 0.25em;
 	}
 
-	/* A clickable .segment used as a single-line row inside a .list -- name on
-	   the left, a secondary label pinned to the right on the same
-	   line, rather than stacked underneath. Used for the font
-	   picker's results, and anything else where a long list reads
-	   better at a glance than at two lines per entry. */
+	/* A single-line row you can pick, inside a .list: the name on the
+	   left, a secondary label pinned to the right on the same line. The
+	   font picker's results. A plain row, lit on hover, rather than a
+	   box: since v2 a box is frosted glass with its own tint and glow,
+	   and a list of them looked like a pile of cards. */
 	.font-row {
+		appearance: none;
+		-webkit-appearance: none;
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
 		gap: 1em;
+		width: 100%;
 		white-space: nowrap;
+		text-align: left;
+		font: inherit;
+		color: var(--fg);
+		background: transparent;
+		border: 1px solid transparent;
+		border-radius: 0.6em;
+		padding: 0.7em 0.9em;
+		cursor: pointer;
 	}
 
+	.font-row:hover,
+	.font-row:focus-visible {
+		background: var(--glass-bg-hover);
+		border-color: var(--glass-border);
+		outline: none;
+	}
+
+	.font-row strong { overflow: hidden; text-overflow: ellipsis; font-size: 1.05em; }
 	.font-row .hint { margin: 0; flex-shrink: 0; }
+
+	/* A list inside a pop-up is part of the pop-up's glass: no frame of
+	   its own */
+	.modal .list { border: none; border-radius: 0; padding: 0; gap: 2px; }
 
 	/* ---------------------------------------------------------------
 	   Floating button — flat, NOT glossy, deliberately distinct from
@@ -749,8 +814,16 @@ function uiStyles(options) {
 		cursor: pointer;
 		backdrop-filter: blur(12px);
 		-webkit-backdrop-filter: blur(12px);
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-		transition: background 0.15s ease;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 30px transparent;
+		transition: background-color 0.2s ease, box-shadow 0.25s ease;
+	}
+
+	/* It glows like any other button */
+	.floating:hover,
+	.floating:focus-visible {
+		background-color: var(--glass-bg-hover);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 30px var(--glow-strong);
+		outline: none;
 	}
 
 	.floating:active,
@@ -1331,12 +1404,17 @@ function uiStyles(options) {
 		border-radius: 0.25em;
 	}
 
+	/* A pop-up: the page dimmed behind it, and the pop-up itself frosted
+	   glass, like the boxes (since v2).
+
+	   The dimmed page is blurred a little too, but on a layer of its own
+	   (::before) rather than on .modal-backdrop. A blur on an element
+	   stops anything inside it from blurring what's behind the element,
+	   so the pop-up's own glass would only see a flat dark colour. */
 	.modal-backdrop {
 		position: fixed;
 		inset: 0;
-		background: rgba(0, 0, 0, 0.6);
-		backdrop-filter: blur(3px);
-		-webkit-backdrop-filter: blur(3px);
+		background: rgba(0, 0, 0, 0.45);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1344,8 +1422,22 @@ function uiStyles(options) {
 		z-index: 100;
 	}
 
+	.modal-backdrop::before {
+		content: "";
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		backdrop-filter: blur(3px);
+		-webkit-backdrop-filter: blur(3px);
+	}
+
 	.modal-backdrop[hidden] { display: none; }
 
+	/* The same glass as a box: its fill, the tint, the light edge, the
+	   blur picked in Settings. Two things more, because a pop-up sits on
+	   top of text rather than a picture: a little shade (--modal-shade,
+	   in modeRules) and at least 16px of blur, so what's behind it can
+	   never be read through it, even with the blur turned right down. */
 	.modal {
 		width: 100%;
 		max-width: 26em;
@@ -1353,10 +1445,15 @@ function uiStyles(options) {
 		display: flex;
 		flex-direction: column;
 		gap: 0.9em;
-		background: var(--bg);
-		border: 1px solid var(--glass-border);
+		background-color: var(--segment-bg);
+		background-image:
+			linear-gradient(var(--glass-tint), var(--glass-tint)),
+			linear-gradient(var(--modal-shade), var(--modal-shade));
+		border: 1px solid var(--segment-border);
 		border-radius: var(--radius);
-		box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+		box-shadow: inset 0 1px 0 var(--segment-edge), 0 16px 48px rgba(0, 0, 0, 0.45);
+		backdrop-filter: blur(max(var(--glass-blur), 16px)) saturate(var(--glass-saturate));
+		-webkit-backdrop-filter: blur(max(var(--glass-blur), 16px)) saturate(var(--glass-saturate));
 		padding: 1.4em;
 	}
 
@@ -1393,6 +1490,8 @@ function uiStyles(options) {
 	.dialog-text { margin: 0; color: var(--fg-muted); line-height: 1.5; }
 	.dialog-buttons { display: flex; gap: 0.6em; margin-top: 0.4em; }
 	.dialog-buttons > button { flex: 1; }
+	.dialog-link { align-self: flex-start; font-size: 0.9em; color: var(--fg-muted); }
+	.dialog-link:hover { color: var(--fg); }
 
 	/* A glass button for something that can't be taken back (deleting a
 	   face, removing a widget). The same button as everywhere else, in
@@ -1452,6 +1551,16 @@ function uiStyles(options) {
 // have one. Pages that are a root — the welcome face, an input face,
 // the wizard — pass nothing and get nothing; there's genuinely nowhere
 // for it to lead.
+//
+// The settings home's button signs out rather than going back (its
+// address is /logout), so it shows a sign-out icon, a door with an arrow
+// leaving it, and says "Sign out" on hover and to a screen reader.
+// Every other page gets the arrow and "Back".
+const SIGN_OUT_ICON =
+	'<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" ' +
+	'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' +
+	'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>';
+
 function backButton(href) {
 	if (!href) {
 		return "";
@@ -1461,11 +1570,13 @@ function backButton(href) {
 		? "top-left"
 		: "bottom-right";
 
+	const signOut = href === "/logout";
+
 	return `
 	<button
 		class="floating ${corner}"
 		onclick="${pageMotion.goScript(`'${href}'`)}"
-		aria-label="Back">&#8592;</button>`;
+		${signOut ? 'aria-label="Sign out" title="Sign out"' : 'aria-label="Back"'}>${signOut ? SIGN_OUT_ICON : "&#8592;"}</button>`;
 }
 
 // The version as it's written on a page: "1.19.4", and for a development
@@ -1575,6 +1686,8 @@ const MODE_SWITCH_SCRIPT = `
 // to what was typed (trimmed; the confirm button stays off until there is
 // something), with `secret: true` for a box that hides what's typed. Both
 // resolve false / null for Cancel, a click outside the panel, or Escape.
+// `link: { text, url }` adds a small link under the text (where to get an
+// API key, say); only an https:// address becomes one.
 const DIALOG_SCRIPT = `
 	function openDialog(options, withInput) {
 		return new Promise(function (resolve) {
@@ -1595,6 +1708,16 @@ const DIALOG_SCRIPT = `
 				text.className = "dialog-text";
 				text.textContent = options.text;
 				panel.appendChild(text);
+			}
+
+			if (options.link && /^https:\\/\\//.test(options.link.url || "")) {
+				var link = document.createElement("a");
+				link.className = "dialog-link";
+				link.href = options.link.url;
+				link.target = "_blank";
+				link.rel = "noopener noreferrer";
+				link.textContent = options.link.text || options.link.url;
+				panel.appendChild(link);
 			}
 
 			var input = null;

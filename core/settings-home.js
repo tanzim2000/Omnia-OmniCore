@@ -351,7 +351,13 @@ const SETTINGS_HOME_CSS = `
 
 	.home-head h1 { margin: 0; }
 
-	.home-panes { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+	/* The tabs start 3em higher than they look, under the heading, with
+	   that 3em given back as padding inside each tab. A tab scrolls on
+	   its own, so it cuts off anything outside it, and a glowing box in
+	   the first row would have its glow cut off in a straight line where
+	   the tab begins. The extra room is where that glow goes. */
+	.home-panes { flex: 1; min-height: 0; position: relative; overflow: hidden; margin-top: -3em; }
+	html:not(.home-tabs) .home-panes { margin-top: 0; }
 
 	/* Without the script: one long page */
 	html:not(.home-tabs) body.settings-home { height: auto; overflow: visible; }
@@ -375,7 +381,7 @@ const SETTINGS_HOME_CSS = `
 		overscroll-behavior: contain;
 		scrollbar-width: thin;
 		scrollbar-color: var(--scroll-thumb) transparent;
-		padding: 0.25em 1.75em 7em;
+		padding: 3.25em 1.75em 7em;
 		box-sizing: border-box;
 	}
 
@@ -441,13 +447,13 @@ const SETTINGS_HOME_CSS = `
 	.fact span:first-child { color: var(--fg-muted); white-space: nowrap; }
 
 	/* The background's preview: a strip rather than a whole picture */
-	.home-bento .backdrop-preview { aspect-ratio: auto; height: 12em; }
+	.home-bento .backdrop-preview { aspect-ratio: auto; height: 10em; }
 	.fact span:last-child { text-align: right; overflow-wrap: anywhere; }
 
 	/* A phone held upright: one column, and the heading below the notch */
 	@media (max-width: 42em) {
 		.home-head { padding: 4.5em 1em 0.5em; min-height: 0; }
-		html.home-tabs .home-pane { padding: 0.25em 1em 7em; }
+		html.home-tabs .home-pane { padding: 3.25em 1em 7em; }
 		html:not(.home-tabs) .home-pane { padding: 0 1em 2em; }
 		.home-bento { grid-template-columns: minmax(0, 1fr); }
 		.home-bento .c2, .home-bento .c3, .home-bento .c4 { grid-column: 1 / -1; }

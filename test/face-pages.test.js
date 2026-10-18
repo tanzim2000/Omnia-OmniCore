@@ -165,7 +165,7 @@ test("facts: the facts and the Widgets / Theme links are two segments", async ()
 	// This face (since v1.19.8)
 	assert.match(
 		html,
-		/<\/div>\s*<\/div>\s*<div class="resource-pair">\s*<div class="segment resources">\s*<h2>Manage resources<\/h2>\s*<p class="lede">[^<]*<\/p>\s*<a class="row" href="\/faces\/4001\/modules">/
+		/<\/div>\s*<\/div>\s*<div class="resource-pair">\s*<div class="segment resources">\s*<h2>Manage resources<\/h2>\s*<p class="lede">[^<]*<\/p>\s*<a class="row glass" href="\/faces\/4001\/modules">/
 	);
 });
 
@@ -226,19 +226,58 @@ test("faces list: heading on the page, the list, and the button where the capsul
 test("updates: the About tab has the version, the updates, and a box for the notes", async () => {
 	const { html } = await get(ADMIN, "/");
 	const about = html.slice(html.indexOf('data-pane="about"'));
-	assert.match(about, /<div class="segment c2">\s*<h2>OmniCore<\/h2>/);
 	assert.match(about, /<div class="segment c4">\s*<h2>Updates<\/h2>/);
 	assert.match(about, /<div class="segment c6" id="release-notes">/);
 	assert.ok(html.includes('fetch("/updates/notes"'), "the notes come after the page is up");
 });
 
-test("updates: the notes scroll inside their box", async () => {
+test("updates: the OmniCore box is the way to System info, with the address, not the port", async () => {
 	const { html } = await get(ADMIN, "/");
-	const rule = html.match(/\.changelog \{([^}]*)\}/);
+	const about = html.slice(html.indexOf('data-pane="about"'));
+	const box = about.slice(about.indexOf('<a class="segment clickable c2 about-box"'), about.indexOf("</a>"));
+
+	assert.ok(box.includes('id="about-link"'), "the whole box is the link");
+	assert.match(box, /<h2>OmniCore<\/h2>/);
+	assert.match(box, /<span>Version<\/span>/);
+	assert.match(box, /<span>Address<\/span><span id="home-address" data-set="">/, "filled in by the page");
+	assert.ok(!box.includes("<span>Port</span>"), "no port on its own");
+	assert.ok(!box.includes("System info</a>"), "no System info button");
+	assert.ok(html.includes("aboutLink.href = faceUrl(1303)"), "a real address, so it opens in a new tab too");
+});
+
+test("updates: OMNICORE_ADDRESS is shown as it is, with the port; anything else is ignored", async () => {
+	const before = process.env.OMNICORE_ADDRESS;
+	try {
+		process.env.OMNICORE_ADDRESS = "192.168.1.50";
+		let { html } = await get(ADMIN, "/");
+		assert.ok(html.includes('<span id="home-address" data-set="yes">192.168.1.50:3000</span>'));
+
+		process.env.OMNICORE_ADDRESS = "http://omnia.local:3000/";
+		({ html } = await get(ADMIN, "/"));
+		assert.ok(html.includes('data-set="yes">omnia.local:3000</span>'), "the scheme, port and path are dropped");
+
+		process.env.OMNICORE_ADDRESS = '"><script>';
+		({ html } = await get(ADMIN, "/"));
+		assert.ok(html.includes('<span id="home-address" data-set="">'), "not an address: ignored");
+		assert.ok(!html.includes('"><script>'));
+	} finally {
+		if (before === undefined) delete process.env.OMNICORE_ADDRESS;
+		else process.env.OMNICORE_ADDRESS = before;
+	}
+});
+
+test("updates: the notes scroll inside their box, which fits the screen", async () => {
+	const { html } = await get(ADMIN, "/");
+	const rule = html.match(/\n\t\.changelog \{([^}]*)\}/);
 
 	assert.ok(rule, "the notes have a rule of their own");
 	assert.match(rule[1], /overflow-y: auto/);
 	assert.match(rule[1], /max-height:/);
+
+	// On the About tab (not a phone held upright) the box takes the room
+	// that's left, and each part scrolls in it, so the tab doesn't
+	assert.match(html, /html\.home-tabs \.home-pane\[data-pane=about\] \.home-bento \{[^}]*grid-template-rows: auto minmax\(0, 1fr\)/);
+	assert.match(html, /html\.home-tabs \.notes-part \.changelog \{ flex: 1; min-height: 0; max-height: none; \}/);
 });
 
 // --- The About page ---------------------------------------------------------

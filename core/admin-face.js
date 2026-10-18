@@ -172,48 +172,6 @@ const styles = `
 	   kept to the size they are in a half-width box */
 	.narrow-previews { max-width: 24em; }
 
-	/* Corner map: the buttons sit where the thing they choose would
-	   actually sit, so the choice is spatial rather than a list of
-	   names to decode */
-	.corner-map {
-		position: relative;
-		background: var(--well-bg);
-		border: 1px solid var(--segment-border);
-		border-radius: 0.625em;
-		height: 118px;
-		padding: 0.5em;
-	}
-
-	.corner-map button {
-		position: absolute;
-		appearance: none;
-		-webkit-appearance: none;
-		background: transparent;
-		border: 1px solid var(--glass-border);
-		color: var(--fg-muted);
-		border-radius: 0.5357em;
-		padding: 0.5357em 0.8929em;
-		font-family: inherit;
-		font-size: 0.7em;
-		cursor: pointer;
-	}
-
-	.corner-map button.active {
-		background: var(--glass-bg-hover);
-		color: var(--fg);
-		box-shadow: inset 0 1px 0 var(--glass-sheen);
-	}
-
-	.corner-map button:disabled {
-		color: var(--disabled-text);
-		border-color: var(--segment-border);
-		cursor: not-allowed;
-	}
-
-	.corner-tl { top: 8px; left: 8px; }
-	.corner-tr { top: 8px; right: 8px; }
-	.corner-bl { bottom: 8px; left: 8px; }
-	.corner-br { bottom: 8px; right: 8px; }
 
 	/* An inset strip inside a segment: the detected location, the current
 	   font. Reads as "this is a value, not a control". */
@@ -241,27 +199,7 @@ const styles = `
 	.inset-label { font-size: 0.7em; color: var(--fg-muted); }
 	.inset-value { font-size: 0.85em; margin-top: 2px; }
 
-	.link-segment { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
 
-	.link-row {
-		display: block;
-		background: var(--glass-bg);
-		border: 1px solid var(--glass-border);
-		border-radius: 0.625em;
-		padding: 0.75em 0.875em;
-		text-decoration: none;
-		color: var(--fg);
-		transition: background 0.2s ease, box-shadow 0.2s ease;
-	}
-
-	.link-row:hover,
-	.link-row:focus-visible {
-		background: var(--glass-bg-hover);
-		box-shadow: 0 0 26px var(--glow-strong);
-	}
-
-	.link-row strong { display: block; font-size: 0.85em; }
-	.link-row span { font-size: 0.72em; color: var(--fg-muted); }
 
 	/* Landscape: width against height rather than a pixel threshold.
 	   A phone can report more CSS pixels than an old desktop monitor,
@@ -546,28 +484,12 @@ const styles = `
 
 	.row span { opacity: 0.55; font-size: 13px; }
 
-	/* Clickable rows get the same glass treatment as buttons, so anything
-	   you can act on looks the same everywhere in OmniCore's own UI */
-	a.row {
-		position: relative;
-		overflow: hidden;
-		background: var(--glass-bg);
-		border-color: var(--glass-border);
-		backdrop-filter: blur(12px);
-	}
-
-	a.row:hover { background: var(--border); }
-
-	a.row::before {
-		content: "";
-		position: absolute;
-		top: 0; left: 0; right: 0;
-		height: 50%;
-		background: linear-gradient(
-			to bottom, var(--glass-sheen), transparent
-		);
-		pointer-events: none;
-	}
+	/* A row you can click (a face in the list, Widgets and Theme on a
+	   face's page) is a glass button (.glass in ui-theme.js), laid out
+	   as a row: the same glow, fade and press as every other button.
+	   Before v2 it had its own copy of the look, which only turned grey
+	   on hover. */
+	.row.glass { border-color: var(--glass-border); }
 
 
 	/* Info order lists, short and long: see priority-ui.js */
@@ -586,6 +508,38 @@ const styles = `
 	/* Its release notes: each part side by side when there's room */
 	#notes-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(20em, 1fr)); gap: 1.5em; }
 	.notes-part h3 { margin: 0 0 0.6em; font-size: 1em; }
+
+	/* The OmniCore box is a link to System info: its heading with an
+	   arrow, then its facts */
+	.about-box { display: block; color: var(--fg); text-decoration: none; }
+	.about-box-head { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+	.about-box-head svg { color: var(--fg-muted); flex: none; }
+	.about-box-head + .fact { border-top: 0; }
+	.about-hint { margin: 0 0 0.5em; }
+	.about-hint[hidden] { display: none; }
+
+	/* The About tab fits the screen: the release notes take the room
+	   left under the two boxes above and scroll inside it, each part on
+	   its own, so the tab itself never scrolls. Less room is kept at the
+	   bottom than on the other tabs, unless the Back button is down
+	   there. A phone held upright scrolls as usual. */
+	@media (min-width: 42.01em) {
+		html.home-tabs .home-pane[data-pane=about] { padding-bottom: 1.75em; }
+		body.settings-home:has(> .floating.bottom-right) .home-pane[data-pane=about] { padding-bottom: 6em; }
+		html.home-tabs .home-pane[data-pane=about] .home-bento {
+			height: 100%;
+			grid-template-rows: auto minmax(0, 1fr);
+		}
+		html.home-tabs #release-notes {
+			align-self: stretch;
+			display: flex;
+			flex-direction: column;
+			min-height: 14em;
+		}
+		html.home-tabs #notes-body { flex: 1; min-height: 0; grid-auto-rows: minmax(0, 100%); overflow-y: auto; }
+		html.home-tabs .notes-part { display: flex; flex-direction: column; min-height: 0; }
+		html.home-tabs .notes-part .changelog { flex: 1; min-height: 0; max-height: none; }
+	}
 
 	/* Location Service's own boxes, under "Set it myself" */
 	.location-manual { margin-top: 14px; }
@@ -610,6 +564,35 @@ const styles = `
 	}
 
 	.backdrop-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+	/* The preview with the back button's corners on it */
+	.backdrop-stage { position: relative; }
+	.corner-pick {
+		position: absolute;
+		width: 2em;
+		height: 2em;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.85em;
+		color: var(--fg);
+		background: transparent;
+		border: 1.5px dashed currentColor;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+		cursor: pointer;
+		padding: 0;
+	}
+	.corner-pick:hover, .corner-pick:focus-visible { background: rgba(255, 255, 255, 0.2); outline: none; }
+	.corner-pick.active {
+		cursor: default;
+		border: 1px solid var(--glass-border);
+		background: var(--segment-bg);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+	}
+	.corner-pick-top-left { top: 0.75em; left: 0.75em; }
+	.corner-pick-bottom-right { bottom: 1.25em; right: 0.75em; }
 	.backdrop-preview.plain { background: var(--bg); color: var(--fg-muted); font-size: 0.9em; }
 
 	.button-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
@@ -671,7 +654,7 @@ const styles = `
 
 	input[type="range"] { width: 100%; accent-color: var(--fg); }
 
-	/* The Place search page: what's saved won't work as it reads */
+	/* Place search: what's chosen won't work as it reads */
 	.place-warning {
 		margin: 12px 0 0;
 		padding: 0.7em 0.9em;
@@ -685,17 +668,21 @@ const styles = `
 
 	.place-warning[hidden] { display: none; }
 
-	/* Its keys: whether one is saved, and where to get one */
-	.key-row .search-row > :first-child { flex: 1; min-width: 0; }
-	.key-row .help { margin-top: 6px; }
-	.key-row .help a { color: inherit; }
-	.key-state.saved { color: var(--success); }
-
-	/* Its list of the services, one line each */
-	.service-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
-	.service-row { display: flex; flex-direction: column; gap: 2px; font-size: 0.9em; line-height: 1.5; }
-	.service-row span { color: var(--fg-muted); }
-	.service-row a { color: inherit; }
+	/* Saved keys: the service and "API key saved", Change and Remove */
+	.saved-key {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.6em 1em;
+		padding: 0.75em 0;
+		border-top: 1px solid var(--segment-border);
+	}
+	.saved-key-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+	.saved-key-text span { color: var(--fg-muted); font-size: 0.85em; }
+	.saved-key-buttons { display: flex; gap: 0.5em; }
+	.saved-key-buttons .glass { padding: 0.6em 1.1em; }
+	.saved-key[hidden], #no-keys[hidden] { display: none; }
 
 
 
@@ -796,23 +783,18 @@ const styles = `
 	   padding already gives it room */
 	.market .segment .lede:last-child { margin-bottom: 0; }
 
-	/* Search, Modules / Themes and the count stay pinned at the top while
-	   the listings scroll under them. Frosted, not solid: the rows passing
-	   underneath are blurred out, so they never collide with the search
-	   text. The tint is the page's own background colour mixed in, so it
-	   works in light and dark without a colour of its own. */
+	/* The search, the Modules / Themes switch and the count: pinned at
+	   the top while the listings scroll under it. Frosted glass like
+	   every other box (since v2: before, a fill of its own, mostly the
+	   page's black). The blur is never less than 16px here, so the
+	   listings passing underneath stay a smudge and never collide with
+	   the search text, even with the blur turned down in Settings. */
 	.market-toolbar {
 		position: sticky;
 		top: 1em;
 		z-index: 5;
-		background:
-			linear-gradient(
-				color-mix(in srgb, var(--bg) 55%, transparent),
-				color-mix(in srgb, var(--bg) 55%, transparent)
-			),
-			var(--segment-bg);
-		backdrop-filter: blur(0.75em);
-		-webkit-backdrop-filter: blur(0.75em);
+		backdrop-filter: blur(max(var(--glass-blur), 16px)) saturate(var(--glass-saturate));
+		-webkit-backdrop-filter: blur(max(var(--glass-blur), 16px)) saturate(var(--glass-saturate));
 	}
 
 	/* As many columns as fit, each at least 30em wide: one on a phone, two
@@ -1019,9 +1001,8 @@ function escapeHtml(text) {
 // a shared one rather than fighting source order.
 //
 // `back` is a URL for the floating button, or nothing at all for a
-// screen that is genuinely a root. `backLabel`, when given, replaces
-// the default arrow with text and switches to the pill shape — see
-// ui-theme.js's backButton().
+// screen that is genuinely a root. /logout (the settings home's) gets a
+// sign-out icon instead of the arrow: see ui-theme.js's backButton().
 // What Delete face's question says goes with the face. Said plainly,
 // because there's no undo: how many widgets, and what happens to a
 // screen that's showing it.
@@ -1190,7 +1171,7 @@ const localTimeScript = `
 	})();
 `;
 
-function page(title, body, script, bodyClass, back, backLabel) {
+function page(title, body, script, bodyClass, back) {
 	return `<!DOCTYPE html>
 <html>
 <head>
@@ -1202,7 +1183,7 @@ function page(title, body, script, bodyClass, back, backLabel) {
 <body class="${bodyClass || ""}">
 ${pageStart()}
 	${body}
-	${backButton(back, backLabel)}
+	${backButton(back)}
 	<script>${UI_MODE_SCRIPT}${PASSWORD_TOGGLE_SCRIPT}${DIALOG_SCRIPT}${script || ""}${ASK_FIRST_SCRIPT}</script>
 </body>
 </html>`;
@@ -1311,7 +1292,7 @@ function notFound(heading, backHref, backLabel) {
 		`<div class="bento narrow">
 			<div class="segment">
 				<h1 style="margin-bottom:14px">${escapeHtml(heading)}</h1>
-				<a class="row" href="${backHref}">
+				<a class="row glass" href="${backHref}">
 					<strong>${escapeHtml(backLabel)}</strong>
 					<span>Go back there</span>
 				</a>
@@ -1698,19 +1679,34 @@ function backgroundPanel(settings) {
 
 	const custom = /^#[0-9a-f]{6}$/i.test(tint) && !backdropStore.TINT_PRESETS.includes(tint.toLowerCase());
 
+	// Where the back button sits, picked on the preview itself: a small
+	// round button in each corner it can go in (top left, bottom right;
+	// bottom left is the welcome face's timer, top right the light switch),
+	// the one in use filled in. Saved, then the page reloads to move it.
+	const topLeft = settings.backButtonCorner === "top-left";
+	const cornerPick = (value, label, active) =>
+		`<button type="button" class="corner-pick corner-pick-${value}${active ? " active" : ""}" data-value="${value}"` +
+		` aria-pressed="${active ? "true" : "false"}"` +
+		` aria-label="${active ? `The back button is ${label}` : `Put the back button ${label}`}"` +
+		` title="${active ? `Back button: ${label}` : `Move the back button ${label}`}">${active ? "&#8592;" : ""}</button>`;
+
 	const backgroundBox = `
-				<div class="segment c4 r2" id="background">
+				<div class="segment c2 r2" id="background">
 					<h2>Background</h2>
 					<p class="lede">
-						Behind OmniCore's own pages: these settings, the setup
-						wizard, the welcome screen and About. A face keeps its
-						theme's own background.
+						Behind OmniCore's own pages. A face keeps its theme's own
+						background.
 					</p>
 
-					<div class="backdrop-preview${picture ? "" : " plain"}" id="preview">${preview}</div>
+					<div class="backdrop-stage">
+						<div class="backdrop-preview${picture ? "" : " plain"}" id="preview">${preview}</div>
+						${cornerPick("top-left", "top left", topLeft)}
+						${cornerPick("bottom-right", "bottom right", !topLeft)}
+					</div>
 					<p class="hint" id="kind">${
 						picture ? escapeHtml(kindName || "A picture") : "Plain: black, or light grey in light mode."
 					}</p>
+					<p class="hint">The round button is where the back button sits. Pick the other corner to move it.</p>
 
 					<div class="button-row">
 						<button type="button" class="glass" id="choose">Choose a file</button>
@@ -1722,18 +1718,15 @@ function backgroundPanel(settings) {
 
 					<p class="help">
 						A picture (JPEG, PNG, WebP), an animated GIF or WebP, or a
-						looping video (MP4, WebM) without sound, up to 50 MB. A video
-						looks sharper than a GIF. It's kept in OmniCore's data folder
-						and shown by OmniCore itself, never sent anywhere, and it's
-						seen on the pages that need no sign-in too. With reduced
-						motion turned on in your device's settings, a still frame is
-						shown instead.
+						looping video (MP4, WebM) without sound, up to 50 MB. Kept by
+						OmniCore and never sent anywhere. With reduced motion on, a
+						still frame is shown.
 					</p>
 				</div>
 `;
 
 	const glassBox = `
-				<div class="segment c4" id="glass">
+				<div class="segment c4 r2" id="glass">
 					<h2>Frosted glass</h2>
 					<p class="lede">Every box on these pages, over the background.</p>
 
@@ -2106,13 +2099,30 @@ function backgroundPanel(settings) {
 	return { backgroundBox, glassBox, script };
 }
 
+// The server's address on the home network, the one other devices use to
+// reach Settings and the faces, when it's been given: OMNICORE_ADDRESS in
+// the compose file, an IP (192.168.1.50) or a name (omnia.local). Inside
+// Docker, OmniCore can't find it by itself: all it sees is the container's
+// own address (172.something), which no other device can use. Anything
+// that isn't a plain address or name is ignored. Null when not given.
+function homeAddress() {
+	const raw = String(process.env.OMNICORE_ADDRESS || "")
+		.trim()
+		.replace(/^[a-z]+:\/\//i, "")
+		.replace(/\/.*$/, "")
+		.replace(/:\d+$/, "");
+	return /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i.test(raw) ? raw : null;
+}
+
 // The About tab's updates. Until v2 they were a page of their own,
 // /updates; that address now opens the tab:
 //
-//   aboutBox    which OmniCore this is: version, port, and since when it's
-//               been running. Not the data folder: in Docker that's a
-//               volume, and the path inside the container means nothing on
-//               the server.
+//   aboutBox    which OmniCore this is: version, its address on the home
+//               network, and since when it's been running. The whole box
+//               is the way to System info (the About face). Not the port
+//               on its own or the data folder: the address says the port,
+//               and in Docker the data folder is a volume whose path means
+//               nothing on the server.
 //   updatesBox  what the last check found, Check now, Update now, and the
 //               install followed through OmniCore restarting
 //   notesBox    the release notes, filled in after the page has opened
@@ -2171,16 +2181,30 @@ async function updatesPanel() {
 				(readiness && readiness.reason) || "This OmniCore can't install updates itself."
 		  )}</span>`;
 
+	// The address: OMNICORE_ADDRESS when it's set. Otherwise the page
+	// fills it in from the address the browser used to open Settings,
+	// which is the server's own when Settings was opened from another
+	// device. Opened on the server itself (localhost), there's nothing to
+	// show, so it says how to set one.
+	const address = homeAddress();
+
 	const aboutBox = `
-		<div class="segment c2">
-			<h2>OmniCore</h2>
-			<div class="fact"><span>Version</span><span>OmniCore ${versionHtml()}</span></div>
-			<div class="fact"><span>Port</span><span>${ADMIN_PORT}</span></div>
-			${dev ? "" : `<div class="fact"><span>Running since</span><span>${when(since)}</span></div>`}
-			<div class="button-row">
-				<a class="glass" id="about-link" href="#">System info</a>
+		<a class="segment clickable c2 about-box" id="about-link" href="#" title="System info">
+			<div class="about-box-head">
+				<h2>OmniCore</h2>
+				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"
+					stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M7 17L17 7M9 7h8v8"/></svg>
 			</div>
-		</div>`;
+			<div class="fact"><span>Version</span><span>OmniCore ${versionHtml()}</span></div>
+			<div class="fact"><span>Address</span><span id="home-address" data-set="${address ? "yes" : ""}">${
+				address ? escapeHtml(`${address}:${ADMIN_PORT}`) : ""
+			}</span></div>
+			<p class="hint about-hint" id="address-hint" hidden>
+				This page was opened on the server itself, so OmniCore can't tell.
+				Add OMNICORE_ADDRESS to your compose file to show it here.
+			</p>
+			${dev ? "" : `<div class="fact"><span>Running since</span><span>${when(since)}</span></div>`}
+		</a>`;
 
 	const updatesBox = `
 		<div class="segment c4">
@@ -2213,6 +2237,23 @@ async function updatesPanel() {
 			<div id="notes-body" aria-live="polite"><p class="hint">Loading the notes...</p></div>
 		</div>`;
 
+	// The address, when OMNICORE_ADDRESS didn't give it: the one the
+	// browser used, unless that's the server talking to itself
+	const addressScript = `
+		(function () {
+			var shown = document.getElementById("home-address");
+			if (!shown || shown.dataset.set) return;
+			var host = location.hostname;
+			var local = host === "localhost" || /^127\\./.test(host) || host === "::1" || host === "[::1]";
+			if (local) {
+				shown.textContent = "Not known";
+				document.getElementById("address-hint").hidden = false;
+			} else {
+				shown.textContent = location.host;
+			}
+		})();
+	`;
+
 	// The notes, fetched once the page is up
 	const notesScript = `
 		(async function () {
@@ -2230,7 +2271,7 @@ async function updatesPanel() {
 	`;
 
 	// Nothing about checking or installing on a development build
-	const script = notesScript + (dev ? "" : `
+	const script = addressScript + notesScript + (dev ? "" : `
 	(function () {
 		var checkButton = document.getElementById("check");
 		var applyButton = document.getElementById("apply");
@@ -2582,18 +2623,17 @@ async function releaseNotes() {
 
 // The General tab's Place search (since v2 it had a page of its own; it's
 // on the settings home now, and /place-search opens the tab). Which
-// service a "Search for a city" box asks, the keys for the ones that need
-// one, what each service is like, and a box to try a search. See
-// place-search.js.
+// service a "Search for a city" box asks, the keys saved for the ones that
+// need one, and a box to try a search. See place-search.js.
 //
-//   placeBox      Primary, Secondary, the warning, Try it
-//   keysBox       a row per service that takes a key: whether one is
-//                 saved (never the key itself), a box to type a new one,
-//                 Remove
-//   servicesBox   one line on each service
+//   placeBox   Primary, Secondary, the warning, Try it
+//   keysBox    Saved keys: a row per key that's saved (never the key
+//              itself), each with Change and Remove
 //
-// Saved as it changes, like the rest of the settings home: a choice when
-// it's picked, a key when its box is left.
+// A key is asked for when its service is picked, and only then: there's
+// no box to type one in ahead of time. The question says what the service
+// is like and links to where a key comes from. Saved as it changes, like
+// the rest of the settings home.
 function placeSearchPanel(settings) {
 	const { primary, secondary } = placeSearch.chosen(settings);
 	const services = placeSearch.servicesForPage(settings);
@@ -2604,51 +2644,31 @@ function placeSearchPanel(settings) {
 			service.key ? ` (needs ${escapeHtml(service.key === "username" ? "a username" : "an API key")})` : ""
 		}</option>`;
 
-	const placeholder = (service) =>
-		service.keySaved
-			? `Saved. Type a new ${service.key === "username" ? "username" : "key"} to replace it`
-			: service.key === "username"
-			? "Your GeoNames username"
-			: "Paste the API key";
+	// "username" or "API key", for the questions and the rows
+	const keyName = (service) => (service.key === "username" ? "username" : "API key");
 
+	// Every service that takes a key has a row, hidden until a key is
+	// saved, so one picked a moment ago can appear without a reload
 	const keyRows = services
 		.filter((service) => service.key)
 		.map(
 			(service) => `
-			<div class="field key-row" data-key-row="${escapeHtml(service.id)}">
-				<label for="key-${escapeHtml(service.id)}">${escapeHtml(service.name)}</label>
-				<div class="search-row">
-					${passwordField(
-						`<input type="password" id="key-${escapeHtml(service.id)}" data-key-for="${escapeHtml(service.id)}" ` +
-							`autocomplete="off" spellcheck="false" placeholder="${escapeHtml(placeholder(service))}">`
-					)}
-					<button type="button" class="glass" data-remove-key="${escapeHtml(service.id)}"
-						style="flex:none;padding:0.75em 1.1em"${service.keySaved ? "" : " hidden"}>Remove</button>
+			<div class="saved-key" data-key-row="${escapeHtml(service.id)}"${service.keySaved ? "" : " hidden"}>
+				<div class="saved-key-text">
+					<strong>${escapeHtml(service.name)}</strong>
+					<span>${service.key === "username" ? "Username" : "API key"} saved</span>
 				</div>
-				<div class="help">
-					<span class="key-state ${service.keySaved ? "saved" : ""}">${service.keySaved ? "Saved" : "Not saved"}</span>
-					· <a href="${escapeHtml(service.signUp)}" target="_blank" rel="noopener noreferrer">Get one</a>
+				<div class="saved-key-buttons">
+					<button type="button" class="glass" data-change-key="${escapeHtml(service.id)}">Change</button>
+					<button type="button" class="glass" data-remove-key="${escapeHtml(service.id)}">Remove</button>
 				</div>
 			</div>`
 		)
 		.join("");
-
-	const aboutList = services
-		.map(
-			(service) => `
-			<div class="service-row">
-				<strong>${escapeHtml(service.name)}</strong>
-				<span>${escapeHtml(service.about)}${
-					service.terms
-						? ` <a href="${escapeHtml(service.terms)}" target="_blank" rel="noopener noreferrer">Its rules</a>`
-						: ""
-				}</span>
-			</div>`
-		)
-		.join("");
+	const anySaved = services.some((service) => service.keySaved);
 
 	const placeBox = `
-		<div class="segment c2" id="place-search">
+		<div class="segment c2 r2" id="place-search">
 			<h2>Place search</h2>
 			<p class="lede">
 				Where a search for a city looks: in the Location Service, on a
@@ -2686,19 +2706,17 @@ function placeSearchPanel(settings) {
 		</div>`;
 
 	const keysBox = `
-		<div class="segment c3">
-			<h2>Place search keys</h2>
+		<div class="segment c4" id="saved-keys">
+			<h2>Saved keys</h2>
 			<p class="lede">
-				For the services that need one. Kept by OmniCore and only ever sent
-				to the service it belongs to; once saved, it isn't shown again.
+				For the place search services that need one. Kept by OmniCore and
+				only ever sent to the service it belongs to. Once saved, a key
+				isn't shown again.
+			</p>
+			<p class="hint" id="no-keys"${anySaved ? " hidden" : ""}>
+				None yet. A service that needs a key asks for it when it's picked.
 			</p>
 			${keyRows}
-		</div>`;
-
-	const servicesBox = `
-		<div class="segment c3">
-			<h2>The services</h2>
-			<div class="service-list">${aboutList}</div>
 		</div>`;
 
 	const script = `
@@ -2721,19 +2739,19 @@ function placeSearchPanel(settings) {
 			warning.hidden = !answer.warning;
 			warning.textContent = answer.warning || "";
 
+			// Saved keys: a row for each one that's saved
+			let any = false;
 			for (const service of SERVICES) {
 				const row = document.querySelector('[data-key-row="' + service.id + '"]');
 				if (!row) continue;
-				const box = row.querySelector("[data-key-for]");
-				const state = row.querySelector(".key-state");
-				box.value = "";
-				box.placeholder = service.keySaved
-					? "Saved. Type a new " + (service.key === "username" ? "username" : "key") + " to replace it"
-					: (service.key === "username" ? "Your GeoNames username" : "Paste the API key");
-				state.textContent = service.keySaved ? "Saved" : "Not saved";
-				state.classList.toggle("saved", service.keySaved);
-				row.querySelector("[data-remove-key]").hidden = !service.keySaved;
+				row.hidden = !service.keySaved;
+				if (service.keySaved) any = true;
 			}
+			document.getElementById("no-keys").hidden = any;
+		}
+
+		function keyName(service) {
+			return service.key === "username" ? "username" : "API key";
 		}
 
 		async function save(change) {
@@ -2773,10 +2791,11 @@ function placeSearchPanel(settings) {
 			const service = byId(select.value);
 			if (!service || !service.key || service.keySaved) return "";
 
-			const what = service.key === "username" ? "username" : "API key";
+			const what = keyName(service);
 			const yes = await confirmDialog({
-				title: "Do you have " + (service.key === "username" ? "a " : "an ") + service.name + " " + what + "?",
+				title: "Do you have a " + service.name + " " + what + "?",
 				text: service.about,
+				link: { text: "Get one from " + service.name, url: service.signUp },
 				confirm: "Yes",
 				cancel: "No"
 			});
@@ -2819,13 +2838,20 @@ function placeSearchPanel(settings) {
 		primary.addEventListener("change", function () { picked(primary); });
 		secondary.addEventListener("change", function () { picked(secondary); });
 
-		// A key typed into its box is saved when the box is left (or on
-		// Enter)
-		for (const box of document.querySelectorAll("[data-key-for]")) {
-			box.addEventListener("change", function () {
-				if (!box.value.trim()) return;
+		// Change: a new key in place of the saved one
+		for (const button of document.querySelectorAll("[data-change-key]")) {
+			button.addEventListener("click", async function () {
+				const service = byId(button.dataset.changeKey);
+				const key = await askDialog({
+					title: "A new " + service.name + " " + keyName(service),
+					text: "It replaces the one saved.",
+					placeholder: service.key === "username" ? "Username" : "API key",
+					secret: true,
+					confirm: "Use it"
+				});
+				if (!key) return;
 				const keys = {};
-				keys[box.dataset.keyFor] = box.value.trim();
+				keys[service.id] = key;
 				save({ keys: keys });
 			});
 		}
@@ -2834,7 +2860,7 @@ function placeSearchPanel(settings) {
 			button.addEventListener("click", async function () {
 				const service = byId(button.dataset.removeKey);
 				const sure = await confirmDialog({
-					title: "Remove the " + service.name + " key?",
+					title: "Remove the " + service.name + " " + keyName(service) + "?",
 					text: "OmniCore forgets it. Searches that need it go to the Secondary, if there is one.",
 					confirm: "Remove",
 					danger: true
@@ -2861,7 +2887,7 @@ function placeSearchPanel(settings) {
 	})();
 	`;
 
-	return { placeBox, keysBox, servicesBox, script };
+	return { placeBox, keysBox, script };
 }
 
 // The routes that take a file as it is rather than JSON. See the JSON
@@ -3037,7 +3063,6 @@ function startAdminFace() {
 		const uiMode = currentUiMode();
 		const modeLabel = (mode, name) =>
 			name + (uiMode === mode ? " (Active)" : "");
-		const bottomRight = settings.backButtonCorner !== "top-left";
 
 		// --- General --------------------------------------------------------
 
@@ -3132,7 +3157,7 @@ function startAdminFace() {
 		const glassParts = backgroundPanel(settings);
 
 		const modeBox = `
-			<div class="segment c2">
+			<div class="segment c3">
 				<h2>Appearance Mode</h2>
 				<p class="lede">
 					Saved in this browser only, so each screen can have
@@ -3170,26 +3195,8 @@ function startAdminFace() {
 				</div>
 			</div>`;
 
-		const cornerBox = `
-			<div class="segment c2">
-				<h2>Back Button Position</h2>
-				<div class="corner-map" id="corner-map">
-					<button type="button" class="corner-tl ${
-						bottomRight ? "" : "active"
-					}" data-value="top-left">&#8598; Top left</button>
-					<button type="button" class="corner-tr" disabled>Top right</button>
-					<button type="button" class="corner-bl" disabled>Bottom left</button>
-					<button type="button" class="corner-br ${
-						bottomRight ? "active" : ""
-					}" data-value="bottom-right">Bottom right &#8600;</button>
-				</div>
-				<p class="hint" style="margin-top:8px">
-					Top right and bottom left aren't available.
-				</p>
-			</div>`;
-
 		const textBox = `
-			<div class="segment c2">
+			<div class="segment c3">
 				<h2>Text Size &amp; Typography</h2>
 				<div class="stepper" style="margin-bottom:10px">
 					<button type="button" class="glass" id="size-down"
@@ -3238,8 +3245,8 @@ function startAdminFace() {
 
 		const body = settingsHome.homeHtml(
 			{
-				general: locationBox + places.placeBox + places.keysBox + places.servicesBox,
-				appearance: glassParts.backgroundBox + modeBox + cornerBox + glassParts.glassBox + textBox,
+				general: locationBox + places.placeBox + places.keysBox,
+				appearance: glassParts.glassBox + glassParts.backgroundBox + modeBox + textBox,
 				resources: resourcesPane,
 				about: updates.aboutBox + updates.updatesBox + updates.notesBox
 			},
@@ -3310,9 +3317,14 @@ function startAdminFace() {
 			});
 
 			// --- About ----------------------------------------------
-			document.getElementById("about-link").addEventListener("click", function (event) {
+			// The OmniCore box opens System info (the About face). A real
+			// address on the link, so it can be opened in a new tab too.
+			const aboutLink = document.getElementById("about-link");
+			aboutLink.href = faceUrl(1303);
+			aboutLink.addEventListener("click", function (event) {
+				if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
 				event.preventDefault();
-				omniGo(faceUrl(1303));
+				omniGo(aboutLink.href);
 			});
 
 			// --- Location -------------------------------------------
@@ -3447,7 +3459,7 @@ function startAdminFace() {
 				});
 			}
 
-			for (const corner of document.querySelectorAll("#corner-map button[data-value]")) {
+			for (const corner of document.querySelectorAll(".corner-pick:not(.active)")) {
 				corner.addEventListener("click", function () {
 					saveAppearance({ backButtonCorner: corner.dataset.value });
 				});
@@ -3493,12 +3505,12 @@ function startAdminFace() {
 
 				fontResults.innerHTML = fonts.map(function (font) {
 					const safe = font.family.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-					return '<div class="segment clickable font-row" onclick="pickFont(' +
+					return '<button type="button" class="font-row" onclick="pickFont(' +
 						JSON.stringify(font.family).replace(/"/g, "&quot;") +
 						')"><strong style="font-family:' +
 						JSON.stringify(font.family).replace(/"/g, "&quot;") +
 						'">' + safe + '</strong>' +
-						'<span class="hint">' + font.category + '</span></div>';
+						'<span class="hint">' + font.category + '</span></button>';
 				}).join("");
 
 				// A live preview needs the real font, and there's no way
@@ -3590,7 +3602,7 @@ function startAdminFace() {
 			}
 		`;
 
-		res.send(page("Settings", body, script, "settings-home", "/logout", "Sign Out"));
+		res.send(page("Settings", body, script, "settings-home", "/logout"));
 	});
 
 
@@ -4853,7 +4865,7 @@ function startAdminFace() {
 				const count = face.instances.length;
 
 				return `
-				<a class="row" href="/faces/${face.id}">
+				<a class="row glass" href="/faces/${face.id}">
 					<strong>${escapeHtml(faceStore.faceLabel(face))}</strong>
 					<span>${faceStore.portsLine(face)} · ${count}${
 						count === 1 ? " module" : " modules"
@@ -4944,11 +4956,11 @@ function startAdminFace() {
 						<div class="segment resources">
 							<h2>Manage resources</h2>
 							<p class="lede">What this face shows, and how it looks.</p>
-							<a class="row" href="/faces/${face.id}/modules">
+							<a class="row glass" href="/faces/${face.id}/modules">
 								<strong>Widgets</strong>
 								<span>${count ? count + (count === 1 ? " widget" : " widgets") : "None added yet"}</span>
 							</a>
-							<a class="row" href="/faces/${face.id}/theme">
+							<a class="row glass" href="/faces/${face.id}/theme">
 								<strong>Theme</strong>
 								<span>${escapeHtml(themeName)}</span>
 							</a>
@@ -5243,7 +5255,7 @@ function startAdminFace() {
 							? manifest.description || "The theme this face is using"
 							: "This face hasn't been given a theme yet, so its screen shows OmniCore's own page"
 					)}</p>
-					<a class="row" href="/faces/${face.id}/theme/change">
+					<a class="row glass" href="/faces/${face.id}/theme/change">
 						<strong>${face.theme ? "Change theme" : "Choose a theme"}</strong>
 						<span>${face.theme ? "Use a different theme on this face" : "Pick the theme this face shows"}</span>
 					</a>
@@ -5349,7 +5361,7 @@ function startAdminFace() {
 				const current = theme.id === face.theme;
 
 				return `
-				<a class="row" href="#" data-theme="${escapeHtml(theme.id)}">
+				<a class="row glass" href="#" data-theme="${escapeHtml(theme.id)}">
 					<strong>${escapeHtml(theme.name)}${current ? " · in use" : ""}</strong>
 					<span>${escapeHtml(theme.description || theme.id)}</span>
 				</a>`;
@@ -5433,7 +5445,7 @@ function startAdminFace() {
 					: manifest.name;
 
 				return `
-				<a class="row" href="/faces/${face.id}/modules/${encodeURIComponent(instance.id)}">
+				<a class="row glass" href="/faces/${face.id}/modules/${encodeURIComponent(instance.id)}">
 					<strong>${escapeHtml(labels[instance.id])}</strong>
 					<span>${escapeHtml(kind)}</span>
 				</a>`;
@@ -5474,7 +5486,7 @@ function startAdminFace() {
 				const manifest = readManifest(moduleId);
 
 				return `
-				<a class="row" href="#" onclick="addModule('${escapeHtml(moduleId)}'); return false;">
+				<a class="row glass" href="#" onclick="addModule('${escapeHtml(moduleId)}'); return false;">
 					<strong>${escapeHtml(manifest.name)}</strong>
 					<span>${escapeHtml(manifest.description || moduleId)}</span>
 				</a>`;

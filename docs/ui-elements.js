@@ -210,7 +210,7 @@ const sections = [
 				id: "glossy",
 				title: "Coloured buttons",
 				sel: ".btn-glossy .btn-glossy-green / .btn-glossy-neutral",
-				desc: "For the few moments that should stand out: green for the safe or finished choice (“Installed”, “Go back”), grey for the second choice. Smaller and squarer than a glass button. Always pair .btn-glossy with one colour class. The green has its own colours (--success-button-*), so it can be calmer than the green of good status text.",
+				desc: "For the few moments that should stand out: green for the safe or finished choice (“Installed”, “Go back”), grey for the second choice. Smaller and squarer than a glass button. Both are glass since v2: the green is a see-through green tint with green words, the grey is plain glass. Always pair .btn-glossy with one colour class. The green has its own colours (--success-button-*), so it can be calmer than the green of good status text.",
 				demo: '<button class="btn-glossy btn-glossy-green">Installed</button> <button class="btn-glossy btn-glossy-neutral">Cancel</button> <button class="btn-glossy btn-glossy-green" disabled>Disabled</button>',
 				code: '<button class="btn-glossy btn-glossy-green">Installed</button>\n<button class="btn-glossy btn-glossy-neutral">Cancel</button>',
 				note: "In dark mode they're glossy, with a bevel. In light mode they're flat: white label, no shadow."
@@ -236,7 +236,7 @@ const sections = [
 				id: "floating",
 				title: "Floating round button",
 				sel: ".floating + .bottom-right / .top-left (+ .flash)",
-				desc: "A flat round button pinned to a corner of the screen: the Back button (&#8592;). It's deliberately not glossy, and it flashes when tapped (.flash, or while pressed) rather than glowing. Which corner is a setting. Bottom-left is never offered: that's where the welcome face's timer lives.",
+				desc: "A flat round button pinned to a corner of the screen: the Back button (&#8592;). On the settings home it signs out instead, so backButton(\"/logout\") draws a sign-out icon and says \"Sign out\". It's deliberately not glossy: it glows softly on hover and flashes when tapped (.flash, or while pressed). Which corner is a setting. Bottom-left is never offered: that's where the welcome face's timer lives.",
 				stage: 150,
 				demo: '<button class="floating top-left" aria-label="Back">&#8592;</button><button class="floating bottom-right" aria-label="Back">&#8592;</button><span class="muted stage-caption">top-left and bottom-right</span>',
 				code: '<button class="floating bottom-right" aria-label="Back"\n\tonclick="location.href=\'/\'">&#8592;</button>\n\n// or let the helper write it, in the corner from Settings:\nbackButton("/")',
@@ -314,9 +314,9 @@ const sections = [
 				id: "font-row",
 				title: "One-line row",
 				sel: ".font-row",
-				desc: "A clickable segment used as a single line in a list: a name on the left and a small label pinned to the right (a .hint). The font picker uses it; it suits any long list that reads better one line per entry.",
-				demo: '<div class="list"><div class="segment clickable font-row"><span>Bitcount Ink</span><span class="hint">display</span></div><div class="segment clickable font-row"><span>Pixelify Sans</span><span class="hint">sans-serif</span></div></div>',
-				code: '<div class="segment clickable font-row">\n\t<span>Name</span><span class="hint">label</span>\n</div>'
+				desc: "A single line you can pick in a list: a name on the left and a small label pinned to the right (a .hint). A plain button, lit on hover, not a box (since v2 a box is frosted glass, and a list of them looked like a pile of cards). The font picker uses it; it suits any long list that reads better one line per entry.",
+				demo: '<div class="list"><button type="button" class="font-row"><strong>Bitcount Ink</strong><span class="hint">display</span></button><button type="button" class="font-row"><strong>Pixelify Sans</strong><span class="hint">sans-serif</span></button></div>',
+				code: '<button type="button" class="font-row">\n\t<strong>Name</strong><span class="hint">label</span>\n</button>'
 			},
 			{
 				id: "list-fill",
@@ -338,17 +338,17 @@ const sections = [
 				id: "modal",
 				title: "Pop-up (modal)",
 				sel: ".modal-backdrop > .modal (.modal-head)",
-				desc: "A centred panel over a dimmed, blurred screen, for a control that needs more room than its segment has (the font picker's results, the location search). The backdrop covers the whole screen; give it the hidden attribute to hide it. At most 26em wide and 80% of the screen tall.",
+				desc: "A centred panel over a dimmed, blurred screen, for a control that needs more room than its segment has (the font picker's results, the location search). Frosted glass like a segment (since v2): its fill, the tint, the light edge and the blur picked in Settings, plus a little shade and at least 16px of blur so what's behind never reads through. A .list inside it has no frame of its own. The backdrop covers the whole screen; give it the hidden attribute to hide it. At most 26em wide and 80% of the screen tall.",
 				stage: 300,
-				demo: '<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2>Choose a font</h2><button class="modal-close" aria-label="Close">&#10005;</button></div><input type="text" placeholder="Search" aria-label="Search fonts"><div class="list"><div class="segment clickable font-row"><span>Adamina</span><span class="hint">serif</span></div></div></div></div>',
+				demo: '<div class="modal-backdrop"><div class="modal"><div class="modal-head"><h2>Choose a font</h2><button class="modal-close" aria-label="Close">&#10005;</button></div><input type="text" placeholder="Search" aria-label="Search fonts"><div class="list"><button type="button" class="font-row"><strong>Adamina</strong><span class="hint">serif</span></button></div></div></div>',
 				code: '<div class="modal-backdrop" hidden>\n\t<div class="modal">\n\t\t<div class="modal-head">\n\t\t\t<h2>Title</h2>\n\t\t\t<button class="modal-close">&#10005;</button>\n\t\t</div>\n\t\t…\n\t</div>\n</div>',
 				note: "It has to sit outside every segment (see --segment-blur above). Here it's kept inside its box; normally it covers the whole window."
 			},
 			{
 				id: "dialog",
 				title: "Question pop-up (confirmDialog, askDialog)",
-				sel: ".modal (.dialog-text, .dialog-buttons)",
-				desc: "A question in a pop-up instead of the browser's own confirm() or prompt() box: a title, a line of text, and two buttons side by side. askDialog adds a box to type into and keeps its confirm button off until something is typed. Built by DIALOG_SCRIPT, which every page on the Default UI carries: <code>await confirmDialog({ title, text, confirm, danger })</code> answers true or false, <code>await askDialog({ title, text, placeholder, secret, confirm })</code> answers what was typed, or null.",
+				sel: ".modal (.dialog-text, .dialog-link, .dialog-buttons)",
+				desc: "A question in a pop-up instead of the browser's own confirm() or prompt() box: a title, a line of text, and two buttons side by side. askDialog adds a box to type into and keeps its confirm button off until something is typed. Built by DIALOG_SCRIPT, which every page on the Default UI carries: <code>await confirmDialog({ title, text, confirm, danger })</code> answers true or false, <code>await askDialog({ title, text, placeholder, secret, confirm })</code> answers what was typed, or null. Either takes <code>link: { text, url }</code> for a small link under the text (.dialog-link), such as where to get an API key; only an https:// address becomes one.",
 				stage: 260,
 				demo: '<div class="modal-backdrop"><div class="modal"><h2>Delete this face?</h2><p class="dialog-text">Its widgets and settings go with it.</p><div class="dialog-buttons"><button class="glass">Cancel</button><button class="glass glass-danger">Delete</button></div></div></div>',
 				code: 'const sure = await confirmDialog({\n\ttitle: "Delete this face?",\n\ttext: "Its widgets and settings go with it.",\n\tconfirm: "Delete",\n\tdanger: true\n});',

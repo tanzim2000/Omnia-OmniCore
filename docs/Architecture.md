@@ -189,7 +189,7 @@ until the Marketplace puts something in them.
 | `system-info.js`           | Reads the real facts the About face reports: host OS, container runtime, resource counts. Every one fails soft rather than showing a blank.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `wizard-face.js`           | Port 3999. The setup wizard, on its own port since v1.12.0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `face-links.js`            | The cross-port link helper. A face on one port cannot assume the host name another is reached on, so links are resolved in the browser. Also the port numbers other faces link to (welcome, wizard, admin).                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces: colours, buttons (glass, and the coloured `.btn-glossy` ones), the `.toolbar` row, the password box with Show / Hide, the round light/dark switch, the `.badge` label, the `.dock` capsule (with `.danger` for a red section), and `.segment`, the one box every page is built from (frosted glass, on since v2: `--segment-blur`, with the picture behind it from `backdrop.js`). Light or dark is per browser, from the `omnicore_ui_mode` cookie (only `light` or `dark` is accepted); with none, the stylesheet carries both and the device picks. Never a dashboard theme. |
+| `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces: colours, buttons (glass, and the coloured `.btn-glossy` ones), the `.toolbar` row, the password box with Show / Hide, the round light/dark switch, the `.badge` label, the `.dock` capsule (with `.danger` for a red section), and `.segment`, the one box every page is built from (frosted glass, on since v2: `--segment-blur`, with the picture behind it from `backdrop.js`), and pop-ups (`.modal`, the same glass). Hovers fade rather than snap: a clickable box carries its glow at rest, transparent, and every control fades its colours. Light or dark is per browser, from the `omnicore_ui_mode` cookie (only `light` or `dark` is accepted); with none, the stylesheet carries both and the device picks. Never a dashboard theme. |
 | `font-service.js`          | The UI font setting. Searches Google Fonts, downloads the chosen one once, then serves it locally so it works with no internet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `install-store.js`         | What is installed, at which pinned commit, and when that commit was made (`data/installed.json`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `update-store.js`          | The record of update checks (`data/update-checks.json`): when last checked, what was offered.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -1361,6 +1361,10 @@ than each module working it out, OmniCore establishes it once.
     Search is pressed: never as someone types (Nominatim forbids that).
   - Answers are kept for a day. Nominatim and Geocode.maps.co are never
     asked twice within a second.
+  - A key is asked for when its service is picked, and only then (the
+    question says what the service costs and links to where a key comes
+    from). **Saved keys**, on the same tab, lists the ones saved, each
+    with Change and Remove.
   - Keys live in `settings.json` (`placeSearchKeys`). No page and no
     answer ever carries one back; Settings only says whether one
     is saved.
@@ -1425,11 +1429,13 @@ with a theme keeps its theme's background.
 
 Since v2 the settings home (`GET /` on the admin face) is four tabs on one
 page, switched by a small script (`settings-home.js`): **General**
-(Location Service, Place search), **Appearance** (Background, Appearance
-Mode, Back Button, Frosted glass, Text Size), **Resources** (Manage Faces,
-the Marketplace, Installed Resources) and **About** (the version, the
-updates). A black notch at the top holds an icon per tab; a
-dot on About means an update is ready.
+(Location Service, Place search, Saved keys), **Appearance** (Frosted
+glass, Background with the Back button's corner picked on its preview,
+Appearance Mode, Text Size), **Resources** (Manage Faces, the Marketplace,
+Installed Resources) and **About** (the version and the address, the
+updates, the release notes). A black notch at the top holds an icon per
+tab; a dot on About means an update is ready. The corner button signs out
+here (`/logout`), so it shows a sign-out icon.
 
 - The tabs lie side by side on one strip, and picking one slides it; the
   picture behind the page moves the same way a quarter as far. Each tab
@@ -1441,17 +1447,27 @@ dot on About means an update is ready.
 - Without the script, the four tabs are one long page, and the notch's
   icons are links down it.
 - The boxes are a six-column grid with mixed widths and heights; one
-  column on a phone held upright.
+  column on a phone held upright. Each tab starts 3em higher than it
+  looks, with that room given back as padding, so a glowing box in the
+  first row isn't cut off where the tab (a scroll area) begins.
 - Everything is on the tabs; there are no settings pages of their own any
-  more. Place search (the choice, the keys, the services, a box to try a
-  search) is on General; Background and Frosted glass on Appearance; the
-  updates on About: what the last check found, Check now, Update now
-  followed through OmniCore restarting, and the release notes, which load
-  after the page has opened (`GET /updates/notes`) so Settings never waits
-  on GitHub. The old addresses open their tab: `/place-search` General,
-  `/background` Appearance, `/updates` About.
+  more. Place search (the choice, a box to try a search) and Saved keys
+  are on General; Background and Frosted glass on Appearance; the updates
+  on About: what the last check found, Check now, Update now followed
+  through OmniCore restarting, and the release notes, which load after the
+  page has opened (`GET /updates/notes`) so Settings never waits on
+  GitHub. On About (not on a phone held upright) the notes take the room
+  left on the screen and scroll inside it, so the tab doesn't. The old
+  addresses open their tab: `/place-search` General, `/background`
+  Appearance, `/updates` About.
+- About's OmniCore box is a link to System info (the About face, 1303). It
+  shows the address other devices use: `OMNICORE_ADDRESS` from the compose
+  file when it's set (an IP or a name, checked, without the port);
+  otherwise the page fills in the address the browser used, unless that's
+  localhost, in which case it says to set `OMNICORE_ADDRESS`. Inside
+  Docker OmniCore can't find the server's own address.
 - Settings save as they change, as before: a choice when it's picked, a
-  slider when it's let go, a key when its box is left.
+  slider when it's let go, a key when it's typed into its question.
 
 Every page fades out to its base colour and the next fades in
 (`page-motion.js`): Settings, the wizard, the welcome face, About, Inports,

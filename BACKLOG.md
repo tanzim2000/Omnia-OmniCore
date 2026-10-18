@@ -127,8 +127,16 @@ https://claude.ai/artifact/LveFSPbVeF9ScADgdPWFhP). Not needed for v2:
 - A faint grain over the glass.
 - A few ready-made pictures to pick from beside Choose a file (the
   mockup's were stand-ins; none ship).
+- An API key manager: one place for every key OmniCore holds (place
+  search's, and the ones modules ask for). For now a key is asked for
+  when its service is picked, and Saved keys only lists place search's.
 
 Settled, so not to be reopened by accident:
+
+- Place search has no box to type keys in ahead of time, and no box
+  describing every service: a key is asked for when its service is
+  picked, and the question says what the service is and costs (v2 test
+  run, Oct 2026).
 
 - Google is not a place search service. Its terms want Geocoding results
   shown on a Google Map and limit how long they're kept, and a picked

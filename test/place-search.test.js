@@ -429,21 +429,34 @@ test("pages: Place search on Settings' General tab, with keys never on it", asyn
 	const { status, text } = await get(3000, "/");
 	assert.equal(status, 200);
 	const general = text.slice(text.indexOf('data-pane="general"'), text.indexOf('data-pane="appearance"'));
-	assert.ok(general.includes('<div class="segment c2" id="place-search">'), "on the General tab");
+	assert.ok(general.includes('<div class="segment c2 r2" id="place-search">'), "on the General tab");
 	assert.ok(!text.includes("my-geonames-user"), "the saved key isn't on the page");
 	assert.match(general, /<option value="geonames" selected>GeoNames \(needs a username\)<\/option>/);
-	assert.match(general, /data-remove-key="geonames"\s+style="[^"]*">Remove<\/button>/, "a saved key can be removed");
-	assert.match(general, /data-remove-key="geoapify"\s+style="[^"]*" hidden>Remove<\/button>/, "nothing to remove without one");
 	assert.ok(!general.includes('value="google"'), "Google isn't offered");
-	assert.ok(general.includes("Saved. Type a new username to replace it"));
-	assert.ok(general.includes("https://operations.osmfoundation.org/policies/nominatim/"), "Nominatim's rules are linked");
 	assert.ok(general.includes("Only what you type is sent"), "says what leaves the machine");
+
+	// Saved keys: a row for each saved one, with Change and Remove; the
+	// rest are there, hidden, for a key saved later
+	assert.ok(general.includes('<div class="segment c4" id="saved-keys">'));
+	assert.ok(general.includes('<div class="saved-key" data-key-row="geonames">'), "the saved one shows");
+	assert.ok(general.includes('<div class="saved-key" data-key-row="geoapify" hidden>'), "one not saved doesn't");
+	assert.ok(general.includes('data-change-key="geonames"') && general.includes('data-remove-key="geonames"'));
+	assert.ok(general.includes("Username saved"));
+	assert.match(general, /id="no-keys" hidden>/, "no \"None yet\" with one saved");
+
+	// Nowhere to type a key ahead of time: it's asked for when its
+	// service is picked, with a link to get one, and "a", never "an"
+	assert.ok(!general.includes("data-key-for"), "no key boxes");
+	assert.ok(!general.includes("Place search keys") && !general.includes("The services"));
+	assert.ok(text.includes('title: "Do you have a " + service.name'));
+	assert.ok(text.includes('link: { text: "Get one from " + service.name, url: service.signUp }'));
 	assert.ok(general.includes('id="place-warning" hidden'), "nothing to warn about");
 	assert.ok(general.includes('id="try-search"'), "a box to try a search");
 	assertScriptsParse(text, "Settings");
 
 	writeSettings({ placeSearchKeys: {} });
 	const warned = await get(3000, "/");
+	assert.match(warned.text, /id="no-keys">/, "None yet, with nothing saved");
 	assert.ok(warned.text.includes("GeoNames has no key saved, so every search goes straight to Nominatim (OpenStreetMap)."));
 });
 

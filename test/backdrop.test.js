@@ -313,7 +313,13 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.equal(old.status, 302);
 
 	const page = (await request(3000, "/")).body.toString();
-	assert.match(page, /<h2 class="pane-title" id="appearance">Appearance<\/h2>[\s\S]*<h2>Background<\/h2>[\s\S]*<h2>Frosted glass<\/h2>/);
+	assert.match(page, /<h2 class="pane-title" id="appearance">Appearance<\/h2>[\s\S]*<h2>Frosted glass<\/h2>[\s\S]*<h2>Background<\/h2>/);
+
+	// The back button's corner is picked on the preview: bottom right by
+	// default, so that one is filled in and top left is the one to pick
+	assert.match(page, /class="corner-pick corner-pick-top-left" data-value="top-left" aria-pressed="false"/);
+	assert.match(page, /class="corner-pick corner-pick-bottom-right active" data-value="bottom-right" aria-pressed="true"/);
+	assert.ok(!page.includes("Back Button Position"), "no box of its own");
 	assert.ok(page.includes('accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"'));
 	assert.ok(page.includes('data-tint="match"') && page.includes(" disabled"), "Match the picture needs a picture");
 	assert.ok(page.includes("never sent anywhere"));

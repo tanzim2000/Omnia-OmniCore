@@ -137,15 +137,17 @@ test("the coloured buttons and the toolbar row live in the shared theme", () => 
 	assert.doesNotMatch(admin, /^\s*\.tab-btn\b[^{]*\{/m, "admin-face.js still restyles the tab switch");
 });
 
-test("the green button: glossy and darker in dark mode, flat with white text in light", () => {
-	const { PALETTES } = require("../core/ui-theme");
+test("the green button is see-through glass with a green tint, in both modes (v2)", () => {
+	const { PALETTES, uiStyles } = require("../core/ui-theme");
 
-	assert.match(PALETTES.dark.successButton, /#1f9a53.*#177a41/);
-	assert.notEqual(PALETTES.dark.successButtonShadow, "none");
-
-	assert.equal(PALETTES.light.successButton, "#2fae63");
-	assert.equal(PALETTES.light.successButtonText, "#fff");
+	// A tint, not a solid block: the fill lets what's behind show through
+	for (const mode of ["dark", "light"]) {
+		assert.match(PALETTES[mode].successButton, /^rgba\(\d+, \d+, \d+, 0\.\d+\)$/, mode);
+		assert.match(PALETTES[mode].successButtonHover, /^rgba\(/, mode);
+	}
 	assert.equal(PALETTES.light.successButtonShadow, "none");
+	assert.match(uiStyles(), /\.btn-glossy-green \{[^}]*backdrop-filter: blur\(12px\)/);
+	assert.doesNotMatch(uiStyles(), /\.btn-glossy-neutral \{[^}]*linear-gradient/, "the grey one is glass too");
 });
 
 test("theme: a capsule section can be marked dangerous, red with a red halo", () => {

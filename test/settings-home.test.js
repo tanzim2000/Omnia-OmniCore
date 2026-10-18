@@ -236,18 +236,27 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 		return text.slice(start, next === -1 ? text.indexOf('id="font-modal"') : next);
 	};
 	for (const [id, boxes] of [
-		["general", ["Location Service", "Place search"]],
-		["appearance", ["Background", "Appearance Mode", "Back Button Position", "Frosted glass", "Text Size"]],
+		["general", ["Location Service", "Place search", "Saved keys", "Try it"]],
+		["appearance", ["Frosted glass", "Background", "Appearance Mode", "Text Size"]],
 		["resources", ["Manage Faces", "Marketplace", "Installed Resources"]],
-		["about", ["OmniCore 1.19.", "Updates", "Release notes"]],
-		["general", ["Place search keys", "The services", "Try it"]]
+		["about", ["OmniCore 1.19.", "Address", "Updates", "Release notes"]]
 	]) {
 		for (const box of boxes) assert.ok(pane(id).includes(box), `${box} on ${id}`);
 	}
 
-	// Different widths and heights: Background two rows tall, the
-	// Marketplace too
-	assert.match(pane("appearance"), /class="segment c4 r2" id="background"/);
+	// Gone since the test run of v2: boxes that were too much for what
+	// they held
+	assert.ok(!pane("general").includes("Place search keys"), "keys are asked for when a service is picked");
+	assert.ok(!pane("general").includes("The services"), "each service is described in its key question");
+	assert.ok(!pane("appearance").includes("Back Button Position"), "the corner is picked on Background's preview");
+
+	// Different widths and heights: Frosted glass two rows tall beside a
+	// narrow Background, Place search beside Location Service and Saved
+	// keys, the Marketplace beside the other two
+	assert.match(pane("appearance"), /class="segment c4 r2" id="glass"/);
+	assert.match(pane("appearance"), /class="segment c2 r2" id="background"/);
+	assert.match(pane("general"), /class="segment c2 r2" id="place-search"/);
+	assert.match(pane("general"), /class="segment c4" id="saved-keys"/);
 	assert.match(pane("resources"), /class="segment clickable home-tile c2 r2" href="\/marketplace"/);
 
 	// The location is set right in its box

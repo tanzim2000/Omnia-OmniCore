@@ -85,6 +85,17 @@ docker compose up -d
 Everything you've set up is saved -- your account, your dashboards,
 whatever you installed -- even when it's off.
 
+### Its address on your network
+
+Settings' About tab shows the address other devices use to reach
+OmniCore (your laptop, a tablet on the wall). Opened from another
+device, it works that out by itself. Opened on the server itself, it
+can't: from inside Docker, OmniCore only sees an address no other device
+can use. To show it there too, open `docker-compose.yml`, find the
+`environment:` lines near the top, remove the `#` in front of them, and
+put in the server's address (an IP like `192.168.1.50`, or a name like
+`omnia.local`, without the port). Then `docker compose up -d` again.
+
 ### A limit worth knowing
 
 Ten dashboards can run at once out of the box. If you ever need an

@@ -19,6 +19,13 @@ services:
     container_name: omnicore
     restart: unless-stopped
 
+    # The address other devices use to reach this server, shown on the
+    # About tab in Settings. From inside Docker OmniCore can't find it by
+    # itself, so it can be written here: an IP or a name, without the
+    # port. Optional. To use it, remove the # in front of both lines.
+    # environment:
+    #   OMNICORE_ADDRESS: 192.168.1.50
+
     ports:
       # Admin — create your account, install things, change settings
       - "3000:3000"

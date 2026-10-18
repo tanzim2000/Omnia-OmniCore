@@ -51,7 +51,7 @@ test("admin face: settings home renders every section", async () => {
 		"Place search",
 		"Background",
 		"Appearance Mode",
-		"Back Button Position",
+		"Saved keys",
 		"Frosted glass",
 		"Text Size",
 		"Manage Faces",
