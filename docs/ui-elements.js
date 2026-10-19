@@ -480,6 +480,15 @@ const sections = [
 				desc: "A small outlined label next to a word, such as “dev” after a development build's version. It says something about its neighbour; it isn't a button and doesn't react.",
 				demo: '<span style="font-size:1.4em">1.19.4 <span class="badge">dev</span></span>',
 				code: '1.19.4 <span class="badge">dev</span>\n\nversionHtml()\t// writes this for you'
+			},
+			{
+				id: "info-tip",
+				title: "Hint behind an ⓘ",
+				sel: ".info-tip > .info-bubble",
+				desc: "For a hint too long to sit on the page (what files a background can be, say): an ⓘ that shows the hint in a small bubble after the pointer rests on it for half a second, at once when it's reached with the keyboard, or with a tap on a touch screen. The box it's in is lifted above its neighbours while the bubble shows. Written by infoTip(text, label), which escapes the text; label is what a screen reader calls the icon.",
+				stage: 170,
+				demo: '<span style="font-size:1.05em;font-weight:600">Background</span> <span class="info-tip" tabindex="0" role="button" aria-label="What can be used"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg><span class="info-bubble" role="tooltip">A picture, a GIF or a video, up to 50 MB.</span></span>',
+				code: 'infoTip("A picture, a GIF or a video, up to 50 MB.", "What can be used")'
 			}
 		]
 	}

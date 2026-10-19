@@ -1368,6 +1368,9 @@ than each module working it out, OmniCore establishes it once.
   - Keys live in `settings.json` (`placeSearchKeys`). No page and no
     answer ever carries one back; Settings only says whether one
     is saved.
+  - The matches float: a glass list under the search box, over the page
+    (`place-search-ui.js` lifts the box it's in above its neighbours
+    while it's open). It closes on a pick, Escape or a click elsewhere.
   - Under the matches: a note when the Secondary was asked and why, and
     the credit for whoever answered, linked, plus "© OpenStreetMap
     contributors" for the ones built on OpenStreetMap. Several services
@@ -1429,9 +1432,9 @@ with a theme keeps its theme's background.
 
 Since v2 the settings home (`GET /` on the admin face) is four tabs on one
 page, switched by a small script (`settings-home.js`): **General**
-(Location Service, Place search, Saved keys), **Appearance** (Frosted
-glass, Background with the Back button's corner picked on its preview,
-Appearance Mode, Text Size), **Resources** (Manage Faces, the Marketplace,
+(Location Service, Place search, Saved keys, a box to try a search),
+**Appearance** (Frosted glass, Background with a Back button: Top left |
+Bottom right switch, Appearance Mode, Text Size), **Resources** (Manage Faces, the Marketplace,
 Installed Resources) and **About** (the version and the address, the
 updates, the release notes). A black notch at the top holds an icon per
 tab; a dot on About means an update is ready. The corner button signs out
@@ -1451,7 +1454,7 @@ here (`/logout`), so it shows a sign-out icon.
   looks, with that room given back as padding, so a glowing box in the
   first row isn't cut off where the tab (a scroll area) begins.
 - Everything is on the tabs; there are no settings pages of their own any
-  more. Place search (the choice, a box to try a search) and Saved keys
+  more. Place search (the choice), Saved keys and a box to try a search
   are on General; Background and Frosted glass on Appearance; the updates
   on About: what the last check found, Check now, Update now followed
   through OmniCore restarting, and the release notes, which load after the

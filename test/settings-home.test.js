@@ -236,7 +236,7 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 		return text.slice(start, next === -1 ? text.indexOf('id="font-modal"') : next);
 	};
 	for (const [id, boxes] of [
-		["general", ["Location Service", "Place search", "Saved keys", "Try it"]],
+		["general", ["Location Service", "Place search", "Saved keys", "Try a city search"]],
 		["appearance", ["Frosted glass", "Background", "Appearance Mode", "Text Size"]],
 		["resources", ["Manage Faces", "Marketplace", "Installed Resources"]],
 		["about", ["OmniCore 1.19.", "Address", "Updates", "Release notes"]]
@@ -248,7 +248,7 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	// they held
 	assert.ok(!pane("general").includes("Place search keys"), "keys are asked for when a service is picked");
 	assert.ok(!pane("general").includes("The services"), "each service is described in its key question");
-	assert.ok(!pane("appearance").includes("Back Button Position"), "the corner is picked on Background's preview");
+	assert.ok(!pane("appearance").includes("Back Button Position"), "the corner is picked in Background");
 
 	// Different widths and heights: Frosted glass two rows tall beside a
 	// narrow Background, Place search beside Location Service and Saved
@@ -256,7 +256,8 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	assert.match(pane("appearance"), /class="segment c4 r2" id="glass"/);
 	assert.match(pane("appearance"), /class="segment c2 r2" id="background"/);
 	assert.match(pane("general"), /class="segment c2 r2" id="place-search"/);
-	assert.match(pane("general"), /class="segment c4" id="saved-keys"/);
+	assert.match(pane("general"), /class="segment c2" id="saved-keys"/);
+	assert.match(pane("general"), /class="segment c2" id="place-try"/);
 	assert.match(pane("resources"), /class="segment clickable home-tile c2 r2" href="\/marketplace"/);
 
 	// The location is set right in its box

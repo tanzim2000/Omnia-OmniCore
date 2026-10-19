@@ -1490,6 +1490,72 @@ function uiStyles(options) {
 	.dialog-text { margin: 0; color: var(--fg-muted); line-height: 1.5; }
 	.dialog-buttons { display: flex; gap: 0.6em; margin-top: 0.4em; }
 	.dialog-buttons > button { flex: 1; }
+	/* A hint behind an ⓘ (infoTip): the bubble shows after the pointer
+	   rests on the icon for half a second, at once on keyboard focus or a
+	   tap. The box it's in is lifted above its neighbours while it shows,
+	   or a box after it would be drawn over the bubble. */
+	.info-tip {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.6em;
+		height: 1.6em;
+		border-radius: 50%;
+		color: var(--fg-muted);
+		cursor: help;
+		vertical-align: middle;
+		outline: none;
+	}
+	.info-tip:hover, .info-tip:focus-visible, .info-tip:focus { color: var(--fg); }
+	.info-tip:focus-visible { box-shadow: 0 0 0 2px var(--glow-strong); }
+
+	.info-bubble {
+		position: absolute;
+		top: calc(100% + 6px);
+		right: -0.5em;
+		z-index: 40;
+		width: max-content;
+		max-width: min(20em, 80vw);
+		padding: 0.7em 0.9em;
+		border-radius: 0.6em;
+		border: 1px solid var(--segment-border);
+		background-color: color-mix(in srgb, var(--bg) 90%, transparent);
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+		color: var(--fg);
+		font-size: 0.8rem;
+		font-weight: 400;
+		line-height: 1.5;
+		text-align: left;
+		cursor: default;
+		opacity: 0;
+		visibility: hidden;
+		transform: translateY(-4px);
+		transition: opacity 0.2s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+		pointer-events: none;
+	}
+
+	.info-tip:hover .info-bubble {
+		opacity: 1;
+		visibility: visible;
+		transform: none;
+		transition-delay: 0.5s;
+	}
+
+	.info-tip:focus .info-bubble {
+		opacity: 1;
+		visibility: visible;
+		transform: none;
+		transition-delay: 0s;
+	}
+
+	.segment:has(.info-tip:hover),
+	.segment:has(.info-tip:focus) { position: relative; z-index: 20; }
+
+	@media (prefers-reduced-motion: reduce) {
+		.info-bubble { transform: none; }
+	}
+
 	.dialog-link { align-self: flex-start; font-size: 0.9em; color: var(--fg-muted); }
 	.dialog-link:hover { color: var(--fg); }
 
@@ -1589,6 +1655,22 @@ function versionHtml() {
 		: "";
 
 	return text + (dev ? (text ? " " : "") + '<span class="badge">dev</span>' : "");
+}
+
+// An ⓘ that holds a hint too long to sit on the page: shown after the
+// pointer rests on it a moment, at once when it's reached with the
+// keyboard, or with a tap on a touch screen (a tap gives it the focus;
+// a tap anywhere else takes it away). `text` is plain text, escaped here;
+// `label` is what a screen reader calls the icon.
+function infoTip(text, label) {
+	const safe = (value) =>
+		String(value).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+	return (
+		`<span class="info-tip" tabindex="0" role="button" aria-label="${safe(label || "More about this")}">` +
+		'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+		'stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg>' +
+		`<span class="info-bubble" role="tooltip">${safe(text)}</span></span>`
+	);
 }
 
 // A password box with its Show / Hide button. `inputHtml` is the
@@ -1830,6 +1912,7 @@ module.exports = {
 	currentUiMode,
 	versionHtml,
 	passwordField,
+	infoTip,
 	PASSWORD_TOGGLE_SCRIPT,
 	modeSwitch,
 	MODE_SWITCH_SCRIPT

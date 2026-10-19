@@ -93,6 +93,15 @@ CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
   `package.json` and `package-lock.json`), turn `## Unreleased` into
   `## v<version>`, push, then tag. More problems are expected once it's
   used; fix them as they come, one small commit at a time.
+- **Next, its own commit: the settings home scrolls sideways.** Asked for
+  in the test run (Oct 2026): one sideways strip of the four tabs, boxes
+  on a grid whose rows fit the screen and whose columns grow to the
+  right, the wheel moving sideways (except inside something that scrolls
+  by itself), scrolling past a tab's end going into the next one, the
+  notch following. A phone held upright stays one column up and down,
+  with a sideways swipe changing tab. It replaces the About tab's
+  fit-the-screen rules. Trade-off: on a short window a tall box scrolls
+  inside itself.
 
 ## v2: left to check
 

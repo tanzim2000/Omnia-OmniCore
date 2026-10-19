@@ -437,7 +437,13 @@ test("pages: Place search on Settings' General tab, with keys never on it", asyn
 
 	// Saved keys: a row for each saved one, with Change and Remove; the
 	// rest are there, hidden, for a key saved later
-	assert.ok(general.includes('<div class="segment c4" id="saved-keys">'));
+	assert.ok(general.includes('<div class="segment c2" id="saved-keys">'));
+
+	// Trying a search has a box of its own, with no heading, between
+	// Saved keys and Place search
+	assert.ok(general.includes('<div class="segment c2" id="place-try">'));
+	const place = general.slice(general.indexOf('id="place-search"'), general.indexOf('id="saved-keys"'));
+	assert.ok(!place.includes('id="try"'), "not in Place search any more");
 	assert.ok(general.includes('<div class="saved-key" data-key-row="geonames">'), "the saved one shows");
 	assert.ok(general.includes('<div class="saved-key" data-key-row="geoapify" hidden>'), "one not saved doesn't");
 	assert.ok(general.includes('data-change-key="geonames"') && general.includes('data-remove-key="geonames"'));

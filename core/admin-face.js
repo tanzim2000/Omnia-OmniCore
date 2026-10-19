@@ -68,6 +68,7 @@ const {
 	versionHtml,
 	UI_MODE_SCRIPT,
 	passwordField,
+	infoTip,
 	PASSWORD_TOGGLE_SCRIPT,
 	modeSwitch,
 	MODE_SWITCH_SCRIPT,
@@ -565,9 +566,9 @@ const styles = `
 
 	.backdrop-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-	/* The preview with the back button's corners on it */
+	/* The preview, with the back button drawn in its corner */
 	.backdrop-stage { position: relative; }
-	.corner-pick {
+	.corner-mark {
 		position: absolute;
 		width: 2em;
 		height: 2em;
@@ -577,22 +578,36 @@ const styles = `
 		justify-content: center;
 		font-size: 0.85em;
 		color: var(--fg);
-		background: transparent;
-		border: 1.5px dashed currentColor;
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
-		cursor: pointer;
-		padding: 0;
-	}
-	.corner-pick:hover, .corner-pick:focus-visible { background: rgba(255, 255, 255, 0.2); outline: none; }
-	.corner-pick.active {
-		cursor: default;
 		border: 1px solid var(--glass-border);
 		background: var(--segment-bg);
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+		pointer-events: none;
 	}
-	.corner-pick-top-left { top: 0.75em; left: 0.75em; }
-	.corner-pick-bottom-right { bottom: 1.25em; right: 0.75em; }
+	.corner-mark-top-left { top: 0.75em; left: 0.75em; }
+
+	/* "A video", say, in the preview's bottom left corner */
+	.backdrop-preview { position: relative; }
+	.preview-kind {
+		position: absolute;
+		left: 0.6em;
+		bottom: 0.6em;
+		padding: 0.15em 0.55em;
+		border-radius: 0.5em;
+		font-size: 0.72em;
+		color: #fff;
+		background: rgba(0, 0, 0, 0.45);
+	}
+	.corner-mark-bottom-right { bottom: 1.25em; right: 0.75em; }
+
+	/* A box's heading with an ⓘ at the end of the line */
+	.box-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5em; }
+
+	/* Background's Back button switch: two halves, the width of the box */
+	.back-corner { margin-top: 10px; }
+	.back-corner .tabs { display: flex; }
+	.back-corner .tab-btn { flex: 1; }
 	.backdrop-preview.plain { background: var(--bg); color: var(--fg-muted); font-size: 0.9em; }
 
 	.button-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
@@ -1662,9 +1677,12 @@ function backgroundPanel(settings) {
 		video: "A video"
 	}[settings.backgroundKind];
 
+	// What's in use, said on the preview itself rather than in a line
+	// under it: a small label in its corner, or "Plain"
 	const preview = picture
-		? `<img src="/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}" alt="">`
-		: `<span>Plain</span>`;
+		? `<img src="/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}" alt="">` +
+		  `<span class="preview-kind">${escapeHtml(kindName || "A picture")}</span>`
+		: `<span>Plain: black, or light grey in light mode</span>`;
 
 	// A colour chip for the tint. "none" and "match" are words, the
 	// rest colours. Match the picture only with a picture, showing
@@ -1679,20 +1697,23 @@ function backgroundPanel(settings) {
 
 	const custom = /^#[0-9a-f]{6}$/i.test(tint) && !backdropStore.TINT_PRESETS.includes(tint.toLowerCase());
 
-	// Where the back button sits, picked on the preview itself: a small
-	// round button in each corner it can go in (top left, bottom right;
-	// bottom left is the welcome face's timer, top right the light switch),
-	// the one in use filled in. Saved, then the page reloads to move it.
+	// Where the back button sits: a named switch, Top left or Bottom right
+	// (bottom left is the welcome face's timer, top right the light
+	// switch), and the button drawn in its corner on the preview. Saved,
+	// then the page reloads to move it.
 	const topLeft = settings.backButtonCorner === "top-left";
-	const cornerPick = (value, label, active) =>
-		`<button type="button" class="corner-pick corner-pick-${value}${active ? " active" : ""}" data-value="${value}"` +
-		` aria-pressed="${active ? "true" : "false"}"` +
-		` aria-label="${active ? `The back button is ${label}` : `Put the back button ${label}`}"` +
-		` title="${active ? `Back button: ${label}` : `Move the back button ${label}`}">${active ? "&#8592;" : ""}</button>`;
 
 	const backgroundBox = `
 				<div class="segment c2 r2" id="background">
-					<h2>Background</h2>
+					<div class="box-head">
+						<h2>Background</h2>
+						${infoTip(
+							"A picture (JPEG, PNG, WebP), an animated GIF or WebP, or a looping video (MP4, WebM) " +
+								"without sound, up to 50 MB. Kept by OmniCore and never sent anywhere. With reduced " +
+								"motion turned on in your device's settings, a still frame is shown.",
+							"What can be used as a background"
+						)}
+					</div>
 					<p class="lede">
 						Behind OmniCore's own pages. A face keeps its theme's own
 						background.
@@ -1700,13 +1721,17 @@ function backgroundPanel(settings) {
 
 					<div class="backdrop-stage">
 						<div class="backdrop-preview${picture ? "" : " plain"}" id="preview">${preview}</div>
-						${cornerPick("top-left", "top left", topLeft)}
-						${cornerPick("bottom-right", "bottom right", !topLeft)}
+						<span class="corner-mark corner-mark-${topLeft ? "top-left" : "bottom-right"}" aria-hidden="true">&#8592;</span>
 					</div>
-					<p class="hint" id="kind">${
-						picture ? escapeHtml(kindName || "A picture") : "Plain: black, or light grey in light mode."
-					}</p>
-					<p class="hint">The round button is where the back button sits. Pick the other corner to move it.</p>
+					<div class="field back-corner">
+						<label id="corner-label">Back button</label>
+						<div class="tabs" id="corner-tabs" role="group" aria-labelledby="corner-label">
+							<button type="button" class="tab-btn${topLeft ? " active" : ""}" data-value="top-left"
+								aria-pressed="${topLeft}">Top left</button>
+							<button type="button" class="tab-btn${topLeft ? "" : " active"}" data-value="bottom-right"
+								aria-pressed="${!topLeft}">Bottom right</button>
+						</div>
+					</div>
 
 					<div class="button-row">
 						<button type="button" class="glass" id="choose">Choose a file</button>
@@ -1715,13 +1740,6 @@ function backgroundPanel(settings) {
 					<input type="file" id="file" hidden
 						accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm">
 					<p class="status" id="upload-status" aria-live="polite"></p>
-
-					<p class="help">
-						A picture (JPEG, PNG, WebP), an animated GIF or WebP, or a
-						looping video (MP4, WebM) without sound, up to 50 MB. Kept by
-						OmniCore and never sent anywhere. With reduced motion on, a
-						still frame is shown.
-					</p>
 				</div>
 `;
 
@@ -1737,7 +1755,12 @@ function backgroundPanel(settings) {
 					</div>
 
 					<div class="field">
-						<label>Tint</label>
+						<label>Tint ${infoTip(
+							picture
+								? "Match the picture takes the picture's main colour, worked out once when it was picked."
+								: "Match the picture needs a picture.",
+							"About Match the picture"
+						)}</label>
 						<div class="tint-chips" id="tints">
 							${chip("none", "None", "", false)}
 							${chip("match", "Match the picture", picture && settings.backgroundColor ? settings.backgroundColor : "", !picture)}
@@ -1746,11 +1769,6 @@ function backgroundPanel(settings) {
 								<input type="color" id="custom" value="${escapeHtml(custom ? tint : "#7aa2ff")}" aria-label="Pick a colour">
 							</label>
 						</div>
-						<div class="help">${
-							picture
-								? "Match the picture takes the picture's main colour, worked out once when it was picked."
-								: "Match the picture needs a picture."
-						}</div>
 					</div>
 
 					<div class="field">
@@ -2626,9 +2644,11 @@ async function releaseNotes() {
 // service a "Search for a city" box asks, the keys saved for the ones that
 // need one, and a box to try a search. See place-search.js.
 //
-//   placeBox   Primary, Secondary, the warning, Try it
+//   placeBox   Primary, Secondary, the warning
 //   keysBox    Saved keys: a row per key that's saved (never the key
 //              itself), each with Change and Remove
+//   tryBox     a box of its own, with no heading, to try a search with
+//              the services picked; the matches float over the page
 //
 // A key is asked for when its service is picked, and only then: there's
 // no box to type one in ahead of time. The question says what the service
@@ -2694,19 +2714,23 @@ function placeSearchPanel(settings) {
 				<div class="help">Asked when the Primary finds nothing, can't be reached, refuses its key or has none saved.</div>
 			</div>
 			<p class="status" id="place-status" aria-live="polite"></p>
+		</div>`;
 
+	const tryBox = `
+		<div class="segment c2" id="place-try">
 			<div class="field">
-				<label for="try">Try it</label>
+				<label for="try">Try a city search</label>
 				<div class="search-row">
 					<input type="text" id="try" placeholder="Bekkestua">
 					<button type="button" class="glass" id="try-search" style="flex:none;padding:0.75em 1.1em">Search</button>
 				</div>
 				<div id="try-results"></div>
 			</div>
+			<p class="hint">With the Primary and Secondary picked in Place search. Nothing is saved.</p>
 		</div>`;
 
 	const keysBox = `
-		<div class="segment c4" id="saved-keys">
+		<div class="segment c2" id="saved-keys">
 			<h2>Saved keys</h2>
 			<p class="lede">
 				For the place search services that need one. Kept by OmniCore and
@@ -2887,7 +2911,7 @@ function placeSearchPanel(settings) {
 	})();
 	`;
 
-	return { placeBox, keysBox, script };
+	return { placeBox, keysBox, tryBox, script };
 }
 
 // The routes that take a file as it is rather than JSON. See the JSON
@@ -3245,7 +3269,7 @@ function startAdminFace() {
 
 		const body = settingsHome.homeHtml(
 			{
-				general: locationBox + places.placeBox + places.keysBox,
+				general: locationBox + places.placeBox + places.keysBox + places.tryBox,
 				appearance: glassParts.glassBox + glassParts.backgroundBox + modeBox + textBox,
 				resources: resourcesPane,
 				about: updates.aboutBox + updates.updatesBox + updates.notesBox
@@ -3459,7 +3483,7 @@ function startAdminFace() {
 				});
 			}
 
-			for (const corner of document.querySelectorAll(".corner-pick:not(.active)")) {
+			for (const corner of document.querySelectorAll("#corner-tabs .tab-btn:not(.active)")) {
 				corner.addEventListener("click", function () {
 					saveAppearance({ backButtonCorner: corner.dataset.value });
 				});
