@@ -226,15 +226,15 @@ test("faces list: heading on the page, the list, and the button where the capsul
 test("updates: the About tab has the version, the updates, and a box for the notes", async () => {
 	const { html } = await get(ADMIN, "/");
 	const about = html.slice(html.indexOf('data-pane="about"'));
-	assert.match(about, /<div class="segment c4">\s*<h2>Updates<\/h2>/);
-	assert.match(about, /<div class="segment c6" id="release-notes">/);
+	assert.match(about, /<div class="segment c4 row1">\s*<h2>Updates<\/h2>/);
+	assert.match(about, /<div class="segment c6 row2" id="release-notes">/);
 	assert.ok(html.includes('fetch("/updates/notes"'), "the notes come after the page is up");
 });
 
 test("updates: the OmniCore box is the way to System info, with the address, not the port", async () => {
 	const { html } = await get(ADMIN, "/");
 	const about = html.slice(html.indexOf('data-pane="about"'));
-	const box = about.slice(about.indexOf('<a class="segment clickable c2 about-box"'), about.indexOf("</a>"));
+	const box = about.slice(about.indexOf('<a class="segment clickable c2 row1 about-box"'), about.indexOf("</a>"));
 
 	assert.ok(box.includes('id="about-link"'), "the whole box is the link");
 	assert.match(box, /<h2>OmniCore<\/h2>/);
@@ -276,7 +276,7 @@ test("updates: the notes scroll inside their box, which fits the screen", async 
 
 	// On the About tab (not a phone held upright) the box takes the room
 	// that's left, and each part scrolls in it, so the tab doesn't
-	assert.match(html, /html\.home-tabs \.home-pane\[data-pane=about\] \.home-bento \{[^}]*grid-template-rows: auto minmax\(0, 1fr\)/);
+	assert.match(html, /html\.home-tabs #release-notes \{[^}]*align-self: stretch;/, "the second row of the sideways grid, filled");
 	assert.match(html, /html\.home-tabs \.notes-part \.changelog \{ flex: 1; min-height: 0; max-height: none; \}/);
 });
 

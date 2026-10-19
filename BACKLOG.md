@@ -109,18 +109,13 @@ CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
   `package.json` and `package-lock.json`), turn `## Unreleased` into
   `## v<version>`, push, then tag. More problems are expected once it's
   used; fix them as they come, one small commit at a time.
-- **Next, its own commit: the settings home scrolls sideways.** Asked for
-  in the test run (Oct 2026): one sideways strip of the four tabs, boxes
-  on a grid whose rows fit the screen and whose columns grow to the
-  right, the wheel moving sideways (except inside something that scrolls
-  by itself), scrolling past a tab's end going into the next one, the
-  notch following. A phone held upright stays one column up and down,
-  with a sideways swipe changing tab. It replaces the About tab's
-  fit-the-screen rules. Trade-off: on a short window a tall box scrolls
-  inside itself.
 
 ## v2: left to check
 
+- **The sideways settings home with a real mouse wheel and trackpad.** The
+  wheel was tried in a test browser only. Check it doesn't feel too fast
+  or too slow, that a trackpad's two-finger swipe both ways feels right,
+  and on a phone that a sideways swipe moves exactly one tab.
 - **Change background on a phone.** The colour wheel was only tried with a
   mouse and arrow keys; try it with a finger, and check the pop-up fits a
   phone held upright (it scrolls inside itself past 92% of the screen).
@@ -168,7 +163,6 @@ Settled, so not to be reopened by accident:
   describing every service: a key is asked for when its service is
   picked, and the question says what the service is and costs (v2 test
   run, Oct 2026).
-
 - Google is not a place search service. Its terms want Geocoding results
   shown on a Google Map and limit how long they're kept, and a picked
   place stays in the settings. Dropped before v2 was released.

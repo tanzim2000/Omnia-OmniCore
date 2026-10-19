@@ -144,14 +144,22 @@ test("the tabs: one page, the address points at each tab's heading, the scripts 
 	assert.doesNotThrow(() => new vm.Script(settingsHome.STARTING_TAB_SCRIPT));
 	assert.doesNotThrow(() => new vm.Script(settingsHome.HOME_SCRIPT));
 	assert.ok(settingsHome.HOME_SCRIPT.includes('localStorage.setItem("omnicore-settings-tab"'), "remembered");
-	assert.ok(settingsHome.HOME_SCRIPT.includes('setAttribute("inert"'), "tabs off the screen can't be reached");
+	assert.ok(settingsHome.HOME_SCRIPT.includes("strip.scrollTo({ left: pane.offsetLeft"), "picking a tab glides the strip there");
+	assert.ok(settingsHome.HOME_SCRIPT.includes('strip.addEventListener("wheel"'), "the wheel moves it sideways");
+	assert.ok(settingsHome.HOME_SCRIPT.includes("{ passive: false }"), "which needs to stop the page's own scrolling");
+	assert.ok(settingsHome.HOME_SCRIPT.includes("scrollsItself(event.target, event.deltaY)"), "but not over something that scrolls by itself");
+	assert.ok(settingsHome.HOME_SCRIPT.includes("mark(inView())"), "the notch follows the tab in view");
 	assert.ok(settingsHome.HOME_SCRIPT.includes("history.replaceState"), "the address follows the tab");
 });
 
-test("the movement: the strip, the picture a quarter as far, nothing with reduced motion", () => {
+test("the movement: one strip scrolling sideways, a grid that grows to the right, the picture panning along", () => {
 	const css = settingsHome.SETTINGS_HOME_CSS;
-	assert.ok(css.includes("transform: translateX(calc(var(--tab, 0) * -25%));"), "a whole tab at a time");
-	assert.ok(css.includes("width: 175vw;") && css.includes("transform: translateX(calc(var(--tab, 0) * -25vw));"), "the picture: a quarter of a screen per tab");
+	assert.match(css, /html\.home-tabs \.home-panes \{[^}]*overflow-x: auto;[^}]*overflow-y: hidden;/, "sideways, never up and down");
+	assert.match(css, /grid-auto-flow: column dense;/, "more boxes make a tab wider, not taller");
+	assert.match(css, /grid-template-rows: minmax\(0, auto\) minmax\(min\(10em, 45%\), 1fr\);/, "two rows that fit the screen");
+	assert.match(css, /\.home-bento > \.segment\.box-scroll \{[^}]*overflow-y: auto;/, "a box with more in it scrolls inside itself");
+	assert.ok(css.includes("width: 175vw;") && css.includes("transform: translateX(calc(var(--pan, 0) * -75vw));"), "the picture pans along");
+	assert.match(css, /@media \(max-width: 42em\) \{[\s\S]*?scroll-snap-type: x mandatory;/, "a phone: a swipe moves a whole tab");
 	assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?transition: none;/);
 	assert.match(css, /html:not\(\.home-tabs\) body\.settings-home \{ height: auto; overflow: visible; \}/, "one long page without the script");
 	assert.match(css, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/, "six columns");
@@ -250,14 +258,15 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	assert.ok(!pane("general").includes("The services"), "each service is described in its key question");
 	assert.ok(!pane("appearance").includes("Back Button Position"), "the corner is picked in Background");
 
-	// Different widths and heights: Frosted glass two rows tall beside a
-	// narrow Background, Place search beside Location Service and Saved
-	// keys, the Marketplace beside the other two
-	assert.match(pane("appearance"), /class="segment c4 r2" id="glass"/);
-	assert.match(pane("appearance"), /class="segment c2 r2" id="background"/);
+	// Different widths and heights, each box on its row of the sideways
+	// grid: Frosted glass and a narrower Background on the first row,
+	// Place search two rows tall beside Location Service, Saved keys and
+	// the search box, the Marketplace beside the other two
+	assert.match(pane("appearance"), /class="segment c4 row1" id="glass"/);
+	assert.match(pane("appearance"), /class="segment c2 row1" id="background"/);
 	assert.match(pane("general"), /class="segment c2 r2" id="place-search"/);
-	assert.match(pane("general"), /class="segment c2" id="saved-keys"/);
-	assert.match(pane("general"), /class="segment c2" id="place-try"/);
+	assert.match(pane("general"), /class="segment c2 row2" id="saved-keys"/);
+	assert.match(pane("general"), /class="segment c2 row2" id="place-try"/);
 	assert.match(pane("resources"), /class="segment clickable home-tile c2 r2" href="\/marketplace"/);
 
 	// The location is set right in its box
@@ -274,5 +283,5 @@ test("pages: a development build's Updates box says it doesn't check", async () 
 	assert.ok(text.includes("A development build doesn't check for updates."));
 	assert.ok(!text.includes('id="check"'), "nothing to check");
 	assert.ok(!text.includes('id="apply"'), "nothing to install");
-	assert.ok(text.includes('<div class="segment c6" id="release-notes">'), "its notes instead");
+	assert.ok(text.includes('<div class="segment c6 row2" id="release-notes">'), "its notes instead");
 });

@@ -522,23 +522,16 @@ const styles = `
 	.about-hint { margin: 0 0 0.5em; }
 	.about-hint[hidden] { display: none; }
 
-	/* The About tab fits the screen: the release notes take the room
-	   left under the two boxes above and scroll inside it, each part on
-	   its own, so the tab itself never scrolls. Less room is kept at the
-	   bottom than on the other tabs, unless the Back button is down
-	   there. A phone held upright scrolls as usual. */
+	/* The release notes take the room left under the two boxes above
+	   (the second row of the sideways grid, settings-home.js) and scroll
+	   inside it, each part on its own. A phone held upright scrolls as
+	   usual. */
 	@media (min-width: 42.01em) {
-		html.home-tabs .home-pane[data-pane=about] { padding-bottom: 1.75em; }
-		body.settings-home:has(> .floating.bottom-right) .home-pane[data-pane=about] { padding-bottom: 6em; }
-		html.home-tabs .home-pane[data-pane=about] .home-bento {
-			height: 100%;
-			grid-template-rows: auto minmax(0, 1fr);
-		}
 		html.home-tabs #release-notes {
 			align-self: stretch;
 			display: flex;
 			flex-direction: column;
-			min-height: 14em;
+			min-height: 0;
 		}
 		html.home-tabs #notes-body { flex: 1; min-height: 0; grid-auto-rows: minmax(0, 100%); overflow-y: auto; }
 		html.home-tabs .notes-part { display: flex; flex-direction: column; min-height: 0; }
@@ -1842,7 +1835,7 @@ function backgroundPanel(settings) {
 	// The preview is the way to change what's behind the pages: it dims on
 	// hover and says "Change background", and opens the dialog below
 	const backgroundBox = `
-				<div class="segment c2 r2" id="background">
+				<div class="segment c2 row1" id="background">
 					<div class="box-head">
 						<h2>Background</h2>
 						${infoTip(
@@ -1966,7 +1959,7 @@ function backgroundPanel(settings) {
 `;
 
 	const glassBox = `
-				<div class="segment c4 r2" id="glass">
+				<div class="segment c4 row1" id="glass">
 					<h2>Frosted glass</h2>
 					<p class="lede">Every box on these pages, over the background.</p>
 
@@ -2724,7 +2717,7 @@ async function updatesPanel() {
 	const address = homeAddress();
 
 	const aboutBox = `
-		<a class="segment clickable c2 about-box" id="about-link" href="#" title="System info">
+		<a class="segment clickable c2 row1 about-box" id="about-link" href="#" title="System info">
 			<div class="about-box-head">
 				<h2>OmniCore</h2>
 				<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"
@@ -2742,7 +2735,7 @@ async function updatesPanel() {
 		</a>`;
 
 	const updatesBox = `
-		<div class="segment c4">
+		<div class="segment c4 row1">
 			<h2>Updates</h2>
 			${status}
 			${
@@ -2767,7 +2760,7 @@ async function updatesPanel() {
 		</div>`;
 
 	const notesBox = `
-		<div class="segment c6" id="release-notes">
+		<div class="segment c6 row2" id="release-notes">
 			<h2>Release notes</h2>
 			<div id="notes-body" aria-live="polite"><p class="hint">Loading the notes...</p></div>
 		</div>`;
@@ -3234,7 +3227,7 @@ function placeSearchPanel(settings) {
 		</div>`;
 
 	const tryBox = `
-		<div class="segment c2" id="place-try">
+		<div class="segment c2 row2" id="place-try">
 			<div class="field">
 				<label for="try">Try a city search</label>
 				<div class="search-row">
@@ -3247,7 +3240,7 @@ function placeSearchPanel(settings) {
 		</div>`;
 
 	const keysBox = `
-		<div class="segment c2" id="saved-keys">
+		<div class="segment c2 row2" id="saved-keys">
 			<h2>Saved keys</h2>
 			<p class="lede">
 				For the place search services that need one. Kept by OmniCore and
@@ -3611,7 +3604,7 @@ function startAdminFace() {
 		// search through the Place search setting, the place's name, and
 		// its coordinates.
 		const locationBox = `
-			<div class="segment c4">
+			<div class="segment c4 row1">
 				<h2>Location Service</h2>
 				<p class="lede">
 					Used by weather and prayer-time modules to know where
@@ -3698,12 +3691,14 @@ function startAdminFace() {
 		const glassParts = backgroundPanel(settings);
 
 		const modeBox = `
-			<div class="segment c3">
-				<h2>Appearance Mode</h2>
-				<p class="lede">
-					Saved in this browser only, so each screen can have
-					its own. Device follows this device's own setting.
-				</p>
+			<div class="segment c3 row2">
+				<div class="box-head">
+					<h2>Appearance Mode</h2>
+					${infoTip(
+						"Saved in this browser only, so each screen can have its own. Device follows this device's own setting.",
+						"About Appearance Mode"
+					)}
+				</div>
 				<div class="mode-previews narrow-previews">
 					<div class="mode-preview ${uiMode === "dark" ? "active" : ""}"
 						data-mode="dark" role="button" tabindex="0">
@@ -3737,7 +3732,7 @@ function startAdminFace() {
 			</div>`;
 
 		const textBox = `
-			<div class="segment c3">
+			<div class="segment c3 row2">
 				<h2>Text Size &amp; Typography</h2>
 				<div class="stepper" style="margin-bottom:10px">
 					<button type="button" class="glass" id="size-down"
@@ -3770,14 +3765,14 @@ function startAdminFace() {
 		// --- Resources ------------------------------------------------------
 
 		const resourcesPane =
-			settingsHome.tileHtml("/faces", "faces", "Manage Faces", "Create, edit and remove dashboards", "c4") +
+			settingsHome.tileHtml("/faces", "faces", "Manage Faces", "Create, edit and remove dashboards", "c4 row1") +
 			settingsHome.tileHtml("/marketplace", "marketplace", "Marketplace", "Modules and themes to install", "c2 r2") +
 			settingsHome.tileHtml(
 				"/installed",
 				"installed",
 				"Installed Resources",
 				"What's installed, its versions, and what has an update waiting",
-				"c4"
+				"c4 row2"
 			);
 
 		// --- About ----------------------------------------------------------

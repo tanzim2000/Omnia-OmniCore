@@ -1,9 +1,10 @@
 // core/settings-home.js
 // The settings home (since v2): four tabs in a notch, on one page.
 //
-//   General      Location Service, Place search
-//   Appearance   Background, Appearance Mode, Back Button, Frosted glass,
-//                Text Size and Typography
+//   General      Location Service, Place search, Saved keys, a box to try
+//                a search
+//   Appearance   Frosted glass, Background (with the Back button's
+//                corner), Appearance Mode, Text Size and Typography
 //   Resources    Manage Faces, the Marketplace, Installed Resources
 //   About        OmniCore itself, and its updates
 //
@@ -16,17 +17,28 @@
 // icons are drawn here, by hand, as SVG: no icon font, nothing from the
 // internet.
 //
-// THE MOVEMENT
+// THE MOVEMENT (sideways since the v2 test run)
 //
-// The four tabs sit side by side on one wide strip, and the screen is a
-// window over it. Picking a tab slides the window: the boxes of the old tab
-// slide out and the new tab's slide in, the way the tab lies (General is
-// left of Appearance). The picture behind the page, when there is one,
-// moves the same way but only a quarter as far, so the glass crosses
-// different parts of it and the blur shows. The notch stays put. Each tab
-// scrolls up and down on its own; the ones off the screen can't be reached
-// with the keyboard or a screen reader. With reduced motion turned on, the
-// tab simply changes.
+// The four tabs lie side by side on one strip that scrolls sideways, never
+// up and down. Each tab is at least a screen wide, and its boxes sit on a
+// grid whose two rows fit the screen's height and whose columns go on to
+// the right: a tab with more boxes than fit is wider, not taller. The
+// mouse wheel moves the strip sideways (a trackpad's sideways swipe does
+// too), except over something that scrolls by itself (the release notes, a
+// box with more in it than fits, a list), which scrolls as usual. Scrolling
+// on past a tab's end goes into the next one; the notch marks whichever
+// tab is in the middle of the screen, and the address and the remembered
+// tab follow. Picking a tab in the notch glides there (jumps, with reduced
+// motion). The picture behind the page, when there is one, pans along,
+// three quarters of a screen from one end of the strip to the other, so
+// the glass crosses different parts of it and the blur shows.
+//
+// A box gets the height its row gives it: the first row is as tall as its
+// boxes need, the second takes what's left. A box with more in it than
+// fits (a short window, say) scrolls inside itself.
+//
+// A phone held upright keeps one column of boxes up and down per tab, and
+// a sideways swipe changes tab, one whole tab at a time.
 //
 // The address follows the tab (/#appearance), and the last tab is
 // remembered in this browser, so opening Settings again, or reloading it,
@@ -148,35 +160,32 @@ const STARTING_TAB_SCRIPT = `
 })();
 `;
 
-// The tabs at work: picking one, the address, the remembered tab, the
-// notch's names on a long press, and the notch sliding up as the page
-// fades out (page-motion.js says when)
+// The tabs at work: the strip scrolling sideways (the wheel, the notch,
+// the tab in view), the address, the remembered tab, the picture panning,
+// boxes that scroll inside themselves, the notch's names on a long press,
+// and the notch sliding up as the page fades out (page-motion.js says when)
 const HOME_SCRIPT = `
 (function () {
 	var ids = ${JSON.stringify(TABS.map((tab) => tab.id))};
 	var root = document.documentElement;
-	var panes = document.querySelectorAll("[data-pane]");
+	var strip = document.querySelector(".home-panes");
+	var panes = Array.prototype.slice.call(document.querySelectorAll("[data-pane]"));
 	var buttons = document.querySelectorAll(".notch [data-tab]");
 	var notch = document.querySelector(".notch");
+	var wide = window.matchMedia("(min-width: 42.01em)");
+	var still = window.matchMedia("(prefers-reduced-motion: reduce)");
+	var current = null;
 
-	function show(id, moving) {
-		var index = ids.indexOf(id);
-		if (index === -1) return;
-		if (!moving) root.classList.add("home-still");
-		root.style.setProperty("--tab", index);
+	function paneOf(id) {
+		return document.querySelector('[data-pane="' + id + '"]');
+	}
+
+	// The notch, the address and the remembered tab follow the tab in view
+	function mark(id) {
+		if (id === current || ids.indexOf(id) === -1) return;
+		current = id;
 		root.setAttribute("data-tab", id);
-
-		panes.forEach(function (pane) {
-			var here = pane.getAttribute("data-pane") === id;
-			// The tabs off the screen can't be reached
-			if (here) {
-				pane.removeAttribute("inert");
-				pane.removeAttribute("aria-hidden");
-			} else {
-				pane.setAttribute("inert", "");
-				pane.setAttribute("aria-hidden", "true");
-			}
-		});
+		root.style.setProperty("--tab", ids.indexOf(id));
 
 		buttons.forEach(function (button) {
 			if (button.getAttribute("data-tab") === id) button.setAttribute("aria-current", "page");
@@ -185,13 +194,81 @@ const HOME_SCRIPT = `
 
 		try { localStorage.setItem("omnicore-settings-tab", id); } catch (error) {}
 		if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
-
-		if (!moving) {
-			requestAnimationFrame(function () {
-				requestAnimationFrame(function () { root.classList.remove("home-still"); });
-			});
-		}
 	}
+
+	// Go to a tab: glide there, or jump (opening the page, reduced motion)
+	function show(id, moving) {
+		var pane = paneOf(id);
+		if (!pane) return;
+		strip.scrollTo({ left: pane.offsetLeft, behavior: moving && !still.matches ? "smooth" : "auto" });
+		mark(id);
+	}
+
+	// The tab under the middle of the screen
+	function inView() {
+		var middle = strip.scrollLeft + strip.clientWidth / 2;
+		var found = ids[0];
+		panes.forEach(function (pane) {
+			if (pane.offsetLeft <= middle) found = pane.getAttribute("data-pane");
+		});
+		return found;
+	}
+
+	// The picture pans along: 0 at the start of the strip, 1 at its end
+	function pan() {
+		var most = strip.scrollWidth - strip.clientWidth;
+		root.style.setProperty("--pan", most > 0 ? strip.scrollLeft / most : 0);
+	}
+
+	// A box with more in it than its place on the grid has room for
+	// scrolls inside itself. Only then: a box that scrolls cuts off what
+	// sticks out of it, like a list of search matches.
+	function fit() {
+		document.querySelectorAll(".home-bento > .segment").forEach(function (box) {
+			box.classList.remove("box-scroll");
+			if (wide.matches && box.scrollHeight > box.clientHeight + 1) box.classList.add("box-scroll");
+		});
+	}
+
+	var waiting = false;
+	function soon(work) {
+		if (waiting) return;
+		waiting = true;
+		requestAnimationFrame(function () {
+			waiting = false;
+			work();
+		});
+	}
+
+	strip.addEventListener("scroll", function () {
+		soon(function () {
+			pan();
+			mark(inView());
+		});
+	}, { passive: true });
+
+	// Can this element, or one around it inside the strip, still scroll
+	// up or down that way? Then the wheel is for it.
+	function scrollsItself(element, delta) {
+		for (var at = element; at && at !== strip; at = at.parentElement) {
+			var overflow = getComputedStyle(at).overflowY;
+			if ((overflow === "auto" || overflow === "scroll") && at.scrollHeight > at.clientHeight + 1) {
+				if (delta < 0 ? at.scrollTop > 0 : at.scrollTop + at.clientHeight < at.scrollHeight - 1) return true;
+			}
+		}
+		return false;
+	}
+
+	// The wheel moves the strip sideways. A sideways swipe on a trackpad
+	// already does, and a phone's tabs scroll up and down by themselves.
+	strip.addEventListener("wheel", function (event) {
+		if (event.ctrlKey || !wide.matches) return;
+		if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+		if (scrollsItself(event.target, event.deltaY)) return;
+		var unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? strip.clientWidth : 1;
+		event.preventDefault();
+		strip.scrollLeft += event.deltaY * unit;
+	}, { passive: false });
 
 	buttons.forEach(function (button) {
 		button.addEventListener("click", function (event) {
@@ -225,7 +302,28 @@ const HOME_SCRIPT = `
 	// own going back between tabs
 	window.addEventListener("hashchange", function () {
 		var id = location.hash.slice(1);
-		if (ids.indexOf(id) !== -1 && id !== root.getAttribute("data-tab")) show(id, true);
+		if (ids.indexOf(id) !== -1 && id !== current) show(id, true);
+	});
+
+	// A new window size: the tab in view stays in view, boxes are measured
+	// again
+	window.addEventListener("resize", function () {
+		soon(function () {
+			var id = current;
+			current = null;
+			show(id || ids[0], false);
+			fit();
+			pan();
+		});
+	});
+
+	// Something in a box opened or closed (Set it myself, a warning, a
+	// list): measure again
+	new MutationObserver(function () { soon(fit); }).observe(strip, {
+		subtree: true,
+		childList: true,
+		attributes: true,
+		attributeFilter: ["hidden", "style"]
 	});
 
 	// Leaving: the notch goes up, then the page fades
@@ -233,6 +331,11 @@ const HOME_SCRIPT = `
 	window.addEventListener("omnicore:stayed", function () { notch.classList.remove("notch-up"); });
 
 	show(root.getAttribute("data-tab") || ids[0], false);
+	fit();
+	pan();
+	requestAnimationFrame(function () {
+		requestAnimationFrame(function () { root.classList.remove("home-still"); });
+	});
 })();
 `;
 
@@ -352,10 +455,10 @@ const SETTINGS_HOME_CSS = `
 	.home-head h1 { margin: 0; }
 
 	/* The tabs start 3em higher than they look, under the heading, with
-	   that 3em given back as padding inside each tab. A tab scrolls on
-	   its own, so it cuts off anything outside it, and a glowing box in
-	   the first row would have its glow cut off in a straight line where
-	   the tab begins. The extra room is where that glow goes. */
+	   that 3em given back as padding inside each tab. The strip cuts off
+	   anything outside it, and a glowing box in the first row would have
+	   its glow cut off in a straight line where the tabs begin. The extra
+	   room is where that glow goes. */
 	.home-panes { flex: 1; min-height: 0; position: relative; overflow: hidden; margin-top: -3em; }
 	html:not(.home-tabs) .home-panes { margin-top: 0; }
 
@@ -365,42 +468,36 @@ const SETTINGS_HOME_CSS = `
 	.pane-title { max-width: 70rem; margin: 1em auto 0.75em; font-size: 1.1em; }
 	html.home-tabs .pane-title { display: none; }
 
-	/* With it: the strip of four, and the window over it */
+	/* With it: one strip of the four tabs, scrolling sideways. No
+	   scrollbar: the notch says where you are. */
+	html.home-tabs .home-panes {
+		width: 100%;
+		max-width: 100vw;
+		min-width: 0;
+		align-self: stretch;
+		overflow-x: auto;
+		overflow-y: hidden;
+		overscroll-behavior-x: contain;
+		scrollbar-width: none;
+	}
+	html.home-tabs .home-panes::-webkit-scrollbar { display: none; }
+
 	html.home-tabs .home-track {
 		display: flex;
-		width: 400%;
+		width: max-content;
 		height: 100%;
-		transform: translateX(calc(var(--tab, 0) * -25%));
-		transition: transform 0.72s cubic-bezier(0.65, 0, 0.25, 1);
 	}
 
-	html.home-tabs .home-pane {
-		width: 25%;
-		height: 100%;
-		overflow-y: auto;
-		overscroll-behavior: contain;
-		scrollbar-width: thin;
-		scrollbar-color: var(--scroll-thumb) transparent;
-		padding: 3.25em 1.75em 7em;
-		box-sizing: border-box;
-	}
-
-	/* The picture moves the same way, a quarter as far: wide enough to
-	   pan three quarters of a screen */
+	/* The picture pans along with the strip (--pan, 0 to 1, set by the
+	   script as it scrolls): wide enough to pan three quarters of a
+	   screen */
 	html.home-tabs body.settings-home .omni-backdrop {
 		right: auto;
 		width: 175vw;
-		transform: translateX(calc(var(--tab, 0) * -25vw));
-		transition: transform 0.72s cubic-bezier(0.65, 0, 0.25, 1);
+		transform: translateX(calc(var(--pan, 0) * -75vw));
 	}
 
-	/* Opening the page, or a tab picked from the address: no movement */
-	html.home-still .home-track,
-	html.home-still body.settings-home .omni-backdrop { transition: none; }
-
 	@media (prefers-reduced-motion: reduce) {
-		html.home-tabs .home-track,
-		html.home-tabs body.settings-home .omni-backdrop,
 		.notch, .nl { transition: none; }
 		html.omni-arriving .notch { animation: none; }
 	}
@@ -426,6 +523,63 @@ const SETTINGS_HOME_CSS = `
 	.home-bento .c6 { grid-column: 1 / -1; }
 	.home-bento .r2 { grid-row: span 2; align-self: stretch; }
 
+	/* Anything but a phone held upright: the grid goes sideways. Two rows
+	   that fit the screen (the first as tall as its boxes need, the second
+	   what's left), and columns a sixth of the boxes' width that go on to
+	   the right, so the first six are the screen and any more make the
+	   tab wider. Each tab is at least a screen wide, its first screen in
+	   the middle as before. */
+	@media (min-width: 42.01em) {
+		html.home-tabs .home-pane {
+			--home-width: min(100vw - 3.5em, 70em);
+			flex: none;
+			height: 100%;
+			min-width: 100vw;
+			box-sizing: border-box;
+			padding: 3.25em max(1.75em, calc((100vw - 70em) / 2)) 1.75em;
+		}
+
+		/* Room for the Back button in the bottom right corner */
+		body.settings-home:has(> .floating.bottom-right) .home-pane { padding-bottom: 6em; }
+
+		html.home-tabs .home-bento {
+			height: 100%;
+			max-width: none;
+			margin: 0;
+			grid-template-columns: none;
+			/* The first row as tall as its boxes need, but never taller
+			   than the room left once the second has at least 10em (or
+			   45% on a very short screen); the second gets the rest */
+			grid-template-rows: minmax(0, auto) minmax(min(10em, 45%), 1fr);
+			grid-auto-flow: column dense;
+			grid-auto-columns: calc((var(--home-width) - 5em) / 6);
+		}
+
+		html.home-tabs .home-bento .c6 { grid-column: span 6; }
+
+		/* Which row a box is on, so it stays there however the grid fills
+		   (sideways, it fills each column top to bottom first). The boxes
+		   of the first row end level with each other. */
+		html.home-tabs .home-bento .row1 { grid-row: 1; align-self: stretch; }
+		html.home-tabs .home-bento .row2 { grid-row: 2; }
+		html.home-tabs .home-bento .r2 { grid-row: 1 / span 2; }
+
+		/* Resources: three big tiles that fill the screen, two rows of the
+		   same height */
+		html.home-tabs .home-pane[data-pane=resources] .home-bento { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+		html.home-tabs .home-bento > .home-tile { align-self: stretch; }
+
+		/* A box never taller than its place; one with more in it scrolls
+		   inside itself (box-scroll, set by the script only when needed) */
+		html.home-tabs .home-bento > .segment { max-height: 100%; }
+		html.home-tabs .home-bento > .segment.box-scroll {
+			overflow-y: auto;
+			overscroll-behavior: contain;
+			scrollbar-width: thin;
+			scrollbar-color: var(--scroll-thumb) transparent;
+		}
+	}
+
 	/* A whole box that is a link (Resources) */
 	.home-tile {
 		display: flex;
@@ -450,10 +604,25 @@ const SETTINGS_HOME_CSS = `
 	.home-bento .backdrop-preview { aspect-ratio: auto; height: 10em; }
 	.fact span:last-child { text-align: right; overflow-wrap: anywhere; }
 
-	/* A phone held upright: one column, and the heading below the notch */
+	/* A phone held upright: one column, and the heading below the notch.
+	   Each tab a screen wide, scrolling up and down by itself; a sideways
+	   swipe moves a whole tab at a time. */
 	@media (max-width: 42em) {
 		.home-head { padding: 4.5em 1em 0.5em; min-height: 0; }
-		html.home-tabs .home-pane { padding: 3.25em 1em 7em; }
+		html.home-tabs .home-panes { scroll-snap-type: x mandatory; }
+		html.home-tabs .home-pane {
+			flex: none;
+			width: 100vw;
+			height: 100%;
+			box-sizing: border-box;
+			overflow-y: auto;
+			overscroll-behavior-y: contain;
+			scrollbar-width: thin;
+			scrollbar-color: var(--scroll-thumb) transparent;
+			scroll-snap-align: start;
+			scroll-snap-stop: always;
+			padding: 3.25em 1em 7em;
+		}
 		html:not(.home-tabs) .home-pane { padding: 0 1em 2em; }
 		.home-bento { grid-template-columns: minmax(0, 1fr); }
 		.home-bento .c2, .home-bento .c3, .home-bento .c4 { grid-column: 1 / -1; }

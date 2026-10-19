@@ -180,7 +180,7 @@ until the Marketplace puts something in them.
 | `place-search-ui.js`       | The browser half: draws the matches, the note when the Secondary was asked, and the credit line, on all three pages that search.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `backdrop.js`              | The picture behind OmniCore's own pages and the frosted glass over it: checks a file by its first bytes, keeps it in `data/backdrop/`, serves it on every port, works out the veil that keeps text readable.                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `page-motion.js`           | Page fades: the curtain every page starts with, which links and `omniGo()` fade out, which arrivals fade in (never a reload), and the `omnicore:revealed` signal for a theme's entrance.                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `settings-home.js`         | The settings home's frame: the notch and its four tabs, the strip they slide on, the picture moving a quarter as far, the remembered tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `settings-home.js`         | The settings home's frame: the notch and its four tabs, the sideways strip they lie on (the wheel, the tab in view, the sideways grid), the picture panning along, the remembered tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `time-service.js`          | One place that knows what time OmniCore thinks it is. Read-only; reachable by a module through `omni.time()` and by a theme directly at `GET /time`.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `settings-store.js`        | OmniCore's own install-wide settings (`data/settings.json`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `paths.js`                 | Resolves where `data/`, `modules/` and `themes/` actually live. Honours `OMNICORE_*_DIR` overrides, which is what lets the test suite use a sandbox.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -1462,19 +1462,34 @@ updates, the release notes). A black notch at the top holds an icon per
 tab; a dot on About means an update is ready. The corner button signs out
 here (`/logout`), so it shows a sign-out icon.
 
-- The tabs lie side by side on one strip, and picking one slides it; the
-  picture behind the page moves the same way a quarter as far. Each tab
-  scrolls on its own; the others are `inert`. Reduced motion: no movement.
+- The tabs lie side by side on one strip that scrolls sideways
+  (`.home-panes`, `overflow-x: auto`), never up and down. The script turns
+  the mouse wheel into sideways movement, except over something that can
+  still scroll up or down by itself (`scrollsItself`); it marks the tab
+  under the middle of the screen in the notch, the address and
+  `localStorage`, and pans the picture (`--pan`, 0 to 1 along the strip,
+  three quarters of a screen in all). Picking a tab in the notch glides
+  there (`scrollTo`), or jumps with reduced motion.
 - The address follows the tab (`/#appearance`, pointing at the tab's
   heading, which is only shown without the script), and the last tab is
   kept in `localStorage`. The tab is picked before the tabs are drawn, so
   opening or reloading doesn't move.
 - Without the script, the four tabs are one long page, and the notch's
   icons are links down it.
-- The boxes are a six-column grid with mixed widths and heights; one
-  column on a phone held upright. Each tab starts 3em higher than it
-  looks, with that room given back as padding, so a glowing box in the
-  first row isn't cut off where the tab (a scroll area) begins.
+- The boxes sit on a sideways grid (`grid-auto-flow: column dense`): two
+  rows that fit the screen, the first as tall as its boxes need (never so
+  tall the second has less than 10em) and the second what's left, and
+  columns a sixth of the boxes' width (70em at most) that go on to the
+  right. So the first six columns are the screen, and a tab with more
+  boxes is wider, not taller; each tab is at least a screen wide. A box
+  says its width (`c2` to `c6`) and row (`row1`, `row2`, or `r2` for both).
+  A box is never taller than its place; one with more in it scrolls
+  inside itself (`box-scroll`, set by the script only then, since a box
+  that scrolls cuts off what sticks out of it). A phone held upright: one
+  column per tab, up and down, and a sideways swipe snaps to the next
+  tab. Each tab starts 3em higher than it looks, with that room given
+  back as padding, so a glowing box in the first row isn't cut off where
+  the strip begins.
 - Everything is on the tabs; there are no settings pages of their own any
   more. Place search (the choice), Saved keys and a box to try a search
   are on General; Background and Frosted glass on Appearance; the updates
