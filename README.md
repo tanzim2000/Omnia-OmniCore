@@ -163,4 +163,14 @@ OmniCore is one of three parts:
 
 ## Licence
 
-MIT.
+Copyright (C) 2026 Tanzim Ahmed.
+
+OmniCore is free software under the GNU Affero General Public License,
+version 3 only (AGPL-3.0-only): use it, change it and share it, and share
+your changes the same way. Modules, faces and themes are their own works,
+under whatever licence their authors choose. The docs are all rights
+reserved, with their code examples free to copy (0BSD). The names Omnia,
+OmniCore and the rest are covered by [TRADEMARKS.md](TRADEMARKS.md).
+
+The details, in plain words: [LICENSING.md](LICENSING.md). The licence
+itself: [LICENSE](LICENSE). To contribute: [CONTRIBUTING.md](CONTRIBUTING.md).

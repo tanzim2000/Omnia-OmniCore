@@ -129,3 +129,26 @@ test("a failure after a good answer gives the old answer, marked stale, with the
 		flaky.close();
 	}
 });
+
+test("the cache keeps at most 500 answers, forgetting the least recently used", async () => {
+	const { CACHE_MOST, cacheSize } = require("../core/module-fetch");
+	assert.equal(CACHE_MOST, 500);
+
+	// One kept answer, then enough new addresses to fill the cache, using
+	// the first one again halfway so it counts as recently used
+	await fetchCached(`${base}/keep`, { cacheSeconds: 600 });
+	for (let i = 0; i < CACHE_MOST + 50; i++) {
+		if (i === 300) await fetchCached(`${base}/keep`, { cacheSeconds: 600 });
+		await fetchCached(`${base}/each/${i}`, { cacheSeconds: 600 });
+	}
+	assert.equal(cacheSize(), CACHE_MOST, "never more than 500");
+
+	// /keep was used recently, so it's still kept: no new request for it
+	const before = seen.length;
+	await fetchCached(`${base}/keep`, { cacheSeconds: 600 });
+	assert.equal(seen.length, before, "a recently used answer stays");
+
+	// /each/0 was the least recently used, so it went: asked again
+	await fetchCached(`${base}/each/0`, { cacheSeconds: 600 });
+	assert.equal(seen.length, before + 1, "the least recently used one went");
+});

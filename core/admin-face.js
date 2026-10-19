@@ -29,6 +29,7 @@
 // consistent no matter who wrote the module.
 
 const { attachBackdropRoute } = require("./backdrop");
+const { ICON_LINK, attachIconRoute } = require("./icon");
 const { pageStart } = require("./page-motion");
 const backdropStore = require("./backdrop");
 const express = require("express");
@@ -202,6 +203,9 @@ const styles = `
 
 	.inset-label { font-size: 0.7em; color: var(--fg-muted); }
 	.inset-value { font-size: 0.85em; margin-top: 2px; }
+	/* The coordinates after a place's name: a little apart, quieter, kept
+	   together */
+	.inset-value .coords { margin-left: 1.25em; color: var(--fg-muted); white-space: nowrap; }
 
 
 
@@ -619,15 +623,18 @@ const styles = `
 	.modal.modal-wide { max-width: 40em; max-height: 92vh; overflow-y: auto; }
 	#background-modal [hidden], #glass [hidden] { display: none !important; }
 
-	/* Frosted glass: the Tint colours on a row of their own, the sliders
-	   two to a row where there's room, so the box stays short enough to
-	   leave the row under it the room it needs. One to a row when the box
-	   is narrow (a phone). */
+	/* Frosted glass: the Tint colours on a row of their own, then the
+	   sliders two to a row (Blur and Tint strength, then brightness and
+	   Dim), so the box stays short enough to leave the row under it the
+	   room it needs. One to a row on a phone held upright. */
 	.glass-fields {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(13em, 1fr));
+		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: 0 1.75em;
 		align-items: start;
+	}
+	@media (max-width: 42em) {
+		.glass-fields { grid-template-columns: minmax(0, 1fr); }
 	}
 	.glass-fields > .field { margin-bottom: 0.9em; min-width: 0; }
 	.glass-fields > .wide-field { grid-column: 1 / -1; }
@@ -1325,6 +1332,7 @@ function page(title, body, script, bodyClass, back) {
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(title)} — OmniCore</title>
+	${ICON_LINK}
 	<style>${uiStyles()}${styles}</style>
 </head>
 <body class="${bodyClass || ""}">
@@ -3445,6 +3453,8 @@ const RAW_UPLOADS = ["/background/upload", "/background/still"];
 
 function startAdminFace() {
 	const app = express();
+	// The browser tab's icon (core/icon.js)
+	attachIconRoute(app);
 	app.use(express.json());
 
 	// Light or dark for whichever browser is asking. See ui-theme.js.
@@ -3599,11 +3609,13 @@ function startAdminFace() {
 		// obvious whether automatic detection actually worked
 		const current = await getLocation();
 
-		const currentText = !settings.locationEnabled
+		// One line: the place's name, then its coordinates a little apart
+		// in a quieter colour (no dash between them)
+		const currentHtml = !settings.locationEnabled
 			? "Location services are off."
 			: current
-			? `${current.label || "Unnamed"} — ` +
-			  `${current.latitude.toFixed(3)}, ${current.longitude.toFixed(3)}`
+			? escapeHtml(current.label || "Unnamed") +
+			  `<span class="coords">${current.latitude.toFixed(3)}, ${current.longitude.toFixed(3)}</span>`
 			: "No location available. Detection may have failed.";
 
 		const manualLocation = settings.locationMode === "manual";
@@ -3650,9 +3662,7 @@ function startAdminFace() {
 							<div class="inset-label">CURRENTLY ${
 								manualLocation ? "SET" : "DETECTED"
 							}</div>
-							<div class="inset-value" id="location-value">${escapeHtml(
-								currentText
-							)}</div>
+							<div class="inset-value" id="location-value">${currentHtml}</div>
 						</div>
 						<button class="glass" id="location-action"
 							style="flex-shrink:0;padding:0.641em 1.1218em;font-size:0.78em${manualLocation ? ";display:none" : ""}">
@@ -4900,6 +4910,15 @@ function startAdminFace() {
 				</div>`
 			: "";
 
+		// The licence the author gave it (the registry entry's `license`, an
+		// SPDX name such as MIT or GPL-3.0-only). A resource is its own work,
+		// not part of OmniCore (LICENSING.md), so this is the author's say.
+		// Older entries may not have one: they still install.
+		const licence =
+			typeof entry.license === "string" && entry.license.trim()
+				? entry.license.trim().slice(0, 64)
+				: "";
+
 		const sourceSection = entry.repo
 			? `
 				<div class="segment">
@@ -4907,6 +4926,9 @@ function startAdminFace() {
 					<p class="lede market-url">
 						<a href="${escapeHtml(entry.repo)}">${escapeHtml(entry.repo)}</a>${entry.ref ? `, pinned at <code>${escapeHtml(String(entry.ref).slice(0, 10))}</code>` : ""}
 					</p>
+					<p class="lede market-licence">${
+						licence ? `Licence: <code>${escapeHtml(licence)}</code>` : "No licence stated"
+					}</p>
 				</div>`
 			: "";
 

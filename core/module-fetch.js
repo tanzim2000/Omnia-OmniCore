@@ -21,8 +21,31 @@
 // every call carries an OmniCore User-Agent unless the module sends its
 // own in `headers`.
 
-// Last good response per key: { data, fetchedAt }
+// Last good response per key: { data, fetchedAt }. At most CACHE_MOST
+// of them: a module whose address changes every time (a timestamp in it,
+// say) would otherwise make this grow for as long as OmniCore runs. When
+// it's full, the answer used least recently goes. (A Map keeps its keys
+// in the order they went in, so moving a key to the end each time it's
+// used leaves the least recently used one first.)
+const CACHE_MOST = 500;
 const cache = new Map();
+
+// Read an answer, marking it as just used
+function remember(key) {
+	const entry = cache.get(key);
+	if (entry) {
+		cache.delete(key);
+		cache.set(key, entry);
+	}
+	return entry;
+}
+
+// Keep an answer, forgetting the least recently used one if it's full
+function keep(key, entry) {
+	cache.delete(key);
+	cache.set(key, entry);
+	while (cache.size > CACHE_MOST) cache.delete(cache.keys().next().value);
+}
 
 // Requests currently in progress, so two faces asking at the same moment
 // result in one call rather than two
@@ -120,7 +143,7 @@ async function fetchCached(url, options = {}) {
 	const timeoutMs =
 		(options.timeoutSeconds === undefined ? 10 : options.timeoutSeconds) * 1000;
 
-	const cached = cache.get(key);
+	const cached = remember(key);
 
 	// Recent enough — don't call out at all
 	if (cached && cached.fetchedAt + cacheMs > Date.now()) {
@@ -150,7 +173,7 @@ async function fetchCached(url, options = {}) {
 		const data =
 			options.as === "text" ? await response.text() : await response.json();
 
-		cache.set(key, { data, fetchedAt: Date.now() });
+		keep(key, { data, fetchedAt: Date.now() });
 		return data;
 	})();
 
@@ -168,4 +191,9 @@ async function fetchCached(url, options = {}) {
 	}
 }
 
-module.exports = { fetchCached, DEFAULT_USER_AGENT };
+// How many answers are kept now (for the tests)
+function cacheSize() {
+	return cache.size;
+}
+
+module.exports = { fetchCached, DEFAULT_USER_AGENT, CACHE_MOST, cacheSize };

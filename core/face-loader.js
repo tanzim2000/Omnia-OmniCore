@@ -8,6 +8,7 @@
 // OmniCore keeps running.
 
 const { attachBackdropRoute } = require("./backdrop");
+const { attachIconRoute } = require("./icon");
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -133,6 +134,8 @@ function startFace(face) {
 		}
 
 		const app = express();
+		// The browser tab's icon (core/icon.js)
+		attachIconRoute(app);
 		app.use(express.json());
 
 		// Light or dark for whichever browser is asking. See ui-theme.js.

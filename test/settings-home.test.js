@@ -145,9 +145,12 @@ test("the tabs: one page, the address points at each tab's heading, the scripts 
 	assert.doesNotThrow(() => new vm.Script(settingsHome.HOME_SCRIPT));
 	assert.ok(settingsHome.HOME_SCRIPT.includes('localStorage.setItem("omnicore-settings-tab"'), "remembered");
 	assert.ok(settingsHome.HOME_SCRIPT.includes("strip.scrollTo({ left: pane.offsetLeft"), "picking a tab glides the strip there");
-	assert.ok(settingsHome.HOME_SCRIPT.includes('strip.addEventListener("wheel"'), "the wheel moves it sideways");
-	assert.ok(settingsHome.HOME_SCRIPT.includes("{ passive: false }"), "which needs to stop the page's own scrolling");
-	assert.ok(settingsHome.HOME_SCRIPT.includes("scrollsItself(event.target, event.deltaY)"), "but not over something that scrolls by itself");
+	assert.ok(!settingsHome.HOME_SCRIPT.includes("{ passive: false }"), "the up and down wheel is never taken over: it never changes tab");
+	assert.ok(!settingsHome.HOME_SCRIPT.includes("scrollsItself"), "not even once what's under it reaches its end");
+	assert.ok(settingsHome.HOME_SCRIPT.includes('if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;\n\t\tif (event.defaultPrevented || busy(event)) return;'), "Left and Right change tab");
+	assert.ok(settingsHome.HOME_SCRIPT.includes('target.closest("input, textarea, select, [contenteditable], [role=slider], [role=listbox], [role=tablist], .notch")'), "but not while typing, on a slider or a list, or in the notch");
+	assert.ok(settingsHome.HOME_SCRIPT.includes('document.querySelector(".modal-backdrop:not([hidden])")'), "or with a pop-up open");
+	assert.ok(settingsHome.HOME_SCRIPT.includes("if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return true;"), "or with a modifier key");
 	assert.ok(settingsHome.HOME_SCRIPT.includes("mark(inView())"), "the notch follows the tab in view");
 	assert.ok(settingsHome.HOME_SCRIPT.includes("history.replaceState"), "the address follows the tab");
 });
@@ -186,7 +189,8 @@ test("snapping: let go between two tabs and it goes on to the next, or back afte
 	assert.ok(script.includes("if (!wide.matches || holding) return;"), "not on a phone (its own snapping does it), not with a finger still down");
 	assert.ok(script.includes("Math.abs(left - from) < NUDGE"), "a nudge goes back");
 	assert.ok(script.includes("} else if (heading > 0) {"), "otherwise on the way it was going");
-	assert.ok(script.includes('if (gliding) strip.scrollTo({ left: from, behavior: "instant" });'), "turning the wheel mid-glide takes over");
+	assert.ok(script.includes('if (gliding) strip.scrollTo({ left: from, behavior: "instant" });'), "pushing it mid-glide takes over");
+	assert.ok(script.includes("if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey) {"), "a sideways swipe or Shift and the wheel, too");
 	assert.ok(script.includes("var end = Math.max(start, start + pane.offsetWidth - strip.clientWidth);"), "a tab wider than the screen can rest anywhere inside it");
 });
 

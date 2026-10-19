@@ -89,6 +89,10 @@ COPY start.OmniCore ./
 # from here, along with what isn't released yet.
 COPY CHANGELOG.md ./
 
+# The licence and what goes with it: the AGPL asks that it travels with
+# every copy, and the About page points to it
+COPY LICENSE LICENSING.md TRADEMARKS.md ./
+
 # 3000 admin, 3999 setup wizard, 4000 welcome face. Dashboard faces
 # (4001+) and input faces (5001+) are published by docker-compose.yml,
 # since how many exist depends on what's been configured.

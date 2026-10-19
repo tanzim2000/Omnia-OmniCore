@@ -112,13 +112,14 @@ CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
 
 ## v2: left to check
 
-- **The sideways settings home with a real mouse wheel and trackpad.** The
-  wheel was tried in a test browser only. Check it doesn't feel too fast
-  or too slow, that a trackpad's two-finger swipe both ways feels right,
-  and on a phone that a sideways swipe moves exactly one tab. Snapping:
-  one notch of the wheel should go to the next tab, a small nudge back,
-  and a trackpad swipe let go of halfway should finish the move without
-  fighting the trackpad's own coasting.
+- **The sideways settings home with a real mouse and trackpad.** Tried in
+  a test browser only. Check that the up and down wheel never changes tab
+  (over the release notes, over a box that scrolls, over empty space),
+  that a trackpad's two-finger sideways swipe both ways feels right and
+  snaps (let go halfway, it should finish the move without fighting the
+  trackpad's own coasting), that Shift and the wheel moves it, that Left
+  and Right change tab but not while typing or on a slider, and on a phone
+  that a sideways swipe moves exactly one tab.
 - **Change background on a phone.** The colour wheel was only tried with a
   mouse and arrow keys; try it with a finger, and check the pop-up fits a
   phone held upright (it scrolls inside itself past 92% of the screen).
@@ -137,12 +138,39 @@ CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
 - **The veil on bright pictures.** It aims at the brightest tenth of the
   picture, so a mostly bright picture may be dimmed more than it needs.
   Tune it after real use, with real pictures.
-- **A favicon 404 on every page.** No page names an icon, so the browser
-  asks for `/favicon.ico` and gets a 404. Harmless (one console error),
-  and older than v2.
-- **`module-fetch.js` keeps every answer forever.** Its cache is never
-  trimmed, so memory grows for a module whose address changes each time
-  (a timestamp in it, say). Place search has its own cache, capped at 500.
+- **OmniCore's own icon.** `core/favicon.svg` is a stand-in (a charcoal
+  tile with a ring). Make the real one (Quiver or Stitch), a square SVG
+  that still reads at 16 x 16 on a dark tab and a light one, and replace
+  that file.
+
+## Licensing: left to do
+
+Decided in Oct 2026 (LICENSING.md has the whole of it): OmniCore is
+AGPL-3.0-only with an exception for Resources; the docs are all rights
+reserved with code examples 0BSD; the names are in TRADEMARKS.md;
+contributions come under the CLA.
+
+- **The Registry and Essentials repos.** The Registry's listing gets CC BY
+  4.0, with submission terms (a resource is listed only by its author, or
+  as a clearly marked and credited fork; no re-listing someone else's
+  work under your own name; a mirror may say it's a mirror, never the
+  official registry) and a `license` field on every entry. Essentials
+  gets 0BSD. The files come separately, with where each goes.
+- **CLA Assistant.** Until it's installed on the repo, a contributor
+  agrees by posting the sentence in CONTRIBUTING.md on their first pull
+  request; nothing from outside is merged without it.
+- **A lawyer's read** of CLA.md and the section 7 permission and terms in
+  LICENSING.md, before the first outside contribution or the first
+  commercial licence. Not needed for the v2 release.
+- **A trademark clearance search** before registering any of the names
+  (CIPO, in Canada). A quick look found other products called Omnia
+  (an "Omnia Genius Smart Home" app, OMNIA filings in the US, OmniaONE),
+  so registering could be refused or contested. Only worth paying for
+  once OmniCore has real users. The names are used with ™ until then.
+- **Paid resources.** The licence already allows a paid or closed
+  module, face or theme; the Marketplace has no way to sell one yet.
+- **Write down what OmniView REVIVE and OmniSense are**, once they're
+  decided. TRADEMARKS.md names them without saying.
 
 ## v2: ideas left from the design
 

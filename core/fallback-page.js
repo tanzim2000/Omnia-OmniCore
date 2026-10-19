@@ -13,6 +13,7 @@
 // docs/planning/default-ui-architecture.md.
 
 const { pageStart } = require("./page-motion");
+const { ICON_LINK } = require("./icon");
 const { uiStyles } = require("./ui-theme");
 const notifications = require("./notifications");
 const { CLIENT_SCRIPT } = require("./face-events");
@@ -42,6 +43,7 @@ function renderFallbackPage(themes, face) {
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>OmniCore</title>
+	${ICON_LINK}
 	<style>
 ${uiStyles()}
 ${notifications.overlayStyles(face && face.notificationMode)}

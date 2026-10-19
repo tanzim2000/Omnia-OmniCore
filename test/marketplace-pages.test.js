@@ -30,6 +30,7 @@ const REGISTRY = {
 			emits: ["pair", "text"],
 			repo: "https://github.com/tanzim2000/Omnia-Essentials",
 			ref: "fab9118965abcdef",
+			license: "0BSD",
 			minOmniCore: "1.0.0",
 			installed: true
 		},
@@ -53,6 +54,8 @@ const REGISTRY = {
 			name: "Windows 8",
 			author: "tanzim2000",
 			description: "Asymmetric tile grid",
+			// An older entry: no licence of its own
+			repo: "https://github.com/tanzim2000/omnia-themes",
 			// A theme doesn't run in the background; the field is ignored
 			background: true,
 			minOmniCore: "1.0.0",
@@ -172,6 +175,10 @@ test("marketplace: a listing's own page has no inline back link, and its button 
 	assert.ok(theme.html.includes('data-install="windows8" data-kind="theme"'));
 	assert.ok(theme.html.includes('"/marketplace/install"'), "its Install button is wired up");
 	assert.ok(!theme.html.includes("<h2>Emits</h2>"), "a theme emits nothing");
+
+	// The licence its author gave it, under Source; or that there's none
+	assert.ok(html.includes('<p class="lede market-licence">Licence: <code>0BSD</code></p>'));
+	assert.ok(theme.html.includes('<p class="lede market-licence">No licence stated</p>'), "an older entry still shows, and still installs");
 });
 
 test("marketplace: an author's page groups their listings, and Install works there too", async () => {

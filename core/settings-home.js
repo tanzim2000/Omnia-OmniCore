@@ -22,11 +22,15 @@
 // The four tabs lie side by side on one strip that scrolls sideways, never
 // up and down. Each tab is at least a screen wide, and its boxes sit on a
 // grid whose two rows fit the screen's height and whose columns go on to
-// the right: a tab with more boxes than fit is wider, not taller. The
-// mouse wheel moves the strip sideways (a trackpad's sideways swipe does
-// too), except over something that scrolls by itself (the release notes, a
-// box with more in it than fits, a list), which scrolls as usual. Scrolling
-// on past a tab's end goes into the next one; the notch marks whichever
+// the right: a tab with more boxes than fit is wider, not taller. Only
+// sideways movement moves the strip: a trackpad's sideways swipe, a tilt
+// wheel, Shift and the wheel, a finger, and the Left and Right keys. The
+// ordinary up and down wheel never changes tab: it scrolls whatever is
+// under it (the release notes, a box with more in it than fits, a list)
+// and stops there. (Until the v2 test run it turned sideways once that
+// thing reached its end, and a box that ran out mid-scroll threw you into
+// the next tab.) Scrolling on past a tab's end goes into the next one;
+// the notch marks whichever
 // tab is in the middle of the screen, and the address and the remembered
 // tab follow. Let go between two tabs and the strip snaps: it glides on to
 // the next tab the way it was going, or back if it was only nudged.
@@ -165,8 +169,8 @@ const STARTING_TAB_SCRIPT = `
 })();
 `;
 
-// The tabs at work: the strip scrolling sideways (the wheel, the notch,
-// the tab in view), the address, the remembered tab, the picture panning,
+// The tabs at work: the strip scrolling sideways (snapping, the notch,
+// the Left and Right keys, the tab in view), the address, the remembered tab, the picture panning,
 // boxes that scroll inside themselves, the notch's names on a long press,
 // and the notch sliding up as the page fades out (page-motion.js says when)
 const HOME_SCRIPT = `
@@ -212,8 +216,8 @@ const HOME_SCRIPT = `
 	}
 
 	// SNAPPING (wide screens; a phone's own scroll snapping does it there).
-	// The strip moves freely while the wheel turns or a finger or trackpad
-	// pushes it. Once it stops between two tabs, it glides on to the next
+	// The strip moves freely while a finger, a trackpad or a tilt wheel
+	// pushes it sideways. Once it stops between two tabs, it glides on to the next
 	// tab the way it was going, or back if it hardly moved (a nudge).
 	var gliding = false;   // our own glide, not the person's
 	var started = null;    // where the person's push began
@@ -375,32 +379,42 @@ const HOME_SCRIPT = `
 		});
 	}, { passive: true });
 
-	// Can this element, or one around it inside the strip, still scroll
-	// up or down that way? Then the wheel is for it.
-	function scrollsItself(element, delta) {
-		for (var at = element; at && at !== strip; at = at.parentElement) {
-			var overflow = getComputedStyle(at).overflowY;
-			if ((overflow === "auto" || overflow === "scroll") && at.scrollHeight > at.clientHeight + 1) {
-				if (delta < 0 ? at.scrollTop > 0 : at.scrollTop + at.clientHeight < at.scrollHeight - 1) return true;
-			}
+	// The up and down wheel never changes tab: it scrolls whatever is under
+	// it (the release notes, a box with more in it than fits) and stops
+	// there. Only sideways movement moves the strip: a trackpad's sideways
+	// swipe, a tilt wheel, Shift and the wheel (the browser turns that
+	// sideways by itself), a finger. The scroll listener above sees it and
+	// snapping finishes the move.
+
+	// A sideways push in the middle of one of our glides takes over from it
+	strip.addEventListener("wheel", function (event) {
+		if (!gliding) return;
+		if (Math.abs(event.deltaX) > Math.abs(event.deltaY) || event.shiftKey) {
+			gliding = false;
+			started = null;
+			strip.scrollTo({ left: strip.scrollLeft, behavior: "instant" });
 		}
-		return false;
+	}, { passive: true });
+
+	// Left and Right change tab, unless they're busy doing something else:
+	// typing, a slider, a list, a pop-up, or with a modifier key held
+	function busy(event) {
+		if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return true;
+		var target = event.target;
+		if (target && target.closest) {
+			if (target.closest("input, textarea, select, [contenteditable], [role=slider], [role=listbox], [role=tablist], .notch")) return true;
+		}
+		return !!document.querySelector(".modal-backdrop:not([hidden])");
 	}
 
-	// The wheel moves the strip sideways. A sideways swipe on a trackpad
-	// already does, and a phone's tabs scroll up and down by themselves.
-	strip.addEventListener("wheel", function (event) {
-		if (event.ctrlKey || !wide.matches) return;
-		if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-		if (scrollsItself(event.target, event.deltaY)) return;
-		var unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? strip.clientWidth : 1;
+	document.addEventListener("keydown", function (event) {
+		if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+		if (event.defaultPrevented || busy(event)) return;
+		var next = ids.indexOf(current) + (event.key === "ArrowRight" ? 1 : -1);
+		if (next < 0 || next >= ids.length) return;
 		event.preventDefault();
-		var from = strip.scrollLeft;
-		pushed(from, event.deltaY);
-		strip.scrollLeft = from + event.deltaY * unit;
-		lastLeft = strip.scrollLeft;
-		settleSoon();
-	}, { passive: false });
+		show(ids[next], true);
+	});
 
 	buttons.forEach(function (button) {
 		button.addEventListener("click", function (event) {

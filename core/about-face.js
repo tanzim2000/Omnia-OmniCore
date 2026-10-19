@@ -19,6 +19,7 @@
 // JavaScript.
 
 const { attachBackdropRoute } = require("./backdrop");
+const { ICON_LINK, attachIconRoute } = require("./icon");
 const { pageStart } = require("./page-motion");
 const express = require("express");
 const fs = require("fs");
@@ -182,6 +183,7 @@ function renderPage(info) {
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>About — OmniCore</title>
+	${ICON_LINK}
 	<style>${uiStyles()}</style>
 	<link rel="stylesheet" href="/about.css">
 </head>
@@ -213,6 +215,17 @@ ${pageStart()}
 		${CLAUDE_MARK}
 		<span>Claude</span>
 	</div>
+
+	<!-- The Appropriate Legal Notices the AGPL asks a program's screen to
+	     show: the copyright, that it's free software with no warranty, and
+	     where its licence is. Keep this in any version based on OmniCore
+	     (LICENSING.md, additional term 3). -->
+	<p class="legal">
+		Copyright (C) 2026 Tanzim Ahmed. Free software under the
+		<a href="https://github.com/tanzim2000/Omnia-OmniCore/blob/main/LICENSING.md"
+			target="_blank" rel="noopener">GNU AGPL-3.0</a>, with no warranty.
+		Omnia and OmniCore are trademarks of Tanzim Ahmed.
+	</p>
 
 	<button class="floating bottom-right" id="back" aria-label="Back">&#8592;</button>
 
@@ -247,6 +260,8 @@ ${pageStart()}
 
 function startAboutFace() {
 	const app = express();
+	// The browser tab's icon (core/icon.js)
+	attachIconRoute(app);
 
 	// Light or dark for whichever browser is asking. See ui-theme.js.
 	app.use(rememberUiMode);

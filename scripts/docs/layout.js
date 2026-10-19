@@ -557,7 +557,9 @@ function renderPage(site, page) {
 			? `<a href="${site.repoUrl}/blob/main/${encodeURI(page.sourcePath)}">Edit this page on GitHub</a>`
 			: "",
 		site.repoUrl ? `<a href="${site.repoUrl}">${esc(site.repoUrl.replace(/^https:\/\//, ""))}</a>` : "",
-		`<span>Built ${esc(site.builtOn)}${site.commit ? ` from <code>${esc(site.commit.slice(0, 7))}</code>` : ""}</span>`
+		`<span>Built ${esc(site.builtOn)}${site.commit ? ` from <code>${esc(site.commit.slice(0, 7))}</code>` : ""}</span>`,
+		// The docs' licence (LICENSING.md)
+		"<span>© 2026 Tanzim Ahmed. Docs all rights reserved, code examples 0BSD.</span>"
 	].filter(Boolean).join("");
 
 	return `<!doctype html>

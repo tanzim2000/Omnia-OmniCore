@@ -8,5 +8,8 @@ themes
 # ...but the CHANGELOG goes in: a development build's Updates page reads
 # its own notes from it, including what isn't released yet
 !CHANGELOG.md
+# ...and the licence's own files (LICENSE has no .md, so it's in already)
+!LICENSING.md
+!TRADEMARKS.md
 docs/
 BACKLOG.md

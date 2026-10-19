@@ -21,6 +21,7 @@
 // looks and feels.
 
 const { attachBackdropRoute } = require("./backdrop");
+const { attachIconRoute } = require("./icon");
 const express = require("express");
 const { loadModule } = require("./module-loader");
 const { readInputSchema } = require("./module-config");
@@ -68,6 +69,8 @@ function startInputFace(faceOrId, maybeFace) {
 		}
 
 		const app = express();
+		// The browser tab's icon (core/icon.js)
+		attachIconRoute(app);
 		app.use(express.json());
 
 		// Light or dark for whichever browser is asking. See ui-theme.js.

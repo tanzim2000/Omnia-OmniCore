@@ -221,6 +221,19 @@ body > * { position: relative; z-index: 1; }
 	flex-shrink: 0;
 }
 
+/* The licence line under the credits: the quietest text on the page */
+.legal {
+	max-width: 460px;
+	margin: 0;
+	font-size: 0.7rem;
+	line-height: 1.6;
+	color: var(--fg-muted);
+	text-align: center;
+	opacity: 0.85;
+}
+.legal a { color: inherit; }
+.legal a:hover { color: var(--fg); }
+
 /* Landscape ---------------------------------------------------------- */
 
 /* Not a separate design -- the same elements, given room to spread out

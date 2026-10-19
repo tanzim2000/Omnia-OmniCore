@@ -13,6 +13,7 @@
 // nowhere for "back" to lead.
 
 const { pageStart } = require("./page-motion");
+const { ICON_LINK } = require("./icon");
 const { uiStyles } = require("./ui-theme");
 
 function escapeHtml(text) {
@@ -87,6 +88,7 @@ function renderInputFacePage(label, controls, postTo) {
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(label)} — OmniCore</title>
+	${ICON_LINK}
 	<style>
 ${uiStyles()}
 
@@ -230,6 +232,7 @@ function renderInputPickerPage(faceName, entries) {
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(faceName)} — OmniCore</title>
+	${ICON_LINK}
 	<style>
 ${uiStyles()}
 

@@ -71,6 +71,14 @@ test("admin face: settings home renders every section", async () => {
 	assert.ok(html.includes('id="font-modal"'), "font picker modal missing");
 	assert.ok(html.includes('id="location-manual"'), "the boxes for setting the location");
 	assert.ok(!html.includes('id="location-modal"'));
+
+	// The current location: one line, its coordinates apart in a quieter
+	// colour, never with a long dash between
+	const location = html.slice(html.indexOf('id="location-value"'), html.indexOf('id="location-value"') + 300);
+	assert.ok(!location.includes("—"), "no long dash");
+
+	// Frosted glass: the colours on their own row, the sliders two to a row
+	assert.match(html, /\.glass-fields \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
 });
 
 // The regression this whole suite exists for. It rendered fine with

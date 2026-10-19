@@ -24,6 +24,7 @@
 // docs/planning/default-ui-architecture.md.
 
 const { attachBackdropRoute } = require("./backdrop");
+const { ICON_LINK, attachIconRoute } = require("./icon");
 const { pageStart } = require("./page-motion");
 const { attachFontRoute } = require("./font-service");
 const express = require("express");
@@ -336,6 +337,7 @@ function page(title, body, script) {
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(title)} \u2014 OmniCore</title>
+	${ICON_LINK}
 	<style>${uiStyles()}${styles}</style>
 </head>
 <body>
@@ -348,6 +350,8 @@ ${pageStart()}
 
 function startWizardFace() {
 	const app = express();
+	// The browser tab's icon (core/icon.js)
+	attachIconRoute(app);
 	app.use(express.json());
 
 	// Light or dark for whichever browser is asking. See ui-theme.js.

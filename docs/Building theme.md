@@ -1,5 +1,10 @@
 # Building a theme for OmniCore
 
+> © 2026 Tanzim Ahmed. All rights reserved. You may read and link to this
+> document and quote short passages with credit. Its code examples are
+> 0BSD: copy them into your own work freely. See
+> [LICENSING.md](https://github.com/tanzim2000/Omnia-OmniCore/blob/main/LICENSING.md).
+
 This is a practical guide to writing a theme. If you want the reasoning
 behind the design rather than instructions for using it, read
 `docs/ARCHITECTURE.md` first -- this guide assumes you've either read that or
