@@ -375,6 +375,12 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.ok(page.includes(backdrop.autoDim.toString()), "the preview uses the same veil as the server");
 	assert.ok(page.includes('id="glass-status"'), "saved as it changes, and says so");
 
+	// Frosted glass stays short: the Tint colours on a row of their own,
+	// first, and the sliders two or three to a row where there's room
+	assert.match(page, /<div class="glass-fields">\s*<div class="field wide-field">\s*<label>Tint /);
+	assert.ok(page.indexOf('class="glass-fields"') < page.indexOf('id="blur"'), "the sliders are in it");
+	assert.ok(page.indexOf('id="tints"') < page.indexOf('id="blur"'), "the colours come first");
+
 	// The preview is the way to change it: a button that opens the
 	// Change background pop-up, with Picture, Colour and Default, a colour
 	// wheel, and Use and Cancel. The Back button switch is at the bottom.

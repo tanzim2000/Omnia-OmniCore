@@ -619,6 +619,19 @@ const styles = `
 	.modal.modal-wide { max-width: 40em; max-height: 92vh; overflow-y: auto; }
 	#background-modal [hidden], #glass [hidden] { display: none !important; }
 
+	/* Frosted glass: the Tint colours on a row of their own, the sliders
+	   two to a row where there's room, so the box stays short enough to
+	   leave the row under it the room it needs. One to a row when the box
+	   is narrow (a phone). */
+	.glass-fields {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(13em, 1fr));
+		gap: 0 1.75em;
+		align-items: start;
+	}
+	.glass-fields > .field { margin-bottom: 0.9em; min-width: 0; }
+	.glass-fields > .wide-field { grid-column: 1 / -1; }
+
 	.bg-preview {
 		position: relative;
 		aspect-ratio: 16 / 7;
@@ -1963,58 +1976,60 @@ function backgroundPanel(settings) {
 					<h2>Frosted glass</h2>
 					<p class="lede">Every box on these pages, over the background.</p>
 
-					<div class="field">
-						<label for="blur">Blur <span class="muted" id="blur-value">${Number(settings.glassBlur)} px</span></label>
-						<input type="range" id="blur" min="0" max="${backdropStore.BLUR_MOST}" step="1"
-							value="${Number(settings.glassBlur)}">
-					</div>
-
-					<div class="field">
-						<label>Tint ${infoTip(
-							file
-								? "Match the background takes the picture's main colour, worked out once when it was picked."
-								: colour
-								? "Match the background takes the background's colour."
-								: "Match the background needs a picture or a colour behind the pages.",
-							"About Match the background"
-						)}</label>
-						<div class="tint-chips" id="tints">
-							${chip("none", "None", "", false)}
-							${chip("match", "Match the background", backdrop && settings.backgroundColor ? settings.backgroundColor : "", !backdrop)}
-							${backdropStore.TINT_PRESETS.map((colour) => chip(colour, colour, colour, false)).join("")}
-							<label class="tint-chip tint-custom${custom ? " active" : ""}" title="Pick a colour">
-								<input type="color" id="custom" value="${escapeHtml(custom ? tint : "#7aa2ff")}" aria-label="Pick a colour">
-							</label>
+					<div class="glass-fields">
+						<div class="field wide-field">
+							<label>Tint ${infoTip(
+								file
+									? "Match the background takes the picture's main colour, worked out once when it was picked."
+									: colour
+									? "Match the background takes the background's colour."
+									: "Match the background needs a picture or a colour behind the pages.",
+								"About Match the background"
+							)}</label>
+							<div class="tint-chips" id="tints">
+								${chip("none", "None", "", false)}
+								${chip("match", "Match the background", backdrop && settings.backgroundColor ? settings.backgroundColor : "", !backdrop)}
+								${backdropStore.TINT_PRESETS.map((colour) => chip(colour, colour, colour, false)).join("")}
+								<label class="tint-chip tint-custom${custom ? " active" : ""}" title="Pick a colour">
+									<input type="color" id="custom" value="${escapeHtml(custom ? tint : "#7aa2ff")}" aria-label="Pick a colour">
+								</label>
+							</div>
 						</div>
-					</div>
 
-					<div class="field">
-						<label for="strength">Tint strength <span class="muted" id="strength-value">${Number(settings.glassTintStrength)}%</span></label>
-						<input type="range" id="strength" min="0" max="${backdropStore.TINT_STRENGTH_MOST}" step="1"
-							value="${Number(settings.glassTintStrength)}">
-					</div>
-
-					${
-						backdrop
-							? `<div class="field">
-						<label for="brightness">${file ? "Picture" : "Colour"} brightness <span class="muted" id="brightness-value">${Number(settings.backgroundBrightness)}%</span></label>
-						<input type="range" id="brightness" min="${backdropStore.BRIGHTNESS_LEAST}" max="${backdropStore.BRIGHTNESS_MOST}" step="1"
-							value="${Number(settings.backgroundBrightness)}">
-					</div>
-
-					<div class="field dim-field">
-						<div class="dim-head">
-							<label for="dim">Dim <span class="muted" id="dim-text">${manualDim}%</span></label>
-							<label class="auto-dim">
-								<span>Auto</span>
-								<input type="checkbox" role="switch" id="auto-dim"${autoDimOn ? " checked" : ""}>
-							</label>
+						<div class="field">
+							<label for="blur">Blur <span class="muted" id="blur-value">${Number(settings.glassBlur)} px</span></label>
+							<input type="range" id="blur" min="0" max="${backdropStore.BLUR_MOST}" step="1"
+								value="${Number(settings.glassBlur)}">
 						</div>
-						<input type="range" id="dim" min="0" max="100" step="1" value="${manualDim}"${autoDimOn ? " disabled" : ""}>
-						<p class="help dim-warning" id="dim-warning" hidden></p>
-					</div>`
-							: ""
-					}
+
+						<div class="field">
+							<label for="strength">Tint strength <span class="muted" id="strength-value">${Number(settings.glassTintStrength)}%</span></label>
+							<input type="range" id="strength" min="0" max="${backdropStore.TINT_STRENGTH_MOST}" step="1"
+								value="${Number(settings.glassTintStrength)}">
+						</div>
+
+						${
+							backdrop
+								? `<div class="field">
+							<label for="brightness">${file ? "Picture" : "Colour"} brightness <span class="muted" id="brightness-value">${Number(settings.backgroundBrightness)}%</span></label>
+							<input type="range" id="brightness" min="${backdropStore.BRIGHTNESS_LEAST}" max="${backdropStore.BRIGHTNESS_MOST}" step="1"
+								value="${Number(settings.backgroundBrightness)}">
+						</div>
+
+						<div class="field dim-field">
+							<div class="dim-head">
+								<label for="dim">Dim <span class="muted" id="dim-text">${manualDim}%</span></label>
+								<label class="auto-dim">
+									<span>Auto</span>
+									<input type="checkbox" role="switch" id="auto-dim"${autoDimOn ? " checked" : ""}>
+								</label>
+							</div>
+							<input type="range" id="dim" min="0" max="100" step="1" value="${manualDim}"${autoDimOn ? " disabled" : ""}>
+							<p class="help dim-warning" id="dim-warning" hidden></p>
+						</div>`
+								: ""
+						}
+					</div>
 					<p class="status" id="glass-status" aria-live="polite"></p>
 				</div>
 `;

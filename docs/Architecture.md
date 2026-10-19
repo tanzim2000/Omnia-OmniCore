@@ -1470,6 +1470,13 @@ here (`/logout`), so it shows a sign-out icon.
   `localStorage`, and pans the picture (`--pan`, 0 to 1 along the strip,
   three quarters of a screen in all). Picking a tab in the notch glides
   there (`scrollTo`), or jumps with reduced motion.
+- Snapping, on a wide screen (`settle`): once the strip has been still for
+  140ms between two tabs, and no finger is on the screen, it glides on to
+  the next tab the way it was pushed, or back to the nearest one if it
+  moved less than 48px (`NUDGE`). So one turn of the wheel is one tab. A
+  tab wider than the screen can rest anywhere inside it. Turning the wheel
+  in the middle of a glide stops the glide and takes over. A phone uses
+  the browser's own scroll snapping instead.
 - The address follows the tab (`/#appearance`, pointing at the tab's
   heading, which is only shown without the script), and the last tab is
   kept in `localStorage`. The tab is picked before the tabs are drawn, so
@@ -1477,19 +1484,36 @@ here (`/logout`), so it shows a sign-out icon.
 - Without the script, the four tabs are one long page, and the notch's
   icons are links down it.
 - The boxes sit on a sideways grid (`grid-auto-flow: column dense`): two
-  rows that fit the screen, the first as tall as its boxes need (never so
-  tall the second has less than 10em) and the second what's left, and
+  rows that fit the screen, and
   columns a sixth of the boxes' width (70em at most) that go on to the
   right. So the first six columns are the screen, and a tab with more
   boxes is wider, not taller; each tab is at least a screen wide. A box
   says its width (`c2` to `c6`) and row (`row1`, `row2`, or `r2` for both).
-  A box is never taller than its place; one with more in it scrolls
+- The two rows share the height fairly (`rows()`, set as
+  `grid-template-rows` on the grid). The script measures the height each
+  row's boxes want (`measuring`: for a moment every box at its natural
+  height). If both fit, the first row gets what it wants and the second
+  the rest. If not, a row that wants less than half gets all it wants,
+  and the other row the rest; if both want more than half, half each.
+  Before the script runs, the stylesheet's own rows apply (the first as
+  tall as it needs, never leaving the second less than 10em). Measured
+  again on a resize, when something in a box changes size
+  (`ResizeObserver`), opens or closes (`MutationObserver`), and once the
+  fonts have arrived.
+- A box is never taller than its place; one with more in it scrolls
   inside itself (`box-scroll`, set by the script only then, since a box
-  that scrolls cuts off what sticks out of it). A phone held upright: one
-  column per tab, up and down, and a sideways swipe snaps to the next
-  tab. Each tab starts 3em higher than it looks, with that room given
-  back as padding, so a glowing box in the first row isn't cut off where
-  the strip begins.
+  that scrolls cuts off what sticks out of it). A box with a search list
+  open (`float-open`) is left out of that and never cuts the list off
+  (`overflow: visible`): the list is limited by the window's edge only.
+- Each tab starts 3em higher than it looks, with that room given back as
+  padding, so a glowing box in the first row isn't cut off where the strip
+  begins.
+- A phone held upright: one column per tab, up and down, and a sideways
+  swipe snaps to the next tab. Here the tabs start right under the
+  heading (no 3em), so boxes scrolling up go out of sight at the
+  heading's lower edge instead of sliding over the heading and the Back
+  button. It's a clean edge, not a fade: a fade (a mask) would stop the
+  boxes' frosted glass from blurring the picture behind.
 - Everything is on the tabs; there are no settings pages of their own any
   more. Place search (the choice), Saved keys and a box to try a search
   are on General; Background and Frosted glass on Appearance; the updates

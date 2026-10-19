@@ -28,17 +28,22 @@
 // box with more in it than fits, a list), which scrolls as usual. Scrolling
 // on past a tab's end goes into the next one; the notch marks whichever
 // tab is in the middle of the screen, and the address and the remembered
-// tab follow. Picking a tab in the notch glides there (jumps, with reduced
-// motion). The picture behind the page, when there is one, pans along,
-// three quarters of a screen from one end of the strip to the other, so
-// the glass crosses different parts of it and the blur shows.
+// tab follow. Let go between two tabs and the strip snaps: it glides on to
+// the next tab the way it was going, or back if it was only nudged.
+// Picking a tab in the notch glides there (jumps, with reduced motion).
+// The picture behind the page, when there is one, pans along, three
+// quarters of a screen from one end of the strip to the other, so the
+// glass crosses different parts of it and the blur shows.
 //
-// A box gets the height its row gives it: the first row is as tall as its
-// boxes need, the second takes what's left. A box with more in it than
-// fits (a short window, say) scrolls inside itself.
+// A box gets the height its row gives it. The two rows share the screen's
+// height fairly: a row that needs less than half gets all it needs, so one
+// tall box can't squeeze the other row to nothing. A box with more in it
+// than fits (a short window, say) scrolls inside itself. A box with a
+// search list open never cuts the list off.
 //
-// A phone held upright keeps one column of boxes up and down per tab, and
-// a sideways swipe changes tab, one whole tab at a time.
+// A phone held upright keeps one column of boxes up and down per tab,
+// below the heading, and a sideways swipe changes tab, one whole tab at a
+// time.
 //
 // The address follows the tab (/#appearance), and the last tab is
 // remembered in this browser, so opening Settings again, or reloading it,
@@ -200,9 +205,89 @@ const HOME_SCRIPT = `
 	function show(id, moving) {
 		var pane = paneOf(id);
 		if (!pane) return;
-		strip.scrollTo({ left: pane.offsetLeft, behavior: moving && !still.matches ? "smooth" : "auto" });
+		gliding = moving && !still.matches;
+		started = null;
+		strip.scrollTo({ left: pane.offsetLeft, behavior: gliding ? "smooth" : "auto" });
 		mark(id);
 	}
+
+	// SNAPPING (wide screens; a phone's own scroll snapping does it there).
+	// The strip moves freely while the wheel turns or a finger or trackpad
+	// pushes it. Once it stops between two tabs, it glides on to the next
+	// tab the way it was going, or back if it hardly moved (a nudge).
+	var gliding = false;   // our own glide, not the person's
+	var started = null;    // where the person's push began
+	var heading = 0;       // which way they pushed: 1 right, -1 left
+	var lastLeft = 0;
+	var holding = false;   // a finger still on the screen
+	var resting = null;
+	var NUDGE = 48;
+
+	// Where the strip can rest: the start of each tab, and its end too if
+	// a tab is wider than the screen (anywhere in between is fine there)
+	function stops() {
+		var list = [];
+		panes.forEach(function (pane) {
+			var start = pane.offsetLeft;
+			var end = Math.max(start, start + pane.offsetWidth - strip.clientWidth);
+			list.push([start, end]);
+		});
+		return list;
+	}
+
+	function settle() {
+		resting = null;
+		if (!wide.matches || holding) return;
+		var left = strip.scrollLeft;
+		var points = [];
+		var inside = stops().some(function (stop) {
+			points.push(stop[0], stop[1]);
+			return left >= stop[0] - 2 && left <= stop[1] + 2;
+		});
+		var from = started;
+		started = null;
+		gliding = false;
+		if (inside) return;
+
+		points.sort(function (a, b) { return a - b; });
+		var target;
+		if (from === null || Math.abs(left - from) < NUDGE) {
+			// A nudge, or a glide that was cut short: the nearest place
+			target = points.reduce(function (best, point) {
+				return Math.abs(point - left) < Math.abs(best - left) ? point : best;
+			}, points[0]);
+		} else if (heading > 0) {
+			target = points.filter(function (point) { return point > left; })[0];
+			if (target === undefined) target = points[points.length - 1];
+		} else {
+			target = points.filter(function (point) { return point < left; }).pop();
+			if (target === undefined) target = points[0];
+		}
+
+		gliding = !still.matches;
+		strip.scrollTo({ left: target, behavior: gliding ? "smooth" : "auto" });
+	}
+
+	// Wait for the strip to be still for a moment before snapping
+	function settleSoon() {
+		clearTimeout(resting);
+		resting = setTimeout(settle, 140);
+	}
+
+	// The person moved it (not our glide): remember where from and which
+	// way
+	function pushed(from, by) {
+		// They took over in the middle of a glide: stop it where it is
+		if (gliding) strip.scrollTo({ left: from, behavior: "instant" });
+		gliding = false;
+		if (started === null) started = from;
+		if (by) heading = by > 0 ? 1 : -1;
+	}
+
+	strip.addEventListener("touchstart", function () { holding = true; gliding = false; }, { passive: true });
+	["touchend", "touchcancel"].forEach(function (name) {
+		strip.addEventListener(name, function () { holding = false; settleSoon(); }, { passive: true });
+	});
 
 	// The tab under the middle of the screen
 	function inView() {
@@ -220,11 +305,48 @@ const HOME_SCRIPT = `
 		root.style.setProperty("--pan", most > 0 ? strip.scrollLeft / most : 0);
 	}
 
-	// A box with more in it than its place on the grid has room for
-	// scrolls inside itself. Only then: a box that scrolls cuts off what
-	// sticks out of it, like a list of search matches.
+	// The two rows of a tab share its height fairly. Each row is measured
+	// at the height its boxes want. If both fit, the first gets what it
+	// wants and the second the rest. If not, a row that wants less than
+	// half gets all it wants, and the other row the rest; if both want
+	// more than half, they get half each. So one tall box can't squeeze
+	// the other row down to nothing. (Resources has its own even rows.)
+	function rows(bento) {
+		var first = bento.querySelectorAll(":scope > .row1");
+		var second = bento.querySelectorAll(":scope > .row2");
+		if (!wide.matches || !first.length || !second.length || bento.querySelector(".home-tile")) {
+			if (bento.style.gridTemplateRows) bento.style.gridTemplateRows = "";
+			return;
+		}
+
+		// Measure: for a moment, every box its own natural height
+		bento.classList.add("measuring");
+		var want1 = 0;
+		var want2 = 0;
+		first.forEach(function (box) { want1 = Math.max(want1, box.offsetHeight); });
+		second.forEach(function (box) { want2 = Math.max(want2, box.offsetHeight); });
+		bento.classList.remove("measuring");
+
+		var gap = parseFloat(getComputedStyle(bento).rowGap) || 0;
+		var room = bento.clientHeight - gap;
+		var half = room / 2;
+		var top;
+		if (want1 + want2 <= room || want1 <= half) top = want1;
+		else if (want2 <= half) top = room - want2;
+		else top = half;
+
+		var value = Math.max(0, Math.floor(top)) + "px minmax(0, 1fr)";
+		if (bento.style.gridTemplateRows !== value) bento.style.gridTemplateRows = value;
+	}
+
+	// Rows shared out, then a box with more in it than its place on the
+	// grid has room for scrolls inside itself. A box with a search list
+	// open is left alone: the list floats over the page, outside the box,
+	// and isn't more for the box to hold.
 	function fit() {
+		document.querySelectorAll(".home-bento").forEach(rows);
 		document.querySelectorAll(".home-bento > .segment").forEach(function (box) {
+			if (box.classList.contains("float-open")) return;
 			box.classList.remove("box-scroll");
 			if (wide.matches && box.scrollHeight > box.clientHeight + 1) box.classList.add("box-scroll");
 		});
@@ -241,6 +363,12 @@ const HOME_SCRIPT = `
 	}
 
 	strip.addEventListener("scroll", function () {
+		// A trackpad's sideways swipe or a finger moves the strip itself
+		var left = strip.scrollLeft;
+		if (!gliding && left !== lastLeft) pushed(lastLeft, left - lastLeft);
+		lastLeft = left;
+		settleSoon();
+
 		soon(function () {
 			pan();
 			mark(inView());
@@ -267,7 +395,11 @@ const HOME_SCRIPT = `
 		if (scrollsItself(event.target, event.deltaY)) return;
 		var unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? strip.clientWidth : 1;
 		event.preventDefault();
-		strip.scrollLeft += event.deltaY * unit;
+		var from = strip.scrollLeft;
+		pushed(from, event.deltaY);
+		strip.scrollLeft = from + event.deltaY * unit;
+		lastLeft = strip.scrollLeft;
+		settleSoon();
 	}, { passive: false });
 
 	buttons.forEach(function (button) {
@@ -325,6 +457,17 @@ const HOME_SCRIPT = `
 		attributes: true,
 		attributeFilter: ["hidden", "style"]
 	});
+
+	// Or something in a box changed size (the text size, a font that
+	// arrived late, a longer line of text)
+	if (window.ResizeObserver) {
+		var sizes = new ResizeObserver(function () { soon(fit); });
+		document.querySelectorAll(".home-bento > .segment").forEach(function (box) {
+			sizes.observe(box);
+			Array.prototype.forEach.call(box.children, function (part) { sizes.observe(part); });
+		});
+	}
+	if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { soon(fit); });
 
 	// Leaving: the notch goes up, then the page fades
 	window.addEventListener("omnicore:leaving", function () { notch.classList.add("notch-up"); });
@@ -549,7 +692,9 @@ const SETTINGS_HOME_CSS = `
 			grid-template-columns: none;
 			/* The first row as tall as its boxes need, but never taller
 			   than the room left once the second has at least 10em (or
-			   45% on a very short screen); the second gets the rest */
+			   45% on a very short screen); the second gets the rest. The
+			   script then shares the height out fairly (rows(), set on
+			   the grid itself); this is how it starts. */
 			grid-template-rows: minmax(0, auto) minmax(min(10em, 45%), 1fr);
 			grid-auto-flow: column dense;
 			grid-auto-columns: calc((var(--home-width) - 5em) / 6);
@@ -578,6 +723,15 @@ const SETTINGS_HOME_CSS = `
 			scrollbar-width: thin;
 			scrollbar-color: var(--scroll-thumb) transparent;
 		}
+
+		/* A box with a search list open never cuts the list off: the list
+		   floats over the page, and only the window's edge limits it */
+		html.home-tabs .home-bento > .segment.float-open { overflow: visible; }
+
+		/* For a moment, while the script measures the height each box
+		   wants: every box at its natural height */
+		html.home-tabs .home-bento.measuring { grid-template-rows: auto auto !important; }
+		html.home-tabs .home-bento.measuring > .segment { max-height: none; align-self: start; }
 	}
 
 	/* A whole box that is a link (Resources) */
@@ -609,7 +763,13 @@ const SETTINGS_HOME_CSS = `
 	   swipe moves a whole tab at a time. */
 	@media (max-width: 42em) {
 		.home-head { padding: 4.5em 1em 0.5em; min-height: 0; }
-		html.home-tabs .home-panes { scroll-snap-type: x mandatory; }
+		/* Here the tabs start right under the heading, not 3em above it:
+		   each tab scrolls up and down, and its boxes go out of sight at
+		   the heading's lower edge instead of sliding over the heading
+		   and the Back button. (A fade there would also stop the boxes'
+		   frosted glass from blurring the picture, so it's a clean
+		   edge.) */
+		html.home-tabs .home-panes { scroll-snap-type: x mandatory; margin-top: 0; }
 		html.home-tabs .home-pane {
 			flex: none;
 			width: 100vw;
@@ -621,7 +781,7 @@ const SETTINGS_HOME_CSS = `
 			scrollbar-color: var(--scroll-thumb) transparent;
 			scroll-snap-align: start;
 			scroll-snap-stop: always;
-			padding: 3.25em 1em 7em;
+			padding: 1em 1em 7em;
 		}
 		html:not(.home-tabs) .home-pane { padding: 0 1em 2em; }
 		.home-bento { grid-template-columns: minmax(0, 1fr); }

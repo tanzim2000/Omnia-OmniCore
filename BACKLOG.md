@@ -115,7 +115,10 @@ CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
 - **The sideways settings home with a real mouse wheel and trackpad.** The
   wheel was tried in a test browser only. Check it doesn't feel too fast
   or too slow, that a trackpad's two-finger swipe both ways feels right,
-  and on a phone that a sideways swipe moves exactly one tab.
+  and on a phone that a sideways swipe moves exactly one tab. Snapping:
+  one notch of the wheel should go to the next tab, a small nudge back,
+  and a trackpad swipe let go of halfway should finish the move without
+  fighting the trackpad's own coasting.
 - **Change background on a phone.** The colour wheel was only tried with a
   mouse and arrow keys; try it with a finger, and check the pop-up fits a
   phone held upright (it scrolls inside itself past 92% of the screen).

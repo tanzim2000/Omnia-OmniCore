@@ -163,6 +163,31 @@ test("the movement: one strip scrolling sideways, a grid that grows to the right
 	assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?transition: none;/);
 	assert.match(css, /html:not\(\.home-tabs\) body\.settings-home \{ height: auto; overflow: visible; \}/, "one long page without the script");
 	assert.match(css, /grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/, "six columns");
+	assert.match(css, /@media \(max-width: 42em\) \{[\s\S]*?\.home-panes \{[^}]*margin-top: 0;/, "a phone: the tabs start under the heading, so boxes never slide over it");
+});
+
+test("the rows share the height fairly, and a box never cuts off its search list", () => {
+	const css = settingsHome.SETTINGS_HOME_CSS;
+	const script = settingsHome.HOME_SCRIPT;
+	assert.ok(script.includes('bento.classList.add("measuring")'), "each row is measured at the height its boxes want");
+	assert.match(css, /\.home-bento\.measuring > \.segment \{[^}]*max-height: none;/, "measured at full height");
+	assert.ok(script.includes("if (want1 + want2 <= room || want1 <= half) top = want1;"), "a row that needs less than half gets all it needs");
+	assert.ok(script.includes("else if (want2 <= half) top = room - want2;"), "so the other row can't take it");
+	assert.ok(script.includes("else top = half;"), "both too big: half each");
+	assert.ok(script.includes("bento.style.gridTemplateRows !== value"), "set only when it changes, or it would measure itself forever");
+	assert.ok(script.includes('if (box.classList.contains("float-open")) return;'), "an open list doesn't make its box scroll");
+	assert.match(css, /\.home-bento > \.segment\.float-open \{ overflow: visible; \}/, "and the box never cuts it off");
+	assert.ok(script.includes("new ResizeObserver"), "measured again when something in a box changes size");
+});
+
+test("snapping: let go between two tabs and it goes on to the next, or back after a nudge", () => {
+	const script = settingsHome.HOME_SCRIPT;
+	assert.ok(script.includes("resting = setTimeout(settle, 140);"), "once the strip has been still a moment");
+	assert.ok(script.includes("if (!wide.matches || holding) return;"), "not on a phone (its own snapping does it), not with a finger still down");
+	assert.ok(script.includes("Math.abs(left - from) < NUDGE"), "a nudge goes back");
+	assert.ok(script.includes("} else if (heading > 0) {"), "otherwise on the way it was going");
+	assert.ok(script.includes('if (gliding) strip.scrollTo({ left: from, behavior: "instant" });'), "turning the wheel mid-glide takes over");
+	assert.ok(script.includes("var end = Math.max(start, start + pane.offsetWidth - strip.clientWidth);"), "a tab wider than the screen can rest anywhere inside it");
 });
 
 // --- With a server --------------------------------------------------------------
