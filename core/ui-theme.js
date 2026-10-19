@@ -103,9 +103,15 @@ const SYSTEM_FONT =
 // Everything colour-ish lives here rather than being written inline
 // anywhere, so light mode is a matter of swapping this table and
 // nothing else.
+// The page's own colour with nothing picked (Settings, Background,
+// Default): Artist's Charcoal in dark mode and Beige Cream in light, since
+// the v2 test run. Before, black and a light grey.
+const DEFAULT_DARK = "#37393e";
+const DEFAULT_LIGHT = "#eedec5";
+
 const PALETTES = {
 	dark: {
-		bg: "#000",
+		bg: DEFAULT_DARK,
 		fg: "#fff",
 		fgMuted: "rgba(255, 255, 255, 0.6)",
 		glassBg: "rgba(255, 255, 255, 0.06)",
@@ -168,7 +174,7 @@ const PALETTES = {
 		disabledText: "#545454"
 	},
 	light: {
-		bg: "#f2f2f4",
+		bg: DEFAULT_LIGHT,
 		fg: "#111",
 		fgMuted: "rgba(0, 0, 0, 0.55)",
 		glassBg: "rgba(255, 255, 255, 0.75)",
@@ -372,7 +378,7 @@ function uiStyles(options) {
 	// mode (backdrop.js), which can override a palette value or two
 	// The curtain a page fades in from and out to (page-motion.js): the
 	// page's own base colour, black or white, rather than its grey
-	const curtain = (light) => `--curtain: ${light ? "#fff" : "#000"};`;
+	const curtain = (light) => `--curtain: ${light ? DEFAULT_LIGHT : DEFAULT_DARK};`;
 
 	const colours = mode
 		? `
@@ -389,7 +395,7 @@ function uiStyles(options) {
 
 	// With a picture behind the page, the faint blobs below have nothing
 	// left to do: the picture is what the glass blurs
-	const overPicture = backdrop.hasPicture(settings)
+	const overPicture = backdrop.hasBackdrop(settings)
 		? `
 	body { background-image: none; }`
 		: "";
@@ -446,6 +452,15 @@ function uiStyles(options) {
 	}
 
 	.omni-backdrop picture { display: block; width: 100%; height: 100%; }
+
+	/* A colour behind the pages instead of a picture: dimmed by
+	   Brightness like a picture, and veiled the same way */
+	.omni-colour {
+		display: block;
+		width: 100%;
+		height: 100%;
+		filter: brightness(var(--backdrop-brightness));
+	}
 
 	.omni-backdrop img,
 	.omni-backdrop video {
@@ -912,53 +927,10 @@ function uiStyles(options) {
 
 	.muted { color: var(--fg-muted); }
 
-	/* ---------------------------------------------------------------
-	   Toggle switch — a real sliding knob, for a plain on/off
-	   preference that has nothing else attached to it (light/dark
-	   mode is the model case). Different from tabs below on purpose:
-	   a switch is for a binary preference alone; tabs are for a
-	   choice that reveals different follow-up content underneath it.
-	   --------------------------------------------------------------- */
-	.switch {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.7em;
-		cursor: pointer;
-	}
-
-	.switch input { position: absolute; opacity: 0; pointer-events: none; }
-
-	.switch-track {
-		position: relative;
-		width: 2.6em;
-		height: 1.5em;
-		border-radius: 999em;
-		background: var(--segment-border);
-		border: 1px solid var(--glass-border);
-		transition: background 0.2s ease;
-		flex-shrink: 0;
-	}
-
-	.switch-knob {
-		position: absolute;
-		top: 2px;
-		left: 2px;
-		width: 1.1em;
-		height: 1.1em;
-		border-radius: 50%;
-		background: var(--fg);
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-		transition: transform 0.2s ease;
-	}
-
-	.switch input:checked + .switch-track { background: var(--success); }
-	.switch input:checked + .switch-track .switch-knob {
-		transform: translateX(1.1em);
-	}
-
-	.switch input:focus-visible + .switch-track {
-		box-shadow: 0 0 0 2px var(--glow-strong);
-	}
+	/* The on/off toggle is the checkbox itself, drawn as one: see
+	   "Toggle" below (every checkbox, since the v2 test run). The old
+	   .switch, a label with its own track and knob, was never used on a
+	   page and has gone. */
 
 	/* ---------------------------------------------------------------
 	   Tabs — a segmented choice between a small, fixed set of named
@@ -1103,7 +1075,140 @@ function uiStyles(options) {
 		background: var(--hover-subtle);
 	}
 
-	input[type="checkbox"] { width: 18px; height: 18px; }
+	/* ---------------------------------------------------------------
+	   Toggle — every on/off choice on OmniCore's own pages (since v2,
+	   no checkboxes). Still a real checkbox underneath, so a keyboard,
+	   a screen reader and a form treat it as one; it's only drawn as a
+	   glass track with a knob that slides across, lit when on. Write
+	   role="switch" on it so a screen reader says "switch".
+	   --------------------------------------------------------------- */
+	input[type="checkbox"] {
+		appearance: none;
+		-webkit-appearance: none;
+		position: relative;
+		flex: none;
+		box-sizing: border-box;
+		width: 2.75em;
+		height: 1.6em;
+		margin: 0;
+		font-size: inherit;
+		vertical-align: middle;
+		border-radius: 99em;
+		background-color: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		box-shadow: inset 0 1px 0 var(--glass-sheen);
+		cursor: pointer;
+		transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+	}
+
+	input[type="checkbox"]::before {
+		content: "";
+		position: absolute;
+		top: 50%;
+		left: 0.2em;
+		width: 1.1em;
+		height: 1.1em;
+		border-radius: 50%;
+		background-color: var(--fg-muted);
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+		transform: translateY(-50%);
+		transition: transform 0.28s cubic-bezier(0.3, 0.7, 0.3, 1.15), background-color 0.25s ease;
+	}
+
+	input[type="checkbox"]:checked {
+		background-color: color-mix(in srgb, var(--success) 55%, transparent);
+		border-color: color-mix(in srgb, var(--success) 70%, transparent);
+	}
+
+	input[type="checkbox"]:checked::before {
+		background-color: #fff;
+		transform: translate(calc(2.75em - 1.1em - 0.4em - 2px), -50%);
+	}
+
+	input[type="checkbox"]:hover { box-shadow: inset 0 1px 0 var(--glass-sheen), 0 0 14px var(--glow); }
+	input[type="checkbox"]:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--glow-strong); }
+	input[type="checkbox"]:disabled { opacity: 0.45; cursor: not-allowed; }
+
+	/* ---------------------------------------------------------------
+	   Slider — one look for every slider: a thin glass track, filled
+	   up to the knob, and a round knob that glows when it's held or
+	   pointed at. The filled part follows --fill, which CONTROLS_SCRIPT
+	   keeps up to date (Firefox fills it by itself).
+	   --------------------------------------------------------------- */
+	input[type="range"] {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 100%;
+		height: 1.6em;
+		margin: 0;
+		background: transparent;
+		cursor: pointer;
+	}
+
+	input[type="range"]::-webkit-slider-runnable-track {
+		height: 0.4em;
+		border-radius: 99em;
+		border: 1px solid var(--glass-border);
+		background: linear-gradient(
+			to right,
+			color-mix(in srgb, var(--fg) 70%, transparent) var(--fill, 0%),
+			var(--glass-bg-hover) var(--fill, 0%)
+		);
+	}
+
+	input[type="range"]::-moz-range-track {
+		height: 0.4em;
+		border-radius: 99em;
+		border: 1px solid var(--glass-border);
+		background: var(--glass-bg-hover);
+	}
+
+	input[type="range"]::-moz-range-progress {
+		height: 0.4em;
+		border-radius: 99em;
+		background: color-mix(in srgb, var(--fg) 70%, transparent);
+	}
+
+	input[type="range"]::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		width: 1.15em;
+		height: 1.15em;
+		margin-top: calc((0.4em - 1.15em) / 2 - 1px);
+		border-radius: 50%;
+		background: var(--fg);
+		border: none;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+		transition: box-shadow 0.2s ease;
+	}
+
+	input[type="range"]::-moz-range-thumb {
+		width: 1.15em;
+		height: 1.15em;
+		border-radius: 50%;
+		background: var(--fg);
+		border: none;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+		transition: box-shadow 0.2s ease;
+	}
+
+	input[type="range"]:hover::-webkit-slider-thumb,
+	input[type="range"]:active::-webkit-slider-thumb,
+	input[type="range"]:focus-visible::-webkit-slider-thumb {
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), 0 0 0 6px var(--glass-bg-hover), 0 0 16px var(--glow);
+	}
+
+	input[type="range"]:hover::-moz-range-thumb,
+	input[type="range"]:active::-moz-range-thumb,
+	input[type="range"]:focus-visible::-moz-range-thumb {
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), 0 0 0 6px var(--glass-bg-hover), 0 0 16px var(--glow);
+	}
+
+	input[type="range"]:focus-visible { outline: none; }
+	input[type="range"]:disabled { opacity: 0.45; cursor: not-allowed; }
+
+	@media (prefers-reduced-motion: reduce) {
+		input[type="checkbox"]::before { transition: none; }
+	}
 
 	input[type="color"] {
 		width: 100%;
@@ -1135,7 +1240,11 @@ function uiStyles(options) {
 	}
 
 	.option:hover { background: var(--hover-subtle); }
-	.option input { width: 17px; height: 17px; }
+	.option input[type="radio"] { width: 17px; height: 17px; }
+
+	/* A toggle in a row sits at its end, after the words, as in the
+	   settings of a phone */
+	.option input[type="checkbox"] { order: 2; margin-left: auto; }
 
 	/* The widget type picker: one button per widget type a module offers
 	   (Month View, Agenda View...), at the top of an instance's settings.
@@ -1754,6 +1863,36 @@ const MODE_SWITCH_SCRIPT = `
 	})();
 `;
 
+// What the shared controls need from a script: a slider's filled part
+// (--fill, see "Slider" in the stylesheet), kept up to date as it moves,
+// as a script changes its value, and for sliders added later. Every page
+// on the Default UI carries it.
+const CONTROLS_SCRIPT = `
+	(function () {
+		function fill(range) {
+			var min = Number(range.min) || 0;
+			var max = range.max === "" ? 100 : Number(range.max);
+			var share = max > min ? (Number(range.value) - min) / (max - min) : 0;
+			range.style.setProperty("--fill", Math.max(0, Math.min(1, share)) * 100 + "%");
+		}
+
+		function fillAll() {
+			document.querySelectorAll('input[type="range"]').forEach(fill);
+		}
+
+		document.addEventListener("input", function (event) {
+			if (event.target.matches && event.target.matches('input[type="range"]')) fill(event.target);
+		});
+		document.addEventListener("change", function (event) {
+			if (event.target.matches && event.target.matches('input[type="range"]')) fill(event.target);
+		});
+		window.omniFillRanges = fillAll;
+
+		if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fillAll);
+		else fillAll();
+	})();
+`;
+
 // Questions in a pop-up, drawn in the Default UI rather than the
 // browser's own confirm() and prompt() boxes: those look like system
 // warnings, can't say which button does what, and on a phone block the
@@ -1899,11 +2038,14 @@ const DIALOG_SCRIPT = `
 module.exports = {
 	MODE_CHOICES,
 	DIALOG_SCRIPT,
+	CONTROLS_SCRIPT,
 	uiStyles,
 	backButton,
 	fontStack,
 	fontFace,
 	PALETTES,
+	DEFAULT_DARK,
+	DEFAULT_LIGHT,
 	SYSTEM_FONT,
 	UI_MODE_COOKIE,
 	UI_MODE_SCRIPT,

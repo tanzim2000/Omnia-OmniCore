@@ -121,7 +121,7 @@ test("admin face: light or dark comes from this browser's cookie, not a setting"
 		})
 	).text();
 
-	assert.ok(light.includes("--bg: #f2f2f4"), "light mode did not take effect");
+	assert.ok(light.includes("--bg: #eedec5"), "light mode did not take effect");
 	// In the stylesheet: a page's script may still ask the device (the
 	// glass preview on the settings home does)
 	const lightStyles = light.slice(light.indexOf("<style>"), light.indexOf("</style>"));

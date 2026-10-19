@@ -3,12 +3,15 @@
 // (since v2).
 //
 // OmniCore's pages (Settings, the setup wizard, the welcome face, About,
-// an Inport's page, a face with no theme) are black by default, or light
-// grey in light mode. A person can put a picture behind them instead:
+// an Inport's page, a face with no theme) have the Default background:
+// Artist's Charcoal in dark mode, Beige Cream in light (see ui-theme.js).
+// A person can put something else behind them instead:
 //
 //   a picture         JPEG, PNG or WebP
 //   an animated one   GIF, animated WebP or animated PNG
 //   a video           MP4 or WebM, looping, without sound
+//   a colour          any one colour, picked on a colour wheel (since the
+//                     v2 test run); backgroundKind "colour"
 //
 // The file is kept in OmniCore's data folder and served by OmniCore itself,
 // on every port that draws its pages. It is never sent anywhere. A face
@@ -40,11 +43,15 @@
 //
 // READABLE TEXT OVER ANY PICTURE
 //
-// A veil (black in dark mode, the light grey in light mode) sits between
-// the picture and the glass. How strong it is comes from `low` and `high`
-// and the Brightness setting (autoDim below): just strong enough that the
-// page's text reads against the brightest (dark mode) or darkest (light
-// mode) parts of the picture.
+// A veil (black in dark mode, Beige Cream in light mode) sits between the
+// picture and the glass. With Auto dim on (the default), how strong it is
+// comes from `low` and `high` and the Brightness setting (autoDim below):
+// just strong enough that the page's text reads against the brightest
+// (dark mode) or darkest (light mode) parts of the picture. A colour is
+// treated as a picture whose darkest and brightest parts are that colour.
+// With Auto dim off, the veil is whatever was set by hand, 0-100%, and
+// OmniCore doesn't overrule it (the page only says when text may be hard
+// to read).
 
 const crypto = require("crypto");
 const fs = require("fs");
@@ -288,7 +295,41 @@ function use(id, about) {
 	};
 }
 
-// The settings for no picture at all
+// How bright a colour is, 0-1 (its relative luminance, the measure used
+// for contrast), from "#rrggbb"
+function luminance(hex) {
+	const value = parseInt(hex.slice(1), 16);
+	const channel = (shift) => {
+		const c = ((value >> shift) & 255) / 255;
+		return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+	};
+	return 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0);
+}
+
+// A colour behind the pages instead of a picture. Returns { changes } for
+// the settings, or { error }. Its darkest and brightest parts are the
+// colour itself, so the veil and Match the picture work as they do for a
+// picture.
+function useColour(colour) {
+	const hex = hexColour(colour);
+	if (!hex) return { error: "That isn't a colour OmniCore can use. A colour looks like #37393e." };
+
+	const bright = Math.round(luminance(hex) * 1000) / 1000;
+	return {
+		changes: {
+			backgroundKind: "colour",
+			backgroundType: "",
+			backgroundFile: "",
+			backgroundStill: "",
+			backgroundColor: hex,
+			backgroundLow: bright,
+			backgroundHigh: bright
+		}
+	};
+}
+
+// The settings for the Default background: nothing behind the pages but
+// their own colour
 const PLAIN = {
 	backgroundKind: "plain",
 	backgroundType: "",
@@ -344,6 +385,11 @@ function cleanGlass(body) {
 	const brightness = number(sent.brightness, BRIGHTNESS_LEAST, BRIGHTNESS_MOST);
 	if (brightness !== null) changes.backgroundBrightness = brightness;
 
+	// Auto dim on or off, and the dim set by hand for when it's off
+	if (sent.autoDim === true || sent.autoDim === false) changes.backgroundAutoDim = sent.autoDim;
+	const dim = number(sent.dim, 0, 100);
+	if (dim !== null) changes.backgroundDim = dim;
+
 	if (sent.tint === "none" || sent.tint === "match") changes.glassTint = sent.tint;
 	else if (hexColour(sent.tint)) changes.glassTint = hexColour(sent.tint);
 
@@ -371,7 +417,7 @@ function tintColour(settings) {
 //
 // Dark mode: white text against the brightest parts, darkened by the veil.
 // Light mode: near-black text against the darkest parts, lightened by a
-// veil the colour of the light page (#f2f2f4). Never less than 0.15, so a
+// veil the colour of the light page (Beige Cream, #eedec5). Never less than 0.15, so a
 // picture never fights the glass, and never more than 0.85, so it's still
 // a picture.
 function autoDim(low, high, brightness, light) {
@@ -388,7 +434,7 @@ function autoDim(low, high, brightness, light) {
 		// The text, #111, has a luminance of about 0.0056
 		var least = target * (0.0056 + 0.05) - 0.05;
 		var dark = Math.min(1, (Number(low) || 0) * factor);
-		var page = 0.886; // #f2f2f4
+		var page = 0.745; // Beige Cream, #eedec5
 		veil = dark >= least ? 0 : (least - dark) / (page - dark);
 	}
 
@@ -398,8 +444,31 @@ function autoDim(low, high, brightness, light) {
 
 // --- What a page gets --------------------------------------------------------------
 
+// A picture, an animation or a video: a file behind the pages
 function hasPicture(settings) {
 	return Boolean(settings && settings.backgroundKind && settings.backgroundKind !== "plain" && NAME.test(settings.backgroundFile || ""));
+}
+
+// A colour behind the pages instead of a picture
+function hasColour(settings) {
+	return Boolean(settings && settings.backgroundKind === "colour" && hexColour(settings.backgroundColor));
+}
+
+// Anything behind the pages but their own Default colour: the glass is a
+// little more there, and the veil keeps text readable
+function hasBackdrop(settings) {
+	return hasPicture(settings) || hasColour(settings);
+}
+
+// How strong the veil is, 0-1: worked out (Auto dim, the default), or as
+// set by hand
+function veilFor(settings, light) {
+	if (!hasBackdrop(settings)) return 0;
+	if (settings.backgroundAutoDim === false) {
+		const dim = Number(settings.backgroundDim);
+		return Number.isFinite(dim) ? Math.min(100, Math.max(0, Math.round(dim))) / 100 : 0.5;
+	}
+	return autoDim(settings.backgroundLow, settings.backgroundHigh, settings.backgroundBrightness, light);
 }
 
 function rgba(hex, alpha) {
@@ -410,17 +479,17 @@ function rgba(hex, alpha) {
 // CSS variables for the glass and the picture, for one mode (light or
 // dark). Part of uiStyles in ui-theme.js, next to the palette.
 function glassVariables(settings, light) {
-	const picture = hasPicture(settings);
+	const picture = hasBackdrop(settings);
 	const tint = tintColour(settings);
 	const strength = Math.min(TINT_STRENGTH_MOST, Math.max(0, Number(settings.glassTintStrength) || 0));
 	const blur = Math.min(BLUR_MOST, Math.max(0, Number.isFinite(Number(settings.glassBlur)) ? Number(settings.glassBlur) : 20));
-	const dim = picture ? autoDim(settings.backgroundLow, settings.backgroundHigh, settings.backgroundBrightness, light) : 0;
+	const dim = veilFor(settings, light);
 
 	return `
 		--glass-blur: ${blur}px;
 		--glass-tint: ${tint && strength ? rgba(tint, strength / 100) : "transparent"};
 		--backdrop-brightness: ${(Number(settings.backgroundBrightness) || 100) / 100};
-		--backdrop-dim: ${light ? `rgba(242, 242, 244, ${dim})` : `rgba(0, 0, 0, ${dim})`};
+		--backdrop-dim: ${light ? `rgba(238, 222, 197, ${dim})` : `rgba(0, 0, 0, ${dim})`};
 		${
 			picture
 				? `
@@ -446,6 +515,13 @@ function glassVariables(settings, light) {
 // reduced motion, and it pauses while the tab is hidden.
 function backdropHtml(given) {
 	const settings = given || require("./settings-store").readSettings();
+
+	// A colour: one layer of it, dimmed and veiled like a picture
+	if (hasColour(settings)) {
+		return `
+<div class="omni-backdrop" aria-hidden="true"><span class="omni-colour" style="background:${hexColour(settings.backgroundColor)}"></span></div>`;
+	}
+
 	if (!hasPicture(settings)) return "";
 
 	const file = `/backdrop/${settings.backgroundFile}`;
@@ -515,6 +591,11 @@ module.exports = {
 	TINT_PRESETS,
 	TARGET_CONTRAST,
 	PLAIN,
+	luminance,
+	useColour,
+	hasColour,
+	hasBackdrop,
+	veilFor,
 	sniff,
 	receive,
 	receiveStill,

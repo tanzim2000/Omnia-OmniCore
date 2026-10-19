@@ -227,10 +227,52 @@ test("the glass in the stylesheet: plain, a tint, a picture", () => {
 	assert.match(over, /--glass-tint: rgba\(51, 102, 153, 0\.1\);/, "matches the picture");
 	assert.match(over, /--backdrop-dim: rgba\(0, 0, 0, 0\.8\);/);
 	assert.match(over, /--segment-bg: rgba\(255, 255, 255, 0\.07\);/);
-	assert.match(backdrop.glassVariables(picture, true), /--backdrop-dim: rgba\(242, 242, 244, 0\.15\);/);
+	// Light mode's veil is Beige Cream, the light page's own colour, a
+	// little darker than the light grey before it, so a touch more of it
+	assert.match(backdrop.glassVariables(picture, true), /--backdrop-dim: rgba\(238, 222, 197, 0\.16\);/);
 
 	// Match the picture with no picture is no tint
 	assert.equal(backdrop.tintColour({ glassTint: "match", backgroundKind: "plain", backgroundColor: "#336699" }), null);
+});
+
+test("a colour behind the pages: its own brightness, the veil and Match the background", () => {
+	assert.equal(backdrop.luminance("#ffffff"), 1);
+	assert.equal(backdrop.luminance("#000000"), 0);
+	assert.ok(Math.abs(backdrop.luminance("#eedec5") - 0.745) < 0.001);
+
+	const { changes } = backdrop.useColour("#FFD700");
+	assert.equal(changes.backgroundKind, "colour");
+	assert.equal(changes.backgroundColor, "#ffd700");
+	assert.equal(changes.backgroundFile, "", "no file with a colour");
+	assert.equal(changes.backgroundLow, changes.backgroundHigh, "darkest and brightest are the colour itself");
+	assert.ok(backdrop.useColour("gold").error, "only #rrggbb");
+	assert.ok(backdrop.useColour('#ffd700"><script>').error);
+
+	const gold = { ...changes, backgroundBrightness: 100, glassBlur: 20, glassTint: "match", glassTintStrength: 10 };
+	assert.ok(backdrop.hasColour(gold) && backdrop.hasBackdrop(gold) && !backdrop.hasPicture(gold));
+	const css = backdrop.glassVariables(gold, false);
+	assert.match(css, /--glass-tint: rgba\(255, 215, 0, 0\.1\);/, "Match the background is the colour");
+	assert.match(css, /--segment-edge: rgba/, "the glass over a colour is the glass over a picture");
+	assert.ok(backdrop.veilFor(gold, false) > 0.5, "a bright colour gets a strong veil in dark mode");
+	assert.match(backdrop.backdropHtml(gold), /<span class="omni-colour" style="background:#ffd700"><\/span>/);
+});
+
+test("Auto dim off: the veil is what was set by hand, never overruled", () => {
+	const picture = {
+		backgroundKind: "picture",
+		backgroundFile: "backdrop-aaaaaaaaaaaa.jpg",
+		backgroundLow: 0.1,
+		backgroundHigh: 0.9,
+		backgroundBrightness: 100
+	};
+	assert.equal(backdrop.veilFor({ ...picture, backgroundAutoDim: false, backgroundDim: 0 }, false), 0, "even when text needs more");
+	assert.equal(backdrop.veilFor({ ...picture, backgroundAutoDim: false, backgroundDim: 100 }, false), 1);
+	assert.equal(backdrop.veilFor({ ...picture, backgroundAutoDim: false, backgroundDim: 30 }, true), 0.3);
+	assert.equal(backdrop.veilFor({ ...picture, backgroundAutoDim: true, backgroundDim: 0 }, false), 0.8, "Auto dim on works it out");
+	assert.equal(backdrop.veilFor({ backgroundKind: "plain", backgroundAutoDim: false, backgroundDim: 90 }, false), 0, "nothing to veil");
+
+	assert.deepEqual(backdrop.cleanGlass({ autoDim: false, dim: 140 }), { backgroundAutoDim: false, backgroundDim: 100 });
+	assert.deepEqual(backdrop.cleanGlass({ autoDim: "yes", dim: "" }), {}, "only true or false; nothing sent is nothing changed");
 });
 
 test("the picture's markup: none when plain, a still for reduced motion, a video that starts itself", () => {
@@ -332,9 +374,54 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.ok(page.includes("never sent anywhere"));
 	assert.ok(page.includes(backdrop.autoDim.toString()), "the preview uses the same veil as the server");
 	assert.ok(page.includes('id="glass-status"'), "saved as it changes, and says so");
+
+	// The preview is the way to change it: a button that opens the
+	// Change background pop-up, with Picture, Colour and Default, a colour
+	// wheel, and Use and Cancel. The Back button switch is at the bottom.
+	assert.match(page, /<button type="button" class="backdrop-stage" id="change-background"/);
+	assert.ok(page.includes('<span class="change-label" aria-hidden="true">Change background</span>'));
+	assert.ok(page.indexOf('id="change-background"') < page.indexOf('id="corner-label"'), "the switch comes after the preview");
+	assert.ok(!page.includes('id="plain"'), "Back to plain is Default, in the pop-up");
+	const modal = page.slice(page.indexOf('id="background-modal"'), page.indexOf('id="font-modal"'));
+	for (const tab of ["picture", "colour", "default"]) assert.ok(modal.includes(`data-bg-tab="${tab}"`), tab);
+	assert.ok(modal.includes('<canvas id="wheel-canvas"'), "a colour wheel of our own");
+	assert.ok(modal.includes("Artist's Charcoal (#37393e)") && modal.includes("Beige Cream (#eedec5)"));
+	assert.ok(modal.includes('id="bg-use" disabled>Use</button>'), "nothing to use until something's chosen");
+	assert.ok(page.indexOf('id="background-modal"') > page.indexOf('data-pane="about"'), "outside every box");
+
 	for (const source of [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])) {
 		assert.doesNotThrow(() => new vm.Script(source));
 	}
+});
+
+test("pages: a colour as the background, and Auto dim and Dim saved", async () => {
+	const bad = await postJson("/background/colour", { color: "red" });
+	assert.equal(bad.status, 400);
+
+	const used = await postJson("/background/colour", { color: "#1E2A44" });
+	assert.equal(used.status, 200);
+	const settings = readSettings();
+	assert.equal(settings.backgroundKind, "colour");
+	assert.equal(settings.backgroundColor, "#1e2a44");
+
+	const page = (await request(3000, "/")).body.toString();
+	assert.ok(page.includes('<span class="omni-colour" style="background:#1e2a44"></span>'), "drawn behind the page");
+	assert.ok(page.includes('id="auto-dim" checked'), "Auto dim on to start with");
+	assert.match(page, /<input type="range" id="dim" min="0" max="100" step="1" value="50" disabled>/, "with Auto on, the slider only shows");
+	assert.ok(page.includes(">Colour brightness"));
+	assert.ok(!page.match(/data-tint="match"[^>]* disabled/), "Match the background works with a colour");
+
+	assert.equal((await postJson("/background/glass", { autoDim: false, dim: 35 })).status, 200);
+	assert.equal(readSettings().backgroundAutoDim, false);
+	assert.equal(readSettings().backgroundDim, 35);
+	const manual = (await request(3000, "/")).body.toString();
+	assert.ok(manual.includes('id="auto-dim">'), "off");
+	assert.match(manual, /<input type="range" id="dim" min="0" max="100" step="1" value="35">/, "off: the slider counts");
+	assert.match(manual, /--backdrop-dim: rgba\(0, 0, 0, 0\.35\)/);
+
+	// Back to the Default for the tests after this one
+	assert.equal((await postJson("/background/plain", {})).status, 200);
+	await postJson("/background/glass", { autoDim: true, dim: 50 });
 });
 
 test("pages: an MP4, its still frame, then in use on every port, signed in or not", async () => {

@@ -90,16 +90,16 @@ test("the curtain's script parses, with and without the fade in", () => {
 		assert.ok(script.includes(`if (${fadeIn} && !still && fadesIn(arrival))`));
 		assert.ok(html.includes("prefers-color-scheme: light"), "follows the device when no mode is picked");
 	}
-	assert.match(pageMotion.curtainHtml({ styles: true, light: true }), /--curtain: #fff;/);
-	assert.match(pageMotion.curtainHtml({ styles: true, light: false }), /--curtain: #000;/);
+	assert.match(pageMotion.curtainHtml({ styles: true, light: true }), /--curtain: #eedec5;/);
+	assert.match(pageMotion.curtainHtml({ styles: true, light: false }), /--curtain: #37393e;/);
 	assert.ok(!pageMotion.curtainHtml().includes("<style>"), "OmniCore's own pages have it in uiStyles");
 	assert.equal(pageMotion.goScript("'/x'"), "(window.omniGo || function (a) { location.href = a; })('/x')");
 });
 
 test("the stylesheet has the curtain, in the page's base colour", () => {
 	const { uiStyles } = require("../core/ui-theme");
-	assert.ok(uiStyles({ forceMode: "dark" }).includes("--curtain: #000;"));
-	assert.ok(uiStyles({ forceMode: "light" }).includes("--curtain: #fff;"));
+	assert.ok(uiStyles({ forceMode: "dark" }).includes("--curtain: #37393e;"));
+	assert.ok(uiStyles({ forceMode: "light" }).includes("--curtain: #eedec5;"));
 	assert.ok(uiStyles().includes(".omni-curtain {"));
 	assert.ok(uiStyles().includes("html.omni-leaving .omni-curtain"));
 });
@@ -219,7 +219,7 @@ test("pages: a face fades in right after <body>, unless its theme does its own e
 
 	// The curtain's colour follows this browser's Appearance Mode
 	const lightPage = await (await fetch(`http://127.0.0.1:${plainFace.id}/`, { headers: { cookie: "omnicore_ui_mode=light" } })).text();
-	assert.ok(lightPage.includes(":root { --curtain: #fff; }"));
+	assert.ok(lightPage.includes(":root { --curtain: #eedec5; }"));
 });
 
 test("pages: the settings home has four tabs, and no version pill", async () => {

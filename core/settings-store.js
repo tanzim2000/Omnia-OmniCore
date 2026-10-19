@@ -75,8 +75,10 @@ const DEFAULTS = {
 	backButtonCorner: "bottom-right",
 
 	// --- Background and glass (since v2) -----------------------------
-	// The picture behind OmniCore's own pages. "plain" is none: black, or
-	// the light grey in light mode. See backdrop.js for what each means.
+	// What's behind OmniCore's own pages: "plain" is the Default (Artist's
+	// Charcoal, or Beige Cream in light mode), "picture", "animated" and
+	// "video" a file, "colour" one colour (backgroundColor). See
+	// backdrop.js for what each means.
 	backgroundKind: "plain",
 	backgroundType: "",
 	backgroundFile: "",
@@ -89,6 +91,10 @@ const DEFAULTS = {
 	backgroundHigh: 0,
 	// The picture's brightness, 40-120 (%)
 	backgroundBrightness: 100,
+	// The veil that keeps text readable: worked out from the picture (Auto
+	// dim, true), or set by hand, 0-100 (%), when Auto dim is off
+	backgroundAutoDim: true,
+	backgroundDim: 50,
 
 	// The frosted glass of every segment: its blur (0-40 px), and a tint:
 	// "none", "match" (the picture's own colour) or a colour like

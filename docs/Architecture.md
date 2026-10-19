@@ -189,7 +189,7 @@ until the Marketplace puts something in them.
 | `system-info.js`           | Reads the real facts the About face reports: host OS, container runtime, resource counts. Every one fails soft rather than showing a blank.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `wizard-face.js`           | Port 3999. The setup wizard, on its own port since v1.12.0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `face-links.js`            | The cross-port link helper. A face on one port cannot assume the host name another is reached on, so links are resolved in the browser. Also the port numbers other faces link to (welcome, wizard, admin).                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces: colours, buttons (glass, and the coloured `.btn-glossy` ones), the `.toolbar` row, the password box with Show / Hide, the round light/dark switch, the `.badge` label, the `.dock` capsule (with `.danger` for a red section), and `.segment`, the one box every page is built from (frosted glass, on since v2: `--segment-blur`, with the picture behind it from `backdrop.js`), and pop-ups (`.modal`, the same glass). Hovers fade rather than snap: a clickable box carries its glow at rest, transparent, and every control fades its colours. Light or dark is per browser, from the `omnicore_ui_mode` cookie (only `light` or `dark` is accepted); with none, the stylesheet carries both and the device picks. Never a dashboard theme. |
+| `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces: colours, buttons (glass, and the coloured `.btn-glossy` ones), the `.toolbar` row, the password box with Show / Hide, the round light/dark switch, the `.badge` label, the `.dock` capsule (with `.danger` for a red section), and `.segment`, the one box every page is built from (frosted glass, on since v2: `--segment-blur`, with the picture behind it from `backdrop.js`), and pop-ups (`.modal`, the same glass). Every checkbox is drawn as a toggle and every slider the same way (`CONTROLS_SCRIPT` keeps a slider's filled part up to date). Hovers fade rather than snap: a clickable box carries its glow at rest, transparent, and every control fades its colours. Light or dark is per browser, from the `omnicore_ui_mode` cookie (only `light` or `dark` is accepted); with none, the stylesheet carries both and the device picks. Never a dashboard theme. |
 | `font-service.js`          | The UI font setting. Searches Google Fonts, downloads the chosen one once, then serves it locally so it works with no internet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `install-store.js`         | What is installed, at which pinned commit, and when that commit was made (`data/installed.json`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `update-store.js`          | The record of update checks (`data/update-checks.json`): when last checked, what was offered.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -1370,7 +1370,11 @@ than each module working it out, OmniCore establishes it once.
     is saved.
   - The matches float: a glass list under the search box, over the page
     (`place-search-ui.js` lifts the box it's in above its neighbours
-    while it's open). It closes on a pick, Escape or a click elsewhere.
+    while it's open). It measures the room it has (the window, made
+    smaller by any box around it that scrolls on its own) and is never
+    taller than that, opening upwards when there's too little room below,
+    so the page never scrolls because of it. It closes on a pick, Escape
+    or a click elsewhere.
   - Under the matches: a note when the Secondary was asked and why, and
     the credit for whoever answered, linked, plus "© OpenStreetMap
     contributors" for the ones built on OpenStreetMap. Several services
@@ -1390,10 +1394,19 @@ today, and shouldn't be described as one.
 
 ### Background and glass
 
-Since v2, a picture, an animation or a video can go behind OmniCore's own
-pages (Settings, Appearance tab): the admin face, the setup wizard,
-the welcome face, About, an Inport's page and a face with no theme. A face
-with a theme keeps its theme's background.
+Since v2, a picture, an animation, a video or one colour can go behind
+OmniCore's own pages (Settings, Appearance tab): the admin face, the setup
+wizard, the welcome face, About, an Inport's page and a face with no theme.
+A face with a theme keeps its theme's background. With none picked, the
+Default: the pages' own colour, Artist's Charcoal (`#37393e`) in dark mode
+and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
+`ui-theme.js`; the page fade uses the same two).
+
+- **Changing it:** the Background box's preview is a button that opens
+  Change background, a pop-up with a live preview and three choices,
+  Picture, Colour (a colour wheel drawn on a canvas, so it's the same on
+  every device; a Brightness slider, swatches, a `#code`) and Default.
+  Nothing is sent until Use.
 
 - **Accepted:** JPEG, PNG, WebP; GIF, animated WebP and animated PNG;
   MP4 and WebM, played muted and looping. Up to 50 MB. Checked by its
@@ -1405,16 +1418,25 @@ with a theme keeps its theme's background.
   `POST /background/use` (JSON: put it in place). The two raw uploads are
   the only admin POSTs that aren't JSON; `application/octet-stream` can't be
   sent from another port without asking first either.
+- **A colour** is `POST /background/colour` (`useColour`):
+  `backgroundKind: "colour"`, the colour in `backgroundColor`, and its own
+  luminance as both its darkest and brightest parts, so the veil and Match
+  the background treat it like a picture. Default is
+  `POST /background/plain`. Either deletes a picture that was in use.
 - **Worked out once, in the browser, when a file is picked:** its main
-  colour (for Match the picture), how dark its darker parts and how bright
+  colour (for Match the background), how dark its darker parts and how bright
   its brighter parts are (10th and 90th percentile of luminance), and the
   still frame. Not live, so nothing changes colour while a video plays.
 - **Drawn** by `backdropHtml()` as the first thing in `<body>`: a layer
-  fixed to the screen, behind everything, with a veil over it. The veil
+  fixed to the screen, behind everything (the picture, or a
+  `.omni-colour`), with a veil over it, black in dark mode and Beige Cream
+  in light. With Auto dim on (`backgroundAutoDim`, the default) the veil
   (`autoDim`) is just strong enough for the page's text to have 4.5 to 1
   against the picture's brightest parts (dark mode) or darkest parts
-  (light mode), between 0.15 and 0.85. A Brightness setting dims the
-  picture itself.
+  (light mode), between 0.15 and 0.85. With it off, the veil is
+  `backgroundDim`, 0 to 100%, as set by hand (`veilFor`); the page says
+  when the text may be hard to read but never changes it. A Brightness
+  setting dims the picture itself.
 - **Reduced motion** shows the still frame and never starts the video. A
   hidden tab pauses the video.
 - **Served** at `/backdrop/<name>` on every port that draws the Default
@@ -1424,7 +1446,7 @@ with a theme keeps its theme's background.
 - **The glass:** every `.segment` blurs what's behind it (`--glass-blur`,
   0 to 40 px, 20 by default) and can carry a tint: a colour laid over its
   fill at up to 35%, picked from a few presets or a colour picker, or
-  Match the picture. Over a picture the glass gets a fuller fill, a thin
+  Match the background. Over a picture the glass gets a fuller fill, a thin
   light edge and a little more colour (`--glass-saturate`). With the plain
   background and no tint, it looks as it always did.
 

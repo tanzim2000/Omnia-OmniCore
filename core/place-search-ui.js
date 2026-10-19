@@ -25,9 +25,15 @@
 //
 // Since the v2 test run the matches float: a glass list dropping from
 // under the search box, over the page, so nothing on the page moves (in
-// a box spanning two rows it used to push the whole tab around). About
-// five rows show, then it scrolls. It closes on a pick, on Escape, or on
-// a click anywhere else. After a pick, only the credit stays, under the
+// a box spanning two rows it used to push the whole tab around). It
+// measures the room it has when it opens: it takes what's left between
+// the search row and the bottom of whatever it's shown in (the window, or
+// a box that scrolls on its own), never more than about five rows, and
+// scrolls inside itself past that. With less than about three rows' room
+// below and more above, it opens upwards instead. It measures again if
+// the window is resized or the page scrolls while it's open. So the list
+// always fits, and the page never scrolls because of it. It closes on a
+// pick, on Escape, or on a click anywhere else. After a pick, only the credit stays, under the
 // box, in the page: the place's name came from that service.
 const PLACE_SEARCH_SCRIPT = `
 	function placeText(text) {
@@ -54,21 +60,68 @@ const PLACE_SEARCH_SCRIPT = `
 		return '<p class="place-credit">' + own + osm + "</p>";
 	}
 
-	// Open the floating list under the search row, or close it. The box it
-	// sits in is lifted above the boxes after it while it's open, or they'd
-	// be drawn over the list.
+	// The part of the screen the list can be seen in: the window, made
+	// smaller by any box around it that cuts off what sticks out of it
+	// (a tab, a wizard step that scrolls on its own)
+	function placeRoom(element) {
+		var top = 0;
+		var bottom = window.innerHeight;
+		for (var parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+			var overflow = getComputedStyle(parent).overflowY;
+			if (overflow === "auto" || overflow === "scroll" || overflow === "hidden") {
+				var edges = parent.getBoundingClientRect();
+				top = Math.max(top, edges.top);
+				bottom = Math.min(bottom, edges.bottom);
+			}
+		}
+		return { top: top, bottom: bottom };
+	}
+
+	// Size and place an open list: below its search row if there's room,
+	// otherwise above it, and never taller than the room it has
+	function placeFit(results) {
+		if (!results.classList.contains("place-float")) return;
+
+		var row = results.previousElementSibling || results.parentElement;
+		var edges = row.getBoundingClientRect();
+		var room = placeRoom(results);
+		var gap = 6;
+		var margin = 12;
+		var em = parseFloat(getComputedStyle(results).fontSize) || 16;
+		var most = 19 * em;
+		var enough = 9 * em;
+		var below = room.bottom - edges.bottom - gap - margin;
+		var above = edges.top - room.top - gap - margin;
+		var up = below < enough && above > below;
+
+		results.classList.toggle("place-up", up);
+		results.style.maxHeight = Math.max(4 * em, Math.min(most, up ? above : below)) + "px";
+
+		if (up) {
+			results.style.top = "";
+			results.style.bottom = results.parentElement.offsetHeight - row.offsetTop + gap + "px";
+		} else {
+			results.style.bottom = "";
+			results.style.top = row.offsetTop + row.offsetHeight + gap + "px";
+		}
+	}
+
+	// Open the floating list under (or over) the search row, or close it.
+	// The box it sits in is lifted above the boxes after it while it's
+	// open, or they'd be drawn over the list.
 	function placeFloat(results, open) {
 		var box = results.closest(".segment");
 		results.parentElement.classList.add("place-anchor");
 
 		if (open) {
-			var row = results.previousElementSibling;
-			results.style.top = row ? row.offsetTop + row.offsetHeight + 6 + "px" : "";
 			results.classList.add("place-float");
 			if (box) box.classList.add("float-open");
+			placeFit(results);
 		} else {
-			results.classList.remove("place-float");
+			results.classList.remove("place-float", "place-up");
 			results.style.top = "";
+			results.style.bottom = "";
+			results.style.maxHeight = "";
 			if (box) box.classList.remove("float-open");
 		}
 	}
@@ -107,6 +160,7 @@ const PLACE_SEARCH_SCRIPT = `
 
 		var credit = placeCredit(answer && answer.credit);
 		results.innerHTML = html + credit;
+		placeFit(results);
 
 		results.querySelectorAll("[data-place-pick]").forEach(function (button) {
 			button.addEventListener("click", function (event) {
@@ -130,6 +184,13 @@ const PLACE_SEARCH_SCRIPT = `
 				if (!results.parentElement.contains(event.target)) closePlaces(results);
 			});
 		});
+
+		// The room changes with the window, or as the page scrolls
+		function refit() {
+			document.querySelectorAll(".place-float").forEach(placeFit);
+		}
+		window.addEventListener("resize", refit);
+		document.addEventListener("scroll", refit, true);
 
 		document.addEventListener("keydown", function (event) {
 			if (event.key !== "Escape") return;
@@ -157,13 +218,14 @@ const PLACE_SEARCH_CSS = `
 		z-index: 30;
 		max-height: 19em;
 		overflow-y: auto;
+		overscroll-behavior: contain;
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
 		padding: 6px;
 		border-radius: 0.75em;
 		border: 1px solid var(--segment-border);
-		background-color: color-mix(in srgb, var(--bg) 94%, transparent);
+		background-color: color-mix(in srgb, var(--bg) 97%, transparent);
 		background-image: linear-gradient(var(--glass-tint), var(--glass-tint));
 		box-shadow: inset 0 1px 0 var(--segment-edge), 0 12px 36px rgba(0, 0, 0, 0.45);
 		backdrop-filter: blur(16px);

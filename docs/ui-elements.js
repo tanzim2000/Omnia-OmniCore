@@ -44,7 +44,7 @@
 // The test checks every colour has one, and no explanation is left over
 // for a colour that's been removed.
 const paletteNotes = {
-	bg: "Page background.",
+	bg: "Page background: the Default, Artist's Charcoal (#37393e) in dark mode and Beige Cream (#eedec5) in light.",
 	fg: "Main text colour.",
 	fgMuted: "Quieter text: labels, hints, secondary info.",
 	glassBg: "Fill of glass buttons, inputs and the dock.",
@@ -130,10 +130,10 @@ const sections = [
 <tr><td><code>--segment-blur</code></td><td>Frosted glass, on since v2: <code>blur(var(--glass-blur)) saturate(var(--glass-saturate))</code>. Every segment blurs what's behind it.</td></tr>
 <tr><td><code>--glass-blur</code></td><td>How much, in px: 20 unless changed on Settings' Appearance tab (0 to 40).</td></tr>
 <tr><td><code>--glass-saturate</code></td><td>1, or 1.4 over a picture, so the colour showing through the glass isn't washed out.</td></tr>
-<tr><td><code>--glass-tint</code></td><td>A colour laid over every segment's fill, a little of it (at most 35%). <code>transparent</code> until one is picked; "Match the picture" uses the picture's own main colour.</td></tr>
+<tr><td><code>--glass-tint</code></td><td>A colour laid over every segment's fill, a little of it (at most 35%). <code>transparent</code> until one is picked; "Match the background" uses the picture's own main colour, or the background's colour.</td></tr>
 <tr><td><code>--segment-edge</code></td><td>The thin light line along a segment's top edge. Transparent with the plain background, there over a picture.</td></tr>
 <tr><td><code>--backdrop-brightness</code></td><td>The picture's brightness, 0.4 to 1.2 (the Brightness setting).</td></tr>
-<tr><td><code>--backdrop-dim</code></td><td>The veil over the picture: black in dark mode, the light grey in light mode, just strong enough for the text to read. Worked out from the picture, not set by hand.</td></tr>
+<tr><td><code>--backdrop-dim</code></td><td>The veil over the picture or colour: black in dark mode, Beige Cream in light mode. With Auto dim on (the default), just strong enough for the text to read, worked out from the picture; with it off, what was set by hand on the Appearance tab, 0 to 100%.</td></tr>
 </table>`,
 				code: ":root {\n\t--font: system-ui, …;\n\t--font-size: 16px;\n\t--radius: 0.75em;\n\t--segment-blur: blur(var(--glass-blur)) saturate(var(--glass-saturate));\n\t--glass-blur: 20px;\n\t--glass-tint: transparent;\n}",
 				note: "A blurred box becomes the frame for anything inside it with position: fixed, so a pop-up (.modal-backdrop) has to sit outside every segment."
@@ -149,9 +149,9 @@ const sections = [
 			},
 			{
 				id: "backdrop",
-				title: "Picture behind the page",
-				sel: ".omni-backdrop",
-				desc: "Since v2, a picture, an animated GIF or WebP, or a looping video can be set behind OmniCore's own pages (Settings, Appearance tab). It's drawn as the first thing inside <code>&lt;body&gt;</code>, fixed to the screen behind everything, with a veil over it (<code>::after</code>, <code>--backdrop-dim</code>) so text stays readable. Nothing is drawn with the plain background. A page doesn't write this itself: <code>backdropHtml()</code> in <code>core/backdrop.js</code> does, and the page's port serves the file at <code>/backdrop/…</code>.",
+				title: "Picture or colour behind the page",
+				sel: ".omni-backdrop (.omni-colour)",
+				desc: "Since v2, a picture, an animated GIF or WebP, a looping video, or one colour (.omni-colour) can be set behind OmniCore's own pages (Settings, Appearance tab). It's drawn as the first thing inside <code>&lt;body&gt;</code>, fixed to the screen behind everything, with a veil over it (<code>::after</code>, <code>--backdrop-dim</code>) so text stays readable. Nothing is drawn with the plain background. A page doesn't write this itself: <code>backdropHtml()</code> in <code>core/backdrop.js</code> does, and the page's port serves the file at <code>/backdrop/…</code>.",
 				demo: `<div style="position:relative;height:140px;border-radius:var(--radius);overflow:hidden;background:linear-gradient(135deg,#3a6df0,#c46cd8 55%,#f2a65a)">
 <div style="position:absolute;inset:0;background:rgba(0,0,0,0.35)"></div>
 <div class="segment" style="position:absolute;left:1em;right:1em;top:1.5em;backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)">A segment over a picture</div>
@@ -372,11 +372,11 @@ const sections = [
 			},
 			{
 				id: "switch",
-				title: "Switch",
-				sel: ".switch (.switch-track, .switch-knob)",
-				desc: "A sliding knob for a plain yes-or-no preference with nothing else attached to it. Green when on. Different from tabs on purpose: a switch is on or off; tabs are a choice between named things.",
-				demo: '<label class="switch"><input type="checkbox" checked><span class="switch-track"><span class="switch-knob"></span></span><span>On</span></label> &nbsp; <label class="switch"><input type="checkbox"><span class="switch-track"><span class="switch-knob"></span></span><span>Off</span></label>',
-				code: '<label class="switch">\n\t<input type="checkbox" checked>\n\t<span class="switch-track"><span class="switch-knob"></span></span>\n\t<span>Enabled</span>\n</label>'
+				title: "Toggle",
+				sel: "input[type=checkbox] (role=\"switch\")",
+				desc: "Every on/off choice on OmniCore's own pages, since the v2 test run: there are no checkboxes to tick. It's still a real checkbox underneath (so a keyboard, a screen reader and a form treat it as one), drawn as a glass track with a knob that slides across, green when on. Write role=\"switch\" on it so a screen reader says \"switch\". In an .option row it sits at the end, after the words. Different from tabs on purpose: a toggle is on or off; tabs are a choice between named things.",
+				demo: '<label class="option" style="margin-bottom:8px"><span>Let OmniCore know where it is</span><input type="checkbox" role="switch" checked></label><label class="option" style="margin-bottom:0"><span>Off</span><input type="checkbox" role="switch"></label>',
+				code: '<label class="option">\n\t<span>Let OmniCore know where it is</span>\n\t<input type="checkbox" role="switch" checked>\n</label>'
 			},
 			{
 				id: "stepper",
@@ -399,7 +399,7 @@ const sections = [
 				id: "option",
 				title: "Option row",
 				sel: ".option",
-				desc: "A bordered row holding a radio button or a checkbox and its words; the whole row can be clicked. A stack of them is a pick-one (radios) or pick-several (checkboxes).",
+				desc: "A bordered row holding a radio button and its words, or words and a toggle at the end; the whole row can be clicked. A stack of radio rows is a pick-one.",
 				demo: '<label class="option"><input type="radio" name="demo-option" checked> Automatic</label><label class="option" style="margin-bottom:0"><input type="radio" name="demo-option"> Set it myself</label>',
 				code: '<label class="option"><input type="radio" name="o"> Automatic</label>'
 			}
@@ -444,11 +444,11 @@ const sections = [
 			},
 			{
 				id: "checkbox-color",
-				title: "Checkbox and colour picker",
-				sel: "input[type=checkbox], input[type=color]",
-				desc: "The checkbox is a plain 18px box (the switch is the nicer on/off). The colour picker is full width and 46px tall, with the glass fill.",
-				demo: '<label style="display:flex;gap:8px;align-items:center;margin-bottom:1em"><input type="checkbox" checked> A checkbox</label><input type="color" value="#4a90e2" aria-label="Colour">',
-				code: '<input type="checkbox">\n<input type="color" value="#4a90e2">'
+				title: "Slider and colour picker",
+				sel: "input[type=range], input[type=color]",
+				desc: "A slider is a thin glass track, filled up to a round knob that glows when it's pointed at or held. The filled part follows --fill, which CONTROLS_SCRIPT keeps up to date (a script that sets a slider's value calls omniFillRanges() after). The colour picker is full width and 46px tall, with the glass fill.",
+				demo: '<input type="range" min="0" max="100" value="60" style="--fill:60%;margin-bottom:1em" aria-label="A slider"><input type="color" value="#4a90e2" aria-label="Colour">',
+				code: '<input type="range" min="0" max="40" value="20">\n<input type="color" value="#4a90e2">'
 			},
 			{
 				id: "search",

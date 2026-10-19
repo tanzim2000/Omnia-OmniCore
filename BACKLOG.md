@@ -46,6 +46,22 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
 
 ## Next: OmniCore
 
+- **Knowing the screen a page is on** (asked in the v2 test run, Oct
+  2026). One shared layer on every page OmniCore draws, faces included:
+  its script labels the page with what it's on (phone, tablet, desktop or
+  wall; touch or mouse; upright or sideways) and keeps that up to date as
+  the window turns or resizes, so Settings, the wizard and themes all read
+  one answer rather than each guessing with its own rules. Each screen
+  with a face open also reports that shape, so a face's "Showing on" can
+  say "2 screens: a 1920x1080 touch screen, sideways, and a phone", and the
+  wizard can suggest sizes that suit it. The layout is still decided on
+  each screen, never by the server: one face can be open on several
+  screens of different shapes at once. Modules stay the same for every
+  screen (one module run serves them all); themes and widget types are
+  what adapt. The sideways settings home would be its first user. It
+  doesn't replace measuring in the page: how much room is left under one
+  search box at one moment is only known there.
+
 - **Marketplace never shows "Update".** `listAvailable()` already works out
   `updateAvailable` and `updateCompatible` for every entry, but the page
   only ever draws Install or a green Installed. Installed Resources does
@@ -105,6 +121,9 @@ CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
 
 ## v2: left to check
 
+- **Change background on a phone.** The colour wheel was only tried with a
+  mouse and arrow keys; try it with a finger, and check the pop-up fits a
+  phone held upright (it scrolls inside itself past 92% of the screen).
 - **Place search's keyed services.** GeoNames, LocationIQ, Geoapify and
   Geocode.maps.co are tested only against answers written from
   their documentation (`test/fixtures/place-search/README.md`). Try each
@@ -136,6 +155,9 @@ https://claude.ai/artifact/LveFSPbVeF9ScADgdPWFhP). Not needed for v2:
 - A faint grain over the glass.
 - A few ready-made pictures to pick from beside Choose a file (the
   mockup's were stand-ins; none ship).
+- Default wallpapers, one for dark and one for light, as the Default
+  background (Oct 2026). Until then Default is a colour: Artist's
+  Charcoal (#37393E) in dark mode, Beige Cream (#EEDEC5) in light.
 - An API key manager: one place for every key OmniCore holds (place
   search's, and the ones modules ask for). For now a key is asked for
   when its service is picked, and Saved keys only lists place search's.

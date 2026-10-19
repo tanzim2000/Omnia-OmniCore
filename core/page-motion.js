@@ -1,8 +1,9 @@
 // core/page-motion.js
 // Going from one page to another (since v2): the page fades out to its
-// base colour, the next one fades in from it. Black in dark mode, white in
-// light mode, following Appearance Mode, and the device's own setting when
-// that's left on Device.
+// base colour, the next one fades in from it: the Default background,
+// Artist's Charcoal in dark mode and Beige Cream in light (black and white
+// before the v2 test run), following Appearance Mode, and the device's own
+// setting when that's left on Device.
 //
 // On every page OmniCore draws (Settings, the setup wizard, the welcome
 // face, About, an Inport's page) and on every face, faces with a theme
@@ -50,6 +51,11 @@
 
 // How long each part takes, in milliseconds. In a little slower than out:
 // the new page is what's worth looking at.
+// The two colours, the same as the Default background (ui-theme.js; kept
+// here too, since ui-theme.js needs this file and not the other way round)
+const DARK = "#37393e";
+const LIGHT = "#eedec5";
+
 const IN_MS = 420;
 const OUT_MS = 250;
 const GIVE_UP_MS = 5000;
@@ -111,7 +117,7 @@ const CURTAIN_CSS = `
 		position: fixed;
 		inset: 0;
 		z-index: 2147483000;
-		background: var(--curtain, #000);
+		background: var(--curtain, ${DARK});
 		opacity: 0;
 		visibility: hidden;
 		pointer-events: none;
@@ -226,10 +232,10 @@ function curtainHtml(options) {
 	if (settings.styles) {
 		const colour =
 			settings.light === true
-				? ":root { --curtain: #fff; }"
+				? `:root { --curtain: ${LIGHT}; }`
 				: settings.light === false
-				? ":root { --curtain: #000; }"
-				: ":root { --curtain: #000; } @media (prefers-color-scheme: light) { :root { --curtain: #fff; } }";
+				? `:root { --curtain: ${DARK}; }`
+				: `:root { --curtain: ${DARK}; } @media (prefers-color-scheme: light) { :root { --curtain: ${LIGHT}; } }`;
 		styles = `<style>${colour}${CURTAIN_CSS}</style>`;
 	}
 

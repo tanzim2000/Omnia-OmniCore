@@ -72,7 +72,10 @@ const {
 	PASSWORD_TOGGLE_SCRIPT,
 	modeSwitch,
 	MODE_SWITCH_SCRIPT,
-	DIALOG_SCRIPT
+	DIALOG_SCRIPT,
+	CONTROLS_SCRIPT,
+	DEFAULT_DARK,
+	DEFAULT_LIGHT
 } = require("./ui-theme");
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const { askAttribute, ASK_FIRST_SCRIPT } = require("./ask-first");
@@ -567,7 +570,131 @@ const styles = `
 	.backdrop-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 	/* The preview, with the back button drawn in its corner */
-	.backdrop-stage { position: relative; }
+	/* The preview is a button: it opens Change background. It dims on
+	   hover (or keyboard focus) and says so; on a touch screen, with no
+	   hover, a small "Change" label sits in its top right corner. */
+	.backdrop-stage {
+		position: relative;
+		display: block;
+		width: 100%;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		border-radius: 0.6em;
+	}
+	.backdrop-stage .backdrop-preview { display: flex; }
+	.backdrop-stage:focus-visible { outline: 2px solid var(--glow-strong); outline-offset: 2px; }
+	.change-label {
+		position: absolute;
+		inset: 4px 0 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.6em;
+		background: rgba(0, 0, 0, 0.5);
+		color: #fff;
+		font-weight: 600;
+		opacity: 0;
+		transition: opacity 0.2s ease;
+		pointer-events: none;
+	}
+	.backdrop-stage:hover .change-label,
+	.backdrop-stage:focus-visible .change-label { opacity: 1; }
+	@media (hover: none) {
+		/* The words are swapped for one: "Change background" is too long
+		   for a corner */
+		.change-label {
+			opacity: 1;
+			inset: calc(4px + 0.6em) 0.6em auto auto;
+			padding: 0.2em 0.6em;
+			border-radius: 0.5em;
+			font-size: 0;
+		}
+		.change-label::before { content: "Change"; font-size: 0.75rem; }
+	}
+
+	/* A colour behind the pages, or the Default, in the preview */
+	.preview-colour { position: absolute; inset: 0; }
+	.preview-default { background: var(--bg); }
+
+	/* Change background: a wider pop-up, its preview with a piece of glass
+	   on it to judge the text by, the three choices and the colour wheel */
+	.modal.modal-wide { max-width: 40em; max-height: 92vh; overflow-y: auto; }
+	#background-modal [hidden], #glass [hidden] { display: none !important; }
+
+	.bg-preview {
+		position: relative;
+		aspect-ratio: 16 / 7;
+		border-radius: 0.6em;
+		overflow: hidden;
+		border: 1px solid var(--segment-border);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+	}
+	.bg-preview-colour, .bg-preview-veil, .bg-preview img { position: absolute; inset: 0; width: 100%; height: 100%; }
+	.bg-preview img { object-fit: cover; }
+	.bg-preview-card {
+		position: relative;
+		padding: 0.6em 1em;
+		border-radius: 0.6em;
+		border: 1px solid var(--segment-border);
+		background: var(--segment-bg);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		color: var(--fg);
+		font-size: 0.9em;
+	}
+
+	.bg-tabs { display: flex; }
+	.bg-tabs .tab-btn { flex: 1; }
+	.bg-pane .hint { margin: 0 0 0.6em; line-height: 1.5; }
+	.bg-pane .button-row { margin-top: 0; }
+
+	.wheel-row { display: flex; gap: 1.25em; align-items: center; justify-content: center; flex-wrap: wrap; }
+	.wheel {
+		position: relative;
+		width: 220px;
+		height: 220px;
+		flex: none;
+		border-radius: 50%;
+		touch-action: none;
+		cursor: crosshair;
+		outline: none;
+	}
+	.wheel:focus-visible { box-shadow: 0 0 0 3px var(--glow-strong); }
+	.wheel canvas { width: 100%; height: 100%; display: block; border-radius: 50%; }
+	.wheel-knob {
+		position: absolute;
+		width: 18px;
+		height: 18px;
+		margin: -9px 0 0 -9px;
+		border-radius: 50%;
+		border: 2px solid #fff;
+		box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.5);
+		pointer-events: none;
+	}
+	.wheel-side { flex: 1 1 12em; min-width: 0; display: flex; flex-direction: column; gap: 0.25em; }
+	.swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+	.swatch {
+		width: 1.9em;
+		height: 1.9em;
+		border-radius: 50%;
+		border: 1px solid var(--glass-border);
+		padding: 0;
+		cursor: pointer;
+	}
+	.swatch:hover, .swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--glow-strong); }
+
+	/* Dim: its label, with the Auto toggle at the other end of the line */
+	.dim-head { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+	.auto-dim { display: inline-flex; align-items: center; gap: 0.5em; font-size: 0.85em; color: var(--fg-muted); cursor: pointer; }
+	.dim-warning { color: var(--fg); }
 	.corner-mark {
 		position: absolute;
 		width: 2em;
@@ -667,7 +794,6 @@ const styles = `
 	.tint-custom input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
 	.tint-custom { padding: 0; justify-content: center; }
 
-	input[type="range"] { width: 100%; accent-color: var(--fg); }
 
 	/* Place search: what's chosen won't work as it reads */
 	.place-warning {
@@ -1199,7 +1325,7 @@ function page(title, body, script, bodyClass, back) {
 ${pageStart()}
 	${body}
 	${backButton(back)}
-	<script>${UI_MODE_SCRIPT}${PASSWORD_TOGGLE_SCRIPT}${DIALOG_SCRIPT}${script || ""}${ASK_FIRST_SCRIPT}</script>
+	<script>${UI_MODE_SCRIPT}${PASSWORD_TOGGLE_SCRIPT}${DIALOG_SCRIPT}${CONTROLS_SCRIPT}${script || ""}${ASK_FIRST_SCRIPT}</script>
 </body>
 </html>`;
 }
@@ -1497,7 +1623,7 @@ function renderFields(schema, config, context, scope) {
 				input = priorityUi.priorityFieldHtml(field, order, owner, escapeHtml);
 			} else if (field.type === "boolean") {
 				input =
-					`<input type="checkbox" data-key="${escapeHtml(field.key)}" ` +
+					`<input type="checkbox" role="switch" data-key="${escapeHtml(field.key)}" ` +
 					`data-scope="${owner}" ` +
 					`data-type="boolean" ${value ? "checked" : ""}>`;
 			} else if (field.type === "select") {
@@ -1667,26 +1793,36 @@ function credentialsPage(options) {
 // page of their own, /background, which now opens that tab). Returns the
 // two boxes as HTML and the script behind both.
 function backgroundPanel(settings) {
-	const picture = backdropStore.hasPicture(settings);
+	// A picture (or an animation, or a video), a colour, or neither: the
+	// Default, the pages' own colour
+	const file = backdropStore.hasPicture(settings);
+	const colour = backdropStore.hasColour(settings);
+	const backdrop = file || colour;
 	const tint = settings.glassTint || "none";
 	const uiMode = currentUiMode();
+	const autoDimOn = settings.backgroundAutoDim !== false;
+	const manualDim = Number.isFinite(Number(settings.backgroundDim)) ? Number(settings.backgroundDim) : 50;
 
 	const kindName = {
 		picture: "A picture",
 		animated: "An animated picture",
-		video: "A video"
+		video: "A video",
+		colour: "A colour"
 	}[settings.backgroundKind];
 
 	// What's in use, said on the preview itself rather than in a line
-	// under it: a small label in its corner, or "Plain"
-	const preview = picture
+	// under it: a small label in its corner
+	const preview = file
 		? `<img src="/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}" alt="">` +
 		  `<span class="preview-kind">${escapeHtml(kindName || "A picture")}</span>`
-		: `<span>Plain: black, or light grey in light mode</span>`;
+		: colour
+		? `<span class="preview-colour" style="background:${escapeHtml(settings.backgroundColor)}"></span>` +
+		  `<span class="preview-kind">${escapeHtml(settings.backgroundColor)}</span>`
+		: `<span class="preview-colour preview-default"></span><span class="preview-kind">Default</span>`;
 
 	// A colour chip for the tint. "none" and "match" are words, the
-	// rest colours. Match the picture only with a picture, showing
-	// the picture's own colour.
+	// rest colours. Match the background only with a picture or a
+	// colour behind the pages, showing that colour.
 	const chip = (value, label, colour, disabled) =>
 		`<button type="button" class="tint-chip${tint === value ? " active" : ""}" data-tint="${escapeHtml(value)}"` +
 		`${disabled ? " disabled" : ""} title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"` +
@@ -1699,18 +1835,20 @@ function backgroundPanel(settings) {
 
 	// Where the back button sits: a named switch, Top left or Bottom right
 	// (bottom left is the welcome face's timer, top right the light
-	// switch), and the button drawn in its corner on the preview. Saved,
-	// then the page reloads to move it.
+	// switch), at the bottom of the box, and the button drawn in its
+	// corner on the preview. Saved, then the page reloads to move it.
 	const topLeft = settings.backButtonCorner === "top-left";
 
+	// The preview is the way to change what's behind the pages: it dims on
+	// hover and says "Change background", and opens the dialog below
 	const backgroundBox = `
 				<div class="segment c2 r2" id="background">
 					<div class="box-head">
 						<h2>Background</h2>
 						${infoTip(
-							"A picture (JPEG, PNG, WebP), an animated GIF or WebP, or a looping video (MP4, WebM) " +
-								"without sound, up to 50 MB. Kept by OmniCore and never sent anywhere. With reduced " +
-								"motion turned on in your device's settings, a still frame is shown.",
+							"A picture (JPEG, PNG, WebP), an animated GIF or WebP, a looping video (MP4, WebM) " +
+								"without sound, up to 50 MB, or one colour. A file is kept by OmniCore and never sent " +
+								"anywhere. With reduced motion turned on in your device's settings, a still frame is shown.",
 							"What can be used as a background"
 						)}
 					</div>
@@ -1719,10 +1857,13 @@ function backgroundPanel(settings) {
 						background.
 					</p>
 
-					<div class="backdrop-stage">
-						<div class="backdrop-preview${picture ? "" : " plain"}" id="preview">${preview}</div>
+					<button type="button" class="backdrop-stage" id="change-background"
+						aria-label="Change background" aria-haspopup="dialog">
+						<span class="backdrop-preview${backdrop ? "" : " plain"}" id="preview">${preview}</span>
 						<span class="corner-mark corner-mark-${topLeft ? "top-left" : "bottom-right"}" aria-hidden="true">&#8592;</span>
-					</div>
+						<span class="change-label" aria-hidden="true">Change background</span>
+					</button>
+
 					<div class="field back-corner">
 						<label id="corner-label">Back button</label>
 						<div class="tabs" id="corner-tabs" role="group" aria-labelledby="corner-label">
@@ -1732,15 +1873,96 @@ function backgroundPanel(settings) {
 								aria-pressed="${!topLeft}">Bottom right</button>
 						</div>
 					</div>
-
-					<div class="button-row">
-						<button type="button" class="glass" id="choose">Choose a file</button>
-						${picture ? `<button type="button" class="glass" id="plain">Back to plain</button>` : ""}
-					</div>
-					<input type="file" id="file" hidden
-						accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm">
-					<p class="status" id="upload-status" aria-live="polite"></p>
 				</div>
+`;
+
+	// Changing the background: a big pop-up with a live preview, and three
+	// choices. Nothing changes until Use.
+	//
+	//   Picture   a file from this device, looked at here before it's sent
+	//   Colour    one colour, from a colour wheel, a brightness slider, a
+	//             few ready-made colours or a #code
+	//   Default   the pages' own colour: Artist's Charcoal, or Beige Cream
+	//             in light mode
+	const startTab = file ? "picture" : colour ? "colour" : "default";
+	const SWATCHES = ["#37393e", "#1e2a44", "#24423b", "#3f2a3d", "#5a3d2b", "#eedec5", "#c9d6df", "#f2c4b4"];
+
+	const backgroundModal = `
+			<div class="modal-backdrop" id="background-modal" hidden>
+				<div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="bg-title">
+					<div class="modal-head">
+						<h2 id="bg-title">Change background</h2>
+						<button class="modal-close" data-close="background-modal" aria-label="Close">&times;</button>
+					</div>
+
+					<div class="bg-preview" id="bg-preview" aria-hidden="true">
+						<span class="bg-preview-colour" id="bg-preview-colour"></span>
+						<img id="bg-preview-image" alt="" hidden>
+						<span class="bg-preview-veil" id="bg-preview-veil"></span>
+						<span class="bg-preview-card">Text on the glass</span>
+					</div>
+
+					<div class="tabs bg-tabs" id="bg-tabs" role="tablist">
+						<button type="button" class="tab-btn${startTab === "picture" ? " active" : ""}" data-bg-tab="picture" role="tab">Picture</button>
+						<button type="button" class="tab-btn${startTab === "colour" ? " active" : ""}" data-bg-tab="colour" role="tab">Colour</button>
+						<button type="button" class="tab-btn${startTab === "default" ? " active" : ""}" data-bg-tab="default" role="tab">Default</button>
+					</div>
+
+					<div class="bg-pane" data-bg-pane="picture"${startTab === "picture" ? "" : " hidden"}>
+						<p class="hint">
+							A picture (JPEG, PNG, WebP), an animated GIF or WebP, or a looping
+							video (MP4, WebM) without sound, up to 50 MB. It's looked at on this
+							device first, then kept by OmniCore and never sent anywhere.
+						</p>
+						<div class="button-row">
+							<button type="button" class="glass" id="choose">Choose a file</button>
+						</div>
+						<input type="file" id="file" hidden
+							accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm">
+					</div>
+
+					<div class="bg-pane" data-bg-pane="colour"${startTab === "colour" ? "" : " hidden"}>
+						<div class="wheel-row">
+							<div class="wheel" id="wheel" tabindex="0" role="slider"
+								aria-label="Colour wheel: arrow keys change the colour and how strong it is">
+								<canvas id="wheel-canvas" width="440" height="440"></canvas>
+								<span class="wheel-knob" id="wheel-knob"></span>
+							</div>
+							<div class="wheel-side">
+								<div class="field">
+									<label for="wheel-value">Brightness <span class="muted" id="wheel-value-text"></span></label>
+									<input type="range" id="wheel-value" min="0" max="100" step="1" value="100">
+								</div>
+								<div class="field">
+									<label for="wheel-hex">Colour code</label>
+									<input type="text" id="wheel-hex" spellcheck="false" autocomplete="off" maxlength="7" placeholder="#37393e">
+								</div>
+								<div class="swatches" id="swatches">
+									${SWATCHES.map(
+										(swatch) =>
+											`<button type="button" class="swatch" data-swatch="${swatch}" style="background:${swatch}" ` +
+											`title="${swatch}" aria-label="${swatch}"></button>`
+									).join("")}
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="bg-pane" data-bg-pane="default"${startTab === "default" ? "" : " hidden"}>
+						<p class="hint">
+							The pages' own colour: Artist's Charcoal (#37393e) in dark mode,
+							Beige Cream (#eedec5) in light mode.${file ? " The picture in use now is deleted from OmniCore." : ""}
+						</p>
+					</div>
+
+					<p class="status" id="upload-status" aria-live="polite"></p>
+
+					<div class="dialog-buttons">
+						<button type="button" class="glass" data-close="background-modal">Cancel</button>
+						<button type="button" class="glass" id="bg-use" disabled>Use</button>
+					</div>
+				</div>
+			</div>
 `;
 
 	const glassBox = `
@@ -1756,14 +1978,16 @@ function backgroundPanel(settings) {
 
 					<div class="field">
 						<label>Tint ${infoTip(
-							picture
-								? "Match the picture takes the picture's main colour, worked out once when it was picked."
-								: "Match the picture needs a picture.",
-							"About Match the picture"
+							file
+								? "Match the background takes the picture's main colour, worked out once when it was picked."
+								: colour
+								? "Match the background takes the background's colour."
+								: "Match the background needs a picture or a colour behind the pages.",
+							"About Match the background"
 						)}</label>
 						<div class="tint-chips" id="tints">
 							${chip("none", "None", "", false)}
-							${chip("match", "Match the picture", picture && settings.backgroundColor ? settings.backgroundColor : "", !picture)}
+							${chip("match", "Match the background", backdrop && settings.backgroundColor ? settings.backgroundColor : "", !backdrop)}
 							${backdropStore.TINT_PRESETS.map((colour) => chip(colour, colour, colour, false)).join("")}
 							<label class="tint-chip tint-custom${custom ? " active" : ""}" title="Pick a colour">
 								<input type="color" id="custom" value="${escapeHtml(custom ? tint : "#7aa2ff")}" aria-label="Pick a colour">
@@ -1778,15 +2002,23 @@ function backgroundPanel(settings) {
 					</div>
 
 					${
-						picture
+						backdrop
 							? `<div class="field">
-						<label for="brightness">Picture brightness <span class="muted" id="brightness-value">${Number(settings.backgroundBrightness)}%</span></label>
+						<label for="brightness">${file ? "Picture" : "Colour"} brightness <span class="muted" id="brightness-value">${Number(settings.backgroundBrightness)}%</span></label>
 						<input type="range" id="brightness" min="${backdropStore.BRIGHTNESS_LEAST}" max="${backdropStore.BRIGHTNESS_MOST}" step="1"
 							value="${Number(settings.backgroundBrightness)}">
-						<div class="help">
-							The picture is dimmed by itself, just enough for text to read
-							over it: <span id="dim-value"></span>.
+					</div>
+
+					<div class="field dim-field">
+						<div class="dim-head">
+							<label for="dim">Dim <span class="muted" id="dim-text">${manualDim}%</span></label>
+							<label class="auto-dim">
+								<span>Auto</span>
+								<input type="checkbox" role="switch" id="auto-dim"${autoDimOn ? " checked" : ""}>
+							</label>
 						</div>
+						<input type="range" id="dim" min="0" max="100" step="1" value="${manualDim}"${autoDimOn ? " disabled" : ""}>
+						<p class="help dim-warning" id="dim-warning" hidden></p>
 					</div>`
 							: ""
 					}
@@ -1799,8 +2031,10 @@ function backgroundPanel(settings) {
 		// (backdrop.js), so what's previewed is what's saved
 		${backdropStore.autoDim.toString()}
 
+		// What's behind the pages now: its darker and brighter parts and
+		// its colour, or null for the Default
 		const PICTURE = ${JSON.stringify(
-			picture
+			backdrop
 				? { low: settings.backgroundLow, high: settings.backgroundHigh, color: settings.backgroundColor || "" }
 				: null
 		).replace(/</g, "\\u003c")};
@@ -1813,6 +2047,12 @@ function backgroundPanel(settings) {
 		const strength = document.getElementById("strength");
 		const brightness = document.getElementById("brightness");
 		const custom = document.getElementById("custom");
+		const autoDimBox = document.getElementById("auto-dim");
+		const dimRange = document.getElementById("dim");
+
+		// The dim set by hand: kept apart from what the slider shows, since
+		// with Auto on the slider shows the worked-out one
+		let manualDim = dimRange ? Number(dimRange.value) : 50;
 
 		// Light or dark: this browser's own choice, or the device's when
 		// it hasn't made one
@@ -1844,13 +2084,31 @@ function backgroundPanel(settings) {
 			if (brightness && PICTURE) {
 				document.getElementById("brightness-value").textContent = brightness.value + "%";
 				root.style.setProperty("--backdrop-brightness", Number(brightness.value) / 100);
-				const dim = autoDim(PICTURE.low, PICTURE.high, brightness.value, light());
+
+				// The veil: worked out (Auto dim), or as set by hand
+				const needed = autoDim(PICTURE.low, PICTURE.high, brightness.value, light());
+				const auto = autoDimBox.checked;
+				const dim = auto ? needed : manualDim / 100;
 				root.style.setProperty(
 					"--backdrop-dim",
-					light() ? "rgba(242, 242, 244, " + dim + ")" : "rgba(0, 0, 0, " + dim + ")"
+					light() ? "rgba(238, 222, 197, " + dim + ")" : "rgba(0, 0, 0, " + dim + ")"
 				);
-				document.getElementById("dim-value").textContent =
-					"a veil of " + Math.round(dim * 100) + "% at this brightness";
+
+				// With Auto on, the slider shows what's worked out and can't
+				// be moved; off, it's the one that counts
+				dimRange.disabled = auto;
+				dimRange.value = auto ? Math.round(needed * 100) : manualDim;
+				if (window.omniFillRanges) window.omniFillRanges();
+				document.getElementById("dim-text").textContent = Math.round(dim * 100) + "%" + (auto ? ", worked out" : "");
+
+				// Set by hand, it's never overruled; it only says when the
+				// text may be hard to read
+				const warning = document.getElementById("dim-warning");
+				const low = !auto && dim + 0.005 < needed;
+				warning.hidden = !low;
+				warning.textContent = low
+					? "Text may be hard to read over this at " + manualDim + "%. Auto would use " + Math.round(needed * 100) + "%."
+					: "";
 			}
 
 			for (const chip of document.querySelectorAll("[data-tint]")) {
@@ -1866,6 +2124,23 @@ function backgroundPanel(settings) {
 
 		for (const input of [blur, strength, brightness]) {
 			if (input) input.addEventListener("input", preview);
+		}
+		if (dimRange) {
+			dimRange.addEventListener("input", function () {
+				manualDim = Number(dimRange.value);
+				preview();
+			});
+		}
+
+		// Auto off starts from what was worked out, so nothing jumps
+		if (autoDimBox) {
+			autoDimBox.addEventListener("change", function () {
+				if (!autoDimBox.checked && PICTURE) {
+					manualDim = Math.round(autoDim(PICTURE.low, PICTURE.high, brightness.value, light()) * 100);
+				}
+				preview();
+				save();
+			});
 		}
 
 		document.getElementById("tints").addEventListener("click", function (event) {
@@ -1905,7 +2180,9 @@ function backgroundPanel(settings) {
 							blur: Number(blur.value),
 							tint: tint,
 							tintStrength: Number(strength.value),
-							brightness: brightness ? Number(brightness.value) : undefined
+							brightness: brightness ? Number(brightness.value) : undefined,
+							autoDim: autoDimBox ? autoDimBox.checked : undefined,
+							dim: dimRange ? manualDim : undefined
 						})
 					});
 					if (!response.ok) throw new Error();
@@ -1917,18 +2194,257 @@ function backgroundPanel(settings) {
 			}, 300);
 		}
 
-		for (const input of [blur, strength, brightness]) {
+		for (const input of [blur, strength, brightness, dimRange]) {
 			if (input) input.addEventListener("change", save);
 		}
 
-		// --- Picking a file ------------------------------------------
+		// --- Changing the background: the dialog --------------------------
+		//
+		// Picture, Colour or Default, with a live preview of what it'll look
+		// like (the veil included, as Auto dim or the Dim set by hand would
+		// make it). Nothing changes until Use.
 
 		const upload = document.getElementById("upload-status");
+		const modal = document.getElementById("background-modal");
+		const useButton = document.getElementById("bg-use");
+		const previewColour = document.getElementById("bg-preview-colour");
+		const previewImage = document.getElementById("bg-preview-image");
+		const previewVeil = document.getElementById("bg-preview-veil");
+		const DEFAULT_COLOURS = { dark: "${DEFAULT_DARK}", light: "${DEFAULT_LIGHT}" };
 
 		function say(text, bad) {
 			upload.className = "status" + (bad ? " bad" : "");
 			upload.textContent = text;
 		}
+
+		// What's chosen in the dialog
+		const chosen = {
+			tab: ${JSON.stringify(startTab)},
+			file: null,
+			about: null,
+			fileAddress: "",
+			// The wheel starts on the colour in use, or a middling blue, so
+			// the wheel isn't shown nearly black
+			colour: ${JSON.stringify(colour ? settings.backgroundColor : "#3d5a99")}
+		};
+
+		function hexOf(r, g, b) {
+			return "#" + [r, g, b].map(function (value) {
+				return Math.round(value).toString(16).padStart(2, "0");
+			}).join("");
+		}
+
+		function rgbOf(hex) {
+			const value = parseInt(hex.slice(1), 16);
+			return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+		}
+
+		// The dialog's preview: what's chosen, under the veil it would get
+		function showChoice() {
+			let low = 0;
+			let high = 0;
+			let veiled = true;
+			previewImage.hidden = true;
+
+			if (chosen.tab === "picture") {
+				if (chosen.fileAddress) {
+					previewImage.src = chosen.fileAddress;
+					previewImage.hidden = false;
+					low = chosen.about.low;
+					high = chosen.about.high;
+				} else if (PICTURE && ${JSON.stringify(Boolean(file))}) {
+					previewImage.src = ${JSON.stringify(file ? `/backdrop/${settings.backgroundStill || settings.backgroundFile}` : "")};
+					previewImage.hidden = false;
+					low = PICTURE.low;
+					high = PICTURE.high;
+				} else {
+					veiled = false;
+				}
+				previewColour.style.background = light() ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark;
+			} else if (chosen.tab === "colour") {
+				const rgb = rgbOf(chosen.colour);
+				low = high = luminance(rgb[0], rgb[1], rgb[2]);
+				previewColour.style.background = chosen.colour;
+			} else {
+				previewColour.style.background = light() ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark;
+				veiled = false;
+			}
+
+			const bright = brightness ? Number(brightness.value) : 100;
+			const auto = autoDimBox ? autoDimBox.checked : true;
+			const dim = !veiled ? 0 : auto ? autoDim(low, high, bright, light()) : manualDim / 100;
+			previewVeil.style.background = light() ? "rgba(238, 222, 197, " + dim + ")" : "rgba(0, 0, 0, " + dim + ")";
+
+			// Use: there has to be something to use
+			useButton.disabled = chosen.tab === "picture" && !chosen.file;
+		}
+
+		function pickTab(tab) {
+			chosen.tab = tab;
+			for (const button of document.querySelectorAll("[data-bg-tab]")) {
+				const on = button.dataset.bgTab === tab;
+				button.classList.toggle("active", on);
+				button.setAttribute("aria-selected", on ? "true" : "false");
+			}
+			for (const pane of document.querySelectorAll("[data-bg-pane]")) {
+				pane.hidden = pane.dataset.bgPane !== tab;
+			}
+			if (tab === "colour") drawWheel();
+			say("");
+			showChoice();
+		}
+
+		for (const button of document.querySelectorAll("[data-bg-tab]")) {
+			button.addEventListener("click", function () { pickTab(button.dataset.bgTab); });
+		}
+
+		document.getElementById("change-background").addEventListener("click", function () {
+			modal.hidden = false;
+			pickTab(chosen.tab);
+			if (window.omniFillRanges) window.omniFillRanges();
+			document.querySelector('[data-bg-tab="' + chosen.tab + '"]').focus();
+		});
+
+		// --- The colour wheel ----------------------------------------------
+		//
+		// Hue goes round, how strong the colour is goes out from the middle
+		// (grey at the centre), and Brightness is the slider beside it. The
+		// ring is drawn once, at twice its size on screen so it's sharp.
+
+		const wheel = document.getElementById("wheel");
+		const wheelCanvas = document.getElementById("wheel-canvas");
+		const wheelKnob = document.getElementById("wheel-knob");
+		const wheelValue = document.getElementById("wheel-value");
+		const wheelHex = document.getElementById("wheel-hex");
+		let drawn = false;
+
+		// Hue (0-360), strength and brightness (0-1) to red, green, blue
+		function rgbFromHsv(h, s, v) {
+			const f = function (n) {
+				const k = (n + h / 60) % 6;
+				return v - v * s * Math.max(0, Math.min(k, 4 - k, 1));
+			};
+			return [f(5) * 255, f(3) * 255, f(1) * 255];
+		}
+
+		function hsvFromRgb(r, g, b) {
+			r /= 255; g /= 255; b /= 255;
+			const most = Math.max(r, g, b);
+			const least = Math.min(r, g, b);
+			const range = most - least;
+			let h = 0;
+			if (range) {
+				if (most === r) h = ((g - b) / range) % 6;
+				else if (most === g) h = (b - r) / range + 2;
+				else h = (r - g) / range + 4;
+				h *= 60;
+				if (h < 0) h += 360;
+			}
+			return { h: h, s: most ? range / most : 0, v: most };
+		}
+
+		let hsv = (function () {
+			const rgb = rgbOf(chosen.colour);
+			return hsvFromRgb(rgb[0], rgb[1], rgb[2]);
+		})();
+
+		function drawWheel() {
+			if (drawn) return;
+			drawn = true;
+			const size = wheelCanvas.width;
+			const middle = size / 2;
+			const context = wheelCanvas.getContext("2d");
+			const image = context.createImageData(size, size);
+			for (let y = 0; y < size; y++) {
+				for (let x = 0; x < size; x++) {
+					const dx = x - middle;
+					const dy = y - middle;
+					const distance = Math.sqrt(dx * dx + dy * dy) / middle;
+					const at = (y * size + x) * 4;
+					if (distance > 1) { image.data[at + 3] = 0; continue; }
+					const hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+					const rgb = rgbFromHsv(hue, distance, 1);
+					image.data[at] = rgb[0];
+					image.data[at + 1] = rgb[1];
+					image.data[at + 2] = rgb[2];
+					// A soft edge rather than jagged pixels
+					image.data[at + 3] = Math.round(Math.min(1, (1 - distance) * middle) * 255);
+				}
+			}
+			context.putImageData(image, 0, 0);
+			showWheel();
+		}
+
+		// The knob where the colour is, the slider and the code to match
+		function showWheel() {
+			const angle = hsv.h * Math.PI / 180;
+			wheelKnob.style.left = 50 + Math.cos(angle) * hsv.s * 50 + "%";
+			wheelKnob.style.top = 50 + Math.sin(angle) * hsv.s * 50 + "%";
+			const rgb = rgbFromHsv(hsv.h, hsv.s, hsv.v);
+			chosen.colour = hexOf(rgb[0], rgb[1], rgb[2]);
+			wheelKnob.style.background = chosen.colour;
+			wheelCanvas.style.filter = "brightness(" + Math.max(0.15, hsv.v) + ")";
+			wheelValue.value = Math.round(hsv.v * 100);
+			document.getElementById("wheel-value-text").textContent = Math.round(hsv.v * 100) + "%";
+			if (document.activeElement !== wheelHex) wheelHex.value = chosen.colour;
+			wheel.setAttribute("aria-valuetext", chosen.colour);
+			if (window.omniFillRanges) window.omniFillRanges();
+			showChoice();
+		}
+
+		function pickAt(event) {
+			const edges = wheelCanvas.getBoundingClientRect();
+			const dx = event.clientX - (edges.left + edges.width / 2);
+			const dy = event.clientY - (edges.top + edges.height / 2);
+			hsv.h = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+			hsv.s = Math.min(1, Math.sqrt(dx * dx + dy * dy) / (edges.width / 2));
+			if (hsv.v < 0.05) hsv.v = 1;
+			showWheel();
+		}
+
+		wheel.addEventListener("pointerdown", function (event) {
+			wheel.setPointerCapture(event.pointerId);
+			pickAt(event);
+			event.preventDefault();
+		});
+		wheel.addEventListener("pointermove", function (event) {
+			if (wheel.hasPointerCapture(event.pointerId)) pickAt(event);
+		});
+
+		// Arrow keys: left and right turn the hue, up and down change how
+		// strong it is
+		wheel.addEventListener("keydown", function (event) {
+			const step = event.shiftKey ? 10 : 2;
+			if (event.key === "ArrowLeft") hsv.h = (hsv.h - step + 360) % 360;
+			else if (event.key === "ArrowRight") hsv.h = (hsv.h + step) % 360;
+			else if (event.key === "ArrowUp") hsv.s = Math.min(1, hsv.s + step / 100);
+			else if (event.key === "ArrowDown") hsv.s = Math.max(0, hsv.s - step / 100);
+			else return;
+			event.preventDefault();
+			showWheel();
+		});
+
+		wheelValue.addEventListener("input", function () {
+			hsv.v = Number(wheelValue.value) / 100;
+			showWheel();
+		});
+
+		wheelHex.addEventListener("input", function () {
+			const typed = wheelHex.value.trim().replace(/^([0-9a-f]{6})$/i, "#$1");
+			if (!/^#[0-9a-f]{6}$/i.test(typed)) return;
+			const rgb = rgbOf(typed.toLowerCase());
+			hsv = hsvFromRgb(rgb[0], rgb[1], rgb[2]);
+			showWheel();
+		});
+		wheelHex.addEventListener("blur", function () { wheelHex.value = chosen.colour; });
+
+		document.getElementById("swatches").addEventListener("click", function (event) {
+			const swatch = event.target.closest("[data-swatch]");
+			if (!swatch) return;
+			const rgb = rgbOf(swatch.dataset.swatch);
+			hsv = hsvFromRgb(rgb[0], rgb[1], rgb[2]);
+			showWheel();
+		});
 
 		// Waits for an element's event, or gives up after a while
 		function once(element, name, seconds) {
@@ -2050,6 +2566,8 @@ function backgroundPanel(settings) {
 			document.getElementById("file").click();
 		});
 
+		// A file picked: looked at here, shown in the preview, and only
+		// sent when Use is pressed
 		document.getElementById("file").addEventListener("change", async function () {
 			const file = this.files[0];
 			this.value = "";
@@ -2060,61 +2578,60 @@ function backgroundPanel(settings) {
 				return;
 			}
 
-			document.getElementById("choose").disabled = true;
-
+			say("Looking at it…");
 			try {
-				say("Looking at it…");
-				let about;
-				try {
-					about = await study(file);
-				} catch (error) {
-					throw new Error(
-						"This browser can't show that file, so it can't be the background. " +
-						"JPEG, PNG, GIF, WebP, MP4 and WebM work; a video has to be in a format browsers play (H.264 or VP9, say)."
-					);
+				const about = await study(file);
+				if (chosen.fileAddress) URL.revokeObjectURL(chosen.fileAddress);
+				chosen.file = file;
+				chosen.about = about;
+				chosen.fileAddress = URL.createObjectURL(about.still);
+				say(file.name);
+				showChoice();
+			} catch (error) {
+				say(
+					"This browser can't show that file, so it can't be the background. " +
+					"JPEG, PNG, GIF, WebP, MP4 and WebM work; a video has to be in a format browsers play (H.264 or VP9, say).",
+					true
+				);
+			}
+		});
+
+		// Use: whichever is chosen, then the page reloads to show it
+		useButton.addEventListener("click", async function () {
+			useButton.disabled = true;
+			try {
+				if (chosen.tab === "picture") {
+					say("Sending it…");
+					const received = await send("/background/upload", chosen.file);
+					await send("/background/still?id=" + encodeURIComponent(received.id), chosen.about.still);
+					const response = await fetch("/background/use", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ id: received.id, color: chosen.about.color, low: chosen.about.low, high: chosen.about.high })
+					});
+					const answer = await response.json().catch(function () { return {}; });
+					if (!response.ok) throw new Error(answer.error || "Couldn't use it.");
+				} else {
+					const response = await fetch(chosen.tab === "colour" ? "/background/colour" : "/background/plain", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(chosen.tab === "colour" ? { color: chosen.colour } : {})
+					});
+					const answer = await response.json().catch(function () { return {}; });
+					if (!response.ok) throw new Error(answer.error || "Couldn't change it.");
 				}
-
-				say("Sending it…");
-				const received = await send("/background/upload", file);
-				await send("/background/still?id=" + encodeURIComponent(received.id), about.still);
-
-				const response = await fetch("/background/use", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ id: received.id, color: about.color, low: about.low, high: about.high })
-				});
-				const answer = await response.json().catch(function () { return {}; });
-				if (!response.ok) throw new Error(answer.error || "Couldn't use it.");
-
 				say("Done.");
 				location.reload();
 			} catch (error) {
 				say(error.message, true);
-				document.getElementById("choose").disabled = false;
+				useButton.disabled = false;
 			}
 		});
 
-		const plain = document.getElementById("plain");
-		if (plain) {
-			plain.addEventListener("click", async function () {
-				const sure = await confirmDialog({
-					title: "Back to plain?",
-					text: "The picture is deleted from OmniCore's data folder.",
-					confirm: "Back to plain"
-				});
-				if (!sure) return;
-				const response = await fetch("/background/plain", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: "{}"
-				});
-				if (response.ok) location.reload();
-				else say("Couldn't change it.", true);
-			});
-		}
+		showChoice();
 	`;
 
-	return { backgroundBox, glassBox, script };
+	return { backgroundBox, glassBox, backgroundModal, script };
 }
 
 // The server's address on the home network, the one other devices use to
@@ -3103,7 +3620,7 @@ function startAdminFace() {
 				</p>
 
 				<label class="option" style="margin-bottom:14px">
-					<input type="checkbox" id="enabled"
+					<input type="checkbox" role="switch" id="enabled"
 						${settings.locationEnabled ? "checked" : ""}>
 					<span>Let OmniCore know where it is</span>
 				</label>
@@ -3190,7 +3707,7 @@ function startAdminFace() {
 				<div class="mode-previews narrow-previews">
 					<div class="mode-preview ${uiMode === "dark" ? "active" : ""}"
 						data-mode="dark" role="button" tabindex="0">
-						<div class="mode-screen" style="background:#0c0d10">
+						<div class="mode-screen" style="background:${DEFAULT_DARK}">
 							<span style="width:40%;height:5px;background:rgba(255,255,255,0.8)"></span>
 							<span style="width:70%;height:4px;background:rgba(255,255,255,0.3)"></span>
 						</div>
@@ -3198,7 +3715,7 @@ function startAdminFace() {
 					</div>
 					<div class="mode-preview ${uiMode === "light" ? "active" : ""}"
 						data-mode="light" role="button" tabindex="0">
-						<div class="mode-screen" style="background:#e5e7eb">
+						<div class="mode-screen" style="background:${DEFAULT_LIGHT}">
 							<span style="width:40%;height:5px;background:#4b5563"></span>
 							<span style="width:70%;height:4px;background:#9ca3af"></span>
 						</div>
@@ -3207,10 +3724,10 @@ function startAdminFace() {
 					<div class="mode-preview ${uiMode ? "" : "active"}"
 						data-mode="device" role="button" tabindex="0">
 						<div class="mode-screen mode-screen-split">
-							<div style="background:#0c0d10">
+							<div style="background:${DEFAULT_DARK}">
 								<span style="width:60%;height:5px;background:rgba(255,255,255,0.8)"></span>
 							</div>
-							<div style="background:#e5e7eb">
+							<div style="background:${DEFAULT_LIGHT}">
 								<span style="width:60%;height:5px;background:#4b5563"></span>
 							</div>
 						</div>
@@ -3276,6 +3793,7 @@ function startAdminFace() {
 			},
 			updates.updateReady
 		) + `
+			${glassParts.backgroundModal}
 			<div class="modal-backdrop" id="font-modal" hidden>
 				<div class="modal">
 					<div class="modal-head">
@@ -3773,6 +4291,19 @@ function startAdminFace() {
 		writeSettings(backdropStore.PLAIN);
 		backdropStore.removeOthers([]);
 		res.json({ ok: true });
+	});
+
+	// One colour behind the pages, picked on the colour wheel. The picture
+	// before it, if there was one, goes.
+	app.post("/background/colour", (req, res) => {
+		const result = backdropStore.useColour((req.body || {}).color);
+		if (result.error) {
+			res.status(400).json(result);
+			return;
+		}
+		writeSettings(result.changes);
+		backdropStore.removeOthers([]);
+		res.json({ ok: true, kind: "colour" });
 	});
 
 	app.post("/background/glass", (req, res) => {

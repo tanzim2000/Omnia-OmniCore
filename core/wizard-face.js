@@ -47,7 +47,7 @@ const { searchPlaces } = require("./place-search");
 const { PLACE_SEARCH_SCRIPT, PLACE_SEARCH_CSS } = require("./place-search-ui");
 const { readSettings } = require("./settings-store");
 const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
-const { uiStyles, rememberUiMode, DIALOG_SCRIPT } = require("./ui-theme");
+const { uiStyles, rememberUiMode, DIALOG_SCRIPT, CONTROLS_SCRIPT } = require("./ui-theme");
 const { ASK_FIRST_SCRIPT } = require("./ask-first");
 
 // Only what's specific to the wizard. Everything else — glass buttons,
@@ -341,7 +341,7 @@ function page(title, body, script) {
 <body>
 ${pageStart()}
 	${body}
-	<script>${DIALOG_SCRIPT}${ASK_FIRST_SCRIPT}${script || ""}</script>
+	<script>${DIALOG_SCRIPT}${CONTROLS_SCRIPT}${ASK_FIRST_SCRIPT}${script || ""}</script>
 </body>
 </html>`;
 }
@@ -1030,7 +1030,7 @@ function renderWizard(data) {
 					// it like any other field, off .value.
 					input = priorityFieldHtml(field, order, owner, escapeHtml);
 				} else if (field.type === "boolean") {
-					input = '<input type="checkbox" data-key="' +
+					input = '<input type="checkbox" role="switch" data-key="' +
 						escapeHtml(field.key) + '" data-scope="' + owner +
 						'" data-type="boolean"' +
 						(value ? " checked" : "") + ">";
