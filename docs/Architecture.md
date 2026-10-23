@@ -190,7 +190,9 @@ until the Marketplace puts something in them.
 | `version.js`               | The running version, from `OMNICORE_VERSION` baked into the image; a build without it is a dev build. For showing only, a dev build reads its number from `package.json` and is marked with a `dev` badge; nothing is ever compared against that number.                                                                                                                                                                                                                                                                                                                                                         |
 | `resource-scheduler.js`    | Checks the registry for newer versions of installed modules and themes, and installs compatible ones. Also behind "Check now" on Installed Resources.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `core-update-scheduler.js` | The same job for OmniCore itself, every six hours.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `core-updater.js`          | Performs a core self-update: pulls the new image, swaps the container, and rolls back automatically if the new version isn't healthy. One update at a time. See §10.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `core-updater.js`          | Performs a core self-update: pulls the new image, swaps the container, and rolls back automatically if the new version isn't healthy. One update at a time. A new major version too: a backup first, the next major's image, the data put back on a rollback, `docker-compose.yml` kept in step. See §10.                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `upgrades.js`              | Brings the data up to date with the version running, when OmniCore starts: `data/data-version.json`, the conversion steps, and refusing data from a newer major version. See §10. |
+| `upgrade-notes.js`         | A new major version's document (`docs/upgrades/<version>.md` at its tag), fetched and drawn safely for the Settings home's pop-up. See §10. |
 
 ### The docs site
 
@@ -1438,7 +1440,7 @@ an untrusted network.
 
 ## 10. Running it
 
-Requires Node 20 or newer.
+Requires Node 24 (Node 20 and 22 still work).
 
 ```bash
 npm install
@@ -1496,6 +1498,55 @@ The page follows along: `/updates/progress` while this OmniCore is still
 answering, then the open `GET /version` until a different start of
 OmniCore (`bootId`) answers -- the new version once Docker calls it
 healthy, or the old one back after a rollback.
+
+### A new major version (since 1.20.0)
+
+A major version (2.0.0 on 1.x) is never installed by the scheduler. The
+same check (`checkForUpdate`) also finds the newest release of the **next**
+major (`nextMajor`, kept in `update-checks.json`), and the Settings home
+shows a box for it. The box opens a pop-up with that version's document,
+`docs/upgrades/<version>.md` fetched from GitHub **at its release tag**
+(`upgrade-notes.js`, which draws its Markdown itself and escapes
+everything first; a version without one shows its CHANGELOG entry),
+followed by OmniCore's own closing part: the backup, and what happens to
+`docker-compose.yml`. **Upgrade** can be pressed only once the document has
+loaded, this OmniCore can install updates (the Docker socket, not a
+development build), and the document has been scrolled to its end. Until
+then it's `aria-disabled` rather than `disabled`, so its title (the reason)
+shows on hover; on a phone the reason is also written under it.
+
+Upgrading (`POST /updates/major/apply`, then `coreUpdater.applyMajorUpgrade`)
+is Update now with three additions, through the same one-at-a-time lock and
+the same progress the Updates page follows:
+
+1. **The data is copied first**, to `data/backups/before-<version>`
+   (`backupData`), in the data volume itself.
+2. **The other image**: the same name with the new major as its tag
+   (`majorImageRef`: `:1` becomes `:2`). The new container is made from it,
+   so later updates follow the new major.
+3. **The helper gets more**: OmniCore's own volumes (`VolumesFrom`, so the
+   data and the backup, at the same paths, and the Docker socket) and the
+   folder of each `docker-compose.yml`, found from Compose's label
+   `com.docker.compose.project.config_files`. If the new version isn't
+   healthy, `restore_data` puts the copy back before the old version
+   starts. Once it is healthy, `edit_compose` (`composeEditScript`) changes
+   the one line naming the old image to the new one, after copying the file
+   to `docker-compose.yml.before-<version>`, rewriting it in place so it
+   keeps its owner. A line that doesn't say the image plainly is left
+   alone. Before offering the upgrade, `checkComposeFile` runs the same
+   check in a short-lived helper, and the pop-up says whether the file will
+   be changed or which line a person needs to change.
+
+When the new version starts, `core/upgrades.js` brings the data up to date
+before anything reads it: `data/data-version.json` says which version last
+did, and every step (`STEPS`) for a version after that and no later than
+the running one runs in order, the file moving on after each. Data with no
+version file counts as 1.0.0 if OmniCore's own files are there, and as the
+running version if the folder is new. Data from a newer **major** version
+is refused (`DataFromNewerVersion`) and OmniCore doesn't start, so forcing
+an old image onto new data can't damage it. A failed step stops OmniCore
+too; during an upgrade that makes the helper put the old version back,
+with its data.
 
 ---
 

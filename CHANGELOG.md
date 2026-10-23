@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.20.0
+
+Getting ready for OmniCore 2: a new major version is offered on the Settings home with what's changing, and installed from there in one press, with a backup of your data and nothing to change by hand
+
+### Added
+
+- **A new major version is offered on the Settings home.** When OmniCore 2.0.0 (or any next major version) is released, a box at the top of Settings says so. Pressing it opens what's changing and why, in a window that scrolls. **Upgrade** can only be pressed once you've read it all the way to the end; until then, pointing at it says why (and on a phone, the reason is written under it). Updates within the same major version still install by themselves, as before; a major version never does.
+- **Upgrading does everything itself.** Your data is copied to `data/backups/before-<version>` first. The new version is downloaded and switched in, the same way Update now works, and if it doesn't start properly the version you had comes back on its own, with that copy of your data. Once the new version is running, the image line in your `docker-compose.yml` is changed to it (a copy of the file is kept beside it), so `docker compose up -d` keeps the new version. If OmniCore can't reach that file, the window says so before you upgrade, with the one line to change.
+- **A new version brings your data up to date when it starts.** If a version changes how something is stored, it converts your data the first time it starts, step by step, before anything reads it. OmniCore notes which version last did this (`data/data-version.json`). An older major version refuses to start on data a newer one has converted, rather than damaging it.
+
+### Changed
+
+- **Node 24.** The image, the dev container and the build all run on Node 24, the current long-term support version. Node 20, used until now, stopped getting security fixes in April 2026. The dev container also brings npm up to date, so the "New major version of npm available" notice stops.
+- **Without the Docker socket, updates are off.** The comment beside that line in `docker-compose.yml` says what removing it means: OmniCore tells you about updates and new major versions, but can't install them.
+
 ## v1.19.9
 
 Four fixes found while testing the Weather module: a widget's page keeps its module's name, Save takes you back, the Save and Remove capsule stays on screen, and red buttons glow red

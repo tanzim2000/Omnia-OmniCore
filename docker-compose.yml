@@ -78,9 +78,11 @@ services:
       # host. Anything OmniCore can do, it can do to every container on
       # this machine, and to the machine itself.
       #
-      # Delete this one line and OmniCore still runs perfectly — it will
-      # tell you when an update exists instead of applying it, and you
-      # update by hand with: docker compose pull && docker compose up -d
+      # Delete this one line and OmniCore still runs perfectly, but its
+      # updates are off: it tells you when an update or a new major version
+      # exists instead of installing it, and you update by hand with:
+      # docker compose pull && docker compose up -d
+      # (and, for a new major version, the image line above changed to it)
       # ---------------------------------------------------------------
       - /var/run/docker.sock:/var/run/docker.sock
 

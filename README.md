@@ -121,7 +121,7 @@ npm install
 node start.OmniCore
 ```
 
-Requires Node 20 or newer. Same pages afterward: port 3000 for the
+Requires Node 24 (Node 20 and 22 still work). Same pages afterward: port 3000 for the
 account and Marketplace, port 3999 for the setup wizard, and port 4000
 to pick which dashboard to show.
 

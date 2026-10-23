@@ -1,6 +1,6 @@
 {
 	"name": "OmniCore Dev",
-	"image": "mcr.microsoft.com/devcontainers/javascript-node:20-bookworm",
+	"image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
 	"features": {
 		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
 	},
@@ -52,6 +52,6 @@
 		2009,
 		2010
 	],
-	"postCreateCommand": "npm install",
+	"postCreateCommand": "npm install -g npm@latest && npm install",
 	"remoteUser": "node"
 }

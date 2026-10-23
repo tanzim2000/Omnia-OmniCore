@@ -7,6 +7,35 @@ removed from here; the CHANGELOG is the record of what shipped.
 If you are picking this back up after a break, this file plus
 `docs/Architecture.md` should be enough to re-orient.
 
+## Now: 1.20.0, then 2.0.0
+
+1.20.0 is the helper release for 2.0.0: everything an install needs to
+upgrade itself to a new major version (the box and its document on the
+Settings home, the backup, the switch to `:2`, `docker-compose.yml` kept
+in step, the data brought up to date). Every 1.x install gets it by
+itself, like any update. Then 2.0.0 is offered to all of them.
+
+1. **Release 1.20.0** from `release-1.20`: merge it into `main`, push, then
+   tag `v1.20.0` (one tag at a time). Its image has to be published before
+   2.0.0 is tagged, so installs are on 1.20.0 when 2.0.0 appears.
+2. **Merge `main` into `v2`.** Not on GitHub's page: `admin-face.js`
+   (the Settings home is all different in v2), `CHANGELOG.md`,
+   `BACKLOG.md` and `package.json` will conflict. Done in a session, with
+   the box moved to v2's About tab.
+3. **In `v2`:** `docs/upgrades/2.0.0.md` (what's changing, why, what
+   happens to settings), any steps 2.0.0 needs in `core/upgrades.js`
+   (check what v2 stores differently), `docker-compose.yml` on `:2`, the
+   version 2.0.0, and `## Unreleased` named `## v2.0.0`.
+4. **Tag `v2.0.0`, then upgrade your own server first**, before telling
+   anyone. Nothing can try the real upgrade earlier: it needs 2.0.0's
+   `:2` image published, and a test release (`v2.0.0-rc.1`) neither
+   publishes `:2` nor is ever offered. The helper's script was run in
+   tests, with GNU tools and with BusyBox (what `docker:cli` has), but
+   never against a real Docker. If the upgrade fails, the old version
+   comes back with its data, so the risk is a failed upgrade, not a
+   broken install. Installs update every six hours, but a major version
+   waits for somebody to press Upgrade, so there's time to fix things.
+
 ## Now: making the Essentials modules work properly
 
 One module at a time, each with a user-friendly description, a "what it

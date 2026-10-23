@@ -23,7 +23,7 @@
 #
 # $BUILDPLATFORM is the machine doing the build, so this stage always runs
 # natively, never emulated.
-FROM --platform=$BUILDPLATFORM node:20-alpine AS dependencies
+FROM --platform=$BUILDPLATFORM node:24-alpine AS dependencies
 
 WORKDIR /app
 
@@ -55,7 +55,7 @@ RUN mkdir -p /folders/modules /folders/themes /folders/data
 
 # ---------------------------------------------------------------------
 # Stage 2: the image itself, for whichever machine it's built for
-FROM node:20-alpine
+FROM node:24-alpine
 
 # Which version this image is. The publish workflow passes the git tag in
 # (e.g. "v1.1.0"); a plain local "docker build" gets "dev" instead, which is

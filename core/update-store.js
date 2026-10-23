@@ -44,7 +44,11 @@ function write(data) {
 // anything was found. "We looked and there was nothing" is exactly as
 // worth recording as "we found something" -- without it, a page can't
 // tell the difference between up to date and never checked.
-function recordCheck({ latestVersion, updateAvailable, error }) {
+//
+// `nextMajor` (since 1.20.0) is the newest release of the next major
+// version, offered on the settings home. A failed check keeps the one
+// found before, so the offer doesn't vanish over a moment without GitHub.
+function recordCheck({ latestVersion, updateAvailable, nextMajor, error }) {
 	const existing = read();
 
 	return write({
@@ -53,7 +57,8 @@ function recordCheck({ latestVersion, updateAvailable, error }) {
 		lastCheckSucceeded: !error,
 		lastCheckError: error || null,
 		latestVersion: latestVersion || null,
-		updateAvailable: Boolean(updateAvailable)
+		updateAvailable: Boolean(updateAvailable),
+		nextMajor: error ? existing.nextMajor || null : nextMajor || null
 	});
 }
 
@@ -82,12 +87,18 @@ function lastResult(runningVersion) {
 		latestVersion && running && semver.gt(latestVersion, running)
 	);
 
+	// Recomputed the same way: once this IS that major version (the
+	// upgrade happened), there's no next major to offer any more
+	const next = semver.valid(semver.coerce(data.nextMajor || ""));
+	const nextMajor = next && running && semver.major(next) === semver.major(running) + 1 ? next : null;
+
 	return {
 		lastCheckedAt: data.lastCheckedAt || null,
 		lastCheckSucceeded: data.lastCheckSucceeded !== false,
 		lastCheckError: data.lastCheckError || null,
 		latestVersion,
-		updateAvailable
+		updateAvailable,
+		nextMajor
 	};
 }
 

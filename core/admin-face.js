@@ -70,6 +70,7 @@ const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const { askAttribute, ASK_FIRST_SCRIPT } = require("./ask-first");
 const coreUpdater = require("./core-updater");
 const updateStore = require("./update-store");
+const upgradeNotes = require("./upgrade-notes");
 const installStore = require("./install-store");
 const resourceScheduler = require("./resource-scheduler");
 const fontService = require("./font-service");
@@ -641,6 +642,58 @@ const styles = `
 
 	/* Explanatory text under a control — quieter than the label it
 	   belongs to, for the "why" rather than the "what" */
+	/* A new major version (since 1.20.0): a box on the settings home
+	   that opens what's changing. The whole box is the button. */
+	.major-box {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+		width: 100%;
+		text-align: left;
+		font: inherit;
+		color: var(--fg);
+	}
+	.major-box-text { display: flex; flex-direction: column; gap: 4px; }
+	.major-box-text strong { font-size: 1.05em; }
+	.major-box-text span { color: var(--fg-muted); font-size: 0.9em; }
+	.major-box-go { font-size: 1.4em; color: var(--fg-muted); flex-shrink: 0; }
+
+	/* Its pop-up: wider and taller than the others, the document
+	   scrolling inside it, Upgrade below it */
+	.modal.major-modal { max-width: 46em; max-height: 88vh; }
+	.major-doc {
+		flex: 1;
+		min-height: 8em;
+		overflow-y: auto;
+		padding-right: 0.75em;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+		line-height: 1.55;
+	}
+	.major-doc > :first-child { margin-top: 0; }
+	.major-doc h3 { font-size: 1em; margin: 1.3em 0 0.4em; }
+	.major-doc h4 { font-size: 0.95em; margin: 1.1em 0 0.3em; color: var(--fg-muted); }
+	.major-doc p, .major-doc li, .major-doc blockquote { font-size: 0.92em; }
+	.major-doc blockquote { margin: 0.8em 0; padding-left: 0.9em; border-left: 3px solid var(--glass-border); color: var(--fg-muted); }
+	.major-doc pre { overflow-x: auto; padding: 0.7em 0.9em; border-radius: 0.5em; background: var(--glass-bg); font-size: 0.85em; }
+	.major-doc a { color: inherit; }
+	.major-doc .major-ours { margin-top: 1.6em; padding-top: 0.4em; border-top: 1px solid var(--glass-border); }
+	.major-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+
+	/* Upgrade, while it can't be pressed: it looks off, and its title
+	   (on hover) says why. Not the disabled attribute, because a disabled
+	   button shows no title in most browsers. */
+	.glass.is-off { opacity: 0.45; cursor: not-allowed; }
+	.glass.is-off:hover, .glass.is-off:focus-visible { box-shadow: none; }
+
+	/* On a phone there's no hover, so the reason is written under it */
+	.major-actions .major-why { display: none; margin: 0; text-align: center; }
+	@media (max-width: 42em) {
+		.major-actions .major-why { display: block; }
+		.modal.major-modal { max-height: 92vh; padding: 1.1em; }
+	}
+
 	/* Release notes scroll inside their own segment rather than making
 	   the page as long as the longest changelog: the version and its
 	   buttons beside them stay in view. As tall as the window allows,
@@ -1860,6 +1913,20 @@ function startAdminFace() {
 			</div>
 
 			<div class="bento">
+				${
+					update.nextMajor
+						? `<div class="bento-row">
+					<button type="button" class="segment clickable major-box" id="major-box"
+						data-version="${escapeHtml(update.nextMajor)}" aria-haspopup="dialog">
+						<span class="major-box-text">
+							<strong>OmniCore ${escapeHtml(update.nextMajor)} is out</strong>
+							<span>A new major version. Read what's changing, then upgrade from here.</span>
+						</span>
+						<span class="major-box-go" aria-hidden="true">&#8594;</span>
+					</button>
+				</div>`
+						: ""
+				}
 				<div class="bento-row two">
 					<div class="segment">
 						<h2>Location Service</h2>
@@ -2074,7 +2141,27 @@ function startAdminFace() {
 					<button class="glass glass-block" id="save-location">Save</button>
 					<p class="status" id="location-status"></p>
 				</div>
-			</div>`;
+			</div>
+			${
+				update.nextMajor
+					? `<div class="modal-backdrop" id="major-modal" hidden>
+				<div class="modal major-modal" role="dialog" aria-modal="true" aria-labelledby="major-title">
+					<div class="modal-head">
+						<h2 id="major-title">OmniCore ${escapeHtml(update.nextMajor)}</h2>
+						<button class="modal-close" data-close="major-modal" aria-label="Close">&times;</button>
+					</div>
+					<div class="major-doc" id="major-doc" tabindex="0">
+						<p class="lede">Loading what's changing…</p>
+					</div>
+					<div class="major-actions">
+						<button type="button" class="glass glass-block is-off" id="major-upgrade"
+							aria-disabled="true" title="Loading what's changing…">Upgrade to ${escapeHtml(update.nextMajor)}</button>
+						<p class="hint major-why" id="major-why" aria-live="polite">Loading what's changing…</p>
+					</div>
+				</div>
+			</div>`
+					: ""
+			}`;
 
 		const script =
 			portLinkScript +
@@ -2420,6 +2507,106 @@ function startAdminFace() {
 					location.reload();
 				});
 			}
+
+			// --- A new major version (since 1.20.0) ------------------
+			// The box opens what's changing. Upgrade can be pressed only
+			// once it has loaded, this OmniCore can install it itself,
+			// and the whole document has been scrolled through. Until
+			// then it looks off and says why: on hover (its title), and
+			// on a phone in a line under it.
+			(function () {
+				var box = document.getElementById("major-box");
+				if (!box) return;
+
+				var version = box.dataset.version;
+				var doc = document.getElementById("major-doc");
+				var upgrade = document.getElementById("major-upgrade");
+				var why = document.getElementById("major-why");
+				var loaded = false;
+				var read = false;
+				var offReason = "";
+				var starting = false;
+
+				function reason() {
+					if (starting) return "Starting…";
+					if (!loaded) return "Loading what's changing…";
+					if (offReason) return offReason;
+					if (!read) return "Scroll to the end to read it all first.";
+					return "";
+				}
+
+				function refresh() {
+					var why_ = reason();
+					upgrade.setAttribute("aria-disabled", why_ ? "true" : "false");
+					upgrade.classList.toggle("is-off", Boolean(why_));
+					upgrade.title = why_;
+					why.textContent = why_;
+				}
+
+				// At the end: within a few pixels of the bottom. A document
+				// short enough to fit counts as read at once.
+				function checkEnd() {
+					if (loaded && doc.scrollHeight - doc.scrollTop - doc.clientHeight <= 4) {
+						read = true;
+						refresh();
+					}
+				}
+				doc.addEventListener("scroll", checkEnd, { passive: true });
+
+				async function load() {
+					loaded = false;
+					read = false;
+					offReason = "";
+					refresh();
+
+					try {
+						var response = await fetch("/updates/major", { headers: { Accept: "application/json" } });
+						var answer = await response.json();
+						if (!response.ok) throw new Error(answer.error || "Couldn't load it.");
+
+						doc.innerHTML = answer.html;
+						offReason = answer.offReason || "";
+					} catch (error) {
+						doc.innerHTML = '<p class="lede"></p>';
+						doc.firstChild.textContent = "What's changing in " + version + " couldn't be loaded: " + error.message;
+						offReason = "It can't be upgraded to before it's been read. Try again in a moment.";
+					}
+
+					loaded = true;
+					doc.scrollTop = 0;
+					refresh();
+					requestAnimationFrame(checkEnd);
+				}
+
+				box.addEventListener("click", function () {
+					openModal("major-modal");
+					load();
+				});
+
+				upgrade.addEventListener("click", async function () {
+					if (upgrade.getAttribute("aria-disabled") === "true") return;
+					starting = true;
+					refresh();
+
+					try {
+						var response = await fetch("/updates/major/apply", {
+							method: "POST",
+							headers: { "Content-Type": "application/json", Accept: "application/json" },
+							body: JSON.stringify({ version: version })
+						});
+						var answer = await response.json().catch(function () { return {}; });
+						if (!response.ok) throw new Error(answer.error || "It couldn't be started.");
+
+						// The Updates page follows it from here, through the
+						// restart
+						location.href = "/updates";
+					} catch (error) {
+						starting = false;
+						offReason = error.message;
+						refresh();
+					}
+				});
+			})();
 		`;
 
 		res.send(page("Settings", body, script, "", "/logout", "Sign Out"));
@@ -3430,7 +3617,9 @@ function startAdminFace() {
 			// /version is open on purpose: the restart signs everyone out.
 			// -------------------------------------------------------------
 			var fromVersion = ${JSON.stringify(running)};
-			var target = ${JSON.stringify(last.latestVersion || "")};
+			// What's being installed: a major upgrade started from Settings
+			// says so in its progress; otherwise the update found here
+			var target = ${JSON.stringify((underWay && coreUpdater.currentProgress().target) || last.latestVersion || "")};
 			var bootId = ${JSON.stringify(BOOT_ID)};
 
 			var progressBox = document.getElementById("progress");
@@ -3537,6 +3726,14 @@ function startAdminFace() {
 						);
 						setButtons(true);
 						return;
+					}
+
+					if (progress.phase === "saving") {
+						show(
+							"working",
+							"Saving a copy of your data...",
+							"Kept in data/backups, and put back on its own if " + (target || "the new version") + " doesn't start properly."
+						);
 					}
 
 					if (progress.phase === "switching") {
@@ -3695,7 +3892,8 @@ function startAdminFace() {
 
 			updateStore.recordCheck({
 				latestVersion: status.latestVersion,
-				updateAvailable: status.updateAvailable
+				updateAvailable: status.updateAvailable,
+				nextMajor: status.nextMajor
 			});
 
 			res.json({ ok: true, ...status });
@@ -3758,6 +3956,110 @@ function startAdminFace() {
 	app.get("/updates/progress", (req, res) => {
 		res.setHeader("Cache-Control", "no-store");
 		res.json(coreUpdater.currentProgress());
+	});
+
+	// --- A new major version (since 1.20.0) ------------------------------
+	//
+	// What the settings home's pop-up shows: the major version's own
+	// document (docs/upgrades/<version>.md at its tag, see
+	// upgrade-notes.js), then a closing part of OmniCore's own saying what
+	// happens to the data and to docker-compose.yml. Read all the way down
+	// before Upgrade can be pressed.
+	//
+	// { version, html, offReason }: offReason is why Upgrade can't be
+	// pressed here at all (no Docker, a development build, nothing to read),
+	// or null.
+	app.get("/updates/major", async (req, res) => {
+		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
+		const next = updateStore.lastResult(running).nextMajor;
+
+		if (!next) {
+			res.status(404).json({ error: "There's no new major version to upgrade to." });
+			return;
+		}
+
+		const [notes, readiness] = await Promise.all([
+			upgradeNotes.fetchUpgradeNotes(next),
+			coreUpdater.applyReadiness()
+		]);
+		const compose = readiness.ready ? await coreUpdater.checkComposeFile(next) : { state: "unknown" };
+
+		const ours = [`<h3>Before ${escapeHtml(next)} starts</h3>`];
+		ours.push(
+			`<p>OmniCore copies your data to <code>data/backups/before-${escapeHtml(next)}</code> first. ` +
+				`If ${escapeHtml(next)} doesn't start properly, the version you have now comes back on its own, ` +
+				`with that copy of your data.</p>`
+		);
+		if (compose.state === "ready") {
+			ours.push(
+				`<p>Once ${escapeHtml(next)} is running, OmniCore changes one line in <code>${escapeHtml(compose.file)}</code>, ` +
+					`<code>${escapeHtml(compose.from)}</code> to <code>${escapeHtml(compose.to)}</code>, so Docker Compose keeps the new version. ` +
+					`A copy of the file is kept beside it. You don't need to change anything.</p>`
+			);
+		} else if (compose.state === "manual") {
+			ours.push(
+				`<p><strong>One thing to do by hand, this time only.</strong> OmniCore can't reach <code>${escapeHtml(compose.file)}</code> ` +
+					`to keep it in step, so after upgrading, change <code>${escapeHtml(compose.from)}</code> to ` +
+					`<code>${escapeHtml(compose.to)}</code> in it. Until then, <code>docker compose up -d</code> would start the old version again, ` +
+					`which won't start on data ${escapeHtml(next)} has brought up to date.</p>`
+			);
+		}
+
+		const offReason = !notes
+			? `What's changing in ${next} couldn't be loaded from GitHub. Try again in a moment.`
+			: omnicoreVersion.isDevBuild()
+			? "This is a development build, which doesn't update itself."
+			: !readiness.ready
+			? "Updates are turned off on this install: OmniCore has no access to Docker, so it can't install a new version itself."
+			: null;
+
+		res.setHeader("Cache-Control", "no-store");
+		res.json({
+			version: next,
+			html: (notes ? notes.html : `<p class="lede">${escapeHtml(offReason)}</p>`) +
+				`<div class="major-ours">${ours.join("")}</div>`,
+			offReason
+		});
+	});
+
+	// Upgrade. Like Update now: starts it and answers straight away, and
+	// the Updates page follows it. Only the major version the settings home
+	// offered, and only where this OmniCore can install it itself.
+	app.post("/updates/major/apply", async (req, res) => {
+		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
+		const next = updateStore.lastResult(running).nextMajor;
+		const asked = String((req.body && req.body.version) || "");
+
+		if (!next || asked !== next) {
+			res.status(409).json({ error: "That isn't the major version on offer. Reload Settings." });
+			return;
+		}
+
+		const readiness = await coreUpdater.applyReadiness();
+		if (!readiness.ready) {
+			res.status(409).json({ error: readiness.reason });
+			return;
+		}
+
+		if (coreUpdater.currentProgress().busy) {
+			res.status(409).json({ busy: true, error: "An update is already being installed." });
+			return;
+		}
+
+		coreUpdater
+			.applyMajorUpgrade(next)
+			.then((result) => {
+				if (result.updated) {
+					console.log(`  Upgrade to ${next} started from Settings. What happened next: ${result.log}`);
+				} else {
+					console.log(`  Upgrade to ${next}: ${result.reason}`);
+				}
+			})
+			.catch((error) => {
+				console.log(`  Upgrade to ${next} failed: ${error.message}`);
+			});
+
+		res.status(202).json({ ok: true });
 	});
 
 	// A catalogue of everything actually installed, across the whole

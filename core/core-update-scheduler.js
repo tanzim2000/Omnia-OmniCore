@@ -42,7 +42,8 @@ async function runOnce() {
 	if (status) {
 		updateStore.recordCheck({
 			latestVersion: status.latestVersion,
-			updateAvailable: status.updateAvailable
+			updateAvailable: status.updateAvailable,
+			nextMajor: status.nextMajor
 		});
 	}
 

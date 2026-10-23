@@ -58,6 +58,22 @@ for (const signal of ["SIGTERM", "SIGINT"]) {
 	});
 }
 
+// The data first: brought up to date with this version before anything
+// reads it (core/upgrades.js). Usually there's nothing to do. If it can't
+// be done (a step failed, or the data belongs to a newer major version),
+// OmniCore doesn't start: carrying on would read data in a shape this
+// version doesn't understand. During an upgrade, that's what makes the old
+// version come back, with its backup.
+try {
+	const brought = require("./core/upgrades").start();
+	if (brought.ran.length) {
+		console.log(`Data brought up to date: ${brought.from} to ${brought.to}`);
+	}
+} catch (error) {
+	console.error(`OmniCore can't start: ${error.message}`);
+	process.exit(1);
+}
+
 // Bring back every dashboard face that was previously created
 const faces = readFaces();
 for (const face of faces) {
