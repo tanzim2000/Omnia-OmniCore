@@ -87,7 +87,7 @@ function renderInputFacePage(label, controls, postTo) {
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>${escapeHtml(label)} — OmniCore</title>
+	<title>${escapeHtml(label)}</title>
 	${ICON_LINK}
 	<style>
 ${uiStyles()}
@@ -231,7 +231,7 @@ function renderInputPickerPage(faceName, entries) {
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>${escapeHtml(faceName)} — OmniCore</title>
+	<title>${escapeHtml(faceName)}</title>
 	${ICON_LINK}
 	<style>
 ${uiStyles()}

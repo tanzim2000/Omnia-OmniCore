@@ -75,8 +75,8 @@ const DEFAULTS = {
 	backButtonCorner: "bottom-right",
 
 	// --- Background and glass (since v2) -----------------------------
-	// What's behind OmniCore's own pages: "plain" is the Default (Artist's
-	// Charcoal, or Beige Cream in light mode), "picture", "animated" and
+	// What's behind OmniCore's own pages: "plain" is the Default (black,
+	// or Beige Cream in light mode), "picture", "animated" and
 	// "video" a file, "colour" one colour (backgroundColor). See
 	// backdrop.js for what each means.
 	backgroundKind: "plain",

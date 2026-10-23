@@ -1331,7 +1331,7 @@ function page(title, body, script, bodyClass, back) {
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>${escapeHtml(title)} — OmniCore</title>
+	<title>${escapeHtml(title)}</title>
 	${ICON_LINK}
 	<style>${uiStyles()}${styles}</style>
 </head>
@@ -1896,10 +1896,10 @@ function backgroundPanel(settings) {
 	//   Picture   a file from this device, looked at here before it's sent
 	//   Colour    one colour, from a colour wheel, a brightness slider, a
 	//             few ready-made colours or a #code
-	//   Default   the pages' own colour: Artist's Charcoal, or Beige Cream
-	//             in light mode
+	//   Default   the pages' own colour: black, or Beige Cream in light
+	//             mode
 	const startTab = file ? "picture" : colour ? "colour" : "default";
-	const SWATCHES = ["#37393e", "#1e2a44", "#24423b", "#3f2a3d", "#5a3d2b", "#eedec5", "#c9d6df", "#f2c4b4"];
+	const SWATCHES = ["#000000", "#1e2a44", "#24423b", "#3f2a3d", "#5a3d2b", "#eedec5", "#c9d6df", "#f2c4b4"];
 
 	const backgroundModal = `
 			<div class="modal-backdrop" id="background-modal" hidden>
@@ -1964,7 +1964,7 @@ function backgroundPanel(settings) {
 
 					<div class="bg-pane" data-bg-pane="default"${startTab === "default" ? "" : " hidden"}>
 						<p class="hint">
-							The pages' own colour: Artist's Charcoal (#37393e) in dark mode,
+							The pages' own colour: black (#000000) in dark mode,
 							Beige Cream (#eedec5) in light mode.${file ? " The picture in use now is deleted from OmniCore." : ""}
 						</p>
 					</div>
@@ -2637,6 +2637,9 @@ function backgroundPanel(settings) {
 					if (!response.ok) throw new Error(answer.error || "Couldn't change it.");
 				}
 				say("Done.");
+				// The old background fades into the new one (backdrop.js)
+				// rather than vanishing as the page reloads
+				if (window.omniKeepBackdrop) window.omniKeepBackdrop();
 				location.reload();
 			} catch (error) {
 				say(error.message, true);

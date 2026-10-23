@@ -4,7 +4,7 @@
 //
 // OmniCore's pages (Settings, the setup wizard, the welcome face, About,
 // an Inport's page, a face with no theme) have the Default background:
-// Artist's Charcoal in dark mode, Beige Cream in light (see ui-theme.js).
+// black in dark mode, Beige Cream in light (see ui-theme.js).
 // A person can put something else behind them instead:
 //
 //   a picture         JPEG, PNG or WebP
@@ -506,6 +506,134 @@ function glassVariables(settings, light) {
 	`;
 }
 
+// THE BACKGROUND FADES IN (since the v2 test run)
+//
+// Two moments it used to just pop:
+//
+//   1. A picture or a video that takes a moment to load: until it has, the
+//      page shows its Default colour, then the picture appears all at once.
+//      Now it fades in once it's ready. One that's already loaded (from the
+//      browser's cache, going from page to page) is simply there, with no
+//      fade every time.
+//   2. Changing the background (a new picture, a colour, Default) or
+//      switching Dark and Light. Both reload the page, and the old
+//      background vanished before the new one was drawn. Now, just before
+//      the reload, the page keeps a copy of what's behind it
+//      (omniKeepBackdrop, in sessionStorage: what's on the screen, with
+//      its brightness and veil as they look right now). The next page puts
+//      that copy on top of its own background, and once its own is ready,
+//      fades the copy away: the old background turns into the new one.
+//
+// With reduced motion there's no fade: the new background is just there.
+const BACKDROP_SCRIPT = `
+<script>
+	(function () {
+		var KEY = "omnicore-backdrop-was";
+		var FADE_MS = 700;
+		var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+		var layer = document.querySelector(".omni-backdrop");
+
+		// Kept just before a reload; called by the Dark and Light switch and
+		// by Change background's Use
+		window.omniKeepBackdrop = function () {
+			try {
+				var kept = { at: Date.now(), bg: getComputedStyle(document.body).backgroundColor, html: "" };
+				var now = document.querySelector(".omni-backdrop");
+				if (now) {
+					var box = getComputedStyle(now);
+					kept.bg = box.backgroundColor;
+					// Its size and place too: the settings home draws it wider
+					// than the screen and slides it along with the tabs
+					kept.width = box.width;
+					kept.transform = box.transform === "none" ? "" : box.transform;
+					var picture = now.querySelector("img");
+					var video = now.querySelector("video");
+					var colour = now.querySelector(".omni-colour");
+					var shown = picture || video || colour;
+					var filter = shown ? getComputedStyle(shown).filter : "none";
+					if (picture) kept.html = '<img src="' + (picture.currentSrc || picture.src) + '" alt="">';
+					else if (video && video.poster) kept.html = '<img src="' + video.poster + '" alt="">';
+					else if (colour) kept.html = '<span class="omni-colour" style="background:' + colour.style.background + '"></span>';
+					kept.filter = filter === "none" ? "" : filter;
+					kept.veil = getComputedStyle(now, "::after").backgroundColor;
+				}
+				sessionStorage.setItem(KEY, JSON.stringify(kept));
+			} catch (error) {}
+		};
+
+		// Is the page's own background ready to be seen?
+		function ready(done) {
+			var picture = layer && layer.querySelector("img");
+			var video = layer && layer.querySelector("video");
+			var called = false;
+			function once() { if (!called) { called = true; done(); } }
+			if (picture && !(picture.complete && picture.naturalWidth)) {
+				picture.addEventListener("load", once);
+				picture.addEventListener("error", once);
+			} else if (video && video.readyState < 2) {
+				video.addEventListener("loadeddata", once);
+				video.addEventListener("error", once);
+			} else {
+				once();
+				return;
+			}
+			// A picture that never comes doesn't keep the old one forever
+			setTimeout(once, 4000);
+		}
+
+		// What was behind the last page, if it just reloaded into this one
+		var was = null;
+		try {
+			was = JSON.parse(sessionStorage.getItem(KEY) || "null");
+			sessionStorage.removeItem(KEY);
+		} catch (error) {}
+		if (was && Date.now() - was.at > 10000) was = null;
+
+		if (was && !still) {
+			var old = document.createElement("div");
+			old.className = "omni-backdrop-was";
+			old.setAttribute("aria-hidden", "true");
+			old.style.background = was.bg;
+			if (was.width) old.style.width = was.width;
+			if (was.transform) old.style.transform = was.transform;
+			old.innerHTML = was.html || "";
+			var shown = old.firstElementChild;
+			if (shown && was.filter) shown.style.filter = was.filter;
+			if (was.veil) {
+				var veil = document.createElement("span");
+				veil.className = "was-veil";
+				veil.style.background = was.veil;
+				old.appendChild(veil);
+			}
+			// On top of this page's own background, under everything else
+			if (layer) layer.insertAdjacentElement("afterend", old);
+			else document.body.insertBefore(old, document.body.firstChild);
+
+			ready(function () {
+				requestAnimationFrame(function () {
+					old.classList.add("going");
+					setTimeout(function () { old.remove(); }, FADE_MS + 100);
+				});
+			});
+			return;
+		}
+
+		// No hand-over: a picture still loading fades in once it's ready.
+		// One already there (from the cache) is left alone: no fade on
+		// every page.
+		if (layer && !still) {
+			var picture = layer.querySelector("img");
+			var video = layer.querySelector("video");
+			if ((picture && !(picture.complete && picture.naturalWidth)) || (video && video.readyState < 2)) {
+				layer.classList.add("omni-waiting");
+				ready(function () {
+					requestAnimationFrame(function () { layer.classList.remove("omni-waiting"); });
+				});
+			}
+		}
+	})();
+</script>`;
+
 // The picture itself: the first thing inside <body> on every page that
 // uses the Default UI. Nothing at all with the plain background.
 //
@@ -519,10 +647,12 @@ function backdropHtml(given) {
 	// A colour: one layer of it, dimmed and veiled like a picture
 	if (hasColour(settings)) {
 		return `
-<div class="omni-backdrop" aria-hidden="true"><span class="omni-colour" style="background:${hexColour(settings.backgroundColor)}"></span></div>`;
+<div class="omni-backdrop" aria-hidden="true"><span class="omni-colour" style="background:${hexColour(settings.backgroundColor)}"></span></div>${BACKDROP_SCRIPT}`;
 	}
 
-	if (!hasPicture(settings)) return "";
+	// The Default: nothing to draw, but the script still runs, for the
+	// fade from whatever was here before a reload
+	if (!hasPicture(settings)) return BACKDROP_SCRIPT;
 
 	const file = `/backdrop/${settings.backgroundFile}`;
 	const still = settings.backgroundStill ? `/backdrop/${settings.backgroundStill}` : "";
@@ -544,7 +674,7 @@ function backdropHtml(given) {
 		if (still.addEventListener) still.addEventListener("change", play);
 		play();
 	})();
-</script>`;
+</script>${BACKDROP_SCRIPT}`;
 	}
 
 	const reduced =
@@ -555,7 +685,7 @@ function backdropHtml(given) {
 	return `
 <div class="omni-backdrop" aria-hidden="true">
 	<picture>${reduced}<img src="${file}" alt="" decoding="async"></picture>
-</div>`;
+</div>${BACKDROP_SCRIPT}`;
 }
 
 // GET /backdrop/<file> on a face's own Express app: the picture and its
@@ -582,6 +712,7 @@ function attachBackdropRoute(app) {
 }
 
 module.exports = {
+	BACKDROP_SCRIPT,
 	MAX_BYTES,
 	MAX_STILL_BYTES,
 	BLUR_MOST,

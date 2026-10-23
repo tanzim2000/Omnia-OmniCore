@@ -154,7 +154,7 @@ test("labels: with nothing typed, the module's suggestion names it everywhere", 
 	// name; the suggestion is in the Label box and the browser tab.
 	assert.ok(page.html.includes("<h1>Suggests</h1>"));
 	assert.ok(!page.html.includes("<h1>Near the lake</h1>"));
-	assert.ok(page.html.includes("<title>Near the lake — OmniCore</title>"));
+	assert.ok(page.html.includes("<title>Near the lake</title>"));
 	assert.match(page.html, /<input type="text" id="label" value=""\s*placeholder="Near the lake">/);
 	assert.ok(page.html.includes("which follows this widget&#39;s settings") || page.html.includes("which follows this widget's settings"));
 
@@ -188,7 +188,7 @@ test("labels: one typed by the user wins, and clearing it follows the settings a
 	await post(base, { label: "Mine", config: {}, themeConfig: {} });
 	const typed = await get(ADMIN, base);
 	assert.ok(typed.html.includes("<h1>Suggests</h1>"), "a typed label doesn't change the heading");
-	assert.ok(typed.html.includes("<title>Mine — OmniCore</title>"));
+	assert.ok(typed.html.includes("<title>Mine</title>"));
 	assert.match(typed.html, /id="label" value="Mine"/);
 
 	const tile = await (await fetch(`http://127.0.0.1:${withTheme.id}/api/${instance.id}`)).json();
@@ -196,7 +196,7 @@ test("labels: one typed by the user wins, and clearing it follows the settings a
 
 	await post(base, { label: "  ", config: { place: "the hills" }, themeConfig: {} });
 	const cleared = await get(ADMIN, base);
-	assert.ok(cleared.html.includes("<title>Near the hills — OmniCore</title>"), "spaces alone are no label");
+	assert.ok(cleared.html.includes("<title>Near the hills</title>"), "spaces alone are no label");
 	assert.ok(cleared.html.includes('placeholder="Near the hills"'));
 	assert.ok(cleared.html.includes("<h1>Suggests</h1>"));
 });

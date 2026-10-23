@@ -182,7 +182,7 @@ function renderPage(info) {
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>About — OmniCore</title>
+	<title>About</title>
 	${ICON_LINK}
 	<style>${uiStyles()}</style>
 	<link rel="stylesheet" href="/about.css">

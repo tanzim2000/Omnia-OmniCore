@@ -26,6 +26,7 @@ const vm = require("vm");
 
 const { resetState, waitForPort, signIn } = helpers;
 const backdrop = require("../core/backdrop");
+const uiTheme = require("../core/ui-theme");
 const paths = require("../core/paths");
 const { readSettings, writeSettings } = require("../core/settings-store");
 
@@ -276,8 +277,9 @@ test("Auto dim off: the veil is what was set by hand, never overruled", () => {
 });
 
 test("the picture's markup: none when plain, a still for reduced motion, a video that starts itself", () => {
-	assert.equal(backdrop.backdropHtml({ backgroundKind: "plain" }), "");
-	assert.equal(backdrop.backdropHtml({ backgroundKind: "picture", backgroundFile: "../../etc/passwd" }), "", "only its own names");
+	// Nothing to draw with the Default, only the fade's script
+	assert.equal(backdrop.backdropHtml({ backgroundKind: "plain" }), backdrop.BACKDROP_SCRIPT);
+	assert.equal(backdrop.backdropHtml({ backgroundKind: "picture", backgroundFile: "../../etc/passwd" }), backdrop.BACKDROP_SCRIPT, "only its own names");
 
 	const picture = backdrop.backdropHtml({ backgroundKind: "picture", backgroundFile: "backdrop-aaaaaaaaaaaa.jpg" });
 	assert.match(picture, /<img src="\/backdrop\/backdrop-aaaaaaaaaaaa\.jpg" alt=""/);
@@ -391,7 +393,7 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	const modal = page.slice(page.indexOf('id="background-modal"'), page.indexOf('id="font-modal"'));
 	for (const tab of ["picture", "colour", "default"]) assert.ok(modal.includes(`data-bg-tab="${tab}"`), tab);
 	assert.ok(modal.includes('<canvas id="wheel-canvas"'), "a colour wheel of our own");
-	assert.ok(modal.includes("Artist's Charcoal (#37393e)") && modal.includes("Beige Cream (#eedec5)"));
+	assert.ok(modal.includes("black (#000000)") && modal.includes("Beige Cream (#eedec5)"));
 	assert.ok(modal.includes('id="bg-use" disabled>Use</button>'), "nothing to use until something's chosen");
 	assert.ok(page.indexOf('id="background-modal"') > page.indexOf('data-pane="about"'), "outside every box");
 
@@ -534,4 +536,34 @@ test("pages: the wizard serves the chosen font too (it never did before v2)", as
 	} finally {
 		fs.rmSync(font, { force: true });
 	}
+});
+
+test("the background fades: in once loaded, and from the old one after a reload that changed it", () => {
+	const script = backdrop.BACKDROP_SCRIPT;
+	assert.doesNotThrow(() => new (require("vm").Script)(script.match(/<script>([\s\S]*)<\/script>/)[1]));
+
+	// Every page with the Default UI has it, whatever is behind it
+	for (const settings of [
+		{ backgroundKind: "plain" },
+		{ backgroundKind: "colour", backgroundColor: "#1e2a44" },
+		{ backgroundKind: "picture", backgroundFile: "a1b2c3d4e5f60718.jpg" }
+	]) {
+		assert.ok(backdrop.backdropHtml(settings).endsWith(script), settings.backgroundKind);
+	}
+
+	// A picture still loading waits, then fades in; one from the cache doesn't
+	assert.ok(script.includes('if ((picture && !(picture.complete && picture.naturalWidth)) || (video && video.readyState < 2)) {\n\t\t\t\tlayer.classList.add("omni-waiting");'));
+
+	// Kept before the reload, put on top after it, faded away once the new one's ready
+	assert.ok(script.includes("window.omniKeepBackdrop = function () {"));
+	assert.ok(script.includes('old.className = "omni-backdrop-was";'));
+	assert.ok(script.includes('old.classList.add("going");'));
+	assert.ok(script.includes("if (was && Date.now() - was.at > 10000) was = null;"), "an old copy is never shown much later");
+	assert.ok(script.includes("if (was && !still) {"), "no fade with reduced motion");
+
+	// Both reloads keep it first
+	assert.ok(uiTheme.UI_MODE_SCRIPT.includes("if (typeof window !== \"undefined\" && window.omniKeepBackdrop) window.omniKeepBackdrop();\n\t\tlocation.reload();"), "Dark and Light");
+	const css = uiTheme.uiStyles({ forceMode: "dark" });
+	assert.match(css, /\.omni-backdrop\.omni-waiting picture,\s*\.omni-backdrop\.omni-waiting video \{ opacity: 0; \}/);
+	assert.match(css, /\.omni-backdrop-was\.going \{ opacity: 0; \}/);
 });

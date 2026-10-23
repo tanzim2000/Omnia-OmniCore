@@ -764,6 +764,18 @@ the author's licence, and the Marketplace shows it under Source on the
 resource's page. An entry without one says "No licence stated"; it still
 installs. New entries in the registry are expected to have it.
 
+`minOmniCore` is the oldest OmniCore the entry works on
+(`checkCompatibility` in `marketplace.js`). It fits when the running
+OmniCore is at least that version, and that version is no older than
+`OLDEST_RESOURCES`: the oldest OmniCore whose modules and themes this one
+still runs. That's 1.0.0, everything, since nothing a resource is given
+has changed. Raise it only when OmniCore breaks what resources rely on
+(the `omni` object, the data blocks, the theme contract), to the first
+version with the new way. Until v2 it was a caret range (the same major
+version only), which tied resources to OmniCore's own version number and
+would have refused every listed module on 2.0.0. A development build, or
+an entry without the field, is never refused.
+
 `ref` is always a **commit**, never a branch. If it pointed at a branch,
 reviewed-safe code could turn malicious in a later push and every
 existing install would silently receive it. Pinning means changing what
@@ -1412,7 +1424,7 @@ Since v2, a picture, an animation, a video or one colour can go behind
 OmniCore's own pages (Settings, Appearance tab): the admin face, the setup
 wizard, the welcome face, About, an Inport's page and a face with no theme.
 A face with a theme keeps its theme's background. With none picked, the
-Default: the pages' own colour, Artist's Charcoal (`#37393e`) in dark mode
+Default: the pages' own colour, black (`#000000`) in dark mode
 and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
 `ui-theme.js`; the page fade uses the same two).
 
@@ -1453,6 +1465,17 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   setting dims the picture itself.
 - **Reduced motion** shows the still frame and never starts the video. A
   hidden tab pauses the video.
+- **It fades in** (`BACKDROP_SCRIPT`, on every page with `backdropHtml()`,
+  the Default included). A picture or video still loading is hidden
+  (`.omni-waiting`, the Default colour shows) and fades in once ready; one
+  the browser already has is simply there. Changing the background or
+  switching Dark and Light reloads the page, so just before the reload
+  `omniKeepBackdrop()` keeps a copy of what's behind the page in
+  `sessionStorage` (the picture or colour, its size and place, its
+  brightness and its veil, as they look then). The next page puts the copy
+  on top of its own background (`.omni-backdrop-was`) and fades it away
+  once its own is ready, at most 4 seconds later. A copy more than 10
+  seconds old is ignored. No fade with reduced motion.
 - **Served** at `/backdrop/<name>` on every port that draws the Default
   UI, before any sign-in (the sign-in page shows it too). Only the current
   picture and its still are served; a new one is a new name, so it can be

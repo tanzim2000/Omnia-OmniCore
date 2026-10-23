@@ -44,7 +44,7 @@
 // The test checks every colour has one, and no explanation is left over
 // for a colour that's been removed.
 const paletteNotes = {
-	bg: "Page background: the Default, Artist's Charcoal (#37393e) in dark mode and Beige Cream (#eedec5) in light.",
+	bg: "Page background: the Default, black (#000000) in dark mode and Beige Cream (#eedec5) in light.",
 	fg: "Main text colour.",
 	fgMuted: "Quieter text: labels, hints, secondary info.",
 	glassBg: "Fill of glass buttons, inputs and the dock.",
@@ -150,14 +150,14 @@ const sections = [
 			{
 				id: "backdrop",
 				title: "Picture or colour behind the page",
-				sel: ".omni-backdrop (.omni-colour)",
+				sel: ".omni-backdrop (.omni-colour, .omni-waiting) · .omni-backdrop-was (.going, .was-veil)",
 				desc: "Since v2, a picture, an animated GIF or WebP, a looping video, or one colour (.omni-colour) can be set behind OmniCore's own pages (Settings, Appearance tab). It's drawn as the first thing inside <code>&lt;body&gt;</code>, fixed to the screen behind everything, with a veil over it (<code>::after</code>, <code>--backdrop-dim</code>) so text stays readable. Nothing is drawn with the plain background. A page doesn't write this itself: <code>backdropHtml()</code> in <code>core/backdrop.js</code> does, and the page's port serves the file at <code>/backdrop/…</code>.",
 				demo: `<div style="position:relative;height:140px;border-radius:var(--radius);overflow:hidden;background:linear-gradient(135deg,#3a6df0,#c46cd8 55%,#f2a65a)">
 <div style="position:absolute;inset:0;background:rgba(0,0,0,0.35)"></div>
 <div class="segment" style="position:absolute;left:1em;right:1em;top:1.5em;backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)">A segment over a picture</div>
 </div>`,
 				code: '<body>\n${backdropHtml()}\n…',
-				note: "With reduced motion turned on in the device's settings, an animation shows its still frame and a video doesn't play. A video pauses while its tab is hidden."
+				note: "With reduced motion turned on in the device's settings, an animation shows its still frame and a video doesn't play. A video pauses while its tab is hidden. It fades in: a picture still loading waits as .omni-waiting and fades in once ready, and after a reload that changed the background (Change background's Use, or Dark and Light), a copy of the old one (.omni-backdrop-was, its veil a .was-veil) sits on top and fades away (.going) once the new one is ready. Call <code>omniKeepBackdrop()</code> just before such a reload. No fade with reduced motion."
 			},
 			{
 				id: "curtain",

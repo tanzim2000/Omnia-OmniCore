@@ -336,7 +336,7 @@ function page(title, body, script) {
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>${escapeHtml(title)} \u2014 OmniCore</title>
+	<title>${escapeHtml(title)}</title>
 	${ICON_LINK}
 	<style>${uiStyles()}${styles}</style>
 </head>

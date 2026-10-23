@@ -240,17 +240,30 @@ function assertSafeId(id) {
 	}
 }
 
+// The oldest OmniCore whose modules and themes this one still runs. A
+// resource made for that version or any later one works here, whatever
+// OmniCore's own version number says. OmniCore 2.0.0 changed its own
+// pages, not what a module or theme is given, so this stays at 1.0.0.
+// Raise it only when OmniCore really breaks what resources rely on (a
+// change to the omni object, the data blocks or the theme contract), to
+// the first version with the new way: then anything made for older ones
+// is refused, rather than installed to crash.
+const OLDEST_RESOURCES = "1.0.0";
+
 // Does this entry's `minOmniCore` allow it to run on the OmniCore that's
-// actually running right now?
+// actually running right now? Two things have to be true:
 //
-// Interpreted as a caret range: same major version, at least that
-// minor/patch. Never an open-ended "any future version" — a resource
-// declaring it needs 1.1.0 is a claim about the 1.x line, not a promise
-// that it'll still work after some future breaking v2. That upper bound
-// is what makes a bare minimum meaningful without ever being asked to
-// name a maximum.
+//   1. This OmniCore is at least that version (the resource may use
+//      something that only arrived then).
+//   2. That version is no older than OLDEST_RESOURCES (this OmniCore
+//      still runs resources made for it).
 //
-// Missing `minOmniCore` is not a failure — it means either a registry
+// Until v2 this was "the same major version": 1.1.0 meant 1.x only. That
+// tied resources to OmniCore's version number rather than to what they
+// rely on, and would have refused every module on OmniCore 2.0.0 though
+// nothing they use had changed.
+//
+// Missing `minOmniCore` is not a failure: it means either a registry
 // entry from before this field existed, or a third-party registry that
 // hasn't adopted it. Nothing to check against, so nothing blocks it; this
 // can only get stricter as entries adopt the field, never reject
@@ -271,10 +284,18 @@ function checkCompatibility(entry) {
 		};
 	}
 
+	// Made for an OmniCore older than this one still runs resources for
+	if (semver.lt(coercedRequired, OLDEST_RESOURCES)) {
+		return {
+			compatible: false,
+			reason: `${entry.id} was made for OmniCore ${required}, and this one runs resources made for ${OLDEST_RESOURCES} or later`
+		};
+	}
+
 	// A dev build (docker-compose.dev.yml, or "npm start" from a bare
 	// clone) has no real release version to compare against. Refusing
 	// every install because of that would make local development
-	// impossible, so a dev build is trusted rather than blocked here —
+	// impossible, so a dev build is trusted rather than blocked here,
 	// same as it already is for the module/theme code itself, which a
 	// dev build can run unreviewed and unpinned by design.
 	const running = omnicoreVersion.comparableVersion();
@@ -282,14 +303,13 @@ function checkCompatibility(entry) {
 		return { compatible: true, reason: null };
 	}
 
-	const ok = semver.satisfies(running, `^${coercedRequired.version}`);
+	const ok = semver.gte(running, coercedRequired);
 
 	return {
 		compatible: ok,
 		reason: ok
 			? null
-			: `${entry.id} needs OmniCore ${required} or later (same major` +
-			  ` version) — this install is running ${running}`
+			: `${entry.id} needs OmniCore ${required} or later. This install is running ${running}`
 	};
 }
 
@@ -861,6 +881,7 @@ async function fetchDetailExtras(kind, entry) {
 }
 
 module.exports = {
+	OLDEST_RESOURCES,
 	DEFAULT_REGISTRY_URL,
 	fetchRegistry,
 	listAvailable,

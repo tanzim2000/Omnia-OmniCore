@@ -1,8 +1,8 @@
 // core/page-motion.js
 // Going from one page to another (since v2): the page fades out to its
 // base colour, the next one fades in from it: the Default background,
-// Artist's Charcoal in dark mode and Beige Cream in light (black and white
-// before the v2 test run), following Appearance Mode, and the device's own
+// black in dark mode and Beige Cream in light (black and white before the
+// v2 test run), following Appearance Mode, and the device's own
 // setting when that's left on Device.
 //
 // On every page OmniCore draws (Settings, the setup wizard, the welcome
@@ -53,7 +53,7 @@
 // the new page is what's worth looking at.
 // The two colours, the same as the Default background (ui-theme.js; kept
 // here too, since ui-theme.js needs this file and not the other way round)
-const DARK = "#37393e";
+const DARK = "#000000";
 const LIGHT = "#eedec5";
 
 const IN_MS = 420;

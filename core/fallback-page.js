@@ -42,7 +42,7 @@ function renderFallbackPage(themes, face) {
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
-	<title>OmniCore</title>
+	<title>Omnia</title>
 	${ICON_LINK}
 	<style>
 ${uiStyles()}

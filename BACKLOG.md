@@ -109,6 +109,15 @@ CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
   `package.json` and `package-lock.json`), turn `## Unreleased` into
   `## v<version>`, push, then tag. More problems are expected once it's
   used; fix them as they come, one small commit at a time.
+- **The version number decides who gets it.** Installs follow the image
+  `:1` (docker-compose.yml), and Update now only goes to a newer release
+  with the same first number (`fetchLatestCompatibleTag` in
+  core-updater.js). So as **2.0.0**, every install now on 1.x stays there
+  until its owner changes `:1` to `:2` in their docker-compose.yml by hand
+  (and the repo's docker-compose.yml needs `:2` for new installs). As
+  **1.20.0**, every install gets it by itself, like any other update.
+  Modules don't decide it: a 1.x module installs on either since
+  `minOmniCore` changed.
 
 ## v2: left to check
 
@@ -172,6 +181,17 @@ contributions come under the CLA.
 - **Write down what OmniView REVIVE and OmniSense are**, once they're
   decided. TRADEMARKS.md names them without saying.
 
+## Essentials: left to do
+
+- **Replace the saved Google weather answers** (`test/weather-samples/google-*.json`)
+  with made-up data in the same shape. Google's Maps Platform terms
+  restrict storing its content, so real answers in a public repo are
+  probably not allowed. The weather tests read them.
+- **Rename the "Windows 8" theme.** The name is Microsoft's trademark,
+  the same thing TRADEMARKS.md stops others doing with Omnia's names. Its
+  id `windows8` is also the folder it installs to, so a new id needs a
+  way to carry existing installs over.
+
 ## v2: ideas left from the design
 
 From the conversation and the mockup (Oct 2026,
@@ -182,8 +202,8 @@ https://claude.ai/artifact/LveFSPbVeF9ScADgdPWFhP). Not needed for v2:
 - A few ready-made pictures to pick from beside Choose a file (the
   mockup's were stand-ins; none ship).
 - Default wallpapers, one for dark and one for light, as the Default
-  background (Oct 2026). Until then Default is a colour: Artist's
-  Charcoal (#37393E) in dark mode, Beige Cream (#EEDEC5) in light.
+  background (Oct 2026). Until then Default is a colour: black
+  (#000000) in dark mode, Beige Cream (#EEDEC5) in light.
 - An API key manager: one place for every key OmniCore holds (place
   search's, and the ones modules ask for). For now a key is asked for
   when its service is picked, and Saved keys only lists place search's.

@@ -90,6 +90,9 @@ const UI_MODE_SCRIPT = `
 			document.cookie = name + "=; Path=/; Max-Age=0; SameSite=Lax";
 		}
 
+		// The background fades from this mode's to the other's
+		// (backdrop.js) rather than vanishing as the page reloads
+		if (typeof window !== "undefined" && window.omniKeepBackdrop) window.omniKeepBackdrop();
 		location.reload();
 	}
 `;
@@ -104,9 +107,10 @@ const SYSTEM_FONT =
 // anywhere, so light mode is a matter of swapping this table and
 // nothing else.
 // The page's own colour with nothing picked (Settings, Background,
-// Default): Artist's Charcoal in dark mode and Beige Cream in light, since
-// the v2 test run. Before, black and a light grey.
-const DEFAULT_DARK = "#37393e";
+// Default): pure black in dark mode and Beige Cream in light, since the v2
+// test run. (For a while in v2 dark mode was Artist's Charcoal, #37393e,
+// which looked more grey than black. Before v2, black and a light grey.)
+const DEFAULT_DARK = "#000000";
 const DEFAULT_LIGHT = "#eedec5";
 
 const PALETTES = {
@@ -429,6 +433,16 @@ function uiStyles(options) {
 		font-family: var(--font);
 		font-size: var(--font-size);
 		margin: 0;
+		/* Text on these pages is for reading, not typing: the ordinary
+		   arrow over it, never the text cursor. Links and buttons still
+		   show the hand (their own rules), and the text cursor is kept for
+		   the places you type. */
+		cursor: default;
+	}
+	input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=button]):not([type=submit]):not([type=file]),
+	textarea,
+	[contenteditable]:not([contenteditable=false]) {
+		cursor: text;
 	}
 	${overPicture}
 
@@ -476,6 +490,44 @@ function uiStyles(options) {
 		position: absolute;
 		inset: 0;
 		background: var(--backdrop-dim);
+	}
+
+	/* The background fading in (BACKDROP_SCRIPT in backdrop.js). A
+	   picture or video still loading is hidden, showing the Default
+	   colour, and fades in once it's ready. */
+	.omni-backdrop picture,
+	.omni-backdrop video { transition: opacity 0.7s ease; }
+	.omni-backdrop.omni-waiting picture,
+	.omni-backdrop.omni-waiting video { opacity: 0; }
+
+	/* Just after a reload that changed the background (a new one, or Dark
+	   and Light): a copy of the old one, on top of the new one, fading
+	   away once the new one is ready */
+	.omni-backdrop-was {
+		position: fixed;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: 100%;
+		z-index: -1;
+		overflow: hidden;
+		pointer-events: none;
+		transition: opacity 0.7s ease;
+	}
+	.omni-backdrop-was.going { opacity: 0; }
+	.omni-backdrop-was img,
+	.omni-backdrop-was .omni-colour {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.omni-backdrop-was .was-veil { position: absolute; inset: 0; }
+
+	@media (prefers-reduced-motion: reduce) {
+		.omni-backdrop picture,
+		.omni-backdrop video,
+		.omni-backdrop-was { transition: none; }
 	}
 
 	/* ---------------------------------------------------------------
