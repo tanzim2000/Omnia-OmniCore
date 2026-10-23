@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## v2.0.0
 
-OmniCore v2: a settings home of four tabs under a notch, with nothing on a page of its own any more; a picture, a GIF or a video behind OmniCore's pages under frosted glass; pages that fade from one to the next; a city search that finds small places, from the service you pick; and Info order lists you drag into place
+OmniCore 2: a settings home of four tabs under a notch, with nothing on a page of its own any more; a picture, a GIF or a video behind OmniCore's pages under frosted glass; pages that fade from one to the next; a city search that finds small places, from the service you pick; and Info order lists you drag into place
 
 ### Added
 
@@ -66,12 +66,42 @@ OmniCore v2: a settings home of four tabs under a notch, with nothing on a page 
 - **Saving the location no longer sends all of OmniCore's settings back to the page.** It sent the whole settings file in its answer. Nothing secret was in it before, but the place search keys now are, so the answer is only the location that was saved.
 - **The setup wizard shows the chosen font.** The wizard's page asked its own port for the font, but that port never served it, so the wizard was always in the system font.
 - **Release notes show code as code.** A name written between backticks in the notes (`CHANGELOG.md`, say) was shown with the backticks around it. It's now drawn like code, as on the docs site.
+- **No empty button under an update's message.** After "Nothing was installed" (or any message without something to press), an empty outlined button showed under it. It's hidden now.
 
 ### Notes
 
-- The version stays at 1.19.9 while v2 is built, and nothing is tagged, so installs that update themselves never see this work.
+- **Getting it:** an install on 1.20 or later is offered 2.0.0 on its Settings page, with what's changing, and upgrades in one press: a copy of the data first, `docker-compose.yml` changed to the new image (`:2`) once 2.0.0 is running, and the old version back on its own, with its data, if 2.0.0 doesn't start properly. An install on anything older first updates itself to 1.20 as usual. Without the Docker socket, change `:1` to `:2` in `docker-compose.yml` and run `docker compose pull && docker compose up -d`.
+- **The next major version is offered on the About tab:** a row at the top of the Updates box ("OmniCore 3 is here!"), the same pop-up as 1.20's box, and a dot on About in the notch.
+- **Nothing stored changed.** 2.0.0 brings no data steps: settings only gained new ones, which start from their defaults.
 - Google isn't one of the place search services. Its terms want results shown on a Google Map and limit how long they're kept, and a picked place stays in the settings for as long as it's set. A Google choice saved while trying a development build counts as unknown: the default Primary is asked, and no Secondary.
 - Updating to it needs nothing done by hand: the settings carry over, and the new ones (place search, the background, the glass) start out looking and working as before.
+
+## v1.20.1
+
+The version at the top of Settings says when a new major version is out, and release notes show code as code
+
+### Changed
+
+- **"OmniCore 2 is here!"** While a new major version is out, the version at the top of Settings says so (with its number), and pressing it opens what's changing, the same as the box under it. An ordinary update waiting at the same time isn't mentioned there: it installs by itself anyway.
+
+### Fixed
+
+- **Release notes show code as code.** A name written between backticks in the notes (`docker-compose.yml`, say) was shown with the backticks around it, on the Updates page. It's now drawn as code.
+
+## v1.20.0
+
+Getting ready for OmniCore 2: a new major version is offered on the Settings home with what's changing, and installed from there in one press, with a backup of your data and nothing to change by hand
+
+### Added
+
+- **A new major version is offered on the Settings home.** When OmniCore 2.0.0 (or any next major version) is released, a box at the top of Settings says so. Pressing it opens what's changing and why, in a window that scrolls. **Upgrade** can only be pressed once you've read it all the way to the end; until then, pointing at it says why (and on a phone, the reason is written under it). Updates within the same major version still install by themselves, as before; a major version never does.
+- **Upgrading does everything itself.** Your data is copied to `data/backups/before-<version>` first. The new version is downloaded and switched in, the same way Update now works, and if it doesn't start properly the version you had comes back on its own, with that copy of your data. Once the new version is running, the image line in your `docker-compose.yml` is changed to it (a copy of the file is kept beside it), so `docker compose up -d` keeps the new version. If OmniCore can't reach that file, the window says so before you upgrade, with the one line to change.
+- **A new version brings your data up to date when it starts.** If a version changes how something is stored, it converts your data the first time it starts, step by step, before anything reads it. OmniCore notes which version last did this (`data/data-version.json`). An older major version refuses to start on data a newer one has converted, rather than damaging it.
+
+### Changed
+
+- **Node 24.** The image, the dev container and the build all run on Node 24, the current long-term support version. Node 20, used until now, stopped getting security fixes in April 2026. The dev container also brings npm up to date, so the "New major version of npm available" notice stops.
+- **Without the Docker socket, updates are off.** The comment beside that line in `docker-compose.yml` says what removing it means: OmniCore tells you about updates and new major versions, but can't install them.
 
 ## v1.19.9
 

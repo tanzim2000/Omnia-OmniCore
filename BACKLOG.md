@@ -8,6 +8,33 @@ under Unreleased until it has a version).
 If you are picking this back up after a break, this file plus
 `docs/Architecture.md` should be enough to re-orient.
 
+## Now: releasing 2.0.0
+
+1.20.0 and 1.20.1 are out: every 1.x install updates itself to them, and
+from then on a new major version is offered in Settings and installed in
+one press. `main` has been merged into `v2`, which is now 2.0.0
+(`docs/upgrades/2.0.0.md` is what installs read before upgrading; no
+data steps; `docker-compose.yml` on `:2`).
+
+1. **Check 1.20.0 can update itself:** your server, on 1.20.0, takes 1.20.1
+   (Update now, or within six hours). If it can't, that's fixed in 1.x
+   before anything else, or no later fix can reach anyone.
+2. **What's left to check on v2** (below) on a real screen, if wanted
+   first: run the image workflow by hand on `v2` for a `:dev` image.
+3. **Merge `v2` into `main`** (`git merge --ff-only v2` on `main`: `v2`
+   already has everything `main` has), push, then **tag `v2.0.0`**.
+4. **Upgrade your own server first**, from the box on its Settings home,
+   before telling anyone. Nothing could try the real upgrade earlier: it
+   needs 2.0.0's `:2` image, and a test release (`v2.0.0-rc.1`) neither
+   publishes `:2` nor is ever offered. The helper's script was run in
+   tests (GNU tools and BusyBox, what `docker:cli` has), never against a
+   real Docker. If the upgrade fails, the old version comes back with its
+   data, so the risk is a failed upgrade, not a broken install; and a
+   major version waits for somebody to press Upgrade, so there's time to
+   fix things.
+5. **After that, a fix for 1.x** goes on a branch from `v1.20.1` and is
+   released as 1.20.2: `main` is 2.x from then on.
+
 ## Now: making the Essentials modules work properly
 
 One module at a time, each with a user-friendly description, a "what it
@@ -92,32 +119,6 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
   image publish at once. Push tags one at a time, or add `concurrency`.
 - **Updates are only noticed for tagged releases.** An untagged version
   bump is invisible to the updater. Always tag.
-
-## v2: releasing it
-
-v2 is built on the branch **`v2`**: the settings home in tabs, the
-background and glass, page fades, place search and Info order (see the
-CHANGELOG's Unreleased entry). `main` still holds v1.19.9.
-
-- Nothing publishes from `v2`: the image workflow runs only on `v*` tags,
-  the docs site only on pushes to `main`. To try it on the server, run the
-  image workflow by hand from the Actions tab and pick `v2`; that `:dev`
-  image is a development build.
-- A fix that has to reach people first goes on `main`, is released and
-  tagged there, then `main` is merged into `v2`.
-- When v2 is judged ready: merge `v2` into `main`, pick the version (in
-  `package.json` and `package-lock.json`), turn `## Unreleased` into
-  `## v<version>`, push, then tag. More problems are expected once it's
-  used; fix them as they come, one small commit at a time.
-- **The version number decides who gets it.** Installs follow the image
-  `:1` (docker-compose.yml), and Update now only goes to a newer release
-  with the same first number (`fetchLatestCompatibleTag` in
-  core-updater.js). So as **2.0.0**, every install now on 1.x stays there
-  until its owner changes `:1` to `:2` in their docker-compose.yml by hand
-  (and the repo's docker-compose.yml needs `:2` for new installs). As
-  **1.20.0**, every install gets it by itself, like any other update.
-  Modules don't decide it: a 1.x module installs on either since
-  `minOmniCore` changed.
 
 ## v2: left to check
 

@@ -23,6 +23,7 @@ const semver = require("semver");
 const Docker = require("dockerode");
 
 const omnicoreVersion = require("./version");
+const paths = require("./paths");
 
 // Same repo the Dockerfile and publish workflow already point at. Not
 // read from settings — unlike the module/theme registry, there's only
@@ -142,41 +143,57 @@ async function fetchReleaseTags() {
 		.filter((name) => semver.valid(semver.coerce(name)));
 }
 
+// The newest release tag of one major version, or null. A test release
+// ("v2.0.0-rc.1") never counts: only what's really released is offered.
+function newestOfMajor(tags, major) {
+	const ofMajor = tags.filter((name) => {
+		const exact = semver.valid(String(name).replace(/^v/, ""));
+		return exact && !semver.prerelease(exact) && semver.major(exact) === major;
+	});
+
+	if (ofMajor.length === 0) {
+		return null;
+	}
+
+	ofMajor.sort((a, b) => semver.rcompare(semver.coerce(a), semver.coerce(b)));
+	return ofMajor[0];
+}
+
 // The newest tag that's still the same major version OmniCore is
 // currently running — never a future major, for exactly the reason
 // docker-compose.yml pins the image to ":<major>" rather than ":latest":
 // a breaking version should never arrive as something that just happens
-// silently.
+// silently. A new major is offered separately (nextMajor below), and only
+// installed when somebody has read about it and pressed Upgrade.
 async function fetchLatestCompatibleTag() {
 	const running = omnicoreVersion.comparableVersion();
 	if (!running) {
 		return null; // dev build — nothing to compare against
 	}
 
-	const tags = await fetchReleaseTags();
-	const sameMajor = tags.filter(
-		(name) => semver.major(semver.coerce(name)) === semver.major(running)
-	);
-
-	if (sameMajor.length === 0) {
-		return null;
-	}
-
-	sameMajor.sort((a, b) => semver.rcompare(semver.coerce(a), semver.coerce(b)));
-	return sameMajor[0];
+	return newestOfMajor(await fetchReleaseTags(), semver.major(running));
 }
 
 // { updateAvailable, currentVersion, latestVersion } — or null on a dev
 // build, where the question doesn't really mean anything.
+//
+// `nextMajor` is the newest release of the NEXT major version (2.0.0 when
+// 1.x is running), or null. It's never installed by itself: the settings
+// home offers it, with what's changing, and it's installed only when
+// somebody has read that and pressed Upgrade (applyMajorUpgrade).
 async function checkForUpdate() {
 	const running = omnicoreVersion.comparableVersion();
 	if (!running) {
 		return null;
 	}
 
-	const latestTag = await fetchLatestCompatibleTag();
+	const tags = await fetchReleaseTags();
+	const latestTag = newestOfMajor(tags, semver.major(running));
+	const nextTag = newestOfMajor(tags, semver.major(running) + 1);
+	const nextMajor = nextTag ? semver.coerce(nextTag).version : null;
+
 	if (!latestTag) {
-		return { updateAvailable: false, currentVersion: running, latestVersion: null };
+		return { updateAvailable: false, currentVersion: running, latestVersion: null, nextMajor };
 	}
 
 	const latest = semver.coerce(latestTag).version;
@@ -184,8 +201,66 @@ async function checkForUpdate() {
 	return {
 		updateAvailable: semver.gt(latest, running),
 		currentVersion: running,
-		latestVersion: latest
+		latestVersion: latest,
+		nextMajor
 	};
+}
+
+// The image name for another major version: the same image with the
+// major as its tag. "ghcr.io/tanzim2000/omnia-omnicore:1" becomes
+// "...:2". A tag that was an exact version, "latest", or none at all, and
+// a pinned digest (@sha256:...), all become ":2" the same way.
+function majorImageRef(imageRef, major) {
+	const ref = String(imageRef || "").split("@")[0];
+	const slash = ref.lastIndexOf("/");
+	const colon = ref.lastIndexOf(":");
+	const name = colon > slash ? ref.slice(0, colon) : ref;
+	return `${name}:${major}`;
+}
+
+// Where this container's docker-compose.yml is on the machine, when
+// Docker Compose made it. Compose leaves that in a label
+// (com.docker.compose.project.config_files, comma-separated when there are
+// override files). An empty list: not made by Compose (a `docker run`
+// line), so there's no file to keep in step. Only absolute paths, and only
+// ones the helper container can be given safely; anything else is left
+// for a person (see composeLine).
+function composeFiles(info) {
+	const labels = (info && info.Config && info.Config.Labels) || {};
+	const listed = String(labels["com.docker.compose.project.config_files"] || "");
+
+	return listed
+		.split(",")
+		.map((file) => file.trim())
+		.filter((file) => /^\/[A-Za-z0-9._\/ -]+$/.test(file) && !file.includes(".."));
+}
+
+// The one line in docker-compose.yml that says which image to run, as it
+// is and as it should become. Used to show a person what to change when
+// OmniCore can't change it itself.
+function composeLine(fromRef, toRef) {
+	return { from: `image: ${fromRef}`, to: `image: ${toRef}` };
+}
+
+// Before a major upgrade: a copy of the data, so the old version can come
+// back with exactly what it had if the new one doesn't come up (the
+// helper puts it back; see helperScript). In the data folder itself,
+// under backups/before-<version>, so it lives in the same volume and needs
+// nothing set up. Earlier backups are left alone; one for the same
+// version is replaced.
+function backupData(version, dataDir) {
+	const from = dataDir || paths.dataDir();
+	const target = path.join(from, "backups", `before-${version}`);
+
+	fs.rmSync(target, { recursive: true, force: true });
+	fs.mkdirSync(target, { recursive: true });
+
+	for (const name of fs.readdirSync(from)) {
+		if (name === "backups") continue;
+		fs.cpSync(path.join(from, name), path.join(target, name), { recursive: true });
+	}
+
+	return target;
 }
 
 // Talks to the Docker Engine API over the socket mounted into the
@@ -434,6 +509,7 @@ function dockerSocketSource(info) {
 // `progress` is what Settings' About tab shows while it waits:
 //
 //   phase   "idle"         nothing happening
+//           "saving"       a major upgrade copying the data first
 //           "downloading"  pulling the new image (the slow part)
 //           "switching"    handed to the helper container; this process
 //                          is about to be stopped and replaced
@@ -495,6 +571,125 @@ async function applyReadiness() {
 //
 // `target` is only for the progress line ("Installing 1.19.1").
 async function applyUpdate(target) {
+	return runUpdate(target, null);
+}
+
+// Install the next major version (2.0.0 on 1.x), once somebody has read
+// what's changing and pressed Upgrade. Never called by the scheduler.
+//
+//   1. The data is copied to data/backups/before-<version>.
+//   2. The new major's image (":2") is downloaded and swapped in, as any
+//      update is, with the same health check and rollback. A rollback
+//      also puts that copy of the data back.
+//   3. Once it's healthy, docker-compose.yml is changed to the new image,
+//      so Compose keeps it (see composeEditScript).
+//   4. The new version brings the data up to date itself when it starts
+//      (core/upgrades.js).
+//
+// Refuses anything but the next major after the one running.
+async function applyMajorUpgrade(version) {
+	const running = omnicoreVersion.comparableVersion();
+	const wanted = semver.valid(String(version || "").replace(/^v/, ""));
+
+	if (!running || !wanted || semver.major(wanted) !== semver.major(running) + 1) {
+		return {
+			updated: false,
+			reason: `${version} isn't the next major version after ${running || "this development build"}.`
+		};
+	}
+
+	return runUpdate(wanted, async () => {
+		const self = await getSelfContainer(connectToDocker());
+		const fromRef = self.info.Config.Image;
+		const targetRef = majorImageRef(fromRef, semver.major(wanted));
+		const hostFiles = composeFiles(self.info);
+
+		setProgress("saving");
+		const backup = backupData(wanted);
+		setProgress("downloading");
+
+		return {
+			targetRef,
+			backup,
+			compose: hostFiles.length
+				? { files: composeMounts(hostFiles), fromRef, toRef: targetRef, version: wanted }
+				: null
+		};
+	});
+}
+
+// Before offering a major upgrade: can its docker-compose.yml be kept in
+// step? One of:
+//
+//   { state: "none" }     not made by Docker Compose: nothing to change
+//   { state: "ready" }    the image line was found and will be changed
+//   { state: "manual", file, from, to }   it can't be reached or doesn't
+//                         say the image plainly: a person changes `from`
+//                         to `to` after upgrading
+//   { state: "unknown" }  couldn't tell (no Docker, say)
+//
+// A short-lived helper container looks at the file, the same way the
+// upgrade itself would reach it.
+async function checkComposeFile(version) {
+	try {
+		const docker = connectToDocker();
+		const self = await getSelfContainer(docker);
+		const labels = (self.info.Config && self.info.Config.Labels) || {};
+		const fromRef = self.info.Config.Image;
+		const toRef = majorImageRef(fromRef, semver.major(semver.coerce(version)));
+		const line = composeLine(fromRef, toRef);
+		const listed = String(labels["com.docker.compose.project.config_files"] || "").trim();
+
+		if (!listed) {
+			return { state: "none" };
+		}
+
+		const hostFiles = composeFiles(self.info);
+		if (!hostFiles.length) {
+			return { state: "manual", file: listed, ...line };
+		}
+
+		await readyHelperImage(docker, HELPER_IMAGE);
+
+		const mounts = composeMounts(hostFiles);
+		const pattern = composePattern(fromRef);
+		const script = mounts
+			.map((file) => `if [ -f "${file.inside}" ] && grep -Eq '${pattern}' "${file.inside}"; then echo "ready"; else echo "manual"; fi`)
+			.join("\n");
+
+		const checker = await docker.createContainer({
+			name: `${self.info.Name.replace(/^\//, "")}-compose-check-${Date.now()}`,
+			Image: HELPER_IMAGE,
+			Entrypoint: ["sh", "-c"],
+			Cmd: [script],
+			Tty: true,
+			HostConfig: { Binds: helperMounts(self.info, { compose: { files: mounts } }).Binds }
+		});
+
+		let said = "";
+		try {
+			await checker.start();
+			await Promise.race([
+				checker.wait(),
+				new Promise((resolve, reject) => setTimeout(() => reject(new Error("took too long")), 60000).unref())
+			]);
+			said = String(await checker.logs({ stdout: true, stderr: true }));
+		} finally {
+			checker.remove({ force: true }).catch(() => {});
+		}
+
+		return /ready/.test(said)
+			? { state: "ready", file: hostFiles[0], ...line }
+			: { state: "manual", file: hostFiles[0], ...line };
+	} catch (error) {
+		return { state: "unknown", error: error.message };
+	}
+}
+
+// The part both share: one update at a time, the progress the page shows,
+// and the lock held while the old version is about to be stopped.
+// `prepare`, when given, works out the swap's options (a major upgrade's).
+async function runUpdate(target, prepare) {
 	if (busy) {
 		return {
 			updated: false,
@@ -509,7 +704,7 @@ async function applyUpdate(target) {
 	let result;
 
 	try {
-		result = await swapContainer();
+		result = await swapContainer(prepare ? await prepare() : undefined);
 	} catch (error) {
 		busy = false;
 		setProgress("failed", { error: error.message });
@@ -551,11 +746,233 @@ async function applyUpdate(target) {
 	return result;
 }
 
+// What the helper container is given. Within a major: the same Docker
+// OmniCore itself talks to, and nothing else. For a major upgrade, also
+// everything OmniCore has (its volumes, so the data and its backup, the
+// Docker socket among them, at the same paths), and the folder of each
+// docker-compose.yml it's to change.
+function helperMounts(info, given) {
+	if (!given.backup && !given.compose) {
+		return { Binds: [`${dockerSocketSource(info)}:/var/run/docker.sock`] };
+	}
+
+	const files = (given.compose && given.compose.files) || [];
+	return {
+		VolumesFrom: [info.Id],
+		Binds: files.map((file, index) => `${path.posix.dirname(file.host)}:/omnicore-compose/${index}`)
+	};
+}
+
+// Each docker-compose.yml on the machine, and where the helper sees it
+function composeMounts(hostFiles) {
+	return hostFiles.map((host, index) => ({
+		host,
+		inside: `/omnicore-compose/${index}/${path.posix.basename(host)}`
+	}));
+}
+
+// What the helper container runs (see swapContainer, where why it exists
+// is explained). Built here, from plain values, so the tests can run it
+// with a stand-in for docker:
+//
+//   originalName, previousName, incomingName, failedName  container names
+//   networkLines   shell lines joining the other networks (networkJoinLines)
+//   dataDir        a major upgrade only: the data folder, as the helper
+//                  sees it (it shares OmniCore's volumes)
+//   backup         a major upgrade only: the copy made before the switch,
+//                  put back if the new version doesn't come up
+//   composeEdit    a major upgrade only: the shell function edit_compose
+//                  (composeEditScript), run once the new version is healthy
+function helperScript(p) {
+	return `
+ORIGINAL=${p.originalName}
+PREVIOUS=${p.previousName}
+INCOMING=${p.incomingName}
+FAILED=${p.failedName}
+# A major upgrade only: where the data is, and the copy made before it
+DATA="${p.dataDir || ""}"
+BACKUP="${p.backup || ""}"
+
+# This container's health as Docker sees it: healthy, unhealthy,
+# starting, "none" for an image without a HEALTHCHECK, "missing" when
+# the container isn't there at all
+health() {
+	docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$1" 2>/dev/null || echo missing
+}
+
+# A major upgrade only: everything in the data folder but the backups
+# replaced with the copy made before the switch. Nothing without one.
+restore_data() {
+	if [ -z "$BACKUP" ] || [ ! -d "$BACKUP" ] || [ -z "$DATA" ]; then
+		return 0
+	fi
+
+	echo "Putting back the data from $BACKUP"
+	for item in "$DATA"/* "$DATA"/.[!.]*; do
+		[ -e "$item" ] || continue
+		[ "$item" = "$DATA/backups" ] && continue
+		rm -rf "$item"
+	done
+	cp -a "$BACKUP"/. "$DATA"/
+}
+
+${p.composeEdit || ""}
+
+# Undo the swap as far as it got, start the old version, and keep the
+# new one's last words in this log
+put_back() {
+	echo "$1 -- putting the old version back"
+
+	if [ "$step" -ge 3 ]; then
+		docker stop "$ORIGINAL" >/dev/null 2>&1
+		docker rename "$ORIGINAL" "$FAILED" || docker rm -f "$ORIGINAL"
+	fi
+
+	if [ "$step" -ge 2 ]; then
+		docker rename "$PREVIOUS" "$ORIGINAL"
+	fi
+
+	# The new version may have started, and brought the data up to its
+	# own version: the old one gets back the copy made before the switch
+	if [ "$step" -ge 3 ]; then
+		restore_data
+	fi
+
+	docker start "$ORIGINAL" || docker start "$PREVIOUS"
+
+	echo "Put back. The new version's last log lines:"
+	docker logs --tail 200 "$FAILED" 2>&1 || docker logs --tail 200 "$INCOMING" 2>&1
+	docker rm -f "$FAILED" "$INCOMING" >/dev/null 2>&1
+	exit 1
+}
+
+step=0
+docker stop "$ORIGINAL" || put_back "Couldn't stop the old version"
+step=1
+docker rename "$ORIGINAL" "$PREVIOUS" || put_back "Couldn't rename the old version"
+step=2
+docker rename "$INCOMING" "$ORIGINAL" || put_back "Couldn't rename the new version"
+step=3
+${p.networkLines || ""}
+docker start "$ORIGINAL" || put_back "The new version wouldn't start"
+
+# Wait for the new version to prove itself. Polling Docker's own health
+# status rather than curling the app directly: the HEALTHCHECK is baked
+# into the image, so this stays correct even if the endpoint moves.
+waited=0
+while [ $waited -lt ${ROLLBACK_WINDOW_SECONDS} ]; do
+	state=$(health "$ORIGINAL")
+
+	if [ "$state" = "healthy" ]; then
+		break
+	fi
+
+	# Docker's own verdict that it failed: the image's healthcheck
+	# allows a start-up period first, so "unhealthy" only ever means it
+	# came up and then kept failing. No point waiting out the rest of
+	# the window with every screen blank.
+	if [ "$state" = "unhealthy" ] || [ "$state" = "missing" ]; then
+		put_back "The new version is $state"
+	fi
+
+	# An image with no HEALTHCHECK at all has nothing to wait for.
+	# Running counts as success: an older OmniCore predating the
+	# healthcheck is not a broken one.
+	if [ "$state" = "none" ]; then
+		if docker inspect --format '{{.State.Running}}' "$ORIGINAL" | grep -q true; then
+			echo "No healthcheck to read; the new version is running, keeping it"
+			break
+		fi
+
+		put_back "The new version stopped"
+	fi
+
+	sleep ${ROLLBACK_POLL_SECONDS}
+	waited=$((waited + ${ROLLBACK_POLL_SECONDS}))
+done
+
+# One last look: it may have turned healthy during the last sleep
+state=$(health "$ORIGINAL")
+
+if [ "$state" != "healthy" ] && [ "$state" != "none" ]; then
+	put_back "The new version wasn't healthy after ${ROLLBACK_WINDOW_SECONDS}s (last: $state)"
+fi
+
+echo "The new version is in place after $\{waited\}s"
+docker rm -f "$PREVIOUS" >/dev/null 2>&1
+${p.composeEdit ? "edit_compose" : ""}
+exit 0
+`;
+}
+
+// The line in docker-compose.yml naming the image, as a pattern grep and
+// sed understand: "image:", the image, and nothing else but spaces, quotes
+// and a comment. Its two halves around the image are kept when it's
+// changed (\1 and \2).
+function composePattern(imageRef) {
+	const from = String(imageRef).replace(/\./g, "\\.");
+	return `^([[:space:]]*image:[[:space:]]*"?)${from}("?[[:space:]]*(#.*)?)$`;
+}
+
+// The shell function the helper runs once a new major version is healthy:
+// the image line in each docker-compose.yml changed from the old major to
+// the new one (":1" to ":2"), so the next `docker compose up -d` or `pull`
+// keeps the new version instead of quietly going back. A copy of the file
+// is kept beside it first (docker-compose.yml.before-2.0.0). Only a line
+// that says exactly the old image is changed; any other file is left as
+// it was, and the log says so.
+//
+// The file is rewritten in place (cat into it) rather than replaced, so it
+// keeps its owner: the helper runs as root, and a file it replaced would
+// become root's.
+//
+//   compose.files    [{ host, inside }]: each file on the machine, and
+//                    where the helper sees it
+//   compose.fromRef  the image now, compose.toRef the new one
+//   compose.version  for the copy's name
+function composeEditScript(compose) {
+	const plain = /^[A-Za-z0-9._\/:@-]+$/;
+	if (!compose || !compose.files || !compose.files.length) return "";
+	if (!plain.test(compose.fromRef) || !plain.test(compose.toRef) || !/^[0-9.]+$/.test(compose.version)) return "";
+
+	const pattern = composePattern(compose.fromRef);
+	const files = compose.files.map((file) => `"${file.inside}"`).join(" ");
+
+	return `edit_compose() {
+	for f in ${files}; do
+		if [ ! -f "$f" ]; then
+			echo "Couldn't find $f: docker-compose.yml left as it was"
+			continue
+		fi
+		if grep -Eq '${pattern}' "$f"; then
+			cp -p "$f" "$f.before-${compose.version}" &&
+				sed -E 's|${pattern}|\\1${compose.toRef}\\2|' "$f" > /tmp/compose.new &&
+				cat /tmp/compose.new > "$f" &&
+				echo "docker-compose.yml now says ${compose.toRef} ($f)" ||
+				echo "Couldn't change $f"
+		else
+			echo "No line in $f says ${compose.fromRef}: left as it was"
+		fi
+	done
+}`;
+}
+
 // The actual swap. Returns what happened; throws only for something
 // genuinely unrecoverable (no socket, a Docker API error) — an
 // already-up-to-date install is a normal, successful outcome, not an
 // error.
-async function swapContainer() {
+//
+// Without options it updates within the same major version: the image the
+// container already runs (":1") is pulled again. A major upgrade
+// (applyMajorUpgrade) passes:
+//
+//   targetRef  the other image (":2")
+//   backup     the copy of the data made before the switch, put back by
+//              the helper if the new version doesn't come up
+//   compose    the docker-compose.yml files to change once it's healthy
+//              ({ files, fromRef, toRef, version }, see composeEditScript)
+async function swapContainer(options) {
+	const given = options || {};
 	const docker = connectToDocker();
 
 	let self;
@@ -569,7 +986,8 @@ async function swapContainer() {
 	}
 
 	const originalName = self.info.Name.replace(/^\//, "");
-	const imageRef = self.info.Config.Image; // e.g. "ghcr.io/tanzim2000/omnia-omnicore:1"
+	const runningRef = self.info.Config.Image; // e.g. "ghcr.io/tanzim2000/omnia-omnicore:1"
+	const imageRef = given.targetRef || runningRef; // what to run next
 	const runningImageId = self.info.Image; // resolved image ID, not the tag string
 
 	await pullImage(docker, imageRef);
@@ -680,97 +1098,16 @@ async function swapContainer() {
 	// is a deliberate compatibility promise, this is disposable
 	// infrastructure glue that runs a few commands and exits; there is
 	// nothing here for a version to be incompatible with.
-	const helperScript = `
-ORIGINAL=${originalName}
-PREVIOUS=${previousName}
-INCOMING=${incomingName}
-FAILED=${failedName}
-
-# This container's health as Docker sees it: healthy, unhealthy,
-# starting, "none" for an image without a HEALTHCHECK, "missing" when
-# the container isn't there at all
-health() {
-	docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$1" 2>/dev/null || echo missing
-}
-
-# Undo the swap as far as it got, start the old version, and keep the
-# new one's last words in this log
-put_back() {
-	echo "$1 -- putting the old version back"
-
-	if [ "$step" -ge 3 ]; then
-		docker stop "$ORIGINAL" >/dev/null 2>&1
-		docker rename "$ORIGINAL" "$FAILED" || docker rm -f "$ORIGINAL"
-	fi
-
-	if [ "$step" -ge 2 ]; then
-		docker rename "$PREVIOUS" "$ORIGINAL"
-	fi
-
-	docker start "$ORIGINAL" || docker start "$PREVIOUS"
-
-	echo "Put back. The new version's last log lines:"
-	docker logs --tail 200 "$FAILED" 2>&1 || docker logs --tail 200 "$INCOMING" 2>&1
-	docker rm -f "$FAILED" "$INCOMING" >/dev/null 2>&1
-	exit 1
-}
-
-step=0
-docker stop "$ORIGINAL" || put_back "Couldn't stop the old version"
-step=1
-docker rename "$ORIGINAL" "$PREVIOUS" || put_back "Couldn't rename the old version"
-step=2
-docker rename "$INCOMING" "$ORIGINAL" || put_back "Couldn't rename the new version"
-step=3
-${networkJoinLines(networks.afterwards)}
-docker start "$ORIGINAL" || put_back "The new version wouldn't start"
-
-# Wait for the new version to prove itself. Polling Docker's own health
-# status rather than curling the app directly: the HEALTHCHECK is baked
-# into the image, so this stays correct even if the endpoint moves.
-waited=0
-while [ $waited -lt ${ROLLBACK_WINDOW_SECONDS} ]; do
-	state=$(health "$ORIGINAL")
-
-	if [ "$state" = "healthy" ]; then
-		break
-	fi
-
-	# Docker's own verdict that it failed: the image's healthcheck
-	# allows a start-up period first, so "unhealthy" only ever means it
-	# came up and then kept failing. No point waiting out the rest of
-	# the window with every screen blank.
-	if [ "$state" = "unhealthy" ] || [ "$state" = "missing" ]; then
-		put_back "The new version is $state"
-	fi
-
-	# An image with no HEALTHCHECK at all has nothing to wait for.
-	# Running counts as success: an older OmniCore predating the
-	# healthcheck is not a broken one.
-	if [ "$state" = "none" ]; then
-		if docker inspect --format '{{.State.Running}}' "$ORIGINAL" | grep -q true; then
-			echo "No healthcheck to read; the new version is running, keeping it"
-			break
-		fi
-
-		put_back "The new version stopped"
-	fi
-
-	sleep ${ROLLBACK_POLL_SECONDS}
-	waited=$((waited + ${ROLLBACK_POLL_SECONDS}))
-done
-
-# One last look: it may have turned healthy during the last sleep
-state=$(health "$ORIGINAL")
-
-if [ "$state" != "healthy" ] && [ "$state" != "none" ]; then
-	put_back "The new version wasn't healthy after ${ROLLBACK_WINDOW_SECONDS}s (last: $state)"
-fi
-
-echo "The new version is in place after $\{waited\}s"
-docker rm -f "$PREVIOUS" >/dev/null 2>&1
-exit 0
-`;
+	const helperText = helperScript({
+		originalName,
+		previousName,
+		incomingName,
+		failedName,
+		networkLines: networkJoinLines(networks.afterwards),
+		dataDir: given.backup ? paths.dataDir() : "",
+		backup: given.backup || "",
+		composeEdit: given.compose ? composeEditScript(given.compose) : ""
+	});
 
 	const helperName = `${originalName}-updater-${Date.now()}`;
 
@@ -779,10 +1116,9 @@ exit 0
 			name: helperName,
 			Image: HELPER_IMAGE,
 			Entrypoint: ["sh", "-c"],
-			Cmd: [helperScript],
+			Cmd: [helperText],
 			HostConfig: {
-				// The same Docker OmniCore itself talks to
-				Binds: [`${dockerSocketSource(self.info)}:/var/run/docker.sock`],
+				...helperMounts(self.info, given),
 				// Kept rather than auto-removed: if an update went wrong,
 				// this container's logs are the only record of what
 				// happened, and they'd vanish exactly when they're most
@@ -922,7 +1258,19 @@ module.exports = {
 	localChangelogEntry,
 	runningSince,
 	fetchLatestCompatibleTag,
+	fetchText,
 	applyUpdate,
+	applyMajorUpgrade,
+	checkComposeFile,
+	majorImageRef,
+	composeFiles,
+	composeMounts,
+	composePattern,
+	composeEditScript,
+	helperScript,
+	helperMounts,
+	backupData,
+	newestOfMajor,
 	applyReadiness,
 	currentProgress,
 	selfHealth,

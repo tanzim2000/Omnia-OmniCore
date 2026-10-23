@@ -276,7 +276,7 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 		["general", ["Location Service", "Place search", "Saved keys", "Try a city search"]],
 		["appearance", ["Frosted glass", "Background", "Appearance Mode", "Text Size"]],
 		["resources", ["Manage Faces", "Marketplace", "Installed Resources"]],
-		["about", ["OmniCore 1.19.", "Address", "Updates", "Release notes"]]
+		["about", ["OmniCore 2.0.", "Address", "Updates", "Release notes"]]
 	]) {
 		for (const box of boxes) assert.ok(pane(id).includes(box), `${box} on ${id}`);
 	}

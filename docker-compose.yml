@@ -6,15 +6,16 @@
 
 services:
   omnicore:
-    # ":1" means "the newest OmniCore that is still version 1.x".
+    # ":2" means "the newest OmniCore that is still version 2.x".
     #
-    # Bug fixes and new features arrive on their own. A version 2 — which by
-    # definition may break things — never arrives silently; upgrading to it
-    # is a deliberate edit of this line. That is the whole point of the
-    # split: automatic where it is safe, manual where it isn't.
+    # Bug fixes and new features arrive on their own. A new major version
+    # (3), which may change more, never arrives silently: Settings offers
+    # it, with what's changing, and it's installed only when you press
+    # Upgrade. OmniCore then changes this line itself (keeping a copy of
+    # this file), so you never have to.
     #
-    # Prefer to never move at all? Pin an exact version, e.g. ":1.0.0".
-    image: ghcr.io/tanzim2000/omnia-omnicore:1
+    # Prefer to never move at all? Pin an exact version, e.g. ":2.0.0".
+    image: ghcr.io/tanzim2000/omnia-omnicore:2
 
     container_name: omnicore
     restart: unless-stopped
@@ -85,9 +86,11 @@ services:
       # host. Anything OmniCore can do, it can do to every container on
       # this machine, and to the machine itself.
       #
-      # Delete this one line and OmniCore still runs perfectly — it will
-      # tell you when an update exists instead of applying it, and you
-      # update by hand with: docker compose pull && docker compose up -d
+      # Delete this one line and OmniCore still runs perfectly, but its
+      # updates are off: it tells you when an update or a new major version
+      # exists instead of installing it, and you update by hand with:
+      # docker compose pull && docker compose up -d
+      # (and, for a new major version, the image line above changed to it)
       # ---------------------------------------------------------------
       - /var/run/docker.sock:/var/run/docker.sock
 
