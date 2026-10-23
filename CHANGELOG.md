@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.20.1
+
+The version at the top of Settings says when a new major version is out, and release notes show code as code
+
+### Changed
+
+- **"OmniCore 2 is here!"** While a new major version is out, the version at the top of Settings says so (with its number), and pressing it opens what's changing, the same as the box under it. An ordinary update waiting at the same time isn't mentioned there: it installs by itself anyway.
+
+### Fixed
+
+- **Release notes show code as code.** A name written between backticks in the notes (`docker-compose.yml`, say) was shown with the backticks around it, on the Updates page. It's now drawn as code.
+
 ## v1.20.0
 
 Getting ready for OmniCore 2: a new major version is offered on the Settings home with what's changing, and installed from there in one press, with a backup of your data and nothing to change by hand

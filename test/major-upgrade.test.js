@@ -396,6 +396,28 @@ test("settings home: the box is there only while a new major version is", async 
 	assert.ok(!/id="major-upgrade"[^>]*\sdisabled[\s>]/.test(html), "not the disabled attribute, which would hide its title");
 });
 
+test("the version at the top: \"OmniCore 2 is here!\" while a new major is out, opening its pop-up", async () => {
+	process.env.OMNICORE_VERSION = "v1.20.1";
+	updateStore.recordCheck({ latestVersion: "1.20.2", updateAvailable: true, nextMajor: "2.0.0" });
+	let html = await (await get("/")).text();
+	assert.match(html, /<button class="version-pill" id="version-pill"\s+title="Read what's changing in OmniCore 2\.0\.0">\s*<span class="version-dot"><\/span>\s*OmniCore 2 is here!\s*<\/button>/);
+	assert.ok(!html.includes("update ready"), "the major version wins over an ordinary update");
+	assert.ok(html.includes("if (window.openMajor) window.openMajor();"), "it opens the same pop-up as the box");
+
+	updateStore.recordCheck({ latestVersion: "1.20.2", updateAvailable: true, nextMajor: null });
+	html = await (await get("/")).text();
+	assert.ok(html.includes(" · update ready"), "without one, as before");
+	assert.ok(!html.includes("is here!"));
+});
+
+test("release notes: a name between backticks is drawn as code", async () => {
+	process.env.OMNICORE_VERSION = "dev";
+	const html = await (await get("/updates")).text();
+	assert.ok(!/`[^`<]+`/.test(html.slice(html.indexOf('class="changelog"'), html.indexOf("</div>", html.indexOf('class="changelog"')))), "no backticks left in the notes");
+	assert.ok(html.includes("<code>docker-compose.yml</code>"), "drawn as code (this version's own notes)");
+	assert.match(html, /\.changelog code \{/);
+});
+
 test("the pop-up's contents: the document, then what happens to the data and docker-compose.yml", async () => {
 	process.env.OMNICORE_VERSION = "v1.20.0";
 	updateStore.recordCheck({ latestVersion: "1.20.0", updateAvailable: false, nextMajor: "2.0.0" });

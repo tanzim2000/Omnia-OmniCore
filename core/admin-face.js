@@ -71,6 +71,7 @@ const { askAttribute, ASK_FIRST_SCRIPT } = require("./ask-first");
 const coreUpdater = require("./core-updater");
 const updateStore = require("./update-store");
 const upgradeNotes = require("./upgrade-notes");
+const semver = require("semver");
 const installStore = require("./install-store");
 const resourceScheduler = require("./resource-scheduler");
 const fontService = require("./font-service");
@@ -712,6 +713,16 @@ const styles = `
 
 	.changelog > :first-child { margin-top: 0; }
 
+	/* A name written between backticks in the notes */
+	.changelog code {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		font-size: 0.9em;
+		padding: 0.1em 0.35em;
+		border-radius: 0.3em;
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+	}
+
 	.changelog h3 { font-size: 14px; margin: 16px 0 6px 0; opacity: 0.75; }
 	.changelog ul { margin: 0; padding-left: 1.25em; }
 	.changelog li { font-size: 14px; line-height: 1.65; margin-bottom: 8px; }
@@ -1091,7 +1102,11 @@ function renderNotes(markdown) {
 	};
 
 	for (const line of lines) {
-		const bolded = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+		// **bold** and `code`. The text is already escaped above, so what's
+		// inside the backticks can't become HTML.
+		const bolded = line
+			.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+			.replace(/`([^`]+)`/g, "<code>$1</code>");
 
 		if (/^### /.test(line)) {
 			closeList();
@@ -1903,13 +1918,24 @@ function startAdminFace() {
 		const body = `
 			<div class="settings-head">
 				<h1>Settings</h1>
-				<button class="version-pill" id="version-pill"
+				${
+					// A new major version says so here too, ahead of an
+					// ordinary update (which installs by itself anyway), and
+					// opens the same pop-up as the box below
+					update.nextMajor
+						? `<button class="version-pill" id="version-pill"
+					title="Read what's changing in OmniCore ${escapeHtml(update.nextMajor)}">
+					<span class="version-dot"></span>
+					OmniCore ${escapeHtml(String(semver.major(update.nextMajor)))} is here!
+				</button>`
+						: `<button class="version-pill" id="version-pill"
 					title="Updates">
 					${update.updateAvailable ? '<span class="version-dot"></span>' : ""}
 					OmniCore ${versionHtml()}${
 						update.updateAvailable ? " · update ready" : ""
 					}
-				</button>
+				</button>`
+				}
 			</div>
 
 			<div class="bento">
@@ -2200,8 +2226,11 @@ function startAdminFace() {
 			});
 
 			// --- Navigation -----------------------------------------
+			// The pill: the Updates page, or, while a new major version is
+			// out, the pop-up about it (openMajor, set up further down)
 			document.getElementById("version-pill").addEventListener("click", function () {
-				location.href = "/updates";
+				if (window.openMajor) window.openMajor();
+				else location.href = "/updates";
 			});
 
 			document.getElementById("about-link").addEventListener("click", function (event) {
@@ -2578,10 +2607,11 @@ function startAdminFace() {
 					requestAnimationFrame(checkEnd);
 				}
 
-				box.addEventListener("click", function () {
+				window.openMajor = function () {
 					openModal("major-modal");
 					load();
-				});
+				};
+				box.addEventListener("click", window.openMajor);
 
 				upgrade.addEventListener("click", async function () {
 					if (upgrade.getAttribute("aria-disabled") === "true") return;
