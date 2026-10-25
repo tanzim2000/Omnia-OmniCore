@@ -1501,8 +1501,9 @@ updates, the release notes). A black notch hangs from the top edge (the
 top corners curve outward, drawn by two small quarter circles) and holds an
 icon per tab. The picked tab has clear glass on its icon: a tint, a bright
 rim and a little more light from `backdrop-filter`, never a blur, and the
-glass slides between tabs (`.nb-pill`, moved by the script from the tab's
-position, frame by frame while a name opens or closes). Names open on hover,
+glass slides between tabs (`.nb-pill`, moved and sized by the script from the
+tab's position and width, frame by frame while a name opens or closes), so it
+holds the picked tab's name too; a tab under the pointer gets a fainter glass. Names open on hover,
 focus or a long press only. On a phone held upright (under 42em) the notch is a capsule at the bottom instead:
 the same nav and the same glass, restyled in one media query (colours from
 `--bg`, `--fg` and the glass border through `color-mix`, so it follows light and

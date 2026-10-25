@@ -209,14 +209,15 @@ const HOME_SCRIPT = `
 		return document.querySelector('[data-pane="' + id + '"]');
 	}
 
-	// The piece of clear glass sits on the picked tab's icon. It moves with
-	// a slide when the tab changes.
+	// The piece of clear glass sits on the picked tab. It moves with a
+	// slide when the tab changes, and it's as wide as the tab, name and all:
+	// when the name opens (hover, focus, a long press, the capsule's own
+	// opening) the glass holds it, never a second shape beside it.
 	function place() {
 		var picked = document.querySelector(".notch [aria-current]");
 		if (!picked || !pill) return;
 		pill.style.transform = "translateX(" + picked.offsetLeft + "px)";
-		// In the capsule the glass is as wide as its tab, name and all
-		pill.style.width = wide.matches ? "" : picked.offsetWidth + "px";
+		pill.style.width = picked.offsetWidth + "px";
 	}
 
 	function closeNames() {
@@ -686,11 +687,20 @@ const SETTINGS_HOME_CSS = `
 	}
 
 	.nb svg { flex: none; }
-	.nb:focus-visible { background: rgba(255, 255, 255, 0.12); outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55); }
+	/* A tab you're about to go to (hover, keyboard focus) gets a fainter
+	   piece of the same glass, with its name inside. The picked tab gets
+	   nothing extra: its own glass already widens to hold its name. */
+	.nb:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55); }
+	.nb:focus-visible:not([aria-current]) {
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+	}
 	/* Only a pointer hovers: on a finger a tap would leave the name stuck
 	   open */
 	@media (hover: hover) {
-		.nb:hover { background: rgba(255, 255, 255, 0.12); }
+		.nb:hover:not([aria-current]) {
+			background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+			box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+		}
 	}
 
 	/* The clear glass on the picked tab's icon. No blur, so the icon stays
@@ -705,7 +715,7 @@ const SETTINGS_HOME_CSS = `
 		width: 2.75em;
 		height: 2.75em;
 		box-sizing: border-box;
-		border-radius: 50%;
+		border-radius: 999px;
 		pointer-events: none;
 		opacity: 0;
 		background:
@@ -721,7 +731,7 @@ const SETTINGS_HOME_CSS = `
 	}
 	.nb-pill.ready {
 		opacity: 1;
-		transition: transform 0.4s cubic-bezier(0.3, 0.9, 0.3, 1.1), opacity 0.25s;
+		transition: transform 0.4s cubic-bezier(0.3, 0.9, 0.3, 1.1), width 0.4s cubic-bezier(0.3, 0.9, 0.3, 1.1), opacity 0.25s;
 	}
 	/* While a name opens or closes, the glass moves with its tab, not after it */
 	.nb-pill.ready.keeping-up { transition: opacity 0.25s; }
@@ -823,6 +833,11 @@ const SETTINGS_HOME_CSS = `
 
 		.nb { color: var(--fg); }
 		.nb:focus-visible { box-shadow: 0 0 0 2px var(--fg); }
+		.nb:focus-visible:not([aria-current]),
+		.nb:hover:not([aria-current]) {
+			background: color-mix(in srgb, var(--fg) 8%, transparent);
+			box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 14%, transparent);
+		}
 		.nl {
 			font-weight: 500;
 			transition: max-width 0.5s var(--ease), opacity 0.3s, padding 0.5s var(--ease);

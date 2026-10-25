@@ -352,7 +352,7 @@ test("the capsule: on a phone held upright, at the bottom, the name and the glas
 	assert.ok(script.includes("function measure(button)") && script.includes("function openName(button)"));
 	assert.ok(script.includes("if (!first && !wide.matches && picked) openName(picked);"), "a tab change opens its name, on a phone only, never when the page opens");
 	assert.ok(script.includes("Date.now() > glideUntil"), "a tap's glide past the tabs in between doesn't open them");
-	assert.ok(script.includes("pill.style.width = wide.matches"), "the glass is as wide as its tab in the capsule");
+	assert.ok(script.includes('pill.style.width = picked.offsetWidth + "px";'), "the glass is as wide as its tab, name and all");
 	assert.ok(!settingsHome.TABS.some((tab) => tab.label.includes("\u2014")));
 });
 
@@ -362,4 +362,13 @@ test("the update dot: green, with two radar rings that stop for reduced motion",
 	assert.ok(css.includes(".nb-dot::before,") && css.includes(".nb-dot::after { animation-delay: 1.2s; }"), "two rings, one after the other");
 	assert.ok(css.includes("@keyframes nb-radar"));
 	assert.ok(css.includes(".nb-dot::before, .nb-dot::after { animation: none; }"), "still with reduced motion");
+});
+
+test("the notch on a wide screen: one shape on the picked tab, a fainter glass on the one under the pointer", () => {
+	const css = settingsHome.SETTINGS_HOME_CSS;
+	assert.ok(/@media \(hover: hover\) \{\s*\.nb:hover:not\(\[aria-current\]\)/.test(css), "hover glass only on the other tabs");
+	assert.ok(!/\.nb:hover \{/.test(css), "no grey hover shape on the picked tab");
+	const pill = css.slice(css.indexOf(".nb-pill {"), css.indexOf("}", css.indexOf(".nb-pill {")));
+	assert.ok(pill.includes("border-radius: 999px"), "a capsule that can hold a name");
+	assert.ok(/\.nb-pill\.ready \{[^}]*width 0\.4s/.test(css), "it widens as it slides");
 });
