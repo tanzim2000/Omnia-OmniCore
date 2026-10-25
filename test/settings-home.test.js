@@ -128,6 +128,7 @@ test("the notch: four tabs, each a link, with a name for screen readers", () => 
 	assert.equal((notch.match(/<svg /g) || []).length, 4, "four icons, drawn here");
 	assert.ok(!notch.includes("http"), "nothing from the internet");
 	assert.ok(!notch.includes("nb-dot"));
+	assert.ok(notch.includes('<span class="nb-pill" aria-hidden="true"></span>'), "the clear glass on the picked tab");
 
 	const ready = settingsHome.notchHtml(true);
 	assert.ok(ready.includes('aria-label="About, an update is ready"'));
@@ -313,4 +314,25 @@ test("pages: a development build's Updates box says it doesn't check", async () 
 	assert.ok(!text.includes('id="check"'), "nothing to check");
 	assert.ok(!text.includes('id="apply"'), "nothing to install");
 	assert.ok(text.includes('<div class="segment c6 row2" id="release-notes">'), "its notes instead");
+});
+
+test("the notch: a dewdrop with clear glass, and a name only on hover, focus or a long press", () => {
+	const css = settingsHome.SETTINGS_HOME_CSS;
+	assert.ok(css.includes(".notch::before") && css.includes(".notch::after"), "the two ears that curve the top corners outward");
+
+	// No name stays open on the picked tab
+	assert.ok(!/aria-current[^{]*\.nl/.test(css), "the picked tab doesn't keep its name");
+
+	// Hover only where there is a pointer, so a tap doesn't leave a name open
+	assert.ok(/@media \(hover: hover\) \{\s*\.nb:hover/.test(css), "hover only for a pointer");
+
+	// Clear glass: a blur would make the icon under it fuzzy
+	const pill = css.slice(css.indexOf(".nb-pill {"), css.indexOf("}", css.indexOf(".nb-pill {")));
+	assert.ok(pill.includes("backdrop-filter: brightness("), "light and colour from behind");
+	assert.ok(!pill.includes("blur"), "no blur");
+	assert.ok(pill.includes("pointer-events: none"), "clicks go through to the tab");
+
+	// The script puts the glass on the picked tab and keeps it there as names open
+	assert.ok(settingsHome.HOME_SCRIPT.includes("picked.offsetLeft"));
+	assert.ok(settingsHome.HOME_SCRIPT.includes("keeping-up"));
 });

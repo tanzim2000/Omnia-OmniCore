@@ -193,6 +193,13 @@ contributions come under the CLA.
   id `windows8` is also the folder it installs to, so a new id needs a
   way to carry existing installs over.
 
+## Next: pictures and banners for resources
+
+Photos and banners for modules and themes, in the Marketplace and on the
+Settings home. Not started: what a Registry entry carries (a banner
+address, size and licence), where Installed Resources and the Settings
+home show them, and what happens with no picture, still to be decided.
+
 ## v2: ideas left from the design
 
 From the conversation and the mockup (Oct 2026,
@@ -232,6 +239,11 @@ Settled, so not to be reopened by accident:
   themes are dropped in favour of the background and tint.
 
 ## Deferred, with why
+
+- **Real liquid glass on the notch's selected tab** (the background bending
+  behind it). It needs an SVG distortion filter that only Chromium draws
+  and that is heavy on a phone, so the notch has clear glass (no blur)
+  instead.
 
 **Sandboxing modules.** Modules are reviewed, then trusted like any
 dependency: full Node access. The `omni` API split exists so a restricted

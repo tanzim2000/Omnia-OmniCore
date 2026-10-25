@@ -1497,8 +1497,13 @@ page, switched by a small script (`settings-home.js`): **General**
 **Appearance** (Frosted glass, Background with a Back button: Top left |
 Bottom right switch, Appearance Mode, Text Size), **Resources** (Manage Faces, the Marketplace,
 Installed Resources) and **About** (the version and the address, the
-updates, the release notes). A black notch at the top holds an icon per
-tab; a dot on About means an update is ready. The corner button signs out
+updates, the release notes). A black notch hangs from the top edge (the
+top corners curve outward, drawn by two small quarter circles) and holds an
+icon per tab. The picked tab has clear glass on its icon: a tint, a bright
+rim and a little more light from `backdrop-filter`, never a blur, and the
+glass slides between tabs (`.nb-pill`, moved by the script from the tab's
+position, frame by frame while a name opens or closes). Names open on hover,
+focus or a long press only. A dot on About means an update is ready. The corner button signs out
 here (`/logout`), so it shows a sign-out icon.
 
 - The tabs lie side by side on one strip that scrolls sideways

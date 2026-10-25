@@ -10,12 +10,16 @@
 //
 // THE NOTCH
 //
-// A black notch drops from the top of the screen with an icon for each
-// tab. The one picked shows its name beside its icon; the others show
-// theirs on hover, keyboard focus or a long press, and every one has its
-// name for screen readers. A dot on About means an update is ready. The
-// icons are drawn here, by hand, as SVG: no icon font, nothing from the
-// internet.
+// A black notch hangs from the top edge of the screen with an icon for
+// each tab, shaped like a drop of water: its top corners curve outward
+// into the edge, its bottom corners are round. No tab keeps its name
+// showing. A name opens beside its icon, and the notch widens to make room
+// for it, on hover, keyboard focus or a long press (a finger can't hover,
+// so a tap never leaves a name stuck open). Every tab has its name for
+// screen readers. The tab picked has a piece of clear glass on its icon,
+// with no blur so the icon stays sharp, and the glass slides from tab to
+// tab. A dot on About means an update is ready. The icons are drawn here,
+// by hand, as SVG: no icon font, nothing from the internet.
 //
 // THE MOVEMENT (sideways since the v2 test run)
 //
@@ -106,6 +110,7 @@ function svg(paths, size) {
 function notchHtml(updateReady) {
 	return `
 	<nav class="notch" data-omni-notch aria-label="Settings sections">
+		<span class="nb-pill" aria-hidden="true"></span>
 		${TABS.map(
 			(tab) => `<a class="nb" href="#${tab.id}" data-tab="${tab.id}" aria-label="${tab.label}${
 				tab.id === "about" && updateReady ? ", an update is ready" : ""
@@ -181,12 +186,21 @@ const HOME_SCRIPT = `
 	var panes = Array.prototype.slice.call(document.querySelectorAll("[data-pane]"));
 	var buttons = document.querySelectorAll(".notch [data-tab]");
 	var notch = document.querySelector(".notch");
+	var pill = document.querySelector(".notch .nb-pill");
 	var wide = window.matchMedia("(min-width: 42.01em)");
 	var still = window.matchMedia("(prefers-reduced-motion: reduce)");
 	var current = null;
 
 	function paneOf(id) {
 		return document.querySelector('[data-pane="' + id + '"]');
+	}
+
+	// The piece of clear glass sits on the picked tab's icon. It moves with
+	// a slide when the tab changes.
+	function place() {
+		var picked = document.querySelector(".notch [aria-current]");
+		if (!picked || !pill) return;
+		pill.style.transform = "translateX(" + picked.offsetLeft + "px)";
 	}
 
 	// The notch, the address and the remembered tab follow the tab in view
@@ -200,6 +214,7 @@ const HOME_SCRIPT = `
 			if (button.getAttribute("data-tab") === id) button.setAttribute("aria-current", "page");
 			else button.removeAttribute("aria-current");
 		});
+		place();
 
 		try { localStorage.setItem("omnicore-settings-tab", id); } catch (error) {}
 		if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
@@ -483,6 +498,18 @@ const HOME_SCRIPT = `
 	}
 	if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { soon(fit); });
 
+	// A name opening or closing moves the tabs along the notch. The glass
+	// keeps up with its tab frame by frame, instead of sliding after it.
+	var catching = null;
+	if (window.ResizeObserver && pill) {
+		new ResizeObserver(function () {
+			pill.classList.add("keeping-up");
+			place();
+			clearTimeout(catching);
+			catching = setTimeout(function () { pill.classList.remove("keeping-up"); }, 120);
+		}).observe(notch);
+	}
+
 	// Leaving: the notch goes up, then the page fades
 	window.addEventListener("omnicore:leaving", function () { notch.classList.add("notch-up"); });
 	window.addEventListener("omnicore:stayed", function () { notch.classList.remove("notch-up"); });
@@ -491,7 +518,11 @@ const HOME_SCRIPT = `
 	fit();
 	pan();
 	requestAnimationFrame(function () {
-		requestAnimationFrame(function () { root.classList.remove("home-still"); });
+		requestAnimationFrame(function () {
+			root.classList.remove("home-still");
+			// The glass only starts sliding once it has been put in place
+			if (pill) pill.classList.add("ready");
+		});
 	});
 })();
 `;
@@ -502,9 +533,12 @@ const SETTINGS_HOME_CSS = `
 	   The settings home (settings-home.js)
 	   --------------------------------------------------------------- */
 
-	/* The notch: black, dropping from the top, with a thin lighter edge
-	   so it shows on a black page */
+	/* The notch: black, hanging from the top edge like a drop of water. Its
+	   top corners curve outward into the edge (the two ears), its bottom
+	   corners are round. A filter draws the thin light edge and the shadow
+	   around the whole shape, ears included, so it shows on a black page. */
 	.notch {
+		--ear: 0.9em;
 		position: fixed;
 		top: 0;
 		left: 50%;
@@ -512,21 +546,43 @@ const SETTINGS_HOME_CSS = `
 		display: flex;
 		align-items: center;
 		gap: 2px;
-		padding: 6px 10px 8px;
+		padding: 6px 10px 9px;
 		background: #000;
-		border: 1px solid rgba(255, 255, 255, 0.22);
-		border-top: 0;
 		border-radius: 0 0 1.75em 1.75em;
-		box-shadow: 0 10px 34px rgba(0, 0, 0, 0.5), inset 0 -1px 0 rgba(255, 255, 255, 0.1);
+		filter: drop-shadow(1px 0 0 rgba(255, 255, 255, 0.2))
+			drop-shadow(-1px 0 0 rgba(255, 255, 255, 0.2))
+			drop-shadow(0 1px 0 rgba(255, 255, 255, 0.2))
+			drop-shadow(0 10px 22px rgba(0, 0, 0, 0.45));
 		transform: translate(-50%, 0);
 		transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.05);
 	}
 
+	/* The ears: a square at each top corner, black outside a quarter
+	   circle, so the edge runs down smoothly into the notch's side. They
+	   reach 1px under the notch so there's no seam. */
+	.notch::before,
+	.notch::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		width: calc(var(--ear) + 1px);
+		height: var(--ear);
+		pointer-events: none;
+	}
+	.notch::before {
+		right: calc(100% - 1px);
+		background: radial-gradient(circle at 0 100%, transparent calc(var(--ear) - 0.5px), #000 var(--ear));
+	}
+	.notch::after {
+		left: calc(100% - 1px);
+		background: radial-gradient(circle at 100% 100%, transparent calc(var(--ear) - 0.5px), #000 var(--ear));
+	}
+
 	/* Up and out of sight: as the page fades out, and before it drops in
 	   when the page fades in */
-	.notch.notch-up { transform: translate(-50%, -115%); transition-duration: 0.18s; }
+	.notch.notch-up { transform: translate(-50%, -125%); transition-duration: 0.18s; }
 	html.omni-arriving .notch { animation: notch-drop 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.05) 0.3s both; }
-	@keyframes notch-drop { from { transform: translate(-50%, -115%); } to { transform: translate(-50%, 0); } }
+	@keyframes notch-drop { from { transform: translate(-50%, -125%); } to { transform: translate(-50%, 0); } }
 
 	.nb {
 		position: relative;
@@ -535,6 +591,7 @@ const SETTINGS_HOME_CSS = `
 		height: 2.75em;
 		min-width: 2.75em;
 		padding: 0 0.7em;
+		box-sizing: border-box;
 		border-radius: 1.4em;
 		color: #fff;
 		text-decoration: none;
@@ -542,12 +599,48 @@ const SETTINGS_HOME_CSS = `
 	}
 
 	.nb svg { flex: none; }
-	.nb:hover, .nb:focus-visible { background: rgba(255, 255, 255, 0.14); outline: none; }
-	.nb:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55); }
-	.nb[aria-current="page"] { background: rgba(255, 255, 255, 0.18); }
+	.nb:focus-visible { background: rgba(255, 255, 255, 0.12); outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55); }
+	/* Only a pointer hovers: on a finger a tap would leave the name stuck
+	   open */
+	@media (hover: hover) {
+		.nb:hover { background: rgba(255, 255, 255, 0.12); }
+	}
 
-	/* A tab's name: shown beside the picked one, and on hover, focus or a
-	   long press */
+	/* The clear glass on the picked tab's icon. No blur, so the icon stays
+	   sharp: a faint tint, a bright rim along the top, a soft glow along the
+	   bottom inside, and a little more light and colour from what's under it.
+	   It lets clicks through to the tab. */
+	.nb-pill {
+		position: absolute;
+		z-index: 2;
+		top: 6px;
+		left: 0;
+		width: 2.75em;
+		height: 2.75em;
+		box-sizing: border-box;
+		border-radius: 50%;
+		pointer-events: none;
+		opacity: 0;
+		background:
+			radial-gradient(120% 90% at 30% 8%, rgba(255, 255, 255, 0.34), transparent 58%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+		border: 1px solid rgba(255, 255, 255, 0.3);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.6),
+			inset 0 -5px 9px -4px rgba(255, 255, 255, 0.22),
+			0 2px 6px rgba(0, 0, 0, 0.4);
+		-webkit-backdrop-filter: brightness(1.35) saturate(1.4);
+		backdrop-filter: brightness(1.35) saturate(1.4);
+	}
+	.nb-pill.ready {
+		opacity: 1;
+		transition: transform 0.4s cubic-bezier(0.3, 0.9, 0.3, 1.1), opacity 0.25s;
+	}
+	/* While a name opens or closes, the glass moves with its tab, not after it */
+	.nb-pill.ready.keeping-up { transition: opacity 0.25s; }
+
+	/* A tab's name: shown beside its icon on hover, focus or a long press,
+	   the notch widening to make room. None stays open on the picked tab. */
 	.nl {
 		max-width: 0;
 		overflow: hidden;
@@ -557,18 +650,24 @@ const SETTINGS_HOME_CSS = `
 		transition: max-width 0.45s cubic-bezier(0.65, 0, 0.25, 1), opacity 0.3s, padding 0.45s;
 	}
 
-	.nb[aria-current="page"] .nl,
-	.nb:hover .nl,
 	.nb:focus-visible .nl,
 	.nb.peek .nl {
 		max-width: 8em;
 		opacity: 1;
 		padding-left: 0.5em;
 	}
+	@media (hover: hover) {
+		.nb:hover .nl {
+			max-width: 8em;
+			opacity: 1;
+			padding-left: 0.5em;
+		}
+	}
 
-	/* An update is ready */
+	/* An update is ready: over the glass, if About is the picked tab */
 	.nb-dot {
 		position: absolute;
+		z-index: 3;
 		top: 0.45em;
 		left: 1.6em;
 		width: 0.6em;
@@ -655,7 +754,7 @@ const SETTINGS_HOME_CSS = `
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.notch, .nl { transition: none; }
+		.notch, .nl, .nb-pill.ready { transition: none; }
 		html.omni-arriving .notch { animation: none; }
 	}
 
