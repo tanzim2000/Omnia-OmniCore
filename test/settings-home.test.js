@@ -336,3 +336,30 @@ test("the notch: a dewdrop with clear glass, and a name only on hover, focus or 
 	assert.ok(settingsHome.HOME_SCRIPT.includes("picked.offsetLeft"));
 	assert.ok(settingsHome.HOME_SCRIPT.includes("keeping-up"));
 });
+
+test("the capsule: on a phone held upright, at the bottom, the name and the glass arrive together", () => {
+	const css = settingsHome.SETTINGS_HOME_CSS;
+	const phone = css.slice(css.indexOf("The capsule: the notch on a phone held upright"));
+	assert.ok(phone.includes("@media (max-width: 42em)"), "only a phone held upright");
+	assert.ok(phone.includes("bottom: calc(0.9em + env(safe-area-inset-bottom, 0px))"), "above the home bar");
+	assert.ok(phone.includes("border-radius: 999px"), "a capsule");
+	assert.ok(phone.includes("color-mix(in srgb, var(--bg) 58%, transparent)"), "its colours follow the theme");
+	assert.ok(phone.includes(".notch::before, .notch::after { display: none; }"), "no ears");
+	assert.ok(phone.includes("body.settings-home > .floating.bottom-right { bottom: auto; top: 1.25em;"), "the sign-out button goes to the top");
+
+	// The glass and the name are timed together, from a measured end
+	const script = settingsHome.HOME_SCRIPT;
+	assert.ok(script.includes("function measure(button)") && script.includes("function openName(button)"));
+	assert.ok(script.includes("if (!first && !wide.matches && picked) openName(picked);"), "a tab change opens its name, on a phone only, never when the page opens");
+	assert.ok(script.includes("Date.now() > glideUntil"), "a tap's glide past the tabs in between doesn't open them");
+	assert.ok(script.includes("pill.style.width = wide.matches"), "the glass is as wide as its tab in the capsule");
+	assert.ok(!settingsHome.TABS.some((tab) => tab.label.includes("\u2014")));
+});
+
+test("the update dot: green, with two radar rings that stop for reduced motion", () => {
+	const css = settingsHome.SETTINGS_HOME_CSS;
+	assert.ok(css.includes("--dot: #2fd47a;"), "green");
+	assert.ok(css.includes(".nb-dot::before,") && css.includes(".nb-dot::after { animation-delay: 1.2s; }"), "two rings, one after the other");
+	assert.ok(css.includes("@keyframes nb-radar"));
+	assert.ok(css.includes(".nb-dot::before, .nb-dot::after { animation: none; }"), "still with reduced motion");
+});

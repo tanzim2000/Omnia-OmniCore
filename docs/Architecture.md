@@ -1503,7 +1503,17 @@ icon per tab. The picked tab has clear glass on its icon: a tint, a bright
 rim and a little more light from `backdrop-filter`, never a blur, and the
 glass slides between tabs (`.nb-pill`, moved by the script from the tab's
 position, frame by frame while a name opens or closes). Names open on hover,
-focus or a long press only. A dot on About means an update is ready. The corner button signs out
+focus or a long press only. On a phone held upright (under 42em) the notch is a capsule at the bottom instead:
+the same nav and the same glass, restyled in one media query (colours from
+`--bg`, `--fg` and the glass border through `color-mix`, so it follows light and
+dark mode and any background). When the tab changes the script measures the
+capsule's end shape with the name open and the others shut (`measure`, with
+transitions off), then opens the name and moves the glass there with the same
+timing (`openName`), so the slide and the expanding happen together; the
+resize observer only keeps the glass on its tab at other times. A tap's own
+glide past the tabs in between doesn't open them. The sign-out button moves
+to the top on a phone. A green dot with two radar rings on About means an
+update is ready. The corner button signs out
 here (`/logout`), so it shows a sign-out icon.
 
 - The tabs lie side by side on one strip that scrolls sideways

@@ -10,6 +10,16 @@
 //
 // THE NOTCH
 //
+// On a phone held upright (under 42em wide) the notch is a CAPSULE instead:
+// a narrow pill of frosted glass floating at the bottom, above the home
+// bar, where a thumb reaches it. Same four icons and the same glass on the
+// picked tab. The capsule is as narrow as its icons. When the tab changes
+// (a tap or a swipe) the glass slides to it and its name opens beside the
+// icon in the same motion, the capsule widening to make room, and about a
+// second later it closes again. A long press opens any tab's name for as
+// long as the finger is down. The update dot is green and sends out radar
+// rings. Everywhere else the notch is as follows.
+//
 // A black notch hangs from the top edge of the screen with an icon for
 // each tab, shaped like a drop of water: its top corners curve outward
 // into the edge, its bottom corners are round. No tab keeps its name
@@ -190,6 +200,10 @@ const HOME_SCRIPT = `
 	var wide = window.matchMedia("(min-width: 42.01em)");
 	var still = window.matchMedia("(prefers-reduced-motion: reduce)");
 	var current = null;
+	var closeTimer = null;
+	var settling = null;
+	var animating = false;   // a name is opening: the glass is on its way there
+	var glideUntil = 0;      // a tap's own glide: its scrolling isn't a swipe
 
 	function paneOf(id) {
 		return document.querySelector('[data-pane="' + id + '"]');
@@ -201,11 +215,66 @@ const HOME_SCRIPT = `
 		var picked = document.querySelector(".notch [aria-current]");
 		if (!picked || !pill) return;
 		pill.style.transform = "translateX(" + picked.offsetLeft + "px)";
+		// In the capsule the glass is as wide as its tab, name and all
+		pill.style.width = wide.matches ? "" : picked.offsetWidth + "px";
+	}
+
+	function closeNames() {
+		buttons.forEach(function (button) { button.classList.remove("show"); });
+	}
+
+	// How wide a tab's name is, padding included, so the name and the glass
+	// reach their final size at the same moment
+	function nameWidth(button) {
+		var label = button.querySelector(".nl");
+		var size = parseFloat(getComputedStyle(label).fontSize) || 14;
+		button.style.setProperty("--nl", Math.ceil(label.scrollWidth + size * 0.65) + "px");
+	}
+
+	// The capsule's final shape, measured with the name open and the other
+	// names shut, without anything moving: where the tab ends up and how wide
+	function measure(button) {
+		var others = Array.prototype.filter.call(buttons, function (other) {
+			return other !== button && other.classList.contains("show");
+		});
+		var was = button.classList.contains("show");
+		notch.classList.add("measuring");
+		others.forEach(function (other) { other.classList.remove("show"); });
+		nameWidth(button);
+		button.classList.add("show");
+		var end = { left: button.offsetLeft, width: button.offsetWidth };
+		if (!was) button.classList.remove("show");
+		others.forEach(function (other) { other.classList.add("show"); });
+		void notch.offsetWidth;
+		notch.classList.remove("measuring");
+		void notch.offsetWidth;
+		return end;
+	}
+
+	// The tab's name opens and the glass moves to it, in one motion: the name,
+	// the capsule and the glass all go to the measured end together, with the
+	// same timing. About a second later the name closes again.
+	function openName(button) {
+		clearTimeout(closeTimer);
+		var end = measure(button);
+		animating = true;
+		clearTimeout(settling);
+		Array.prototype.forEach.call(buttons, function (other) {
+			if (other !== button) other.classList.remove("show");
+		});
+		button.classList.add("show");
+		if (button.getAttribute("aria-current") === "page") {
+			pill.style.transform = "translateX(" + end.left + "px)";
+			pill.style.width = end.width + "px";
+		}
+		settling = setTimeout(function () { animating = false; place(); }, 560);
+		closeTimer = setTimeout(closeNames, 1600);
 	}
 
 	// The notch, the address and the remembered tab follow the tab in view
 	function mark(id) {
 		if (id === current || ids.indexOf(id) === -1) return;
+		var first = current === null;
 		current = id;
 		root.setAttribute("data-tab", id);
 		root.style.setProperty("--tab", ids.indexOf(id));
@@ -214,7 +283,11 @@ const HOME_SCRIPT = `
 			if (button.getAttribute("data-tab") === id) button.setAttribute("aria-current", "page");
 			else button.removeAttribute("aria-current");
 		});
-		place();
+
+		// A phone's capsule opens the new tab's name; opening the page doesn't
+		var picked = document.querySelector('.notch [data-tab="' + id + '"]');
+		if (!first && !wide.matches && picked) openName(picked);
+		else place();
 
 		try { localStorage.setItem("omnicore-settings-tab", id); } catch (error) {}
 		if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
@@ -225,6 +298,7 @@ const HOME_SCRIPT = `
 		var pane = paneOf(id);
 		if (!pane) return;
 		gliding = moving && !still.matches;
+		if (moving) glideUntil = Date.now() + 800;
 		started = null;
 		strip.scrollTo({ left: pane.offsetLeft, behavior: gliding ? "smooth" : "auto" });
 		mark(id);
@@ -390,7 +464,9 @@ const HOME_SCRIPT = `
 
 		soon(function () {
 			pan();
-			mark(inView());
+			// The glide of a tap on the capsule passes the tabs in between:
+			// they aren't opened
+			if (wide.matches || Date.now() > glideUntil) mark(inView());
 		});
 	}, { passive: true });
 
@@ -434,6 +510,13 @@ const HOME_SCRIPT = `
 	buttons.forEach(function (button) {
 		button.addEventListener("click", function (event) {
 			event.preventDefault();
+			// The click that ends a long press only showed the name
+			if (button.classList.contains("peek")) return;
+			// Tapping the tab you're on opens its name again
+			if (!wide.matches && button.getAttribute("aria-current") === "page") {
+				openName(button);
+				return;
+			}
 			show(button.getAttribute("data-tab"), true);
 		});
 
@@ -449,7 +532,10 @@ const HOME_SCRIPT = `
 		// A long press shows the name, for a finger that can't hover
 		var held = null;
 		button.addEventListener("pointerdown", function () {
-			held = setTimeout(function () { button.classList.add("peek"); }, 450);
+			held = setTimeout(function () {
+				nameWidth(button);
+				button.classList.add("peek");
+			}, 450);
 		});
 		["pointerup", "pointerleave", "pointercancel"].forEach(function (name) {
 			button.addEventListener(name, function () {
@@ -503,6 +589,7 @@ const HOME_SCRIPT = `
 	var catching = null;
 	if (window.ResizeObserver && pill) {
 		new ResizeObserver(function () {
+			if (animating) return;
 			pill.classList.add("keeping-up");
 			place();
 			clearTimeout(catching);
@@ -651,30 +738,112 @@ const SETTINGS_HOME_CSS = `
 	}
 
 	.nb:focus-visible .nl,
+	.nb.show .nl,
 	.nb.peek .nl {
-		max-width: 8em;
+		max-width: var(--nl, 8em);
 		opacity: 1;
 		padding-left: 0.5em;
 	}
+	.notch.measuring, .notch.measuring * { transition: none !important; }
 	@media (hover: hover) {
 		.nb:hover .nl {
-			max-width: 8em;
+			max-width: var(--nl, 8em);
 			opacity: 1;
 			padding-left: 0.5em;
 		}
 	}
 
-	/* An update is ready: over the glass, if About is the picked tab */
+	/* An update is ready: a green dot over the glass (if About is the picked
+	   tab), with two rings spreading out from it and fading, one after the
+	   other, like a blip on a radar */
 	.nb-dot {
+		--dot: #2fd47a;
 		position: absolute;
 		z-index: 3;
 		top: 0.45em;
 		left: 1.6em;
-		width: 0.6em;
-		height: 0.6em;
+		width: 0.62em;
+		height: 0.62em;
+		box-sizing: content-box;
 		border-radius: 50%;
-		background: #ffb020;
-		border: 2px solid #000;
+		background: var(--dot);
+		border: 2px solid var(--dot-edge, #000);
+	}
+	.nb-dot::before,
+	.nb-dot::after {
+		content: "";
+		position: absolute;
+		inset: -2px;
+		box-sizing: border-box;
+		border-radius: 50%;
+		border: 2px solid var(--dot);
+		opacity: 0;
+		pointer-events: none;
+		animation: nb-radar 2.4s cubic-bezier(0.1, 0.6, 0.3, 1) infinite;
+	}
+	.nb-dot::after { animation-delay: 1.2s; }
+	@keyframes nb-radar {
+		0% { transform: scale(1); opacity: 0.7; }
+		70%, 100% { transform: scale(3); opacity: 0; }
+	}
+
+	/* ---------------------------------------------------------------
+	   The capsule: the notch on a phone held upright
+	   ---------------------------------------------------------------
+	   A narrow pill of frosted glass floating above the bottom edge and the
+	   home bar. Its colours come from the page's own (--bg, --fg and the
+	   glass border), so it follows light and dark mode and any background.
+	   A tab's name opens beside its icon and the capsule widens to make
+	   room (settings-home.js measures the end first, so the name, the
+	   capsule and the glass all arrive together). */
+	@media (max-width: 42em) {
+		.notch {
+			--ease: cubic-bezier(0.32, 0.72, 0, 1);
+			--dot-edge: var(--bg);
+			top: auto;
+			bottom: calc(0.9em + env(safe-area-inset-bottom, 0px));
+			padding: 5px;
+			gap: 2px;
+			border-radius: 999px;
+			border: 1px solid var(--glass-border);
+			background: color-mix(in srgb, var(--bg) 58%, transparent);
+			-webkit-backdrop-filter: blur(26px) saturate(1.6);
+			backdrop-filter: blur(26px) saturate(1.6);
+			filter: none;
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28), inset 0 1px 0 var(--glass-sheen);
+			color: var(--fg);
+		}
+		.notch::before, .notch::after { display: none; }
+
+		/* Down and out of sight as the page fades out, and rising before
+		   it fades in */
+		.notch.notch-up { transform: translate(-50%, 200%); }
+		html.omni-arriving .notch { animation: capsule-rise 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.05) 0.3s both; }
+		@keyframes capsule-rise { from { transform: translate(-50%, 200%); } to { transform: translate(-50%, 0); } }
+
+		.nb { color: var(--fg); }
+		.nb:focus-visible { box-shadow: 0 0 0 2px var(--fg); }
+		.nl {
+			font-weight: 500;
+			transition: max-width 0.5s var(--ease), opacity 0.3s, padding 0.5s var(--ease);
+		}
+
+		/* The glass is as wide as its tab, so it holds the name too */
+		.nb-pill {
+			top: 5px;
+			border-radius: 999px;
+			background:
+				radial-gradient(120% 90% at 30% 8%, color-mix(in srgb, var(--fg) 20%, transparent), transparent 58%),
+				linear-gradient(180deg, color-mix(in srgb, var(--fg) 12%, transparent), color-mix(in srgb, var(--fg) 5%, transparent));
+			border: 1px solid color-mix(in srgb, var(--fg) 26%, transparent);
+			box-shadow: inset 0 1px 0 var(--glass-sheen), 0 2px 8px rgba(0, 0, 0, 0.25);
+			-webkit-backdrop-filter: none;
+			backdrop-filter: none;
+		}
+		.nb-pill.ready {
+			transition: transform 0.5s var(--ease), width 0.5s var(--ease), opacity 0.25s;
+		}
+		.nb-pill.ready.keeping-up { transition: opacity 0.25s; }
 	}
 
 	/* The page: the heading at the top, the tabs filling the rest, edge
@@ -755,6 +924,7 @@ const SETTINGS_HOME_CSS = `
 
 	@media (prefers-reduced-motion: reduce) {
 		.notch, .nl, .nb-pill.ready { transition: none; }
+		.nb-dot::before, .nb-dot::after { animation: none; }
 		html.omni-arriving .notch { animation: none; }
 	}
 
@@ -871,11 +1041,11 @@ const SETTINGS_HOME_CSS = `
 	.home-bento .backdrop-preview { aspect-ratio: auto; height: 10em; }
 	.fact span:last-child { text-align: right; overflow-wrap: anywhere; }
 
-	/* A phone held upright: one column, and the heading below the notch.
-	   Each tab a screen wide, scrolling up and down by itself; a sideways
+	/* A phone held upright: one column, and the heading at the top (the
+	   capsule is at the bottom). Each tab a screen wide, scrolling up and down by itself; a sideways
 	   swipe moves a whole tab at a time. */
 	@media (max-width: 42em) {
-		.home-head { padding: 4.5em 1em 0.5em; min-height: 0; }
+		.home-head { padding: 1.25em 1em 0.5em; min-height: 0; }
 		/* Here the tabs start right under the heading, not 3em above it:
 		   each tab scrolls up and down, and its boxes go out of sight at
 		   the heading's lower edge instead of sliding over the heading
@@ -904,13 +1074,16 @@ const SETTINGS_HOME_CSS = `
 	}
 
 	/* The Back button in the top left: the heading starts after it. On a
-	   phone held upright it has a row of its own below the notch, with
-	   the heading beside it. */
+	   phone held upright the heading is beside it. */
 	body.settings-home:has(> .floating.top-left) .home-head { padding-left: 6em; }
 	body.settings-home > .floating.top-left { top: 1.25em; }
 	@media (max-width: 42em) {
-		body.settings-home > .floating.top-left { top: 4.5em; }
-		body.settings-home:has(> .floating.top-left) .home-head { padding-left: 5.5em; padding-top: 4.6em; min-height: 3.4em; }
+		body.settings-home > .floating.top-left { top: 1.25em; }
+		/* The capsule has the bottom: the sign-out button goes to the top
+		   right, where it can't be in the way of a name opening */
+		body.settings-home > .floating.bottom-right { bottom: auto; top: 1.25em; right: 1em; }
+		body.settings-home:has(> .floating.bottom-right) .home-head { padding-right: 5.5em; }
+		body.settings-home:has(> .floating.top-left) .home-head { padding-left: 5.5em; padding-top: 1.25em; min-height: 4.9em; }
 	}
 `;
 

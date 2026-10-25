@@ -193,6 +193,13 @@ contributions come under the CLA.
   id `windows8` is also the folder it installs to, so a new id needs a
   way to carry existing installs over.
 
+## Notch and capsule: left to check
+
+On a real phone: tap and swipe between tabs (the glass and the name should
+arrive together), long-press an icon, and look at the capsule over a
+picture, a bright colour and in light mode. The update dot's green and the
+radar rings can only be seen with an update waiting.
+
 ## Next: pictures and banners for resources
 
 Photos and banners for modules and themes, in the Marketplace and on the
