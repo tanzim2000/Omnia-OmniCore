@@ -132,10 +132,11 @@ function notchHtml(updateReady) {
 }
 
 // A whole box on the Resources tab that is a link: its icon at the top,
-// its name and a line under it at the foot
-function tileHtml(href, icon, name, line, size) {
+// its name and a line under it at the foot. `attrs` is anything else the
+// box needs (the Marketplace's has data-market-slides).
+function tileHtml(href, icon, name, line, size, attrs) {
 	return `
-	<a class="segment clickable home-tile ${size}" href="${href}">
+	<a class="segment clickable home-tile ${size}" href="${href}"${attrs ? " " + attrs : ""}>
 		${svg(TILE_ICONS[icon], 30)}
 		<span class="tile-text"><strong>${name}</strong><span>${line}</span></span>
 	</a>`;
@@ -615,6 +616,67 @@ const HOME_SCRIPT = `
 })();
 `;
 
+// The Marketplace tile's pictures: the banner of each registry OmniCore
+// reads (the built-in one, then any added under Sources), one after the
+// other, crossfading every six seconds behind the tile's name. One banner
+// stays still; none, or none that load, and the tile is as it always was.
+// Asked for once the page is open, so a slow registry never holds Settings
+// up. With reduced motion only the first one shows, and nothing changes
+// while the page isn't being looked at.
+const MARKET_TILE_SCRIPT = `
+(function () {
+	var tile = document.querySelector("[data-market-slides]");
+	if (!tile || !window.fetch) return;
+	var still = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+	fetch("/marketplace/banners", { credentials: "same-origin" })
+		.then(function (response) { return response.ok ? response.json() : []; })
+		.then(function (banners) {
+			if (!Array.isArray(banners) || !banners.length) return;
+
+			var holder = document.createElement("span");
+			holder.className = "tile-slides";
+			holder.setAttribute("aria-hidden", "true");
+			var pictures = [];
+
+			banners.forEach(function (banner) {
+				if (!banner || typeof banner.src !== "string" || banner.src.indexOf("/marketplace/") !== 0) return;
+				var picture = new Image();
+				picture.alt = "";
+				picture.decoding = "async";
+				picture.addEventListener("load", function () {
+					// The first picture to arrive shows; the tile goes dark
+					// behind its text only once there's a picture to see
+					if (!holder.querySelector(".on")) picture.classList.add("on");
+					tile.classList.add("has-slides");
+				});
+				picture.addEventListener("error", function () {
+					var at = pictures.indexOf(picture);
+					if (at !== -1) pictures.splice(at, 1);
+					picture.remove();
+					if (!pictures.length) tile.classList.remove("has-slides");
+				});
+				picture.src = banner.src;
+				holder.appendChild(picture);
+				pictures.push(picture);
+			});
+
+			tile.insertBefore(holder, tile.firstChild);
+
+			setInterval(function () {
+				if (still.matches || document.hidden) return;
+				var ready = pictures.filter(function (picture) { return picture.complete && picture.naturalWidth; });
+				if (ready.length < 2) return;
+				var showing = holder.querySelector(".on");
+				var next = ready[(ready.indexOf(showing) + 1) % ready.length];
+				if (showing) showing.classList.remove("on");
+				next.classList.add("on");
+			}, 6000);
+		})
+		.catch(function () {});
+})();
+`;
+
 // The look. Added to the admin face's own styles.
 const SETTINGS_HOME_CSS = `
 	/* ---------------------------------------------------------------
@@ -1044,6 +1106,43 @@ const SETTINGS_HOME_CSS = `
 	}
 
 	.tile-text { display: flex; flex-direction: column; gap: 0.25em; }
+
+	/* The Marketplace tile with the registries' banners behind it
+	   (MARKET_TILE_SCRIPT): the pictures fill the box, crossfading, and
+	   darken towards the bottom so the name stays readable over any of
+	   them, in light mode too */
+	.tile-slides {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		overflow: hidden;
+		border-radius: inherit;
+		pointer-events: none;
+	}
+	.tile-slides img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		opacity: 0;
+		transition: opacity 1.2s ease;
+	}
+	.tile-slides img.on { opacity: 1; }
+	.home-tile.has-slides .tile-slides::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.2) 60%, rgba(0, 0, 0, 0.05));
+	}
+	.home-tile { position: relative; }
+	.home-tile > svg, .home-tile > .tile-text { position: relative; z-index: 1; }
+	.home-tile.has-slides { color: #fff; }
+	.home-tile.has-slides .tile-text > span { color: rgba(255, 255, 255, 0.85); }
+	.home-tile.has-slides > svg { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5)); }
+	@media (prefers-reduced-motion: reduce) {
+		.tile-slides img { transition: none; }
+	}
 	.tile-text strong { font-size: 1.2em; font-weight: 600; }
 	.tile-text > span { color: var(--fg-muted); font-size: 0.9em; line-height: 1.45; }
 
@@ -1109,5 +1208,6 @@ module.exports = {
 	STARTING_TAB_SCRIPT,
 	notchHtml,
 	tileHtml,
+	MARKET_TILE_SCRIPT,
 	homeHtml
 };

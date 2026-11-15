@@ -766,6 +766,26 @@ the author's licence, and the Marketplace shows it under Source on the
 resource's page. An entry without one says "No licence stated"; it still
 installs. New entries in the registry are expected to have it.
 
+`icon` (since 2.0.0) is a picture of the resource, an https:// address,
+square, shown on its listing and at the top of its own page. An entry
+without one, or whose picture won't load, gets a tile in a colour of its
+own (always the same for the same name) with its first letter. New
+entries are expected to have one. The registry itself may have a
+`banner`, one https:// address beside `modules` and `themes`: the
+Marketplace shows the built-in registry's across its heading, the Sources
+page shows each registry's beside its name, and the Settings home's
+Marketplace tile crossfades every registry's (`/marketplace/banners`,
+asked for once the page is open). A module's screenshots stay in its own
+`module.json`, as before. OmniCore 1.x reads neither field, so a registry
+can carry them without breaking an older install.
+
+None of these addresses reaches the browser. `safeImageUrl` keeps only an
+https:// address; the page then gets `/marketplace/screenshot/<key>`, a
+key the image proxy remembered for it (`pictureSrc` in admin-face.js), and
+OmniCore fetches the picture itself. That route says `nosniff` and
+`sandbox`, so somebody else's file served from OmniCore's address is only
+ever drawn as a picture.
+
 `minOmniCore` is the oldest OmniCore the entry works on
 (`checkCompatibility` in `marketplace.js`). It fits when the running
 OmniCore is at least that version, and that version is no older than

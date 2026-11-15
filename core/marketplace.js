@@ -112,16 +112,37 @@ function fetchUrl(url, redirectsLeft) {
 	});
 }
 
+// A picture's address from a registry (a registry's `banner`, an entry's
+// `icon`, since 2.0.0), or null when it isn't one we'll use: only an
+// https:// address, of a sensible length, with no spaces in it. It is
+// never sent to the browser as it is: pages show it through the image
+// proxy (image-proxy.js), so a browser only ever talks to OmniCore.
+// OmniCore 1.x reads neither field, so a registry can carry them without
+// breaking an older install.
+function safeImageUrl(value) {
+	if (typeof value !== "string") return null;
+	const url = value.trim();
+	if (!/^https:\/\/[^\s]+$/i.test(url) || url.length > 2048) return null;
+	return url;
+}
+
+// The parts of a parsed registry.json OmniCore uses: its modules, its
+// themes, and its banner (a picture for the registry itself, shown at the
+// top of the Marketplace and on the Settings home's Marketplace tile)
+function readRegistry(parsed) {
+	const given = parsed && typeof parsed === "object" ? parsed : {};
+	return {
+		modules: Array.isArray(given.modules) ? given.modules : [],
+		themes: Array.isArray(given.themes) ? given.themes : [],
+		banner: safeImageUrl(given.banner)
+	};
+}
+
 // Fetch and parse one registry URL. Shared by the built-in fetch and every
 // additional source, so both are held to the same shape.
 async function fetchOneRegistry(url) {
 	const body = await fetchUrl(url);
-	const parsed = JSON.parse(body.toString("utf-8"));
-
-	return {
-		modules: Array.isArray(parsed.modules) ? parsed.modules : [],
-		themes: Array.isArray(parsed.themes) ? parsed.themes : []
-	};
+	return readRegistry(JSON.parse(body.toString("utf-8")));
 }
 
 // Every module and theme currently reviewed into the registry — the
@@ -149,17 +170,38 @@ async function fetchRegistry() {
 	const themes = [...builtIn.themes];
 	const sourceFailures = [];
 
+	// Every registry that could be read, built-in first, with its banner
+	// (null when it has none)
+	const sources = [{ url: DEFAULT_REGISTRY_URL, builtIn: true, banner: builtIn.banner }];
+
 	for (const url of extraUrls) {
 		try {
 			const extra = await fetchOneRegistry(url);
 			modules.push(...extra.modules);
 			themes.push(...extra.themes);
+			sources.push({ url, builtIn: false, banner: extra.banner });
 		} catch (error) {
 			sourceFailures.push({ url, message: error.message });
 		}
 	}
 
-	return { modules, themes, sourceFailures };
+	const registry = { modules, themes, sourceFailures, sources };
+	lastRegistry = { at: Date.now(), sources };
+	return registry;
+}
+
+// The registries' banners for the Settings home's Marketplace tile and the
+// Sources page. Those shouldn't fetch every registry each time they're
+// opened, so the last fetch is kept for ten minutes (any Marketplace visit
+// refreshes it too). Returns the same list as fetchRegistry's `sources`.
+let lastRegistry = null;
+const SOURCES_CACHE_MS = 10 * 60 * 1000;
+
+async function registrySources() {
+	if (lastRegistry && Date.now() - lastRegistry.at < SOURCES_CACHE_MS) {
+		return lastRegistry.sources;
+	}
+	return (await module.exports.fetchRegistry()).sources;
 }
 
 // Split a GitHub URL into the two parts a tarball download needs.
@@ -742,6 +784,8 @@ async function listAvailable() {
 
 			return {
 				...entry,
+				// Its picture, if it has a usable one (see safeImageUrl)
+				icon: safeImageUrl(entry.icon),
 				installed,
 				updateAvailable,
 				updateCompatible: updateAvailable
@@ -753,7 +797,8 @@ async function listAvailable() {
 	return {
 		modules: mark("module", registry.modules, modulesDir()),
 		themes: mark("theme", registry.themes, themesDir()),
-		sourceFailures: registry.sourceFailures
+		sourceFailures: registry.sourceFailures,
+		sources: registry.sources
 	};
 }
 
@@ -884,6 +929,9 @@ module.exports = {
 	OLDEST_RESOURCES,
 	DEFAULT_REGISTRY_URL,
 	fetchRegistry,
+	registrySources,
+	readRegistry,
+	safeImageUrl,
 	listAvailable,
 	parseRepoUrl,
 	tarballUrl,

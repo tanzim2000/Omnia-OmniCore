@@ -200,12 +200,20 @@ arrive together), long-press an icon, and look at the capsule over a
 picture, a bright colour and in light mode. The update dot's green and the
 radar rings can only be seen with an update waiting.
 
-## Next: pictures and banners for resources
+## Marketplace pictures: left to do
 
-Photos and banners for modules and themes, in the Marketplace and on the
-Settings home. Not started: what a Registry entry carries (a banner
-address, size and licence), where Installed Resources and the Settings
-home show them, and what happens with no picture, still to be decided.
+Built in 2.0.0: `icon` on registry entries, `banner` on the registry, the
+Marketplace tile crossfading the banners. Left:
+
+1. **Make the pictures:** a banner for Omnia-Registry (16:9, about
+   1600 by 900, under 500 KB) and an icon for each Essentials module and
+   theme (square, 512 by 512, under 200 KB). Put them in the Registry repo
+   (an `images/` folder) and fill in `banner` and each `icon` in
+   registry.json with their raw.githubusercontent.com addresses.
+2. **Look at them on a real screen:** the tile on the Resources tab
+   crops a 16:9 banner to its own shape (tall on a wide screen, wide on a
+   phone), so keep what matters in the middle.
+3. **Installed Resources** could show the same icons. Not built.
 
 ## v2: ideas left from the design
 

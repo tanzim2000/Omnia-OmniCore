@@ -1045,7 +1045,78 @@ const styles = `
 	   unexpectedly while typing */
 	.market-item[hidden] { display: none; }
 
-	.market-item-text { min-width: 0; }
+	.market-item-text { flex: 1; min-width: 0; }
+
+	/* A listing's icon: its own picture (an entry's \`icon\` in the
+	   registry, since 2.0.0) or, without one, a tile in a colour of its
+	   own with its first letter. Under the link stretched over the
+	   listing, so a click on it opens the listing like the rest. */
+	.market-icon {
+		flex: none;
+		align-self: flex-start;
+		width: 3.25em;
+		height: 3.25em;
+		box-sizing: border-box;
+		border-radius: 0.85em;
+		object-fit: cover;
+		background: var(--glass-bg);
+		border: 1px solid var(--segment-border);
+	}
+	.market-icon.big { width: 4.75em; height: 4.75em; border-radius: 1.1em; }
+	.market-initial {
+		display: grid;
+		place-items: center;
+		color: #fff;
+		font-weight: 600;
+		font-size: 1.35em;
+		width: 2.41em;
+		height: 2.41em;
+		border-radius: 0.63em;
+		border-color: rgba(255, 255, 255, 0.18);
+		background: linear-gradient(145deg, hsl(var(--hue) 55% 52%), hsl(calc(var(--hue) + 35) 60% 36%));
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+	}
+	.market-initial.big { font-size: 1.9em; width: 2.5em; height: 2.5em; border-radius: 0.58em; }
+
+	/* A narrow screen: the description gets the width beside the icon, and
+	   the button goes on a line of its own under it */
+	@media (max-width: 42em) {
+		.market-item { flex-wrap: wrap; align-items: flex-start; }
+		.market-item > .market-item-text { flex: 1 1 calc(100% - 4.25em); }
+		.market-item > .market-action { margin-left: 4.25em; }
+	}
+
+	/* The registry's banner behind the Marketplace's heading, darkened
+	   towards the bottom so the heading stays readable over any picture.
+	   A banner that won't load is taken away (marketPictureScript) and the
+	   heading looks as it always has. */
+	.market-head.has-banner {
+		position: relative;
+		overflow: hidden;
+		min-height: 12em;
+		align-items: flex-end;
+		color: #fff;
+	}
+	.market-banner {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		z-index: 0;
+	}
+	.market-head.has-banner::before {
+		content: "";
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0.05));
+	}
+	.market-head.has-banner > div,
+	.market-head.has-banner > .market-action { position: relative; z-index: 2; }
+	.market-head.has-banner h1 { color: #fff; }
+	.market-head.has-banner .lede,
+	.market-head.has-banner .help { color: rgba(255, 255, 255, 0.85); }
 	.market-item h3 { margin: 0; font-size: 1.05em; font-weight: 600; }
 	.market-by { color: var(--fg-muted); font-size: 0.8em; margin: 0.15em 0 0.5em 0; }
 	.market-desc { color: var(--fg-muted); font-size: 0.9em; line-height: 1.4; }
@@ -1148,6 +1219,17 @@ const styles = `
 	.market-source:first-child { border-top: none; padding-top: 0; }
 	.market-source:last-child { padding-bottom: 0; }
 	.market-source > div { min-width: 0; }
+
+	/* A source's banner, small, beside its name */
+	.market-source-name { display: flex; align-items: center; gap: 0.875em; min-width: 0; }
+	.market-source-banner {
+		flex: none;
+		width: 6.4em;
+		aspect-ratio: 16 / 9;
+		object-fit: cover;
+		border-radius: 0.5em;
+		border: 1px solid var(--segment-border);
+	}
 
 	/* The search box in the font picker */
 	.font-search {
@@ -3908,7 +3990,7 @@ function startAdminFace() {
 
 		const resourcesPane =
 			settingsHome.tileHtml("/faces", "faces", "Manage Faces", "Create, edit and remove dashboards", "c4 row1") +
-			settingsHome.tileHtml("/marketplace", "marketplace", "Marketplace", "Modules and themes to install", "c2 r2") +
+			settingsHome.tileHtml("/marketplace", "marketplace", "Marketplace", "Modules and themes to install", "c2 r2", "data-market-slides") +
 			settingsHome.tileHtml(
 				"/installed",
 				"installed",
@@ -3959,6 +4041,7 @@ function startAdminFace() {
 			portLinkScript +
 			localTimeScript +
 			settingsHome.HOME_SCRIPT +
+			settingsHome.MARKET_TILE_SCRIPT +
 			glassParts.script +
 			updates.script +
 			places.script +
@@ -4601,7 +4684,69 @@ function startAdminFace() {
 	//
 	// post() puts any failure on the button itself -- there's no other
 	// obvious place on these pages for it to go.
-	const marketPostScript = `
+	// --- Pictures in the Marketplace (since 2.0.0) -----------------------
+	//
+	// A registry's banner and each entry's icon are addresses on somebody
+	// else's server. The browser never gets them: each is remembered by the
+	// image proxy under a short key, and the page asks OmniCore for
+	// /marketplace/screenshot/<key> (the same route the screenshots have
+	// always used), so a browser only ever talks to OmniCore.
+
+	// A key for a picture: what it is, and a short fingerprint of where it
+	// is, so the same picture keeps the same key
+	function pictureKey(what, url) {
+		const print = require("crypto").createHash("sha256").update(url).digest("hex").slice(0, 16);
+		return `${what}:${print}`;
+	}
+
+	function pictureSrc(what, url) {
+		const key = pictureKey(what, url);
+		imageProxy.remember(key, url);
+		return `/marketplace/screenshot/${encodeURIComponent(key)}`;
+	}
+
+	// A colour for a listing without an icon, always the same for the same
+	// name, so it's recognisable from visit to visit
+	function nameHue(name) {
+		let hash = 0;
+		for (const character of String(name)) hash = (hash * 31 + character.codePointAt(0)) % 360;
+		return hash;
+	}
+
+	// A listing's icon, or a coloured tile with its first letter when it
+	// has none (a registry from before icons) or its picture won't load
+	// (the script below swaps it in then). `big` for a listing's own page.
+	function marketIcon(entry, big) {
+		const name = entry.name || entry.id || "?";
+		const letter = escapeHtml((Array.from(String(name).trim())[0] || "?").toUpperCase());
+		const size = big ? " big" : "";
+		const initial = `<span class="market-icon market-initial${size}" style="--hue:${nameHue(name)}" aria-hidden="true">${letter}</span>`;
+
+		if (!entry.icon) return initial;
+		return `<img class="market-icon${size}" src="${pictureSrc("icon", entry.icon)}" alt="" ` +
+			`loading="lazy" data-initial="${escapeHtml(initial)}">`;
+	}
+
+	// A picture that won't load (the address is wrong, the server is down,
+	// it isn't an image) is replaced: an icon by its coloured letter, a
+	// banner by nothing at all
+	const marketPictureScript = `
+		document.addEventListener("error", function (event) {
+			var picture = event.target;
+			if (!picture || picture.tagName !== "IMG") return;
+			if (picture.classList.contains("market-icon") && picture.dataset.initial) {
+				picture.outerHTML = picture.dataset.initial;
+			} else if (picture.classList.contains("market-banner")) {
+				var head = picture.closest(".has-banner");
+				if (head) head.classList.remove("has-banner");
+				picture.remove();
+			} else if (picture.classList.contains("market-source-banner")) {
+				picture.remove();
+			}
+		}, true);
+	`;
+
+	const marketPostScript = marketPictureScript + `
 		async function post(url, payload, button, working, done) {
 			const was = button.textContent;
 			button.disabled = true;
@@ -4766,6 +4911,7 @@ function startAdminFace() {
 				return `
 					<div class="segment clickable market-item" data-search="${searchText}">
 						<a class="market-link" href="${escapeHtml(detailUrl)}" aria-label="${escapeHtml(name)}"></a>
+						${marketIcon(entry, false)}
 						<div class="market-item-text">
 							<h3>${escapeHtml(name)}</h3>
 							${author ? `<div class="market-by">by ${escapeHtml(author)}</div>` : ""}
@@ -4833,9 +4979,16 @@ function startAdminFace() {
 					${marketplaceListings(available.themes, "theme")}
 				</div>`;
 
+		// The built-in registry's banner across the top, when it has one
+		const builtIn = available && (available.sources || []).find((source) => source.builtIn);
+		const banner = builtIn && builtIn.banner
+			? `<img class="market-banner" src="${pictureSrc("banner", builtIn.banner)}" alt="">`
+			: "";
+
 		const body = `
 			<div class="market">
-				<div class="segment market-head">
+				<div class="segment market-head${banner ? " has-banner" : ""}">
+					${banner}
 					<div>
 						<h1>Marketplace</h1>
 						<p class="lede">
@@ -4920,11 +5073,26 @@ function startAdminFace() {
 		res.send(page("Marketplace", body, script, "", "/"));
 	});
 
-	app.get("/marketplace/sources", (req, res) => {
+	app.get("/marketplace/sources", async (req, res) => {
 		const settings = readSettings();
 		const sources = Array.isArray(settings.registrySources)
 			? settings.registrySources
 			: [];
+
+		// Each registry's banner beside its name, from the last time the
+		// registries were read (a registry that can't be read has none)
+		let read = [];
+		try {
+			read = await marketplace.registrySources();
+		} catch (error) {
+			read = [];
+		}
+		const bannerOf = (url, builtIn) => {
+			const found = read.find((source) => (builtIn ? source.builtIn : source.url === url));
+			return found && found.banner
+				? `<img class="market-source-banner" src="${pictureSrc("banner", found.banner)}" alt="" loading="lazy">`
+				: "";
+		};
 
 		// One line per registry: the built-in one first, which can't be
 		// removed, then any the admin added
@@ -4932,7 +5100,10 @@ function startAdminFace() {
 			.map(
 				(url) => `
 				<div class="market-source">
-					<div class="market-url"><strong>${escapeHtml(url)}</strong></div>
+					<div class="market-source-name">
+						${bannerOf(url, false)}
+						<div class="market-url"><strong>${escapeHtml(url)}</strong></div>
+					</div>
 					<button type="button" class="glass market-action" data-remove-source="${escapeHtml(url)}">Remove</button>
 				</div>`
 			)
@@ -4949,9 +5120,12 @@ function startAdminFace() {
 
 				<div class="segment">
 					<div class="market-source">
-						<div>
-							<strong>Omnia-Registry</strong>
-							<div class="help">Built-in. Reviewed, and always included.</div>
+						<div class="market-source-name">
+							${bannerOf(null, true)}
+							<div>
+								<strong>Omnia-Registry</strong>
+								<div class="help">Built-in. Reviewed, and always included.</div>
+							</div>
 						</div>
 						<span class="toolbar-note">Built-in</span>
 					</div>
@@ -5199,6 +5373,7 @@ function startAdminFace() {
 		const body = `
 			<div class="market reading">
 				<div class="segment market-head">
+					${marketIcon(entry, true)}
 					<div>
 						<h1>${escapeHtml(name)}</h1>
 						<div class="market-by">
@@ -5240,7 +5415,31 @@ function startAdminFace() {
 
 		res.setHeader("Content-Type", image.type);
 		res.setHeader("Cache-Control", "private, max-age=300");
+		// It's somebody else's file served from OmniCore's own address.
+		// The browser must take it as the picture it says it is, and an
+		// SVG opened on its own can't run anything as OmniCore.
+		res.setHeader("X-Content-Type-Options", "nosniff");
+		res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox");
 		res.end(image.body);
+	});
+
+	// The registries' banners, for the Marketplace tile on the Settings
+	// home: the built-in registry's first, then the added ones'. Asked for
+	// by the page once it's open, so a slow registry never holds Settings
+	// up. Nothing (an empty list) when there are none or none can be read.
+	app.get("/marketplace/banners", async (req, res) => {
+		let sources = [];
+		try {
+			sources = await marketplace.registrySources();
+		} catch (error) {
+			sources = [];
+		}
+		res.setHeader("Cache-Control", "no-store");
+		res.json(
+			sources
+				.filter((source) => source.banner)
+				.map((source) => ({ src: pictureSrc("banner", source.banner) }))
+		);
 	});
 
 	app.get("/marketplace/modules/:id", (req, res) => {
