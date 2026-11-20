@@ -146,6 +146,21 @@ function tileHtml(href, icon, name, line, size, attrs) {
 	</a>`;
 }
 
+// The same box when it leads nowhere: a plain box, not a button, its line
+// saying why (the Network box, when OmniCore can't change the Wi-Fi). The
+// line is passed as plain text and escaped here.
+function staticTileHtml(icon, name, line, size, attrs) {
+	// "Wi-Fi" never broken across two lines
+	const safe = String(line)
+		.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]))
+		.replace(/Wi-Fi/g, "Wi&#8209;Fi");
+	return `
+	<div class="segment home-tile home-tile-off ${size}"${attrs ? " " + attrs : ""}>
+		${svg(TILE_ICONS[icon], 30)}
+		<span class="tile-text"><strong>${name}</strong><span>${safe}</span></span>
+	</div>`;
+}
+
 // The page: the heading, the notch and the four tabs. `panes` holds each
 // tab's boxes as HTML, by tab id.
 //
@@ -1155,6 +1170,9 @@ const SETTINGS_HOME_CSS = `
 		.tile-slides img { transition: none; }
 	}
 	.tile-text strong { font-size: 1.2em; font-weight: 600; }
+	/* A box that leads nowhere (staticTileHtml): its icon faded, so it
+	   doesn't look like something to press */
+	.home-tile-off > svg { opacity: 0.4; }
 	.tile-text > span { color: var(--fg-muted); font-size: 0.9em; line-height: 1.45; }
 
 	/* The About tab's facts */
@@ -1219,6 +1237,7 @@ module.exports = {
 	STARTING_TAB_SCRIPT,
 	notchHtml,
 	tileHtml,
+	staticTileHtml,
 	MARKET_TILE_SCRIPT,
 	homeHtml
 };

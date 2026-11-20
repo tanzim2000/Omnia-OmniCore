@@ -82,6 +82,7 @@ const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const { askAttribute, ASK_FIRST_SCRIPT } = require("./ask-first");
 const coreUpdater = require("./core-updater");
 const networkHelper = require("./network-helper");
+const networkPage = require("./network-page");
 const updateStore = require("./update-store");
 const upgradeNotes = require("./upgrade-notes");
 const semver = require("semver");
@@ -4002,8 +4003,18 @@ function startAdminFace() {
 		// each has its own place (settings-home.js): Manage Faces wide at
 		// the top, Network and Installed Resources side by side under it,
 		// the Marketplace tall on the right.
+		//
+		// The Network box is a plain box saying why when OmniCore can't
+		// change the Wi-Fi here (no Docker, no Wi-Fi tools, a Wi-Fi it
+		// can't drive). Known at once, or found out once the page is open
+		// (network-page.js, TILE_SCRIPT).
+		const networkAbility = networkPage.ability();
+		const networkTile =
+			networkAbility && networkAbility.canChange === false
+				? settingsHome.staticTileHtml("network", "Network", networkAbility.message, "c2 row2", 'data-tile="network"')
+				: settingsHome.tileHtml("/network", "network", "Network", "The server's Wi&#8209;Fi, and the networks around", "c2 row2", 'data-tile="network"');
 		const resourcesPane =
-			settingsHome.tileHtml("/network", "network", "Network", "The server's Wi&#8209;Fi, and the networks around", "c2 row2", 'data-tile="network"') +
+			networkTile +
 			settingsHome.tileHtml("/faces", "faces", "Manage Faces", "Create, edit and remove dashboards", "c4 row1", 'data-tile="faces"') +
 			settingsHome.tileHtml(
 				"/installed",
@@ -4058,6 +4069,7 @@ function startAdminFace() {
 			localTimeScript +
 			settingsHome.HOME_SCRIPT +
 			settingsHome.MARKET_TILE_SCRIPT +
+			networkPage.TILE_SCRIPT +
 			glassParts.script +
 			updates.script +
 			places.script +
@@ -5662,7 +5674,7 @@ function startAdminFace() {
 
 	// The Network page, from the Network box on the Resources tab: the
 	// server's Wi-Fi on a normal day (see network-page.js)
-	require("./network-page").attach(app, { page });
+	networkPage.attach(app, { page });
 
 	app.get("/updates/major", async (req, res) => {
 		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");

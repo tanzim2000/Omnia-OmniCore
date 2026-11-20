@@ -274,24 +274,30 @@ function result(output) {
 // Who looks after the Wi-Fi, which card, and where its settings are; or
 // why OmniCore can't change anything here, in words for the screen.
 // `found` is what the helper's probe found (network-helper.js).
+//
+// A problem is `lasting` when looking again won't change it (no Docker,
+// no tools, a Wi-Fi OmniCore can't drive): the Network box on the
+// Resources tab then says so instead of leading anywhere. A helper that
+// failed once isn't lasting.
 function changeable(found) {
 	if (!found.available) {
-		return {
-			problem:
-				found.reason === "no-docker"
-					? "OmniCore can't reach the server's network settings, because it doesn't have access to Docker."
-					: "This OmniCore can't change the server's network settings."
-		};
+		if (found.reason === "no-docker") {
+			return { problem: "OmniCore can't change the server's Wi-Fi: it has no access to Docker.", lasting: true };
+		}
+		if (found.reason === "no-tools") {
+			return { problem: "This OmniCore can't change the server's Wi-Fi: it wasn't built with the Wi-Fi tools.", lasting: true };
+		}
+		return { problem: "OmniCore couldn't look at the server's Wi-Fi. Try again in a moment.", lasting: false };
 	}
 	if (!found.supported) {
-		return { problem: "OmniCore can't change the Wi-Fi on this server: something other than wpa_supplicant or NetworkManager looks after it." };
+		return { problem: "OmniCore can't change the Wi-Fi on this server: something other than wpa_supplicant or NetworkManager looks after it.", lasting: true };
 	}
 	const card = (found.wpa && found.wifi.find((wifi) => wifi.name === found.wpa.interface)) || found.wifi[0];
-	if (!card) return { problem: "This server has no Wi-Fi card OmniCore can see." };
+	if (!card) return { problem: "This server has no Wi-Fi card OmniCore can see.", lasting: true };
 	if (found.manager === "wpa_supplicant") {
 		const config = found.wpa && found.wpa.config;
 		if (!config || !found.wpa.readable || !/^\/[\w./-]+$/.test(config) || config.includes("..")) {
-			return { problem: "OmniCore can't find wpa_supplicant's settings file on this server." };
+			return { problem: "OmniCore can't find wpa_supplicant's settings file on this server.", lasting: true };
 		}
 		return { manager: "wpa_supplicant", card: card.name, config };
 	}

@@ -1749,6 +1749,15 @@ connections for that name. The network the server is on can't be forgotten
 (join another first). Nothing here works while the Wi-Fi is disconnected:
 the takeover's setup has the card then.
 
+When OmniCore can't change the Wi-Fi (no Docker access, no Wi-Fi tools in
+the image, or a Wi-Fi it can't drive), the Network box on the Resources tab
+isn't a button: it's a plain box whose line says why. What's plain at once
+(the tools, Docker's socket) or was found out before (`ability()`) decides
+how it's drawn; otherwise it's drawn as a button and asks
+(`GET /network/ability`), turning into the plain box if the answer is no.
+Only a lasting answer is kept (`lasting` from `changeable()`): a helper
+that failed once changes nothing. The page, opened anyway, is one box.
+
 **OmniSync first** (`core/network-hotspot.js`, `core/omnisync.js`). When
 the Wi-Fi is disconnected and the card can run a network of its own (what the
 probe says of its radio), the core assumes OmniSync: it starts a setup

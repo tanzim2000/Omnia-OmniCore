@@ -275,7 +275,7 @@ test("the page's script parses, and its words have no em dashes", () => {
 test("the Resources tab's Network box leads here", () => {
 	const admin = fs.readFileSync(path.join(__dirname, "..", "core", "admin-face.js"), "utf-8");
 	assert.ok(admin.includes('settingsHome.tileHtml("/network", "network", "Network"'));
-	assert.ok(admin.indexOf('require("./network-page").attach(app, { page })') > admin.indexOf("Gate everything except the setup and login endpoints"), "after sign-in");
+	assert.ok(admin.indexOf("networkPage.attach(app, { page })") > admin.indexOf("Gate everything except the setup and login endpoints"), "after sign-in");
 });
 
 test("the helper reads each Wi-Fi card's address, without the /24", () => {
@@ -296,4 +296,44 @@ test("the helper reads each Wi-Fi card's address, without the /24", () => {
 	assert.equal(found.wifi[0].address, "192.168.1.42");
 	assert.equal(found.wifi[0].ssid, "Home");
 	assert.ok(networkHelper.probeScript().includes('echo "@@ address $n"'));
+});
+
+// --- When OmniCore can't change the Wi-Fi ----------------------------------
+
+test("can't change the Wi-Fi: the reason, kept only when looking again won't change it", async () => {
+	const lasting = await networkPage.checkAbility({
+		ability: () => null,
+		probe: async () => ({ ...FOUND, supported: false, manager: "iwd" })
+	});
+	assert.deepEqual(lasting, {
+		canChange: false,
+		message: "OmniCore can't change the Wi-Fi on this server: something other than wpa_supplicant or NetworkManager looks after it."
+	});
+	assert.equal((await networkPage.checkAbility({ ability: () => null, probe: async () => FOUND })).canChange, true);
+	const failedOnce = await networkPage.checkAbility({ ability: () => null, probe: async () => ({ available: false, reason: "failed" }) });
+	assert.equal(failedOnce.canChange, true, "a helper that failed once changes nothing: the last answer stands");
+
+	// Plain from here: an OmniCore without the Wi-Fi tools (this one, run
+	// from source)
+	assert.ok(!networkHelper.hasTools());
+	assert.deepEqual(networkPage.ability(), {
+		canChange: false,
+		message: "This OmniCore can't change the server's Wi-Fi: it wasn't built with the Wi-Fi tools."
+	});
+	assert.match(networkSetup.changeable({ available: false, reason: "no-docker" }).problem, /no access to Docker/);
+});
+
+test("the Network box when it leads nowhere: a plain box with the reason, not a button", () => {
+	const box = require("../core/settings-home").staticTileHtml("network", "Network", "Can't <b>here</b>", "c2 row2", 'data-tile="network"');
+	assert.match(box, /^\s*<div class="segment home-tile home-tile-off c2 row2" data-tile="network">/);
+	assert.ok(!box.includes("href") && !box.includes("clickable"));
+	assert.ok(box.includes("Can't &lt;b&gt;here&lt;/b&gt;"), "the reason as text");
+	// Drawn as a button before anyone knew: it turns into the same plain box
+	new Function(networkPage.TILE_SCRIPT);
+	assert.ok(networkPage.TILE_SCRIPT.includes("answer.canChange !== false"));
+	assert.ok(networkPage.TILE_SCRIPT.includes('box.className = tile.className.replace(/\\bclickable\\b/'));
+	assert.ok(networkPage.TILE_SCRIPT.includes("line.textContent = (answer.message"), "the reason as text there too");
+	// The page itself, opened anyway: one box
+	assert.ok(networkPage.PAGE_SCRIPT.includes('getElementById("net-known-box").remove()'));
+	assert.ok(networkPage.PAGE_SCRIPT.includes('getElementById("net-around-box").remove()'));
 });

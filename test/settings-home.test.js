@@ -303,7 +303,7 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	// Faces, Installed Resources and the Marketplace; wider, each box in
 	// its own place (Manage Faces wide on top, Network and Installed
 	// Resources under it, the Marketplace tall on the right)
-	const order = ["/network", "/faces", "/installed", "/marketplace"].map((href) => pane("resources").indexOf(`href="${href}"`));
+	const order = ["network", "faces", "installed", "marketplace"].map((tile) => pane("resources").indexOf(`data-tile="${tile}"`));
 	assert.ok(order.every((at, i) => at !== -1 && (i === 0 || at > order[i - 1])), "the order a phone stacks them in");
 	for (const [tile, place] of [
 		["faces", "grid-column: 1 / span 4; grid-row: 1;"],

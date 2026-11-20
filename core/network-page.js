@@ -14,6 +14,13 @@
 //                     if the new one doesn't reach the internet within a
 //                     minute, everything is put back as it was
 //
+// WHEN OMNICORE CAN'T CHANGE THE WI-FI
+//
+// No Docker access, no Wi-Fi tools in the image, or a Wi-Fi OmniCore
+// can't drive: then the Network box on the Resources tab isn't a button
+// at all, just a box that says why (ability(), checkAbility()). The page,
+// if opened anyway, is one box with the same words.
+//
 // WHO CAN USE IT
 //
 // It's on the admin face, after sign-in, like the rest of Settings. Its
@@ -42,7 +49,10 @@ const networkStatus = require("./network-status");
 const networkSetup = require("./network-setup");
 const { passwordField } = require("./ui-theme");
 
+const fs = require("fs");
+
 const PAGE_PATH = "/network";
+const ABILITY_PATH = "/network/ability";
 const NOW_PATH = "/network/now";
 const KNOWN_PATH = "/network/known";
 const AROUND_PATH = "/network/around";
@@ -192,10 +202,11 @@ async function now(deps = {}) {
 	const probe = deps.probe || ((options) => networkHelper.probe(options));
 	const found = await probe({ fresh: true });
 	const state = networkStatus.state();
-	if (!found.available) {
-		return { available: false, state, message: networkSetup.changeable(found).problem };
-	}
 	const target = networkSetup.changeable(found);
+	record(target);
+	if (!found.available) {
+		return { available: false, state, canChange: false, message: target.problem };
+	}
 	const card =
 		found.wifi.find((wifi) => wifi.name === target.card) ||
 		found.wifi.find((wifi) => wifi.connected) ||
@@ -221,6 +232,38 @@ async function now(deps = {}) {
 			}
 			: null
 	};
+}
+
+// Whether OmniCore can change the Wi-Fi here, as last found out:
+// { canChange, message }, or null while nobody knows yet. Only a lasting
+// answer is kept (see changeable() in network-setup.js); a helper that
+// failed once says nothing either way.
+let verdict = null;
+
+function record(target) {
+	if (!target.problem) verdict = { canChange: true, message: null };
+	else if (target.lasting) verdict = { canChange: false, message: target.problem };
+}
+
+// For drawing the Settings home at once, without waiting for the helper:
+// what's plain from here (the tools in the image, Docker's socket), or
+// what was last found out
+function ability() {
+	if (!networkHelper.hasTools()) return { canChange: false, message: networkSetup.changeable({ available: false, reason: "no-tools" }).problem };
+	if (!fs.existsSync(process.env.OMNICORE_DOCKER_SOCKET || "/var/run/docker.sock")) {
+		return { canChange: false, message: networkSetup.changeable({ available: false, reason: "no-docker" }).problem };
+	}
+	return verdict;
+}
+
+// Finding out (the helper's look, shared with anything else asking
+// within 5 seconds)
+async function checkAbility(deps = {}) {
+	const quick = (deps.ability || ability)();
+	if (quick && quick.canChange === false) return quick;
+	const found = await (deps.probe || ((options) => networkHelper.probe(options)))({ fresh: false });
+	record(networkSetup.changeable(found));
+	return verdict || { canChange: null, message: null };
 }
 
 // The networks the server already knows
@@ -294,6 +337,16 @@ function notNow() {
 function attach(app, { page }) {
 	app.get(PAGE_PATH, (req, res) => {
 		res.send(page("Network", PAGE_BODY, PAGE_SCRIPT, "", "/"));
+	});
+
+	// What the Network box on the Settings home asks once the page is open
+	app.get(ABILITY_PATH, async (req, res) => {
+		res.setHeader("Cache-Control", "no-store");
+		try {
+			res.json(await module.exports.checkAbility());
+		} catch (error) {
+			res.json({ canChange: null, message: null });
+		}
 	});
 
 	app.get(NOW_PATH, async (req, res) => {
@@ -436,19 +489,19 @@ const PAGE_BODY = `
 		<h1>Network</h1>
 	</div>
 	<div class="bento">
-		<div class="bento-row two top">
+		<div class="bento-row two top" id="net-top">
 			<div class="segment">
 				<h2>Wi&#8209;Fi</h2>
 				<div id="net-now" aria-live="polite"><p class="status"><span class="net-spin" aria-hidden="true"></span>Looking at the Wi&#8209;Fi&hellip;</p></div>
 			</div>
-			<div class="segment">
+			<div class="segment" id="net-known-box">
 				<h2>Known networks</h2>
 				<p class="hint">Networks the server has the password for. It joins one by itself when it's around.</p>
 				<div class="list" id="net-known" role="list"></div>
 				<p class="status" id="net-known-status" role="status"></p>
 			</div>
 		</div>
-		<div class="segment">
+		<div class="segment" id="net-around-box">
 			<div class="box-head">
 				<h2>Networks around</h2>
 				<button type="button" class="glass" id="net-look" style="padding:0.55em 1em;font-size:0.85em" disabled>Look again</button>
@@ -804,8 +857,9 @@ const PAGE_SCRIPT = `
 
 	// Steps as they happen, and, when the stream comes back after the page
 	// lost the server, the one it missed
+	var events = null;
 	if (window.EventSource) {
-		var events = new EventSource(${JSON.stringify(networkStatus.EVENTS_PATH)});
+		events = new EventSource(${JSON.stringify(networkStatus.EVENTS_PATH)});
 		var opened = false;
 		events.addEventListener("setup", function (event) {
 			try { showStep(JSON.parse(event.data)); } catch (error) {}
@@ -818,9 +872,24 @@ const PAGE_SCRIPT = `
 		});
 	}
 
+	// OmniCore can't change the Wi-Fi here: one box, the Wi-Fi as far as
+	// it can be seen and why, and nothing else
+	function onlyNow() {
+		document.getElementById("net-known-box").remove();
+		document.getElementById("net-around-box").remove();
+		document.getElementById("net-top").classList.remove("two");
+		if (events) events.close();
+	}
+
 	// First the Wi-Fi now, then what it knows, then a look around (one
 	// thing at a time: they all use the card)
 	lookNow()
+		.then(function () {
+			if (current && current.canChange === false) {
+				onlyNow();
+				throw "stop";
+			}
+		})
 		.then(lookKnown)
 		.then(function () {
 			return getJson(${JSON.stringify(JOIN_PATH)}).then(function (answer) {
@@ -833,12 +902,37 @@ const PAGE_SCRIPT = `
 				return lookAround();
 			});
 		})
-		.catch(function () { lookButton.disabled = false; });
+		.catch(function (why) { if (why !== "stop") lookButton.disabled = false; });
+})();
+`;
+
+// The Network box on the Settings home, when it was drawn as a button
+// before anyone knew: asks, and if OmniCore can't change the Wi-Fi here,
+// turns into a plain box that says why
+const TILE_SCRIPT = `
+(function () {
+	var tile = document.querySelector('a[data-tile="network"]');
+	if (!tile || !window.fetch) return;
+	fetch(${JSON.stringify(ABILITY_PATH)}, { cache: "no-store", credentials: "same-origin" })
+		.then(function (r) { return r.json(); })
+		.then(function (answer) {
+			if (!answer || answer.canChange !== false) return;
+			var box = document.createElement("div");
+			box.className = tile.className.replace(/\\bclickable\\b/, "").replace(/\\s+/g, " ").trim() + " home-tile-off";
+			box.setAttribute("data-tile", "network");
+			while (tile.firstChild) box.appendChild(tile.firstChild);
+			var line = box.querySelector(".tile-text > span");
+			// "Wi-Fi" never broken across two lines
+			if (line) line.textContent = (answer.message || "OmniCore can't change the server's Wi-Fi.").replace(/Wi-Fi/g, "Wi\\u2011Fi");
+			tile.replaceWith(box);
+		})
+		.catch(function () {});
 })();
 `;
 
 module.exports = {
 	PAGE_PATH,
+	ABILITY_PATH,
 	NOW_PATH,
 	KNOWN_PATH,
 	AROUND_PATH,
@@ -851,9 +945,12 @@ module.exports = {
 	readSsid,
 	parseKnown,
 	now,
+	ability,
+	checkAbility,
 	known,
 	forget,
 	attach,
 	PAGE_BODY,
-	PAGE_SCRIPT
+	PAGE_SCRIPT,
+	TILE_SCRIPT
 };
