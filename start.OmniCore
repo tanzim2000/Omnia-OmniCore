@@ -123,3 +123,6 @@ coreUpdateScheduler.start();
 // Watching the network: the status drawer and the takeover on every face
 // (since 2.0.0; see core/network-watcher.js)
 require("./core/network-watcher").start();
+// The setup hotspot for OmniSync: follows the watcher, and first clears
+// away one left over from before
+require("./core/network-hotspot").start();

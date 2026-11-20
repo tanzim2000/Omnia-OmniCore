@@ -100,10 +100,10 @@ done
 # this script itself, whose own command line mentions them all)
 echo "@@ processes"
 for p in /proc/[0-9]*; do
-	first=$(tr '\\0' '\\n' < "$p/cmdline" 2>/dev/null | head -n 1)
+	first=$({ tr '\\0' '\\n' < "$p/cmdline"; } 2>/dev/null | head -n 1)
 	case "$first" in
 		*wpa_supplicant|*NetworkManager|*iwd|*udhcpc|*dhcpcd|*dhclient|*connmand|*systemd-networkd)
-			echo "\${p##*/}|$(tr '\\0' ' ' < "$p/cmdline" 2>/dev/null)" ;;
+			echo "\${p##*/}|$({ tr '\\0' ' ' < "$p/cmdline"; } 2>/dev/null)" ;;
 	esac
 done
 
@@ -113,7 +113,7 @@ done
 # line of the file itself: that's where the passwords are.
 echo "@@ wpa"
 for p in /proc/[0-9]*; do
-	first=$(tr '\\0' '\\n' < "$p/cmdline" 2>/dev/null | head -n 1)
+	first=$({ tr '\\0' '\\n' < "$p/cmdline"; } 2>/dev/null | head -n 1)
 	case "$first" in *wpa_supplicant) ;; *) continue ;; esac
 	conf=$(tr '\\0' '\\n' < "$p/cmdline" | awk 'previous == "-c" { print; exit } /^-c./ { print substr($0, 3); exit } { previous = $0 }')
 	iface=$(tr '\\0' '\\n' < "$p/cmdline" | awk 'previous == "-i" { print; exit } /^-i./ { print substr($0, 3); exit } { previous = $0 }')
@@ -479,6 +479,74 @@ async function runOnHost(script, options = {}) {
 	}
 }
 
+// A helper that keeps running (the setup hotspot, network-hotspot.js),
+// instead of one that runs a script and is gone. The same container as
+// runOnHost's, labelled as what it's for so a leftover one can be found
+// and cleared away when OmniCore starts. Returns { finished, stop }:
+// `finished` settles when its script ends (by itself or stopped), and the
+// container is removed then; `stop()` asks it to end (SIGTERM, which its
+// script traps to put things back) and waits.
+async function startOnHost(script, options = {}) {
+	const docker = options.docker || connectToDocker();
+	const self = await selfContainer(docker);
+	const purpose = options.purpose || "network";
+	const helper = await docker.createContainer({
+		name: `${String(self.info.Name || "omnicore").replace(/^\//, "")}-${purpose}-${Date.now()}`,
+		Image: self.info.Image,
+		Entrypoint: ["sh", "-c"],
+		Cmd: [script],
+		Tty: true,
+		Env: Object.entries(options.env || {}).map(([key, value]) => `${key}=${value}`),
+		Labels: { "omnicore.helper": purpose },
+		HostConfig: {
+			NetworkMode: "host",
+			PidMode: "host",
+			CapAdd: ["NET_ADMIN", "NET_RAW"],
+			Mounts: [{ Type: "bind", Source: "/", Target: HOST, ReadOnly: true }],
+			AutoRemove: false
+		}
+	});
+	await helper.start();
+
+	if (options.onLine) {
+		const stream = await helper.logs({ follow: true, stdout: true, stderr: true });
+		let pending = "";
+		stream.on("data", (chunk) => {
+			pending += chunk.toString("utf-8");
+			let end;
+			while ((end = pending.indexOf("\n")) !== -1) {
+				options.onLine(pending.slice(0, end).replace(/\r$/, ""));
+				pending = pending.slice(end + 1);
+			}
+		});
+	}
+
+	const finished = helper
+		.wait()
+		.catch(() => null)
+		.then(() => helper.remove({ force: true }).catch(() => {}));
+
+	return {
+		finished,
+		async stop() {
+			// Time for its script to put the Wi-Fi back before it's forced
+			await helper.stop({ t: 20 }).catch(() => {});
+			await finished;
+		}
+	};
+}
+
+// Every helper of a kind still there from before (OmniCore stopped while
+// one ran), removed. Returns how many there were.
+async function removeLeftovers(purpose, options = {}) {
+	const docker = options.docker || connectToDocker();
+	const found = await docker.listContainers({ all: true, filters: { label: [`omnicore.helper=${purpose}`] } });
+	for (const info of found) {
+		await docker.getContainer(info.Id).remove({ force: true }).catch(() => {});
+	}
+	return found.length;
+}
+
 // Live speeds: a Wi-Fi card's byte counters, read once a second for
 // `seconds` seconds, each reading handed to onSample({ down, up }) in
 // bytes a second as it comes. The counters are the card's own (what the
@@ -573,6 +641,8 @@ module.exports = {
 	unescapeSsid,
 	bars,
 	runOnHost,
+	startOnHost,
+	removeLeftovers,
 	watchCounters,
 	hasTools
 };

@@ -20,7 +20,13 @@ Decided to ship in 2.0.0 (Nov 2026). Built in steps, one zip each:
    work. Not yet: hidden networks (typing a name), WEP and 802.1X
    networks, and putting the old file back if OmniCore stops in the
    middle of a try (the copy stays beside it, `.omnicore-before`).
-4. **The hotspot and the OmniSync QR** (only OmniSync reads it).
+4. **The hotspot and the OmniSync QR** (done): OmniSync first, with "Set
+   up manually" under the QR code; only OmniSync reads it
+   (`docs/OmniSync-setup.md`); ten-minute rounds so the old network can
+   come back by itself. Not yet: back to OmniSync after choosing manual
+   (it comes back with the next outage, or a restart); and a server that
+   already runs a DHCP server can keep dnsmasq from starting (the hotspot
+   then says it failed, and Manual Setup shows).
 5. **The Network page**, from a Network box on the Resources tab.
 6. **Saved passwords** (encrypted) **and the Guest Wi-Fi widget.**
 7. **Docs.**

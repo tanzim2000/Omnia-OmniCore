@@ -58,8 +58,8 @@ RUN mkdir -p /folders/modules /folders/themes /folders/data
 #
 # Network Management (core/network-helper.js) reads and changes the HOST's
 # Wi-Fi, using the standard Linux tools for it: wpa_supplicant's wpa_cli,
-# NetworkManager's nmcli, iw, and later hostapd and dnsmasq for the setup
-# hotspot. They have to be in the image itself, because they're needed
+# NetworkManager's nmcli, iw, and hostapd and dnsmasq for the setup
+# hotspot (OmniSync). They have to be in the image itself, because they're needed
 # exactly when the server has no internet to download anything.
 #
 # They live in a small Alpine of their own, /opt/omnicore-net, apart from
@@ -83,7 +83,8 @@ RUN set -e; \
 	apk add --quiet --no-cache --root /net --arch "$arch" --initdb --no-scripts \
 	--keys-dir "/usr/share/apk/keys/$arch" \
 	--repositories-file /etc/apk/repositories \
-	alpine-baselayout busybox wpa_supplicant iw networkmanager-cli; \
+	alpine-baselayout busybox wpa_supplicant iw networkmanager-cli \
+	hostapd dnsmasq; \
 	# --no-scripts skipped busybox making its commands; the tools' own
 	# scripts only need a shell
 	ln -sf /bin/busybox /net/bin/sh; \

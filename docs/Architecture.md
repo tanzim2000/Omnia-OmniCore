@@ -1720,6 +1720,46 @@ Every step reaches the page as a `setup` event on the network stream.
 WEP and username-and-password (802.1X) networks are listed but can't be
 joined yet; hidden networks can't be typed in yet.
 
+**OmniSync first** (`core/network-hotspot.js`, `core/omnisync.js`). When
+the Wi-Fi is disconnected and the card can run a network of its own (what the
+probe says of its radio), the core assumes OmniSync: it starts a setup
+hotspot with a name and password made up for the round, and the setup page
+shows a QR code holding them, encrypted, with a "Set up manually" button
+under it. The name and password are never on the page in words. OmniSync
+joins the hotspot and sends the home Wi-Fi, encrypted for this server and
+this round only (X25519, HKDF-SHA256, AES-256-GCM), to
+`10.42.0.1:3000/omnicore-network/omnisync`; OmniCore turns the hotspot off
+and joins it the way Manual Setup does. The formats, for whoever builds
+OmniSync, are in `docs/OmniSync-setup.md`. A card that can't, or a hotspot
+that doesn't come up, goes straight to Manual Setup; "Set up manually" turns
+the hotspot off first (the card can't run a network and scan at once), and
+the list is only answered while the hotspot is off (409 otherwise).
+
+The page asks `GET /omnicore-network/mode` what to show (`starting`,
+`omnisync` with the QR code's SVG, `resting`, `joining`, `manual`), and is
+told to ask again by a `setup-mode` event. The same rules as Manual Setup:
+open only while disconnected, JSON only.
+
+- **wpa_supplicant:** paused (SIGSTOP) so it doesn't fight over the card.
+  A radio that can run a network alongside a connection gets a second
+  interface (`omni0`, type `__ap`); otherwise the card itself is switched
+  to access point. 10.42.0.1/24 on it, `hostapd` (WPA2, channel 6), and
+  `dnsmasq --port=0` for addresses only, no DNS, so nothing like Pi-hole on
+  the server is in the way. Afterwards all of it is undone, and
+  wpa_supplicant unpaused (SIGCONT) and told to look again (SIGHUP).
+- **NetworkManager:** `nmcli device wifi hotspot` (a connection named
+  `omnicore-hotspot`, also 10.42.0.1), deleted afterwards.
+
+**Rounds.** While the hotspot runs, the server can't get back to its old
+network by itself, so a round lasts ten minutes, timed by the helper's own
+script (`sleep` then undo), so it still ends if OmniCore stops in the
+middle. Then everything is put back and the old network gets a minute
+(`resting`); still disconnected, a new round with a new name, password,
+session and QR code. Stopping a round (the Wi-Fi back, "Set up manually",
+OmniSync's reply) sends the helper SIGTERM, and its trap puts things back.
+A hotspot helper is labelled `omnicore.helper=hotspot`, and one left over
+from before is removed when OmniCore starts, with the Wi-Fi put back.
+
 The drawer is clear glass with no blur, lets every touch through, and
 moves with the Web Animations API: it drops in at the top right as a
 sliver (0.25 s, settling with a little give), slides open left (0.4 s, no

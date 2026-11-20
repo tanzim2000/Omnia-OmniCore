@@ -125,7 +125,7 @@ function nmName(ssid) {
 const FIND_PROCESS = `
 find_process() {
 	for p in /proc/[0-9]*; do
-		first=$(tr '\\0' '\\n' < "$p/cmdline" 2>/dev/null | head -n 1)
+		first=$({ tr '\\0' '\\n' < "$p/cmdline"; } 2>/dev/null | head -n 1)
 		case "$first" in *"$1") echo "\${p##*/}" ;; esac
 	done
 }
@@ -196,9 +196,9 @@ fi
 // dhcpcd and NetworkManager notice the new network by themselves.
 const NUDGE_DHCP = `
 for p in /proc/[0-9]*; do
-	first=$(tr '\\0' '\\n' < "$p/cmdline" 2>/dev/null | head -n 1)
+	first=$({ tr '\\0' '\\n' < "$p/cmdline"; } 2>/dev/null | head -n 1)
 	case "$first" in *udhcpc) ;; *) continue ;; esac
-	line=" $(tr '\\0' ' ' < "$p/cmdline" 2>/dev/null) "
+	line=" $({ tr '\\0' ' ' < "$p/cmdline"; } 2>/dev/null) "
 	case "$line" in
 		*" -i $OMNI_CARD "*|*" -i$OMNI_CARD "*|*"--interface=$OMNI_CARD "*)
 			kill -USR2 "\${p##*/}"; sleep 1; kill -USR1 "\${p##*/}"; echo "@@ result nudged" ;;
@@ -408,6 +408,10 @@ function openNow(res) {
 }
 
 function attach(app) {
+	// OmniSync's routes: which view the page shows, "Set up manually", and
+	// the phone's reply (network-hotspot.js)
+	require("./network-hotspot").attach(app, express);
+
 	app.get(SETUP_PATH, (req, res) => {
 		// Shown in a frame by the takeover on any of this server's faces
 		// (any port, same host), and nowhere else
@@ -419,6 +423,12 @@ function attach(app) {
 
 	app.get(NEARBY_PATH, async (req, res) => {
 		if (!openNow(res)) return;
+		// Not while the OmniSync hotspot has the card: one thing at a time
+		const hotspotMode = require("./network-hotspot").current().mode();
+		if (!["manual", "off"].includes(hotspotMode)) {
+			res.status(409).json({ available: false, message: "Choose Set up manually first." });
+			return;
+		}
 		res.setHeader("Cache-Control", "no-store");
 		try {
 			res.json(await module.exports.scan());
@@ -519,10 +529,25 @@ const SETUP_PAGE = `<!DOCTYPE html>
 		.status.bad { color: #ffb4a8; }
 		.spin { display: inline-block; width: 0.9em; height: 0.9em; margin-right: 0.45em; vertical-align: -0.1em; border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.9s linear infinite; }
 		@keyframes spin { to { transform: rotate(360deg); } }
+		[hidden] { display: none !important; }
+		.omnisync { display: grid; justify-items: center; gap: 0.8em; text-align: center; }
+		.omnisync h2 { font-size: 1.15em; }
+		.omnisync p { margin: 0; max-width: 28em; color: rgba(255, 255, 255, 0.75); }
+		.code { width: min(14em, 38vh); aspect-ratio: 1; border-radius: 0.9em; overflow: hidden; background: #fff; }
+		.code svg { display: block; width: 100%; height: 100%; }
+		.waiting { display: grid; place-items: center; min-height: 10em; }
 		@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
 	</style>
 </head>
 <body>
+	<section class="omnisync" id="omnisync" hidden>
+		<h2>Set up with OmniSync</h2>
+		<div class="code" id="code" aria-label="A code for OmniSync to scan"></div>
+		<div class="waiting" id="waiting" hidden><p id="waiting-text"></p></div>
+		<p id="omnisync-text">Open OmniSync on your phone and scan this code. Your phone joins the server for a moment and tells it your Wi&#8209;Fi's name and password.</p>
+		<button type="button" class="secondary" id="manual">Set up manually</button>
+	</section>
+	<section id="manual-view" hidden>
 	<div class="head">
 		<h2>Choose a network</h2>
 		<button type="button" class="link" id="again">Look again</button>
@@ -540,6 +565,7 @@ const SETUP_PAGE = `<!DOCTYPE html>
 			<button type="submit" class="primary" id="go">Connect</button>
 		</div>
 	</form>
+	</section>
 	<p class="status" id="status" role="status" aria-live="polite"></p>
 	<script>
 	(function () {
@@ -660,6 +686,70 @@ const SETUP_PAGE = `<!DOCTYPE html>
 			});
 		}
 
+		// --- Which view: OmniSync first, Manual Setup on request ----------
+		var omnisyncView = document.getElementById("omnisync");
+		var manualView = document.getElementById("manual-view");
+		var code = document.getElementById("code");
+		var waiting = document.getElementById("waiting");
+		var waitingText = document.getElementById("waiting-text");
+		var omnisyncText = document.getElementById("omnisync-text");
+		var manualButton = document.getElementById("manual");
+		var view = null;
+
+		function showMode(answer) {
+			var mode = (answer && answer.mode) || "manual";
+			if (mode === "manual" || mode === "off") {
+				omnisyncView.hidden = true;
+				manualView.hidden = false;
+				if (view !== "manual") {
+					view = "manual";
+					look();
+				}
+				return;
+			}
+			view = mode;
+			manualView.hidden = true;
+			omnisyncView.hidden = false;
+			if (mode === "omnisync" && answer.qr) {
+				code.innerHTML = answer.qr;
+				code.hidden = false;
+				waiting.hidden = true;
+				omnisyncText.hidden = false;
+				manualButton.hidden = false;
+				say("");
+				return;
+			}
+			code.hidden = true;
+			waiting.hidden = false;
+			omnisyncText.hidden = true;
+			manualButton.hidden = mode === "joining";
+			waitingText.innerHTML = '<span class="spin" aria-hidden="true"></span>';
+			waitingText.appendChild(document.createTextNode(
+				mode === "starting" ? "Getting OmniSync ready\u2026"
+				: mode === "resting" ? "Looking for a Wi\u2011Fi this server knows\u2026"
+				: "Joining your Wi\u2011Fi\u2026"
+			));
+		}
+
+		function askMode() {
+			fetch(${JSON.stringify(require("./network-hotspot").MODE_PATH)}, { cache: "no-store" })
+				.then(function (r) { return r.json(); })
+				.then(showMode)
+				.catch(function () { showMode({ mode: "manual" }); });
+		}
+
+		manualButton.addEventListener("click", function () {
+			manualButton.disabled = true;
+			say("Turning off the OmniSync network\u2026", false, true);
+			fetch(${JSON.stringify(require("./network-hotspot").MANUAL_PATH)}, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: "{}"
+			}).then(function (r) { return r.json(); })
+				.then(function () { manualButton.disabled = false; showMode({ mode: "manual" }); })
+				.catch(function () { manualButton.disabled = false; say("Couldn't switch. Try again.", true); });
+		});
+
 		document.getElementById("again").addEventListener("click", look);
 		document.getElementById("cancel").addEventListener("click", function () {
 			password.value = "";
@@ -680,12 +770,25 @@ const SETUP_PAGE = `<!DOCTYPE html>
 
 		// How joining goes, step by step, from the network stream
 		var events = new EventSource(${JSON.stringify(networkStatus.EVENTS_PATH)});
+		events.addEventListener("setup-mode", function () { askMode(); });
+
+		// While OmniSync's network is being joined, its steps go in the
+		// middle, where the code was; in Manual Setup, under the list
+		function sayStep(text, spinning) {
+			if (view && view !== "manual") {
+				waitingText.innerHTML = spinning ? '<span class="spin" aria-hidden="true"></span>' : "";
+				waitingText.appendChild(document.createTextNode(text));
+				return;
+			}
+			say(text, false, spinning);
+		}
+
 		events.addEventListener("setup", function (event) {
 			var step = {};
 			try { step = JSON.parse(event.data); } catch (error) { return; }
-			if (step.phase === "connecting") say("Connecting to " + step.ssid + "\\u2026", false, true);
-			else if (step.phase === "joined") say("Joined " + step.ssid + ". Waiting for the internet\\u2026", false, true);
-			else if (step.phase === "connected") say("Connected to " + step.ssid + ". Back in a moment.");
+			if (step.phase === "connecting") sayStep("Connecting to " + step.ssid + "\\u2026", true);
+			else if (step.phase === "joined") sayStep("Joined " + step.ssid + ". Waiting for the internet\\u2026", true);
+			else if (step.phase === "connected") sayStep("Connected to " + step.ssid + ". Back in a moment.", false);
 			else if (step.phase === "failed") {
 				busy = false;
 				say(step.message || "Couldn't connect.", true);
@@ -693,7 +796,7 @@ const SETUP_PAGE = `<!DOCTYPE html>
 			}
 		});
 
-		look();
+		askMode();
 	})();
 	</script>
 </body>

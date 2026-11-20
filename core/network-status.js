@@ -120,12 +120,26 @@ function attach(app, kind) {
 
 // --- What the watcher (network-watcher.js) tells it ---------------------
 
+// Who else wants to know when the state changes (network-hotspot.js)
+const stateListeners = [];
+
+function onState(listener) {
+	stateListeners.push(listener);
+}
+
 // "online", "no-internet" or "disconnected"
 function setState(state) {
 	if (current.state === state) return;
 	current = { state };
 	if (state !== "online") reconnect = null;
 	broadcast("state", current);
+	for (const listener of stateListeners) {
+		try {
+			listener(state);
+		} catch (error) {
+			console.log(`A network listener failed: ${error.message}`);
+		}
+	}
 }
 
 // The Wi-Fi is back after being disconnected: the drawer on dashboards,
@@ -151,6 +165,13 @@ function state() {
 // the setup page: { phase, ssid, message }
 function broadcastSetup(step) {
 	broadcast("setup", step || {});
+}
+
+// What the setup page should show now (network-hotspot.js): "omnisync",
+// "starting", "resting", "joining", "manual" or "off". The page asks for
+// the QR code itself; it isn't sent to every screen.
+function broadcastMode(mode) {
+	broadcast("setup-mode", { mode });
 }
 
 // ---------------------------------------------------------------------
@@ -499,6 +520,7 @@ function reset() {
 		}
 	}
 	clients.clear();
+	stateListeners.length = 0;
 	current = { state: "starting" };
 	reconnect = null;
 }
@@ -512,6 +534,8 @@ module.exports = {
 	showSpeed,
 	state,
 	broadcastSetup,
+	broadcastMode,
+	onState,
 	CLIENT_HTML,
 	CLIENT_CSS,
 	CLIENT_SCRIPT,
