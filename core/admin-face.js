@@ -81,6 +81,7 @@ const {
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const { askAttribute, ASK_FIRST_SCRIPT } = require("./ask-first");
 const coreUpdater = require("./core-updater");
+const networkHelper = require("./network-helper");
 const updateStore = require("./update-store");
 const upgradeNotes = require("./upgrade-notes");
 const semver = require("semver");
@@ -5631,6 +5632,19 @@ function startAdminFace() {
 	// { version, html, offReason }: offReason is why Upgrade can't be
 	// pressed here at all (no Docker, a development build, nothing to read),
 	// or null.
+	// Network Management (since 2.0.0): what the host's network looks like,
+	// read by a short-lived helper on the host's network
+	// (core/network-helper.js). Read-only: nothing here changes anything.
+	// ?raw=1 adds exactly what the helper printed, for working out why a
+	// server's Wi-Fi isn't read as expected; it holds network names and
+	// the commands that run them, never a password.
+	app.get("/network/probe", async (req, res) => {
+		const raw = req.query.raw === "1";
+		const result = await networkHelper.probe({ fresh: raw || req.query.fresh === "1", raw });
+		res.setHeader("Cache-Control", "no-store");
+		res.json(result);
+	});
+
 	app.get("/updates/major", async (req, res) => {
 		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
 		const next = updateStore.lastResult(running).nextMajor;

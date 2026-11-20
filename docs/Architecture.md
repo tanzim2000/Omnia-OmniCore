@@ -1627,6 +1627,33 @@ five seconds the old one comes back. Leaving the settings home slides the
 notch up first. A theme hears `omnicore:revealed` when the curtain has
 lifted, and can turn Core's fade in off with `"coreFade": false`.
 
+### Network Management (since 2.0.0)
+
+OmniCore reads and, later, changes the **host's** Wi-Fi, which a container
+can't see. It does it the way updates work: it starts a short-lived copy of
+itself (`core/network-helper.js`, `runOnHost`) from **its own image**, so
+nothing is downloaded, which matters most when there's no internet. The
+helper gets the host's network (`NetworkMode: host`), the host's processes
+(`PidMode: host`), `NET_ADMIN` and `NET_RAW` (never privileged), and the
+host's files **read-only** at `/opt/omnicore-net/host`. It runs one shell
+script, prints what it found in `@@` sections, and is removed.
+
+The tools (`wpa_cli`, `nmcli`, `iw`) are in the image in an Alpine of their
+own at `/opt/omnicore-net`, unpacked for the target architecture on the
+build machine (the Dockerfile's `network-tools` stage) so the final stage
+still only copies, and run with `chroot` into it.
+
+`probe()` (`GET /network/probe` on the admin face) reports the system,
+who looks after the Wi-Fi (`wpa_supplicant` or `networkmanager` are
+supported; `iwd` and `other` aren't yet), each Wi-Fi card's network,
+signal, byte counters, the networks it already knows are nearby, and
+whether its radio can run a hotspot, alone or alongside a connection.
+`?raw=1` adds what the helper printed. Of wpa_supplicant's settings file
+the script reads only counts and the control socket's folder: it never
+prints a line of it, since that's where the passwords are (a test checks).
+Without Docker access it answers `{ available: false, reason: "no-docker" }`;
+an OmniCore without the tools (from source, or before 2.0.0), `"no-tools"`.
+
 ### Image proxying
 
 A theme requests `/api/<instanceId>/image/<n>`. OmniCore fetches the real

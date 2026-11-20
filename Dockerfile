@@ -1,10 +1,12 @@
 # OmniCore, packaged so nobody running it needs Node, npm, or a terminal
 # beyond one docker compose command.
 #
-# Built in two stages, so that nothing ever has to RUN under emulation:
+# Built in three stages, so that nothing ever has to RUN under emulation:
 #
 #   dependencies   installs the libraries, on the machine doing the build
 #                  (GitHub's x86 runners), whatever image is being built
+#   network-tools  the Wi-Fi tools Network Management uses, unpacked on the
+#                  build machine for the target machine (since 2.0.0)
 #   final          the image itself: a Node base for the target machine
 #                  (x86 or ARM) with those libraries and OmniCore's own
 #                  files copied in. Only COPY steps, no RUN.
@@ -54,7 +56,46 @@ RUN npm ci --omit=dev --ignore-scripts \
 RUN mkdir -p /folders/modules /folders/themes /folders/data
 
 # ---------------------------------------------------------------------
-# Stage 2: the image itself, for whichever machine it's built for
+# Stage 2: the network tools (since 2.0.0)
+#
+# Network Management (core/network-helper.js) reads and changes the HOST's
+# Wi-Fi, using the standard Linux tools for it: wpa_supplicant's wpa_cli,
+# NetworkManager's nmcli, iw, and later hostapd and dnsmasq for the setup
+# hotspot. They have to be in the image itself, because they're needed
+# exactly when the server has no internet to download anything.
+#
+# They live in a small Alpine of their own, /opt/omnicore-net, apart from
+# OmniCore's own files: the helper container runs them with `chroot` into
+# that folder. Installed here, on the build machine, for the TARGET
+# machine's architecture: apk can unpack another architecture's packages
+# without running anything from them (--no-scripts), so this needs no
+# emulation either, and the final stage only copies the folder.
+FROM --platform=$BUILDPLATFORM alpine:3.22 AS network-tools
+
+# Docker's name for the machine the image is for (amd64, arm64), turned
+# into Alpine's (x86_64, aarch64)
+ARG TARGETARCH
+
+RUN set -e; \
+	case "$TARGETARCH" in \
+		amd64) arch=x86_64 ;; \
+		arm64) arch=aarch64 ;; \
+		*) echo "No network tools for $TARGETARCH"; exit 1 ;; \
+	esac; \
+	apk add --quiet --no-cache --root /net --arch "$arch" --initdb --no-scripts \
+		--keys-dir "/usr/share/apk/keys/$arch" \
+		--repositories-file /etc/apk/repositories \
+		alpine-baselayout busybox wpa_supplicant iw networkmanager-cli; \
+	# --no-scripts skipped busybox making its commands; the tools' own
+	# scripts only need a shell
+	ln -sf /bin/busybox /net/bin/sh; \
+	# The package manager's own records aren't needed inside the image
+	rm -rf /net/lib/apk /net/var/cache/apk /net/etc/apk; \
+	# Where the helper mounts the host's own files, read-only
+	mkdir -p /net/host
+
+# ---------------------------------------------------------------------
+# Stage 3: the image itself, for whichever machine it's built for
 FROM node:24-alpine
 
 # Which version this image is. The publish workflow passes the git tag in
@@ -83,6 +124,10 @@ COPY package.json package-lock.json ./
 
 COPY core/ ./core/
 COPY start.OmniCore ./
+
+# The network tools, in their own folder (see Stage 2). Outside /app, so
+# nothing of OmniCore's mixes with them.
+COPY --from=network-tools /net /opt/omnicore-net
 
 # What's in this build, for its Updates page. A release reads its notes
 # from GitHub; a development build (a hand-run ":dev" image) reads them

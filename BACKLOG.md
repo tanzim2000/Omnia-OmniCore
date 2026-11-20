@@ -8,7 +8,25 @@ under Unreleased until it has a version).
 If you are picking this back up after a break, this file plus
 `docs/Architecture.md` should be enough to re-orient.
 
-## Now: releasing 2.0.0
+## Now: Network Management, for 2.0.0
+
+Decided to ship in 2.0.0 (Nov 2026). Built in steps, one zip each:
+
+1. **The network helper** (done): reads the host's Wi-Fi through a
+   short-lived copy of OmniCore on the host's network. Read-only.
+2. **The watcher, the takeover and the status drawer.**
+3. **Manual Setup**: nearby networks, a password typed on a physical
+   keyboard, back to the old network if the new one doesn't work.
+4. **The hotspot and the OmniSync QR** (only OmniSync reads it).
+5. **The Network page**, from a Network box on the Resources tab.
+6. **Saved passwords** (encrypted) **and the Guest Wi-Fi widget.**
+7. **Docs.**
+
+Then on your server, before tagging: what `/network/probe?raw=1` says, the
+takeover, Manual Setup, a wrong password, the no-internet drawer, the
+reconnect drawer, the hotspot.
+
+## Then: releasing 2.0.0
 
 1.20.0 and 1.20.1 are out: every 1.x install updates itself to them, and
 from then on a new major version is offered in Settings and installed in
