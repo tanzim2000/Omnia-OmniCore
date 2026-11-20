@@ -106,10 +106,16 @@ function wpaBlock({ ssid, password, auth }) {
 	} else {
 		lines.push("\tkey_mgmt=SAE", `\tsae_password="${password}"`, "\tieee80211w=2");
 	}
-	// Above any network the file had: this is the one asked for
-	lines.push("\tpriority=50", "}");
+	// Above any network the file has: this is the one asked for. The
+	// script puts the number in (one more than the highest it finds, and
+	// at least 50), so a network joined later always wins over one joined
+	// earlier, even when the server is still on that one.
+	lines.push(`\tpriority=${PRIORITY_MARK}`, "}");
 	return lines.join("\n");
 }
+
+// Where the script writes the priority in (see wpaBlock)
+const PRIORITY_MARK = "OMNICORE_PRIORITY";
 
 // NetworkManager's name for the connection OmniCore makes for a network
 function nmName(ssid) {
@@ -131,17 +137,12 @@ find_process() {
 }
 `;
 
-const WPA_APPLY = `
-H=${networkHelper.HOST}
-f="$H$OMNI_CONF"
-before="$f.omnicore-before"
-${FIND_PROCESS}
-if [ ! -w "$f" ]; then echo "@@ result cant-write"; exit 0; fi
-cp -p "$f" "$before" || { echo "@@ result cant-write"; exit 0; }
-
-# The file without any network that has the same name (in hex or in
-# quotes), and without the note OmniCore left above it; then the new one
-awk -v hexname="$OMNI_SSID_HEX" -v quoted="$OMNI_SSID_QUOTED" '
+// An awk command that copies a wpa_supplicant settings file without any
+// network named $OMNI_SSID_HEX (the name in hex) or $OMNI_SSID_QUOTED (in
+// quotes, the way a file written by hand has it), and without the note
+// OmniCore left above one. Joining uses it before adding the network
+// again, and the Network page to forget one (network-page.js).
+const DROP_NAMED = `awk -v hexname="$OMNI_SSID_HEX" -v quoted="$OMNI_SSID_QUOTED" '
 	function close_block() {
 		if (!(name == hexname || (quoted != "" && name == quoted))) printf "%s", note block
 		block = ""; note = ""; name = ""; inside = 0
@@ -161,9 +162,24 @@ awk -v hexname="$OMNI_SSID_HEX" -v quoted="$OMNI_SSID_QUOTED" '
 	}
 	{ printf "%s", note; note = ""; print }
 	END { if (inside) printf "%s", note block }
-' "$before" > "$f.omnicore-new" || { rm -f "$f.omnicore-new" "$before"; echo "@@ result cant-write"; exit 0; }
+'`;
 
-printf '\\n%s\\n' "$(echo "$OMNI_BLOCK" | base64 -d)" >> "$f.omnicore-new"
+const WPA_APPLY = `
+H=${networkHelper.HOST}
+f="$H$OMNI_CONF"
+before="$f.omnicore-before"
+${FIND_PROCESS}
+if [ ! -w "$f" ]; then echo "@@ result cant-write"; exit 0; fi
+cp -p "$f" "$before" || { echo "@@ result cant-write"; exit 0; }
+
+# The file without any network that has the same name, then the new one
+${DROP_NAMED} "$before" > "$f.omnicore-new" || { rm -f "$f.omnicore-new" "$before"; echo "@@ result cant-write"; exit 0; }
+
+# One more than the highest priority left in the file, and at least 50
+top=$(awk '/^[[:space:]]*priority[[:space:]]*=/ { v = $0; sub(/^[^=]*=[[:space:]]*/, "", v); v += 0; if (v > m) m = v } END { print m + 0 }' "$f.omnicore-new")
+priority=50
+[ "$top" -ge 50 ] && priority=$((top + 1))
+printf '\\n%s\\n' "$(echo "$OMNI_BLOCK" | base64 -d | sed "s/^\\([[:space:]]*priority=\\)${PRIORITY_MARK}\\$/\\1$priority/")" >> "$f.omnicore-new"
 chmod "$(stat -c %a "$before")" "$f.omnicore-new"
 mv "$f.omnicore-new" "$f"
 
@@ -256,9 +272,9 @@ function result(output) {
 // Doing it
 
 // Who looks after the Wi-Fi, which card, and where its settings are; or
-// why Manual Setup can't change anything here, in words for the screen
-async function whatWeCanChange() {
-	const found = await networkHelper.probe({ fresh: true });
+// why OmniCore can't change anything here, in words for the screen.
+// `found` is what the helper's probe found (network-helper.js).
+function changeable(found) {
 	if (!found.available) {
 		return {
 			problem:
@@ -282,6 +298,12 @@ async function whatWeCanChange() {
 	return { manager: "networkmanager", card: card.name };
 }
 
+// The same, from a fresh look. The Network page passes { fresh: false }
+// when it has only just looked (the helper keeps a look for 5 seconds).
+async function whatWeCanChange(options = {}) {
+	return changeable(await networkHelper.probe({ fresh: options.fresh !== false }));
+}
+
 // The networks around, for the setup page
 async function scan(options = {}) {
 	const target = await (options.target || whatWeCanChange)();
@@ -300,6 +322,12 @@ async function scan(options = {}) {
 }
 
 let attempt = null;
+
+// Whether a network is being joined right now. The watcher holds its
+// tongue meanwhile: the Wi-Fi drops for a moment while it switches.
+function busy() {
+	return attempt !== null;
+}
 
 function wait(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -813,15 +841,20 @@ module.exports = {
 	problemWith,
 	nmName,
 	scanScript,
+	DROP_NAMED,
+	FIND_PROCESS,
 	WPA_APPLY,
 	WPA_KEEP,
 	WPA_UNDO,
 	NUDGE_DHCP,
 	NM_APPLY,
 	NM_UNDO,
+	changeable,
 	whatWeCanChange,
 	scan,
 	connect,
+	busy,
+	PRIORITY_MARK,
 	attach,
 	SETUP_PAGE
 };

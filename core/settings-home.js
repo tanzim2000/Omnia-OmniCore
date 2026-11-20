@@ -5,7 +5,8 @@
 //                a search
 //   Appearance   Frosted glass, Background (with the Back button's
 //                corner), Appearance Mode, Text Size and Typography
-//   Resources    Manage Faces, the Marketplace, Installed Resources
+//   Resources    Network, Manage Faces, Installed Resources, the
+//                Marketplace
 //   About        OmniCore itself, and its updates
 //
 // THE NOTCH
@@ -104,6 +105,9 @@ const TABS = [
 
 // The icons for the Resources tab's boxes, the same way
 const TILE_ICONS = {
+	network:
+		'<path d="M2.5 9a14 14 0 0 1 19 0"/><path d="M5.5 12.2a9.5 9.5 0 0 1 13 0"/><path d="M8.7 15.4a5 5 0 0 1 6.6 0"/>' +
+		'<circle cx="12" cy="19" r="1.3" fill="currentColor" stroke="none"/>',
 	faces: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
 	marketplace: '<path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
 	installed: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>'
@@ -1069,9 +1073,16 @@ const SETTINGS_HOME_CSS = `
 		html.home-tabs .home-bento .row2 { grid-row: 2; }
 		html.home-tabs .home-bento .r2 { grid-row: 1 / span 2; }
 
-		/* Resources: three big tiles that fill the screen, two rows of the
-		   same height */
+		/* Resources: four big tiles that fill the screen, two rows of the
+		   same height. Each has its own place, whatever order the page
+		   has them in (a phone's): Manage Faces wide at the top, Network
+		   and Installed Resources side by side under it, the Marketplace
+		   tall on the right. */
 		html.home-tabs .home-pane[data-pane=resources] .home-bento { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+		html.home-tabs .home-bento > [data-tile=faces] { grid-column: 1 / span 4; grid-row: 1; }
+		html.home-tabs .home-bento > [data-tile=network] { grid-column: 1 / span 2; grid-row: 2; }
+		html.home-tabs .home-bento > [data-tile=installed] { grid-column: 3 / span 2; grid-row: 2; }
+		html.home-tabs .home-bento > [data-tile=marketplace] { grid-column: 5 / span 2; grid-row: 1 / span 2; }
 		html.home-tabs .home-bento > .home-tile { align-self: stretch; }
 
 		/* A box never taller than its place; one with more in it scrolls

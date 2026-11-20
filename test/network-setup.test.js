@@ -41,7 +41,8 @@ test("the network written down: name in hex, the key and never the password", ()
 		"\tssid=4e657720506c616365",
 		// What `wpa_passphrase "New Place" "correct horse battery"` prints
 		"\tpsk=3413cbaabf8b108cb6f7e0bbd5c2fd549aa0878b4f4004acebf72446aab373b0",
-		"\tpriority=50",
+		// The script writes the number in: one above the highest in the file
+		"\tpriority=OMNICORE_PRIORITY",
 		"}"
 	].join("\n"));
 	assert.ok(!block.includes("correct horse"));

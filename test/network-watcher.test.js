@@ -26,7 +26,7 @@ const networkHelper = require("../core/network-helper");
 // A watcher on a clock the test moves, with the internet and the Wi-Fi as
 // the test says, and everything it would show written down
 function rig() {
-	const world = { internet: true, wifi: "connected", available: true };
+	const world = { internet: true, wifi: "connected", available: true, joining: false };
 	let clock = 1000000;
 	const said = [];
 	const speeds = [];
@@ -49,6 +49,7 @@ function rig() {
 		probe: async () => found(),
 		now: () => clock,
 		status: fakeStatus,
+		busy: () => world.joining,
 		watchCounters: async (card, seconds, onSample) => {
 			counted = { card, seconds };
 			onSample({ down: 125000, up: 4000 });
@@ -94,6 +95,27 @@ test("online at once; the internet going needs 30 seconds, and the first 90 are 
 	r.at(100);
 	await r.w.check();
 	assert.deepEqual(r.said, ["online", "no-internet", "online"], "good news at once");
+});
+
+test("joining another network on purpose: nothing said while it switches", async () => {
+	const r = rig();
+	r.at(0);
+	await r.w.check();
+	r.world.joining = true;
+	r.world.internet = false;
+	r.world.wifi = "gone";
+	r.at(100);
+	assert.equal(await r.w.check(), watcher.CHECK_WHILE_UNSURE_MS);
+	r.at(160);
+	await r.w.check();
+	assert.deepEqual(r.said, ["online"], "a minute without the Wi-Fi, and no takeover");
+	// Done, and it didn't work out: from then on, as usual
+	r.world.joining = false;
+	r.at(170);
+	await r.w.check();
+	r.at(200);
+	await r.w.check();
+	assert.deepEqual(r.said, ["online", "disconnected"]);
 });
 
 test("a blip shorter than 30 seconds is never shown", async () => {
@@ -211,11 +233,17 @@ async function read(server, until) {
 	const reader = response.body.getReader();
 	let text = "";
 	const deadline = Date.now() + 3000;
+	// One read at a time: a read still waiting when the 200 ms are up is
+	// kept for the next turn, so nothing that arrives late is lost
+	let pending = null;
 	while (!until(text) && Date.now() < deadline) {
-		const { value, done } = await Promise.race([
-			reader.read(),
-			new Promise((resolve) => setTimeout(() => resolve({ value: null }), 200))
+		if (!pending) pending = reader.read();
+		const { value, done, waited } = await Promise.race([
+			pending,
+			new Promise((resolve) => setTimeout(() => resolve({ waited: true }), 200))
 		]);
+		if (waited) continue;
+		pending = null;
 		if (done) break;
 		if (value) text += Buffer.from(value).toString("utf-8");
 	}
@@ -280,11 +308,38 @@ test("every kind of face has the stream, Settings' sign-in included", () => {
 		["core/control-face.js", "other"],
 		["core/wizard-face.js", "other"],
 		["core/about-face.js", "other"],
-		["core/admin-face.js", "other"]
+		["core/admin-face.js", "admin"]
 	]) {
 		const source = fs.readFileSync(require("path").join(__dirname, "..", file), "utf-8");
 		assert.ok(source.includes(`require("./network-status").attach(app, "${kind}");`), file);
 	}
 	const admin = fs.readFileSync(require("path").join(__dirname, "..", "core/admin-face.js"), "utf-8");
-	assert.ok(admin.indexOf('attach(app, "other")') < admin.indexOf("Gate everything except the setup and login endpoints"), "before sign-in");
+	assert.ok(admin.indexOf('attach(app, "admin")') < admin.indexOf("Gate everything except the setup and login endpoints"), "before sign-in");
+});
+
+test("joining a network's steps, with its name: the admin face's stream only", async () => {
+	status.reset();
+	status.setState("online");
+	const admin = await listen("admin");
+	const theme = await listen("dashboard");
+	const other = await listen("other");
+	try {
+		const reading = [
+			read(admin, (t) => t.includes("Kitchen")),
+			read(theme, (t) => t.includes("Kitchen")),
+			read(other, (t) => t.includes("Kitchen"))
+		];
+		await new Promise((resolve) => setTimeout(resolve, 300));
+		status.broadcastSetup({ phase: "connecting", ssid: "Kitchen" });
+		status.broadcastMode("manual");
+		const [onAdmin, onTheme, onOther] = await Promise.all(reading);
+		assert.match(onAdmin, /event: setup\ndata: \{"phase":"connecting","ssid":"Kitchen"\}/);
+		assert.ok(!onTheme.includes("Kitchen") && !onTheme.includes("setup-mode"), "a theme never hears a network's name");
+		assert.ok(!onOther.includes("Kitchen") && !onOther.includes("setup-mode"));
+	} finally {
+		admin.close();
+		theme.close();
+		other.close();
+		status.reset();
+	}
 });

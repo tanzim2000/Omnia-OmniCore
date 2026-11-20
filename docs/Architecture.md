@@ -1526,8 +1526,10 @@ Since v2 the settings home (`GET /` on the admin face) is four tabs on one
 page, switched by a small script (`settings-home.js`): **General**
 (Location Service, Place search, Saved keys, a box to try a search),
 **Appearance** (Frosted glass, Background with a Back button: Top left |
-Bottom right switch, Appearance Mode, Text Size), **Resources** (Manage Faces, the Marketplace,
-Installed Resources) and **About** (the version and the address, the
+Bottom right switch, Appearance Mode, Text Size), **Resources** (Network,
+Manage Faces, Installed Resources, the Marketplace: Manage Faces wide on
+top, Network and Installed Resources under it, the Marketplace tall on the
+right; on a phone in that order, Network first) and **About** (the version and the address, the
 updates, the release notes). A black notch hangs from the top edge (the
 top corners curve outward, drawn by two small quarter circles) and holds an
 icon per tab. The picked tab has clear glass on its icon: a tint, a bright
@@ -1678,7 +1680,11 @@ it has lasted 30 (checked every 10 meanwhile); good news at once.
 `/omnicore-network/events` (`networkStatus.attach(app, kind)`; on the admin
 face before sign-in, since the takeover is for every screen), and every
 page gets the same client (`pageStart()` and `clientBundle()`). The stream
-carries only the state, signal bars and speeds, never a network's name.
+carries only the state, signal bars and speeds, never a network's name. The
+one exception is the admin face's own stream (`attach(app, "admin")`): how a
+join is going (`setup` events, with the network's name) and the setup
+page's view (`setup-mode`) go only there, for the setup page and the
+Network page. A theme's page is on another port and can't open it.
 
 - **no-internet**: the drawer with a question mark, on every face, until
   it's back.
@@ -1719,6 +1725,29 @@ Joining, safely:
 Every step reaches the page as a `setup` event on the network stream.
 WEP and username-and-password (802.1X) networks are listed but can't be
 joined yet; hidden networks can't be typed in yet.
+
+**The Network page** (`core/network-page.js`), from the Network box on the
+Resources tab, after sign-in like the rest of Settings: the Wi-Fi now (its
+name, signal, band, link speed, address, card, and who looks after it),
+**Known networks** with Forget, and **Networks around** to join another.
+Joining is Manual Setup's `connect()`, so it's just as safe: a network that
+doesn't reach the internet within a minute is undone and the old one comes
+back. Meanwhile the watcher says nothing bad (`networkSetup.busy()`): the
+Wi-Fi drops for a moment while it switches, and that's no outage. With
+wpa_supplicant a newly joined network gets a priority one above the highest
+in the file (at least 50), so it wins over the network the server is still
+on. The phone or computer the page is open on may lose the server while it
+switches, so the last step is kept (`GET /network/join`) and the page asks
+for it when its stream comes back.
+
+Known networks are read by name only: the ssid line of each network in
+wpa_supplicant's file (never anything else; a test runs the script against
+a pretend file), or NetworkManager's Wi-Fi connections (not its hotspots).
+Forget takes the network out of the file the same way joining takes out an
+older entry, and tells wpa_supplicant; with NetworkManager it deletes the
+connections for that name. The network the server is on can't be forgotten
+(join another first). Nothing here works while the Wi-Fi is disconnected:
+the takeover's setup has the card then.
 
 **OmniSync first** (`core/network-hotspot.js`, `core/omnisync.js`). When
 the Wi-Fi is disconnected and the card can run a network of its own (what the

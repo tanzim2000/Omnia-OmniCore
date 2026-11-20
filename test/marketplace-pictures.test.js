@@ -148,7 +148,7 @@ test("Sources: each registry's banner beside its name", async () => {
 
 test("the Settings home: the Marketplace tile asks for the banners once the page is open", async () => {
 	const { text } = await get("/");
-	assert.ok(/<a class="segment clickable home-tile c2 r2" href="\/marketplace" data-market-slides>/.test(text));
+	assert.ok(/<a class="segment clickable home-tile c2 r2" href="\/marketplace" data-tile="marketplace" data-market-slides>/.test(text));
 	assert.ok(text.includes('fetch("/marketplace/banners"'), "the slideshow script is on the page");
 	assert.ok(!text.includes("pictures.example"), "the page itself carries no picture address");
 });

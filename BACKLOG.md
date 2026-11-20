@@ -27,7 +27,9 @@ Decided to ship in 2.0.0 (Nov 2026). Built in steps, one zip each:
    (it comes back with the next outage, or a restart); and a server that
    already runs a DHCP server can keep dnsmasq from starting (the hotspot
    then says it failed, and Manual Setup shows).
-5. **The Network page**, from a Network box on the Resources tab.
+5. **The Network page** (done), from the Network box on the Resources tab:
+   the Wi-Fi now, known networks with Forget, and joining another network
+   the safe way. Not yet: live speeds on the page, and a cable's details.
 6. **Saved passwords** (encrypted) **and the Guest Wi-Fi widget.**
 7. **Docs.**
 

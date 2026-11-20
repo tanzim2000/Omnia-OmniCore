@@ -157,6 +157,8 @@ for d in /sys/class/net/*; do
 	[ -d "$d/wireless" ] || [ -e "$d/phy80211" ] || continue
 	echo "@@ link $n"
 	tool 8 iw dev "$n" link
+	echo "@@ address $n"
+	ip -o -4 addr show dev "$n" 2>/dev/null | awk '{ print $4 }'
 	echo "@@ nearby $n"
 	tool 12 iw dev "$n" scan dump | grep -E '^BSS |^[[:space:]]+(freq|signal|SSID|RSN|WPA|capability|\\* Authentication suites):'
 	if [ -r "$d/phy80211/name" ]; then
@@ -378,10 +380,13 @@ function parseProbe(text) {
 
 	const wifi = interfaces.filter((card) => card.kind === "wifi").map((card) => {
 		const link = parseLink(found[`link ${card.name}`] || []);
+		// Its IPv4 address on the network, without the /24
+		const address = (found[`address ${card.name}`] || []).map((line) => line.trim().split("/")[0]).find((line) => /^\d+\.\d+\.\d+\.\d+$/.test(line));
 		return {
 			name: card.name,
 			state: card.state,
 			...link,
+			address: address || null,
 			rxBytes: card.rxBytes,
 			txBytes: card.txBytes,
 			phy: card.phy,

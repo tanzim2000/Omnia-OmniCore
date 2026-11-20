@@ -34,6 +34,9 @@
 //   - a bad state is only said once it has lasted 30 seconds, checked again
 //     every ten seconds meanwhile
 //   - good news is said at once
+//   - while a network is being joined on purpose (the Network page, or
+//     Manual Setup), nothing bad is said: the Wi-Fi drops for a moment
+//     while it switches, and the join puts the old one back if it fails
 // It checks once a minute while everything's fine, every 30 seconds while
 // something's wrong.
 //
@@ -88,6 +91,9 @@ function createWatcher(deps = {}) {
 	const now = deps.now || (() => Date.now());
 	const status = deps.status || networkStatus;
 	const watchCounters = deps.watchCounters || networkHelper.watchCounters;
+	// Whether a network is being joined (network-setup.js): the Wi-Fi
+	// drops for a moment while it switches, which is no outage
+	const busy = deps.busy || (() => require("./network-setup").busy());
 
 	const startedAt = now();
 	let state = "starting";
@@ -131,6 +137,14 @@ function createWatcher(deps = {}) {
 			}
 			if (state !== "online") say("online", card);
 			return CHECK_WHEN_FINE_MS;
+		}
+
+		// Switching networks on purpose: nothing is said until it's done
+		// (it takes about a minute at most, and puts the old one back if
+		// the new one doesn't work)
+		if (busy()) {
+			pending = null;
+			return CHECK_WHILE_UNSURE_MS;
 		}
 
 		let seen;

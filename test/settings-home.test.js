@@ -276,7 +276,7 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	for (const [id, boxes] of [
 		["general", ["Location Service", "Place search", "Saved keys", "Try a city search"]],
 		["appearance", ["Frosted glass", "Background", "Appearance Mode", "Text Size"]],
-		["resources", ["Manage Faces", "Marketplace", "Installed Resources"]],
+		["resources", ["Network", "Manage Faces", "Marketplace", "Installed Resources"]],
 		["about", ["OmniCore 2.0.", "Address", "Updates", "Release notes"]]
 	]) {
 		for (const box of boxes) assert.ok(pane(id).includes(box), `${box} on ${id}`);
@@ -298,6 +298,22 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	assert.match(pane("general"), /class="segment c2 row2" id="saved-keys"/);
 	assert.match(pane("general"), /class="segment c2 row2" id="place-try"/);
 	assert.match(pane("resources"), /class="segment clickable home-tile c2 r2" href="\/marketplace"/);
+
+	// Resources: on a phone held upright, Network first, then Manage
+	// Faces, Installed Resources and the Marketplace; wider, each box in
+	// its own place (Manage Faces wide on top, Network and Installed
+	// Resources under it, the Marketplace tall on the right)
+	const order = ["/network", "/faces", "/installed", "/marketplace"].map((href) => pane("resources").indexOf(`href="${href}"`));
+	assert.ok(order.every((at, i) => at !== -1 && (i === 0 || at > order[i - 1])), "the order a phone stacks them in");
+	for (const [tile, place] of [
+		["faces", "grid-column: 1 / span 4; grid-row: 1;"],
+		["network", "grid-column: 1 / span 2; grid-row: 2;"],
+		["installed", "grid-column: 3 / span 2; grid-row: 2;"],
+		["marketplace", "grid-column: 5 / span 2; grid-row: 1 / span 2;"]
+	]) {
+		assert.ok(pane("resources").includes(`data-tile="${tile}"`), tile);
+		assert.ok(settingsHome.SETTINGS_HOME_CSS.includes(`[data-tile=${tile}] { ${place} }`), `${tile}'s place`);
+	}
 
 	// The location is set right in its box
 	assert.ok(pane("general").includes('id="location-manual"'));

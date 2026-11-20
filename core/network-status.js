@@ -37,6 +37,12 @@
 // who can reach the face (Settings' sign-in page too: that's a face to
 // take over as well), so it holds nothing to look up.
 //
+// The one exception is the admin face's own stream (kind "admin"): how
+// joining a network is going ("setup" events, with the network's name)
+// and which view the setup page shows ("setup-mode") go only there, for
+// the setup page and the Network page, which are both served by it. A
+// theme's page is on another port, so it can't open that stream.
+//
 // A THEME
 //
 // Hears about it: <html> carries data-omnicore-network="online",
@@ -81,7 +87,8 @@ function broadcast(event, data, onlyKind) {
 }
 
 // Give a face's server the stream. `kind` is "dashboard" for a dashboard
-// face (port 4000 and up) and "other" for everything else.
+// face (port 4000 and up), "admin" for the admin face (port 3000), and
+// "other" for everything else.
 function attach(app, kind) {
 	app.get(EVENTS_PATH, (req, res) => {
 		res.setHeader("Content-Type", "text/event-stream");
@@ -89,7 +96,7 @@ function attach(app, kind) {
 		res.setHeader("Connection", "keep-alive");
 		res.flushHeaders();
 
-		const client = { res, kind: kind === "dashboard" ? "dashboard" : "other" };
+		const client = { res, kind: ["dashboard", "admin"].includes(kind) ? kind : "other" };
 		clients.add(client);
 
 		// What's true now, so a page opened during an outage shows it
@@ -161,17 +168,18 @@ function state() {
 	return current.state;
 }
 
-// How joining a network in Manual Setup is going (network-setup.js), for
-// the setup page: { phase, ssid, message }
+// How joining a network is going (network-setup.js), for the setup page
+// and the Network page: { phase, ssid, message }. The admin face only: it
+// has the network's name.
 function broadcastSetup(step) {
-	broadcast("setup", step || {});
+	broadcast("setup", step || {}, "admin");
 }
 
 // What the setup page should show now (network-hotspot.js): "omnisync",
 // "starting", "resting", "joining", "manual" or "off". The page asks for
 // the QR code itself; it isn't sent to every screen.
 function broadcastMode(mode) {
-	broadcast("setup-mode", { mode });
+	broadcast("setup-mode", { mode }, "admin");
 }
 
 // ---------------------------------------------------------------------

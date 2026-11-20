@@ -3659,7 +3659,7 @@ function startAdminFace() {
 	// The network stream for the status drawer and the takeover (see
 	// network-status.js). Before sign-in, so nothing stands in its way: the
 	// takeover is for every screen, the sign-in page's too.
-	require("./network-status").attach(app, "other");
+	require("./network-status").attach(app, "admin");
 	// Manual Setup's page and routes, open only while the Wi-Fi is
 	// disconnected (see network-setup.js)
 	require("./network-setup").attach(app);
@@ -3998,16 +3998,22 @@ function startAdminFace() {
 
 		// --- Resources ------------------------------------------------------
 
+		// In the order a phone held upright stacks them. On a wider screen
+		// each has its own place (settings-home.js): Manage Faces wide at
+		// the top, Network and Installed Resources side by side under it,
+		// the Marketplace tall on the right.
 		const resourcesPane =
-			settingsHome.tileHtml("/faces", "faces", "Manage Faces", "Create, edit and remove dashboards", "c4 row1") +
-			settingsHome.tileHtml("/marketplace", "marketplace", "Marketplace", "Modules and themes to install", "c2 r2", "data-market-slides") +
+			settingsHome.tileHtml("/network", "network", "Network", "The server's Wi&#8209;Fi, and the networks around", "c2 row2", 'data-tile="network"') +
+			settingsHome.tileHtml("/faces", "faces", "Manage Faces", "Create, edit and remove dashboards", "c4 row1", 'data-tile="faces"') +
 			settingsHome.tileHtml(
 				"/installed",
 				"installed",
 				"Installed Resources",
 				"What's installed, its versions, and what has an update waiting",
-				"c4 row2"
-			);
+				"c2 row2",
+				'data-tile="installed"'
+			) +
+			settingsHome.tileHtml("/marketplace", "marketplace", "Marketplace", "Modules and themes to install", "c2 r2", 'data-tile="marketplace" data-market-slides');
 
 		// --- About ----------------------------------------------------------
 
@@ -5653,6 +5659,10 @@ function startAdminFace() {
 		res.setHeader("Cache-Control", "no-store");
 		res.json(result);
 	});
+
+	// The Network page, from the Network box on the Resources tab: the
+	// server's Wi-Fi on a normal day (see network-page.js)
+	require("./network-page").attach(app, { page });
 
 	app.get("/updates/major", async (req, res) => {
 		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
