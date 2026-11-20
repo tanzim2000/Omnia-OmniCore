@@ -1238,6 +1238,17 @@ Themes should also **re-read `/identity` periodically** and re-apply their
 settings if they changed. If a push is ever missed, the display corrects
 itself rather than sitting stale until somebody reloads it by hand.
 
+### The network (since 2.0.0)
+
+The same injection brings the **status drawer** and the **takeover**
+(`core/network-status.js`). A theme doesn't draw either, but it can hear
+about the network: `<html>` carries `data-omnicore-network` (`online`,
+`no-internet` or `disconnected`), and the window gets an
+`omnicore:network` event with `{ state }` whenever that changes. A theme
+that wants to show it its own way can hide Core's drawer
+(`.omni-net-drawer { display: none }`). The takeover can't be hidden: it's
+how a screen nobody can reach any more says why.
+
 ---
 
 ## 7. Settings schemas
@@ -1653,6 +1664,37 @@ the script reads only counts and the control socket's folder: it never
 prints a line of it, since that's where the passwords are (a test checks).
 Without Docker access it answers `{ available: false, reason: "no-docker" }`;
 an OmniCore without the tools (from source, or before 2.0.0), `"no-tools"`.
+
+**Watching.** `core/network-watcher.js` asks github.com (any answer counts;
+nothing in 8 seconds doesn't) once a minute, and every 30 seconds while
+something's wrong. Only when that fails does it look at the Wi-Fi: a
+connected card or a plugged-in cable means **no-internet**, neither means
+**disconnected**; an OmniCore that can't look says no-internet. Nothing bad
+is said in the first 90 seconds after starting, and a bad state only once
+it has lasted 30 (checked every 10 meanwhile); good news at once.
+`OMNICORE_NETWORK_WATCH=off` turns it off.
+
+**Showing.** Every face's server, of every kind, has
+`/omnicore-network/events` (`networkStatus.attach(app, kind)`; on the admin
+face before sign-in, since the takeover is for every screen), and every
+page gets the same client (`pageStart()` and `clientBundle()`). The stream
+carries only the state, signal bars and speeds, never a network's name.
+
+- **no-internet**: the drawer with a question mark, on every face, until
+  it's back.
+- **disconnected**: the takeover on every face, "Wi-Fi disconnected"; no
+  drawer.
+- **disconnected to online**: the takeover fades, then on dashboard faces
+  only (the server sends it to `kind: "dashboard"` streams) the drawer
+  shows the signal and live speeds for ten seconds. The speeds are the
+  card's own byte counters, read once a second by a helper
+  (`watchCounters`): nothing is downloaded to measure them.
+
+The drawer is clear glass with no blur, lets every touch through, and
+moves with the Web Animations API: it drops in at the top right as a
+sliver (0.25 s, settling with a little give), slides open left (0.4 s, no
+overshoot), and leaves straight up (0.35 s, speeding up as it goes); with
+reduced motion it fades.
 
 ### Image proxying
 

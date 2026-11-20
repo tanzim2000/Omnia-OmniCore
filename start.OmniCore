@@ -119,3 +119,7 @@ resourceScheduler.start();
 // Delayed slightly later than resourceScheduler so the two never pull
 // from GitHub in the same instant on a cold start.
 coreUpdateScheduler.start();
+
+// Watching the network: the status drawer and the takeover on every face
+// (since 2.0.0; see core/network-watcher.js)
+require("./core/network-watcher").start();

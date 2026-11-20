@@ -1,12 +1,10 @@
 # OmniCore, packaged so nobody running it needs Node, npm, or a terminal
 # beyond one docker compose command.
 #
-# Built in three stages, so that nothing ever has to RUN under emulation:
+# Built in two stages, so that nothing ever has to RUN under emulation:
 #
 #   dependencies   installs the libraries, on the machine doing the build
 #                  (GitHub's x86 runners), whatever image is being built
-#   network-tools  the Wi-Fi tools Network Management uses, unpacked on the
-#                  build machine for the target machine (since 2.0.0)
 #   final          the image itself: a Node base for the target machine
 #                  (x86 or ARM) with those libraries and OmniCore's own
 #                  files copied in. Only COPY steps, no RUN.
@@ -78,14 +76,14 @@ ARG TARGETARCH
 
 RUN set -e; \
 	case "$TARGETARCH" in \
-		amd64) arch=x86_64 ;; \
-		arm64) arch=aarch64 ;; \
-		*) echo "No network tools for $TARGETARCH"; exit 1 ;; \
+	amd64) arch=x86_64 ;; \
+	arm64) arch=aarch64 ;; \
+	*) echo "No network tools for $TARGETARCH"; exit 1 ;; \
 	esac; \
 	apk add --quiet --no-cache --root /net --arch "$arch" --initdb --no-scripts \
-		--keys-dir "/usr/share/apk/keys/$arch" \
-		--repositories-file /etc/apk/repositories \
-		alpine-baselayout busybox wpa_supplicant iw networkmanager-cli; \
+	--keys-dir "/usr/share/apk/keys/$arch" \
+	--repositories-file /etc/apk/repositories \
+	alpine-baselayout busybox wpa_supplicant iw networkmanager-cli; \
 	# --no-scripts skipped busybox making its commands; the tools' own
 	# scripts only need a shell
 	ln -sf /bin/busybox /net/bin/sh; \

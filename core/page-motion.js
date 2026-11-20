@@ -242,11 +242,12 @@ function curtainHtml(options) {
 	return `${styles}<div class="omni-curtain" aria-hidden="true"></div><script>${curtainScript(fadeIn)}</script>`;
 }
 
-// What every page OmniCore draws starts its <body> with: the curtain, then
-// the picture behind the page (backdrop.js)
+// What every page OmniCore draws starts its <body> with: the curtain, the
+// picture behind the page (backdrop.js), and the status drawer and the
+// takeover (network-status.js)
 function pageStart() {
 	const { backdropHtml } = require("./backdrop");
-	return curtainHtml() + backdropHtml();
+	return curtainHtml() + backdropHtml() + require("./network-status").CLIENT_HTML;
 }
 
 // Moving on from a page's own script: with the fade where there is one.

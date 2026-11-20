@@ -263,6 +263,10 @@ function startAboutFace() {
 	// The browser tab's icon (core/icon.js)
 	attachIconRoute(app);
 
+	// The network stream for the status drawer and the takeover (see
+	// network-status.js)
+	require("./network-status").attach(app, "other");
+
 	// Light or dark for whichever browser is asking. See ui-theme.js.
 	app.use(rememberUiMode);
 

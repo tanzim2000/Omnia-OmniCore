@@ -3655,6 +3655,12 @@ function startAdminFace() {
 	const app = express();
 	// The browser tab's icon (core/icon.js)
 	attachIconRoute(app);
+
+	// The network stream for the status drawer and the takeover (see
+	// network-status.js). Before sign-in, so nothing stands in its way: the
+	// takeover is for every screen, the sign-in page's too.
+	require("./network-status").attach(app, "other");
+
 	app.use(express.json());
 
 	// Light or dark for whichever browser is asking. See ui-theme.js.

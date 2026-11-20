@@ -14,7 +14,7 @@ Decided to ship in 2.0.0 (Nov 2026). Built in steps, one zip each:
 
 1. **The network helper** (done): reads the host's Wi-Fi through a
    short-lived copy of OmniCore on the host's network. Read-only.
-2. **The watcher, the takeover and the status drawer.**
+2. **The watcher, the takeover and the status drawer** (done).
 3. **Manual Setup**: nearby networks, a password typed on a physical
    keyboard, back to the old network if the new one doesn't work.
 4. **The hotspot and the OmniSync QR** (only OmniSync reads it).

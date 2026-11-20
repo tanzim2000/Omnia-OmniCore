@@ -187,7 +187,8 @@ function displayCount(faceId) {
 }
 
 // Everything Core injects into a page, in one block: the reload
-// listener, the notification listener, and the overlay that draws one.
+// listener, the notification listener, the overlay that draws one, and the
+// network's status drawer and takeover.
 //
 // Bundled together on purpose. Anything that already injects
 // CLIENT_SCRIPT gets notifications without having to know they exist,
@@ -201,7 +202,10 @@ function clientBundle(face) {
 	return (
 		`<style>${notifications.overlayStyles(face && face.notificationMode)}</style>\n` +
 		`<script>${notifications.OVERLAY_SCRIPT}</script>\n` +
-		CLIENT_SCRIPT
+		CLIENT_SCRIPT +
+		// The status drawer and the takeover (since 2.0.0): a theme's page
+		// gets them the way it gets everything else here
+		require("./network-status").CLIENT_HTML
 	);
 }
 

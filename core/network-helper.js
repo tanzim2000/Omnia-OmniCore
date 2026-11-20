@@ -430,6 +430,22 @@ async function runOnHost(script, options = {}) {
 
 	try {
 		await helper.start();
+
+		// A line at a time, as it's printed (for the live speeds), rather
+		// than everything once it's finished
+		if (options.onLine) {
+			const stream = await helper.logs({ follow: true, stdout: true, stderr: true });
+			let pending = "";
+			stream.on("data", (chunk) => {
+				pending += chunk.toString("utf-8");
+				let end;
+				while ((end = pending.indexOf("\n")) !== -1) {
+					options.onLine(pending.slice(0, end).replace(/\r$/, ""));
+					pending = pending.slice(end + 1);
+				}
+			});
+		}
+
 		await Promise.race([
 			helper.wait(),
 			new Promise((resolve, reject) => setTimeout(() => reject(new Error("The network helper took too long")), options.timeoutMs || PROBE_TIMEOUT_MS).unref())
@@ -438,6 +454,43 @@ async function runOnHost(script, options = {}) {
 	} finally {
 		helper.remove({ force: true }).catch(() => {});
 	}
+}
+
+// Live speeds: a Wi-Fi card's byte counters, read once a second for
+// `seconds` seconds, each reading handed to onSample({ down, up }) in
+// bytes a second as it comes. The counters are the card's own (what the
+// kernel has counted going through it), so nothing is downloaded to
+// measure anything: it's the traffic there is right now.
+async function watchCounters(card, seconds, onSample, options = {}) {
+	if (!/^[\w.-]{1,15}$/.test(String(card))) throw new Error("Not a network card's name");
+	const count = Math.max(1, Math.min(60, Math.round(seconds)));
+	const script = `
+d=/sys/class/net/${card}/statistics
+i=0
+while [ $i -le ${count} ]; do
+	echo "@@ count $(cat $d/rx_bytes 2>/dev/null) $(cat $d/tx_bytes 2>/dev/null)"
+	i=$((i + 1))
+	sleep 1
+done
+`;
+	let previous = null;
+	await (options.run || runOnHost)(script, {
+		...options,
+		timeoutMs: (count + 15) * 1000,
+		onLine: (line) => {
+			const match = line.match(/^@@ count (\d+) (\d+)$/);
+			if (!match) return;
+			const now = { at: Date.now(), rx: Number(match[1]), tx: Number(match[2]) };
+			if (previous) {
+				const elapsed = Math.max(0.2, (now.at - previous.at) / 1000);
+				onSample({
+					down: Math.max(0, (now.rx - previous.rx) / elapsed),
+					up: Math.max(0, (now.tx - previous.tx) / elapsed)
+				});
+			}
+			previous = now;
+		}
+	});
 }
 
 // Whether this OmniCore has the network tools at all: an image from 2.0.0
@@ -497,5 +550,6 @@ module.exports = {
 	unescapeSsid,
 	bars,
 	runOnHost,
+	watchCounters,
 	hasTools
 };
