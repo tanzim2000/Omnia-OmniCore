@@ -1690,6 +1690,36 @@ carries only the state, signal bars and speeds, never a network's name.
   card's own byte counters, read once a second by a helper
   (`watchCounters`): nothing is downloaded to measure them.
 
+**Manual Setup** (`core/network-setup.js`). Under the takeover's message,
+a list of the networks around (a fresh scan), a password box, and Connect.
+It's a page of its own on the admin face (`/omnicore-network/setup`), shown
+in a frame: the takeover is on a theme's pages too, whose JavaScript isn't
+trusted, and a different port is a different origin, so a theme can't read
+what's typed. Its CSP lets only this server's own faces frame it. Every
+route answers 409 unless the Wi-Fi is disconnected, which is what stands
+in for signing in: then only the server's own screen can reach it. It takes
+JSON only.
+
+Joining, safely:
+- **wpa_supplicant:** the helper gets the settings file's folder writable
+  (and nothing else). It keeps the file as it was beside it
+  (`.omnicore-before`), takes out any entry with the same name, appends the
+  new one, and sends wpa_supplicant SIGHUP to read it again. The name is
+  written in hex. A WPA/WPA2 password is stored as the key `wpa_passphrase`
+  works out (PBKDF2-SHA1, 4096 rounds, the name as salt), never as typed;
+  only a WPA3-only network gets the password itself. Once the card has
+  joined, udhcpc is nudged (SIGUSR2 then SIGUSR1) for a new address.
+- **NetworkManager:** a connection of its own (`omnicore-<name in hex>`),
+  brought up with `nmcli`, which also gets the address.
+- **Then** up to a minute for the internet. Online: kept (the copy is
+  removed), and the watcher looks at once. Not: everything put back (the
+  copy restored and wpa_supplicant told; or the connection deleted), and the
+  page says why ("Check the password", or "has no internet").
+
+Every step reaches the page as a `setup` event on the network stream.
+WEP and username-and-password (802.1X) networks are listed but can't be
+joined yet; hidden networks can't be typed in yet.
+
 The drawer is clear glass with no blur, lets every touch through, and
 moves with the Web Animations API: it drops in at the top right as a
 sliver (0.25 s, settling with a little give), slides open left (0.4 s, no

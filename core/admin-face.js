@@ -3660,6 +3660,9 @@ function startAdminFace() {
 	// network-status.js). Before sign-in, so nothing stands in its way: the
 	// takeover is for every screen, the sign-in page's too.
 	require("./network-status").attach(app, "other");
+	// Manual Setup's page and routes, open only while the Wi-Fi is
+	// disconnected (see network-setup.js)
+	require("./network-setup").attach(app);
 
 	app.use(express.json());
 

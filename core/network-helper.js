@@ -240,7 +240,7 @@ function parseNearby(lines) {
 	let point = null;
 	for (const line of lines) {
 		if (/^BSS /.test(line)) {
-			point = { ssid: "", signal: null, frequency: null, rsn: false, wpa: false, privacy: false, sae: false };
+			point = { ssid: "", signal: null, frequency: null, rsn: false, wpa: false, privacy: false, sae: false, psk: false, enterprise: false };
 			points.push(point);
 			continue;
 		}
@@ -252,20 +252,34 @@ function parseNearby(lines) {
 		else if (/^RSN:/.test(value)) point.rsn = true;
 		else if (/^WPA:/.test(value)) point.wpa = true;
 		else if (/^capability:/.test(value) && /Privacy/.test(value)) point.privacy = true;
-		else if (/Authentication suites:/.test(value) && /SAE/.test(value)) point.sae = true;
+		else if (/Authentication suites:/.test(value)) {
+			if (/\bSAE\b/.test(value)) point.sae = true;
+			if (/\bPSK\b/.test(value)) point.psk = true;
+			if (/802\.1X/.test(value)) point.enterprise = true;
+		}
 	}
 
 	const byName = new Map();
 	for (const found of points) {
 		if (!found.ssid || /^\\x00/.test(found.ssid) || /^\0+$/.test(found.ssid)) continue;
 		const security = found.sae ? "WPA3" : found.rsn ? "WPA2" : found.wpa ? "WPA" : found.privacy ? "WEP" : "Open";
+		// How OmniCore would join it: no password, a WPA/WPA2 password (also
+		// what a network offering both WPA2 and WPA3 takes), a WPA3-only
+		// password, or not at all (WEP, and work networks that sign in with
+		// a username)
+		const auth =
+			!found.rsn && !found.wpa && !found.privacy ? "open"
+			: (found.psk || ((found.rsn || found.wpa) && !found.sae && !found.enterprise)) ? "psk"
+			: found.sae ? "sae"
+			: "unsupported";
 		const entry = {
 			ssid: found.ssid,
 			signal: found.signal,
 			bars: bars(found.signal),
 			frequency: found.frequency,
 			band: found.frequency >= 5900 ? "6 GHz" : found.frequency >= 4900 ? "5 GHz" : found.frequency ? "2.4 GHz" : null,
-			security
+			security,
+			auth
 		};
 		const kept = byName.get(entry.ssid);
 		if (!kept || (entry.signal !== null && (kept.signal === null || entry.signal > kept.signal))) byName.set(entry.ssid, entry);
@@ -417,13 +431,22 @@ async function runOnHost(script, options = {}) {
 		Image: self.info.Image,
 		Entrypoint: ["sh", "-c"],
 		Cmd: [script],
+		// Anything the script needs from OmniCore (Manual Setup's new
+		// network): only ever for the moment the helper exists
+		Env: Object.entries(options.env || {}).map(([key, value]) => `${key}=${value}`),
 		Tty: true,
 		Labels: { "omnicore.helper": "network" },
 		HostConfig: {
 			NetworkMode: "host",
 			PidMode: "host",
 			CapAdd: ["NET_ADMIN", "NET_RAW"],
-			Mounts: [{ Type: "bind", Source: "/", Target: HOST, ReadOnly: true }],
+			// The host's files read-only, plus any folder a change needs to
+			// write in (Manual Setup: the one holding wpa_supplicant's
+			// settings), and nothing else
+			Mounts: [
+				{ Type: "bind", Source: "/", Target: HOST, ReadOnly: true },
+				...(options.writable || []).map((folder) => ({ Type: "bind", Source: folder, Target: HOST + folder, ReadOnly: false }))
+			],
 			AutoRemove: false
 		}
 	});

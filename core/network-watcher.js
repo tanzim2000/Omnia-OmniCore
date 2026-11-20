@@ -180,6 +180,13 @@ function createWatcher(deps = {}) {
 			stopped = true;
 			clearTimeout(timer);
 		},
+		// Look now, not at the next turn (Manual Setup has just joined a
+		// network)
+		checkNow() {
+			if (stopped) return;
+			clearTimeout(timer);
+			schedule(0);
+		},
 		state: () => state
 	};
 }
@@ -199,7 +206,12 @@ function start() {
 	return running;
 }
 
+function checkNow() {
+	if (running) running.checkNow();
+}
+
 module.exports = {
+	checkNow,
 	BOOT_GRACE_MS,
 	DROP_GRACE_MS,
 	CHECK_WHEN_FINE_MS,

@@ -19,7 +19,9 @@
 //
 //   The takeover: when the Wi-Fi is disconnected, the core's core takes
 //   over every face, pauses it, and says so: "Wi-Fi disconnected". No
-//   drawer then. (Setting up a network from it comes with Manual Setup.)
+//   drawer then. Under that, Manual Setup (network-setup.js), in a frame
+//   from the admin face's port so that a theme's page can't read what's
+//   typed into it.
 //
 // HOW IT GETS THERE
 //
@@ -44,6 +46,12 @@
 // (.omni-net-drawer { display: none }); the takeover can't be hidden.
 
 const EVENTS_PATH = "/omnicore-network/events";
+
+// Manual Setup's page, on the admin face (network-setup.js has the same
+// path; written out here too, as requiring that file here would go round
+// in a circle)
+const SETUP_PATH = "/omnicore-network/setup";
+const { ADMIN_PORT } = require("./face-links");
 
 // How long the drawer stays out when the Wi-Fi comes back
 const RECONNECT_SHOWN_MS = 10000;
@@ -139,6 +147,12 @@ function state() {
 	return current.state;
 }
 
+// How joining a network in Manual Setup is going (network-setup.js), for
+// the setup page: { phase, ssid, message }
+function broadcastSetup(step) {
+	broadcast("setup", step || {});
+}
+
 // ---------------------------------------------------------------------
 // The client: one <style> and one <script>, the same on every page
 
@@ -222,7 +236,15 @@ const CLIENT_CSS = `
 	}
 	.omni-net-takeover[hidden] { display: none; }
 	.omni-net-takeover.on { opacity: 1; }
-	.omni-net-takeover-card { max-width: 30em; display: grid; justify-items: center; gap: 0.75em; }
+	.omni-net-takeover-card { width: min(34em, 100%); display: grid; justify-items: center; gap: 0.75em; }
+	.omni-net-setup {
+		width: 100%;
+		height: min(30em, 58vh);
+		margin-top: 0.75em;
+		border: 0;
+		background: transparent;
+		color-scheme: dark;
+	}
 	.omni-net-takeover svg { width: 4.5em; height: 4.5em; opacity: 0.9; }
 	.omni-net-takeover h1 { margin: 0.25em 0 0; font-size: 2em; font-weight: 600; letter-spacing: -0.01em; }
 	.omni-net-takeover p { margin: 0; color: rgba(255, 255, 255, 0.75); }
@@ -384,6 +406,16 @@ const CLIENT_SCRIPT = `
 					'</div>';
 				document.body.appendChild(takeover);
 			}
+			// Manual Setup, from the admin face's port: a different origin,
+			// so a theme's script on this page can't read the password
+			// typed into it. Fresh each time the takeover comes up.
+			if (!takeover.querySelector("iframe")) {
+				var frame = document.createElement("iframe");
+				frame.className = "omni-net-setup";
+				frame.title = "Manual Setup";
+				frame.src = location.protocol + "//" + location.hostname + ":${ADMIN_PORT}${SETUP_PATH}";
+				takeover.querySelector(".omni-net-takeover-card").appendChild(frame);
+			}
 			takeover.hidden = false;
 			// The next frame, so it fades in rather than appearing; and
 			// only if it's still wanted by then (the Wi-Fi can come back
@@ -395,7 +427,12 @@ const CLIENT_SCRIPT = `
 			takeover.classList.remove("on");
 			var fade = still.matches ? 0 : 400;
 			takeoverGoneAt = Date.now() + fade;
-			setTimeout(function () { if (!takeoverWanted) takeover.hidden = true; }, fade);
+			setTimeout(function () {
+				if (takeoverWanted) return;
+				takeover.hidden = true;
+				var frame = takeover.querySelector("iframe");
+				if (frame) frame.remove();
+			}, fade);
 		}
 	}
 
@@ -474,6 +511,7 @@ module.exports = {
 	showReconnected,
 	showSpeed,
 	state,
+	broadcastSetup,
 	CLIENT_HTML,
 	CLIENT_CSS,
 	CLIENT_SCRIPT,
