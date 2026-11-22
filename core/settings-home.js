@@ -1045,6 +1045,18 @@ const SETTINGS_HOME_CSS = `
 	.home-bento .c6 { grid-column: 1 / -1; }
 	.home-bento .r2 { grid-row: span 2; align-self: stretch; }
 
+	/* Appearance tab: the mode box has some empty room to the right of its
+	   three previews, so it gives a little of it to the Text Size box
+	   beside it. The mode box is narrower by an amount, and the text box
+	   starts that far to the left, so the gap between them stays the same.
+	   The amount is a share of the box, never more than 5em, so a smaller
+	   screen doesn't squeeze the previews. Only where the boxes sit side
+	   by side; on a phone they stack and keep their full width. */
+	@media (min-width: 42.01em) {
+		.home-bento > .mode-box { width: calc(100% - min(15%, 5em)); }
+		.home-bento > .type-box { margin-left: calc(-1 * min(15%, 5em)); }
+	}
+
 	/* Anything but a phone held upright: the grid goes sideways. Two rows
 	   that fit the screen (the first as tall as its boxes need, the second
 	   what's left), and columns a sixth of the boxes' width that go on to

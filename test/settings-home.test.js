@@ -294,6 +294,24 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	// the search box, the Marketplace beside the other two
 	assert.match(pane("appearance"), /class="segment c4 row1" id="glass"/);
 	assert.match(pane("appearance"), /class="segment c2 row1" id="background"/);
+	// Appearance Mode and Text Size & Typography share the second row; the
+	// mode box hands the Text Size box its empty room (see the CSS test
+	// below), and the Text Size box has the note on the left, the stepper
+	// on the right and the font underneath
+	assert.match(pane("appearance"), /class="segment c3 row2 mode-box"/);
+	assert.match(pane("appearance"), /class="segment c3 row2 type-box"/);
+	const typeHead = pane("appearance").slice(pane("appearance").indexOf('class="type-head"'));
+	assert.ok(typeHead.indexOf("type-head-text") < typeHead.indexOf('class="stepper"'), "the note, then the stepper");
+	assert.ok(typeHead.indexOf('class="stepper"') < typeHead.indexOf('class="inset"'), "the font under both");
+	assert.ok(
+		typeHead.slice(typeHead.indexOf("type-head-text"), typeHead.indexOf('class="stepper"')).includes("Dashboards are unaffected."),
+		"the note sits in the left part, beside the stepper"
+	);
+	for (const id of ["size-down", "size", "size-up", "change-font"]) {
+		assert.equal(pane("appearance").split(`id="${id}"`).length - 1, 1, `${id} once`);
+	}
+	assert.match(settingsHome.SETTINGS_HOME_CSS, /\.home-bento > \.mode-box \{ width: calc\(100% - min\(15%, 5em\)\); \}/);
+	assert.match(settingsHome.SETTINGS_HOME_CSS, /\.home-bento > \.type-box \{ margin-left: calc\(-1 \* min\(15%, 5em\)\); \}/);
 	assert.match(pane("general"), /class="segment c2 r2" id="place-search"/);
 	assert.match(pane("general"), /class="segment c2 row2" id="saved-keys"/);
 	assert.match(pane("general"), /class="segment c2 row2" id="place-try"/);

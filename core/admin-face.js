@@ -205,6 +205,22 @@ const styles = `
 	   unwrapped content first. */
 	.inset-text { flex: 1 1 0; min-width: 0; }
 
+	/* Text Size & Typography: the heading and its note on the left, the
+	   size stepper on the right, then the font underneath. On a narrow
+	   screen the stepper drops under the note rather than squeezing it
+	   (flex-wrap, and the text keeps at least 12em). */
+	.type-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px 14px;
+		margin-bottom: 14px;
+	}
+	.type-head-text { flex: 1 1 12em; min-width: 0; }
+	.type-head-text .hint { margin: 0; }
+	.type-head .stepper { flex-shrink: 0; }
+
 	.inset-label { font-size: 0.7em; color: var(--fg-muted); }
 	.inset-value { font-size: 0.85em; margin-top: 2px; }
 	/* The coordinates after a place's name: a little apart, quieter, kept
@@ -3926,7 +3942,7 @@ function startAdminFace() {
 		const glassParts = backgroundPanel(settings);
 
 		const modeBox = `
-			<div class="segment c3 row2">
+			<div class="segment c3 row2 mode-box">
 				<div class="box-head">
 					<h2>Appearance Mode</h2>
 					${infoTip(
@@ -3967,20 +3983,24 @@ function startAdminFace() {
 			</div>`;
 
 		const textBox = `
-			<div class="segment c3 row2">
-				<h2>Text Size &amp; Typography</h2>
-				<div class="stepper" style="margin-bottom:10px">
-					<button type="button" class="glass" id="size-down"
-						aria-label="Smaller">&#8722;</button>
-					<input type="number" id="size" min="12" max="24" step="1"
-						value="${Number(settings.uiFontSize) || 16}">
-					<span class="muted">px</span>
-					<button type="button" class="glass" id="size-up"
-						aria-label="Larger">&#43;</button>
+			<div class="segment c3 row2 type-box">
+				<div class="type-head">
+					<div class="type-head-text">
+						<h2>Text Size &amp; Typography</h2>
+						<p class="hint">
+							Applies immediately. Dashboards are unaffected.
+						</p>
+					</div>
+					<div class="stepper">
+						<button type="button" class="glass" id="size-down"
+							aria-label="Smaller">&#8722;</button>
+						<input type="number" id="size" min="12" max="24" step="1"
+							value="${Number(settings.uiFontSize) || 16}">
+						<span class="muted">px</span>
+						<button type="button" class="glass" id="size-up"
+							aria-label="Larger">&#43;</button>
+					</div>
 				</div>
-				<p class="hint" style="margin-bottom:12px">
-					Applies immediately. Dashboards are unaffected.
-				</p>
 				<div class="inset">
 					<div class="inset-text">
 						<div class="inset-label">FONT</div>
