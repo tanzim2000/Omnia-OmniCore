@@ -397,6 +397,590 @@ function modeRules(light) {
 //   - otherwise BOTH, dark first and light inside a
 //     prefers-color-scheme query, so the browser picks by itself with
 //     no script and no flash of the wrong colours on load.
+// The Settings home's elements (settings-home.js draws the page): the
+// notch and the capsule, the strip of tabs, a tab's grid, the tiles, and
+// fact rows. At the end of uiStyles, where they've always been on the page.
+const SETTINGS_HOME_CSS = `
+	/* ===============================================================
+	   THE SETTINGS HOME: a page of tabs under a notch
+	   ===============================================================
+	   The page (body.settings-home) and its notch are drawn by
+	   settings-home.js; what they look like is here, like everything
+	   else. Its script only switches classes and sets CSS variables:
+	   --tab and --pan on the page, --nl on a tab of the notch, --pill-x
+	   and --pill-w on the glass, --rows on a tab's grid.
+	   --------------------------------------------------------------- */
+
+	/* The notch: black, hanging from the top edge like a drop of water. Its
+	   top corners curve outward into the edge (the two ears), its bottom
+	   corners are round. A filter draws the thin light edge and the shadow
+	   around the whole shape, ears included, so it shows on a black page. */
+	.notch {
+		--ear: 0.9em;
+		position: fixed;
+		top: 0;
+		left: 50%;
+		z-index: 60;
+		display: flex;
+		align-items: center;
+		gap: 2px;
+		/* In em, like every padding, so the notch grows with the text size
+		   (6px, 10px and 9px at the usual 16px) */
+		padding: 0.375em 0.625em 0.5625em;
+		background: #000;
+		border-radius: 0 0 1.75em 1.75em;
+		filter: drop-shadow(1px 0 0 rgba(255, 255, 255, 0.2))
+			drop-shadow(-1px 0 0 rgba(255, 255, 255, 0.2))
+			drop-shadow(0 1px 0 rgba(255, 255, 255, 0.2))
+			drop-shadow(0 10px 22px rgba(0, 0, 0, 0.45));
+		transform: translate(-50%, 0);
+		transition: transform 0.45s cubic-bezier(0.2, 0.9, 0.25, 1.05);
+	}
+
+	/* The ears: a square at each top corner, black outside a quarter
+	   circle, so the edge runs down smoothly into the notch's side. They
+	   reach 1px under the notch so there's no seam. */
+	.notch::before,
+	.notch::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		width: calc(var(--ear) + 1px);
+		height: var(--ear);
+		pointer-events: none;
+	}
+	.notch::before {
+		right: calc(100% - 1px);
+		background: radial-gradient(circle at 0 100%, transparent calc(var(--ear) - 0.5px), #000 var(--ear));
+	}
+	.notch::after {
+		left: calc(100% - 1px);
+		background: radial-gradient(circle at 100% 100%, transparent calc(var(--ear) - 0.5px), #000 var(--ear));
+	}
+
+	/* Up and out of sight: as the page fades out, and before it drops in
+	   when the page fades in */
+	.notch.notch-up { transform: translate(-50%, -125%); transition-duration: 0.18s; }
+	html.omni-arriving .notch { animation: notch-drop 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.05) 0.3s both; }
+	@keyframes notch-drop { from { transform: translate(-50%, -125%); } to { transform: translate(-50%, 0); } }
+
+	.nb {
+		position: relative;
+		display: flex;
+		align-items: center;
+		height: 2.75em;
+		min-width: 2.75em;
+		padding: 0 0.7em;
+		box-sizing: border-box;
+		border-radius: 1.4em;
+		color: #fff;
+		text-decoration: none;
+		transition: background 0.25s;
+	}
+
+	.nb svg { flex: none; }
+	/* A tab you're about to go to (hover, keyboard focus) gets a fainter
+	   piece of the same glass, with its name inside. The picked tab gets
+	   nothing extra: its own glass already widens to hold its name. */
+	.nb:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.55); }
+	.nb:focus-visible:not([aria-current]) {
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+	}
+	/* Only a pointer hovers: on a finger a tap would leave the name stuck
+	   open */
+	@media (hover: hover) {
+		.nb:hover:not([aria-current]) {
+			background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+			box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+		}
+	}
+
+	/* The clear glass on the picked tab's icon. No blur, so the icon stays
+	   sharp: a faint tint, a bright rim along the top, a soft glow along the
+	   bottom inside, and a little more light and colour from what's under it.
+	   It lets clicks through to the tab. */
+	.nb-pill {
+		position: absolute;
+		z-index: 2;
+		top: 0.375em;
+		left: 0;
+		/* On the picked tab and as wide as it, name and all: the script
+		   measures the tab and sets these two */
+		transform: translateX(var(--pill-x, 0px));
+		width: var(--pill-w, 2.75em);
+		height: 2.75em;
+		box-sizing: border-box;
+		border-radius: 999em;
+		pointer-events: none;
+		opacity: 0;
+		background:
+			radial-gradient(120% 90% at 30% 8%, rgba(255, 255, 255, 0.34), transparent 58%),
+			linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+		border: 1px solid rgba(255, 255, 255, 0.3);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.6),
+			inset 0 -5px 9px -4px rgba(255, 255, 255, 0.22),
+			0 2px 6px rgba(0, 0, 0, 0.4);
+		-webkit-backdrop-filter: brightness(1.35) saturate(1.4);
+		backdrop-filter: brightness(1.35) saturate(1.4);
+	}
+	.nb-pill.ready {
+		opacity: 1;
+		transition: transform 0.4s cubic-bezier(0.3, 0.9, 0.3, 1.1), width 0.4s cubic-bezier(0.3, 0.9, 0.3, 1.1), opacity 0.25s;
+	}
+	/* While a name opens or closes, the glass moves with its tab, not after it */
+	.nb-pill.ready.keeping-up { transition: opacity 0.25s; }
+
+	/* A tab's name: shown beside its icon on hover, focus or a long press,
+	   the notch widening to make room. None stays open on the picked tab. */
+	.nl {
+		max-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		opacity: 0;
+		font-size: 0.875em;
+		transition: max-width 0.45s cubic-bezier(0.65, 0, 0.25, 1), opacity 0.3s, padding 0.45s;
+	}
+
+	.nb:focus-visible .nl,
+	.nb.show .nl,
+	.nb.peek .nl {
+		max-width: var(--nl, 8em);
+		opacity: 1;
+		padding-left: 0.5em;
+	}
+	.notch.measuring, .notch.measuring * { transition: none !important; }
+	@media (hover: hover) {
+		.nb:hover .nl {
+			max-width: var(--nl, 8em);
+			opacity: 1;
+			padding-left: 0.5em;
+		}
+	}
+
+	/* An update is ready: a green dot over the glass (if About is the picked
+	   tab), with two rings spreading out from it and fading, one after the
+	   other, like a blip on a radar */
+	.nb-dot {
+		--dot: #2fd47a;
+		position: absolute;
+		z-index: 3;
+		top: 0.45em;
+		left: 1.6em;
+		width: 0.62em;
+		height: 0.62em;
+		box-sizing: content-box;
+		border-radius: 50%;
+		background: var(--dot);
+		border: 2px solid var(--dot-edge, #000);
+	}
+	.nb-dot::before,
+	.nb-dot::after {
+		content: "";
+		position: absolute;
+		inset: -2px;
+		box-sizing: border-box;
+		border-radius: 50%;
+		border: 2px solid var(--dot);
+		opacity: 0;
+		pointer-events: none;
+		animation: nb-radar 2.4s cubic-bezier(0.1, 0.6, 0.3, 1) infinite;
+	}
+	.nb-dot::after { animation-delay: 1.2s; }
+	@keyframes nb-radar {
+		0% { transform: scale(1); opacity: 0.7; }
+		70%, 100% { transform: scale(3); opacity: 0; }
+	}
+
+	/* ---------------------------------------------------------------
+	   The capsule: the notch on a phone held upright
+	   ---------------------------------------------------------------
+	   A narrow pill of frosted glass floating above the bottom edge and the
+	   home bar. Its colours come from the page's own (--bg, --fg and the
+	   glass border), so it follows light and dark mode and any background.
+	   A tab's name opens beside its icon and the capsule widens to make
+	   room (settings-home.js measures the end first, so the name, the
+	   capsule and the glass all arrive together). */
+	@media (max-width: 42em) {
+		.notch {
+			--ease: cubic-bezier(0.32, 0.72, 0, 1);
+			--dot-edge: var(--bg);
+			top: auto;
+			bottom: calc(0.9em + env(safe-area-inset-bottom, 0px));
+			padding: 0.3125em;
+			gap: 2px;
+			border-radius: 999em;
+			border: 1px solid var(--glass-border);
+			background: color-mix(in srgb, var(--bg) 58%, transparent);
+			-webkit-backdrop-filter: blur(26px) saturate(1.6);
+			backdrop-filter: blur(26px) saturate(1.6);
+			filter: none;
+			box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28), inset 0 1px 0 var(--glass-sheen);
+			color: var(--fg);
+		}
+		.notch::before, .notch::after { display: none; }
+
+		/* Down and out of sight as the page fades out, and rising before
+		   it fades in */
+		.notch.notch-up { transform: translate(-50%, 200%); }
+		html.omni-arriving .notch { animation: capsule-rise 0.5s cubic-bezier(0.2, 0.9, 0.25, 1.05) 0.3s both; }
+		@keyframes capsule-rise { from { transform: translate(-50%, 200%); } to { transform: translate(-50%, 0); } }
+
+		.nb { color: var(--fg); }
+		.nb:focus-visible { box-shadow: 0 0 0 2px var(--fg); }
+		.nb:focus-visible:not([aria-current]),
+		.nb:hover:not([aria-current]) {
+			background: color-mix(in srgb, var(--fg) 8%, transparent);
+			box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fg) 14%, transparent);
+		}
+		.nl {
+			font-weight: 500;
+			transition: max-width 0.5s var(--ease), opacity 0.3s, padding 0.5s var(--ease);
+		}
+
+		/* The glass is as wide as its tab, so it holds the name too */
+		.nb-pill {
+			top: 0.3125em;
+			border-radius: 999em;
+			background:
+				radial-gradient(120% 90% at 30% 8%, color-mix(in srgb, var(--fg) 20%, transparent), transparent 58%),
+				linear-gradient(180deg, color-mix(in srgb, var(--fg) 12%, transparent), color-mix(in srgb, var(--fg) 5%, transparent));
+			border: 1px solid color-mix(in srgb, var(--fg) 26%, transparent);
+			box-shadow: inset 0 1px 0 var(--glass-sheen), 0 2px 8px rgba(0, 0, 0, 0.25);
+			-webkit-backdrop-filter: none;
+			backdrop-filter: none;
+		}
+		.nb-pill.ready {
+			transition: transform 0.5s var(--ease), width 0.5s var(--ease), opacity 0.25s;
+		}
+		.nb-pill.ready.keeping-up { transition: opacity 0.25s; }
+	}
+
+	/* The page: the heading at the top, the tabs filling the rest, edge
+	   to edge, so boxes slide in from the screen's edge rather than from
+	   a margin. Room for the Back button is left inside each tab
+	   instead. */
+	body.settings-home {
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
+		height: 100dvh;
+		overflow: hidden;
+		padding: 0;
+	}
+
+	body.settings-home:has(> .floating.bottom-right),
+	body.settings-home:has(> .floating.top-left) { padding: 0; }
+	html:has(body.settings-home) { height: 100%; }
+
+	.home-head {
+		flex: none;
+		display: flex;
+		align-items: center;
+		min-height: 5.25em;
+		padding: 0.9em 1.75em;
+		/* The boxes' width plus the tab's own sides, so the heading
+		   starts where the boxes do */
+		max-width: calc(70em + 3.5em);
+		width: 100%;
+		margin: 0 auto;
+		box-sizing: border-box;
+	}
+
+	.home-head h1 { margin: 0; }
+
+	/* The tabs start 3em higher than they look, under the heading, with
+	   that 3em given back as padding inside each tab. The strip cuts off
+	   anything outside it, and a glowing box in the first row would have
+	   its glow cut off in a straight line where the tabs begin. The extra
+	   room is where that glow goes. */
+	.home-panes { flex: 1; min-height: 0; position: relative; overflow: hidden; margin-top: -3em; }
+	html:not(.home-tabs) .home-panes { margin-top: 0; }
+
+	/* Without the script: one long page */
+	html:not(.home-tabs) body.settings-home { height: auto; overflow: visible; }
+	html:not(.home-tabs) .home-pane { padding: 0 1.75em 2em; }
+	.pane-title { max-width: 70rem; margin: 1em auto 0.75em; font-size: 1.1em; }
+	html.home-tabs .pane-title { display: none; }
+
+	/* With it: one strip of the four tabs, scrolling sideways. No
+	   scrollbar: the notch says where you are. */
+	html.home-tabs .home-panes {
+		width: 100%;
+		max-width: 100vw;
+		min-width: 0;
+		align-self: stretch;
+		overflow-x: auto;
+		overflow-y: hidden;
+		overscroll-behavior-x: contain;
+		scrollbar-width: none;
+	}
+	html.home-tabs .home-panes::-webkit-scrollbar { display: none; }
+
+	html.home-tabs .home-track {
+		display: flex;
+		width: max-content;
+		height: 100%;
+	}
+
+	/* The picture pans along with the strip (--pan, 0 to 1, set by the
+	   script as it scrolls): wide enough to pan three quarters of a
+	   screen */
+	html.home-tabs body.settings-home .omni-backdrop {
+		right: auto;
+		width: 175vw;
+		transform: translateX(calc(var(--pan, 0) * -75vw));
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.notch, .nl, .nb-pill.ready { transition: none; }
+		.nb-dot::before, .nb-dot::after { animation: none; }
+		html.omni-arriving .notch { animation: none; }
+	}
+
+	/* The boxes: six columns, of different widths and heights, so a tab
+	   isn't a row of even halves */
+	.home-bento {
+		display: grid;
+		grid-template-columns: repeat(6, minmax(0, 1fr));
+		gap: 1em;
+		max-width: 70em;
+		margin: 0 auto;
+		/* Each box its own height, so a short one beside a tall one isn't
+		   stretched into an empty frame; a box two rows tall (r2) fills
+		   both */
+		align-items: start;
+	}
+
+	.home-bento > .segment { margin: 0; min-width: 0; }
+	.home-bento .c2 { grid-column: span 2; }
+	.home-bento .c3 { grid-column: span 3; }
+	.home-bento .c4 { grid-column: span 4; }
+	.home-bento .c6 { grid-column: 1 / -1; }
+	.home-bento .r2 { grid-row: span 2; align-self: stretch; }
+
+	/* Lending room: a box with empty room at its end (.lends-room) gives
+	   a little of it to the box after it (.borrows-room), which starts
+	   that far to the left, so the gap between them stays the same. On
+	   the Appearance tab, the mode box gives the Text Size box room for
+	   its note on one line. The amount is a share of the box, never more
+	   than 5em, so a smaller screen doesn't squeeze what's in it. Only
+	   where the boxes sit side by side; on a phone they stack and keep
+	   their full width. */
+	@media (min-width: 42.01em) {
+		.home-bento > .lends-room { width: calc(100% - min(15%, 5em)); }
+		.home-bento > .borrows-room { margin-left: calc(-1 * min(15%, 5em)); }
+	}
+
+	/* Anything but a phone held upright: the grid goes sideways. Two rows
+	   that fit the screen (the first as tall as its boxes need, the second
+	   what's left), and columns a sixth of the boxes' width that go on to
+	   the right, so the first six are the screen and any more make the
+	   tab wider. Each tab is at least a screen wide, its first screen in
+	   the middle as before. */
+	@media (min-width: 42.01em) {
+		html.home-tabs .home-pane {
+			--home-width: min(100vw - 3.5em, 70em);
+			flex: none;
+			height: 100%;
+			min-width: 100vw;
+			box-sizing: border-box;
+			padding: 3.25em max(1.75em, calc((100vw - 70em) / 2)) 1.75em;
+		}
+
+		/* Room for the Back button in the bottom right corner */
+		body.settings-home:has(> .floating.bottom-right) .home-pane { padding-bottom: 6em; }
+
+		html.home-tabs .home-bento {
+			height: 100%;
+			max-width: none;
+			margin: 0;
+			grid-template-columns: none;
+			/* The first row as tall as its boxes need, but never taller
+			   than the room left once the second has at least 10em (or
+			   45% on a very short screen); the second gets the rest. The
+			   script then shares the height out fairly (rows(), through
+			   --rows); this is how it starts. */
+			grid-template-rows: var(--rows, minmax(0, auto) minmax(min(10em, 45%), 1fr));
+			grid-auto-flow: column dense;
+			grid-auto-columns: calc((var(--home-width) - 5em) / 6);
+		}
+
+		html.home-tabs .home-bento .c6 { grid-column: span 6; }
+
+		/* Which row a box is on, so it stays there however the grid fills
+		   (sideways, it fills each column top to bottom first). The boxes
+		   of the first row end level with each other. */
+		html.home-tabs .home-bento .row1 { grid-row: 1; align-self: stretch; }
+		html.home-tabs .home-bento .row2 { grid-row: 2; }
+		html.home-tabs .home-bento .r2 { grid-row: 1 / span 2; }
+
+		/* Resources: four big tiles that fill the screen, two rows of the
+		   same height. Each has its own place, whatever order the page
+		   has them in (a phone's): Manage Faces wide at the top, Network
+		   and Installed Resources side by side under it, the Marketplace
+		   tall on the right. */
+		html.home-tabs .home-pane[data-pane=resources] .home-bento { grid-template-rows: repeat(2, minmax(0, 1fr)); }
+		html.home-tabs .home-bento > [data-tile=faces] { grid-column: 1 / span 4; grid-row: 1; }
+		html.home-tabs .home-bento > [data-tile=network] { grid-column: 1 / span 2; grid-row: 2; }
+		html.home-tabs .home-bento > [data-tile=installed] { grid-column: 3 / span 2; grid-row: 2; }
+		html.home-tabs .home-bento > [data-tile=marketplace] { grid-column: 5 / span 2; grid-row: 1 / span 2; }
+		html.home-tabs .home-bento > .home-tile { align-self: stretch; }
+
+		/* A box never taller than its place; one with more in it scrolls
+		   inside itself (box-scroll, set by the script only when needed) */
+		html.home-tabs .home-bento > .segment { max-height: 100%; }
+		html.home-tabs .home-bento > .segment.box-scroll {
+			overflow-y: auto;
+			overscroll-behavior: contain;
+			scrollbar-width: thin;
+			scrollbar-color: var(--scroll-thumb) transparent;
+		}
+
+		/* A box with a search list open never cuts the list off: the list
+		   floats over the page, and only the window's edge limits it */
+		html.home-tabs .home-bento > .segment.float-open { overflow: visible; }
+
+		/* For a moment, while the script measures the height each box
+		   wants: every box at its natural height */
+		html.home-tabs .home-bento.measuring { grid-template-rows: auto auto !important; }
+		html.home-tabs .home-bento.measuring > .segment { max-height: none; align-self: start; }
+	}
+
+	/* A whole box that is a link (Resources) */
+	.home-tile {
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+		gap: 1.5em;
+		min-height: 9.5em;
+		color: var(--fg);
+		text-decoration: none;
+	}
+
+	.tile-text { display: flex; flex-direction: column; gap: 0.25em; }
+
+	/* The Marketplace tile with the registries' banners behind it
+	   (MARKET_TILE_SCRIPT): the pictures fill the box, crossfading, and
+	   darken towards the bottom so the name stays readable over any of
+	   them, in light mode too */
+	.tile-slides {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		overflow: hidden;
+		border-radius: inherit;
+		pointer-events: none;
+	}
+	.tile-slides img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		opacity: 0;
+		transition: opacity 1.2s ease;
+	}
+	.tile-slides img.on { opacity: 1; }
+	.home-tile.has-slides .tile-slides::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(to top, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.2) 60%, rgba(0, 0, 0, 0.05));
+	}
+	.home-tile { position: relative; }
+	.home-tile > svg, .home-tile > .tile-text { position: relative; z-index: 1; }
+	.home-tile.has-slides { color: #fff; }
+	.home-tile.has-slides .tile-text > span { color: rgba(255, 255, 255, 0.85); }
+	.home-tile.has-slides > svg { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5)); }
+	@media (prefers-reduced-motion: reduce) {
+		.tile-slides img { transition: none; }
+	}
+	.tile-text strong { font-size: 1.2em; font-weight: 600; }
+	/* A box that leads nowhere (staticTileHtml): its icon faded, so it
+	   doesn't look like something to press */
+	.home-tile-off > svg { opacity: 0.4; }
+	.tile-text > span { color: var(--fg-muted); font-size: 0.9em; line-height: 1.45; }
+
+	/* The background's preview on a tab: a strip rather than a whole
+	   picture */
+	.home-bento .backdrop-preview { aspect-ratio: auto; height: 10em; }
+
+	/* A phone held upright: one column, and the heading at the top (the
+	   capsule is at the bottom). Each tab a screen wide, scrolling up and down by itself; a sideways
+	   swipe moves a whole tab at a time. */
+	@media (max-width: 42em) {
+		.home-head { padding: 1.25em 1em 0.5em; min-height: 0; }
+		/* Here the tabs start right under the heading, not 3em above it:
+		   each tab scrolls up and down, and its boxes go out of sight at
+		   the heading's lower edge instead of sliding over the heading
+		   and the Back button. (A fade there would also stop the boxes'
+		   frosted glass from blurring the picture, so it's a clean
+		   edge.) */
+		html.home-tabs .home-panes { scroll-snap-type: x mandatory; margin-top: 0; }
+		html.home-tabs .home-pane {
+			flex: none;
+			width: 100vw;
+			height: 100%;
+			box-sizing: border-box;
+			overflow-y: auto;
+			overscroll-behavior-y: contain;
+			scrollbar-width: thin;
+			scrollbar-color: var(--scroll-thumb) transparent;
+			scroll-snap-align: start;
+			scroll-snap-stop: always;
+			padding: 1em 1em 7em;
+		}
+		html:not(.home-tabs) .home-pane { padding: 0 1em 2em; }
+		.home-bento { grid-template-columns: minmax(0, 1fr); }
+		.home-bento .c2, .home-bento .c3, .home-bento .c4 { grid-column: 1 / -1; }
+		.home-bento .r2 { grid-row: auto; }
+		.home-tile { min-height: 7.5em; }
+	}
+
+	/* The Back button in the top left: the heading starts after it. On a
+	   phone held upright the heading is beside it. */
+	body.settings-home:has(> .floating.top-left) .home-head { padding-left: 6em; }
+	body.settings-home > .floating.top-left { top: 1.25em; }
+	@media (max-width: 42em) {
+		body.settings-home > .floating.top-left { top: 1.25em; }
+		/* The capsule has the bottom: the sign-out button goes to the top
+		   right, where it can't be in the way of a name opening */
+		body.settings-home > .floating.bottom-right { bottom: auto; top: 1.25em; right: 1em; }
+		body.settings-home:has(> .floating.bottom-right) .home-head { padding-right: 5.5em; }
+		body.settings-home:has(> .floating.top-left) .home-head { padding-left: 5.5em; padding-top: 1.25em; min-height: 4.9em; }
+	}
+
+	/* ---------------------------------------------------------------
+	   Fact rows — a label on the left and its value on the right, one
+	   under another with a line between them: the About tab, the Network
+	   page's Wi-Fi, a face's page (in a .facts list). A .hint in a row
+	   goes under it, across the whole row. .fact-label and .fact-value
+	   are a face's: its value in bold.
+
+	   (Until 2.0.0's central theme there were two: the Settings home's
+	   came later on the page and won, which put a face's hints on the
+	   same line as its facts.)
+	   --------------------------------------------------------------- */
+	.facts { display: flex; flex-direction: column; margin-top: 10px; }
+	.fact {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		column-gap: 1em;
+		align-items: baseline;
+		padding: 0.75em 0;
+		border-top: 1px solid var(--segment-border);
+		font-size: 0.95em;
+	}
+	.fact:first-child,
+	.fact:first-of-type { border-top: none; }
+	.fact span:first-child { color: var(--fg-muted); white-space: nowrap; }
+	.fact > span:nth-child(2) { text-align: right; overflow-wrap: anywhere; }
+	.fact-label { font-size: 0.9em; }
+	.fact-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+	.fact .hint { grid-column: 1 / -1; margin: 2px 0 0 0; }
+`;
+
 function uiStyles(options) {
 	const settings = readSettings();
 	const forced = options && options.forceMode;
@@ -1950,7 +2534,7 @@ function uiStyles(options) {
 		margin: 0;
 	}
 	.stepper input[type="number"] { -moz-appearance: textfield; }
-`;
+${SETTINGS_HOME_CSS}`;
 }
 
 // The floating back button's markup, or nothing when a page shouldn't
@@ -2858,6 +3442,7 @@ function notificationStyles(mode) {
 
 
 module.exports = {
+	SETTINGS_HOME_CSS,
 	styleTag,
 	CURTAIN_CSS,
 	curtainStyles,

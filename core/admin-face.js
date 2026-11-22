@@ -299,23 +299,6 @@ const styles = `
 	/* A segment's last row shouldn't leave a gap under itself */
 	.segment > a.row:last-child { margin-bottom: 0; }
 
-	/* A face's facts: a label on the left, its value on the right, an
-	   optional quieter line under the label explaining it */
-	.facts { display: flex; flex-direction: column; margin-top: 10px; }
-
-	.fact {
-		display: grid;
-		grid-template-columns: 1fr auto;
-		column-gap: 1em;
-		align-items: baseline;
-		padding: 0.6em 0;
-		border-top: 1px solid var(--segment-border);
-	}
-
-	.fact:first-child { border-top: none; }
-	.fact-label { color: var(--fg-muted); font-size: 0.9em; }
-	.fact-value { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
-	.fact .hint { grid-column: 1 / -1; margin: 2px 0 0 0; }
 
 	/* Everything a segment does at the end of a form: Save and its message,
 	   and anything after it, with even space between them */
@@ -527,7 +510,6 @@ const styles = `
 	/* Under place search matches: see place-search-ui.js */
 	${PLACE_SEARCH_CSS}
 
-	${settingsHome.SETTINGS_HOME_CSS}
 
 	/* The About tab: Check now and Update now side by side */
 	.update-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
@@ -3942,7 +3924,7 @@ function startAdminFace() {
 		const glassParts = backgroundPanel(settings);
 
 		const modeBox = `
-			<div class="segment c3 row2 mode-box">
+			<div class="segment c3 row2 lends-room">
 				<div class="box-head">
 					<h2>Appearance Mode</h2>
 					${infoTip(
@@ -3983,7 +3965,7 @@ function startAdminFace() {
 			</div>`;
 
 		const textBox = `
-			<div class="segment c3 row2 type-box">
+			<div class="segment c3 row2 borrows-room">
 				<div class="type-head">
 					<div class="type-head-text">
 						<h2>Text Size &amp; Typography</h2>

@@ -23,6 +23,7 @@ const assert = require("node:assert");
 const { resetState, waitForPort, signIn } = helpers;
 const marketplace = require("../core/marketplace");
 const imageProxy = require("../core/image-proxy");
+const theme = require("../core/ui-theme");
 const settingsHome = require("../core/settings-home");
 
 const PORT = 3000;
@@ -158,5 +159,5 @@ test("the tile's slideshow: one at a time, still with reduced motion, only OmniC
 	assert.ok(script.includes('banner.src.indexOf("/marketplace/") !== 0'), "nothing from anywhere else");
 	assert.ok(script.includes("still.matches || document.hidden"), "no movement with reduced motion, or unseen");
 	assert.ok(script.includes("ready.length < 2"), "one banner stays still");
-	assert.ok(settingsHome.SETTINGS_HOME_CSS.includes(".tile-slides img { transition: none; }"));
+	assert.ok(theme.SETTINGS_HOME_CSS.includes(".tile-slides img { transition: none; }"));
 });

@@ -105,8 +105,16 @@ desktop and phone, taken before it, pixel by pixel.
    `.dialog-buttons` for a pop-up's; one row padding for every list row;
    the box heading (`.segment h2`, `.box-head`) moved out of
    `admin-face.js`.
-3. **The Settings home** (`settings-home.js`): the notch, the capsule, the
-   tabs and the grid.
+3. **The Settings home** (done): the page of tabs, the notch and the
+   capsule, the tab grid, link tiles (with pictures, and leading
+   nowhere) and fact rows are central elements, in a new Page layouts
+   section of the catalogue. Its script sets `--pill-x`, `--pill-w` and
+   `--rows` instead of looks. The two `.fact` definitions (the Settings
+   home's and `admin-face.js`'s) are one, which puts a face's hints back
+   under its facts. "Lending room" (`.lends-room`, `.borrows-room`)
+   replaces the Appearance tab's own mode and type box rules. The notch's
+   padding is in em, so it grows with the text size like everything
+   else.
 4. **The Settings pages** (`admin-face.js`): about 280 rules and 51
    `style=""`, the biggest step, maybe in two. Its page layout first
    (`.bento`, `.bento-row` and its `.two` / `.three` / `.top`,

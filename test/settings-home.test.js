@@ -25,6 +25,7 @@ const vm = require("vm");
 
 const { resetState, waitForPort, signIn, themesDir } = helpers;
 const pageMotion = require("../core/page-motion");
+const theme = require("../core/ui-theme");
 const settingsHome = require("../core/settings-home");
 const faceStore = require("../core/face-store");
 
@@ -157,10 +158,10 @@ test("the tabs: one page, the address points at each tab's heading, the scripts 
 });
 
 test("the movement: one strip scrolling sideways, a grid that grows to the right, the picture panning along", () => {
-	const css = settingsHome.SETTINGS_HOME_CSS;
+	const css = theme.SETTINGS_HOME_CSS;
 	assert.match(css, /html\.home-tabs \.home-panes \{[^}]*overflow-x: auto;[^}]*overflow-y: hidden;/, "sideways, never up and down");
 	assert.match(css, /grid-auto-flow: column dense;/, "more boxes make a tab wider, not taller");
-	assert.match(css, /grid-template-rows: minmax\(0, auto\) minmax\(min\(10em, 45%\), 1fr\);/, "two rows that fit the screen");
+	assert.match(css, /grid-template-rows: var\(--rows, minmax\(0, auto\) minmax\(min\(10em, 45%\), 1fr\)\);/, "two rows that fit the screen, until the script shares them out");
 	assert.match(css, /\.home-bento > \.segment\.box-scroll \{[^}]*overflow-y: auto;/, "a box with more in it scrolls inside itself");
 	assert.ok(css.includes("width: 175vw;") && css.includes("transform: translateX(calc(var(--pan, 0) * -75vw));"), "the picture pans along");
 	assert.match(css, /@media \(max-width: 42em\) \{[\s\S]*?scroll-snap-type: x mandatory;/, "a phone: a swipe moves a whole tab");
@@ -171,14 +172,14 @@ test("the movement: one strip scrolling sideways, a grid that grows to the right
 });
 
 test("the rows share the height fairly, and a box never cuts off its search list", () => {
-	const css = settingsHome.SETTINGS_HOME_CSS;
+	const css = theme.SETTINGS_HOME_CSS;
 	const script = settingsHome.HOME_SCRIPT;
 	assert.ok(script.includes('bento.classList.add("measuring")'), "each row is measured at the height its boxes want");
 	assert.match(css, /\.home-bento\.measuring > \.segment \{[^}]*max-height: none;/, "measured at full height");
 	assert.ok(script.includes("if (want1 + want2 <= room || want1 <= half) top = want1;"), "a row that needs less than half gets all it needs");
 	assert.ok(script.includes("else if (want2 <= half) top = room - want2;"), "so the other row can't take it");
 	assert.ok(script.includes("else top = half;"), "both too big: half each");
-	assert.ok(script.includes("bento.style.gridTemplateRows !== value"), "set only when it changes, or it would measure itself forever");
+	assert.ok(script.includes('bento.style.getPropertyValue("--rows") !== value'), "set only when it changes, or it would measure itself forever");
 	assert.ok(script.includes('if (box.classList.contains("float-open")) return;'), "an open list doesn't make its box scroll");
 	assert.match(css, /\.home-bento > \.segment\.float-open \{ overflow: visible; \}/, "and the box never cuts it off");
 	assert.ok(script.includes("new ResizeObserver"), "measured again when something in a box changes size");
@@ -295,11 +296,11 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	assert.match(pane("appearance"), /class="segment c4 row1" id="glass"/);
 	assert.match(pane("appearance"), /class="segment c2 row1" id="background"/);
 	// Appearance Mode and Text Size & Typography share the second row; the
-	// mode box hands the Text Size box its empty room (see the CSS test
+	// mode box lends the Text Size box its empty room (see the CSS test
 	// below), and the Text Size box has the note on the left, the stepper
 	// on the right and the font underneath
-	assert.match(pane("appearance"), /class="segment c3 row2 mode-box"/);
-	assert.match(pane("appearance"), /class="segment c3 row2 type-box"/);
+	assert.match(pane("appearance"), /class="segment c3 row2 lends-room"/);
+	assert.match(pane("appearance"), /class="segment c3 row2 borrows-room"/);
 	const typeHead = pane("appearance").slice(pane("appearance").indexOf('class="type-head"'));
 	assert.ok(typeHead.indexOf("type-head-text") < typeHead.indexOf('class="stepper"'), "the note, then the stepper");
 	assert.ok(typeHead.indexOf('class="stepper"') < typeHead.indexOf('class="inset"'), "the font under both");
@@ -310,8 +311,8 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	for (const id of ["size-down", "size", "size-up", "change-font"]) {
 		assert.equal(pane("appearance").split(`id="${id}"`).length - 1, 1, `${id} once`);
 	}
-	assert.match(settingsHome.SETTINGS_HOME_CSS, /\.home-bento > \.mode-box \{ width: calc\(100% - min\(15%, 5em\)\); \}/);
-	assert.match(settingsHome.SETTINGS_HOME_CSS, /\.home-bento > \.type-box \{ margin-left: calc\(-1 \* min\(15%, 5em\)\); \}/);
+	assert.match(theme.SETTINGS_HOME_CSS, /\.home-bento > \.lends-room \{ width: calc\(100% - min\(15%, 5em\)\); \}/);
+	assert.match(theme.SETTINGS_HOME_CSS, /\.home-bento > \.borrows-room \{ margin-left: calc\(-1 \* min\(15%, 5em\)\); \}/);
 	assert.match(pane("general"), /class="segment c2 r2" id="place-search"/);
 	assert.match(pane("general"), /class="segment c2 row2" id="saved-keys"/);
 	assert.match(pane("general"), /class="segment c2 row2" id="place-try"/);
@@ -330,7 +331,7 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 		["marketplace", "grid-column: 5 / span 2; grid-row: 1 / span 2;"]
 	]) {
 		assert.ok(pane("resources").includes(`data-tile="${tile}"`), tile);
-		assert.ok(settingsHome.SETTINGS_HOME_CSS.includes(`[data-tile=${tile}] { ${place} }`), `${tile}'s place`);
+		assert.ok(theme.SETTINGS_HOME_CSS.includes(`[data-tile=${tile}] { ${place} }`), `${tile}'s place`);
 	}
 
 	// The location is set right in its box
@@ -351,7 +352,7 @@ test("pages: a development build's Updates box says it doesn't check", async () 
 });
 
 test("the notch: a dewdrop with clear glass, and a name only on hover, focus or a long press", () => {
-	const css = settingsHome.SETTINGS_HOME_CSS;
+	const css = theme.SETTINGS_HOME_CSS;
 	assert.ok(css.includes(".notch::before") && css.includes(".notch::after"), "the two ears that curve the top corners outward");
 
 	// No name stays open on the picked tab
@@ -372,11 +373,11 @@ test("the notch: a dewdrop with clear glass, and a name only on hover, focus or 
 });
 
 test("the capsule: on a phone held upright, at the bottom, the name and the glass arrive together", () => {
-	const css = settingsHome.SETTINGS_HOME_CSS;
+	const css = theme.SETTINGS_HOME_CSS;
 	const phone = css.slice(css.indexOf("The capsule: the notch on a phone held upright"));
 	assert.ok(phone.includes("@media (max-width: 42em)"), "only a phone held upright");
 	assert.ok(phone.includes("bottom: calc(0.9em + env(safe-area-inset-bottom, 0px))"), "above the home bar");
-	assert.ok(phone.includes("border-radius: 999px"), "a capsule");
+	assert.ok(phone.includes("border-radius: 999em"), "a capsule");
 	assert.ok(phone.includes("color-mix(in srgb, var(--bg) 58%, transparent)"), "its colours follow the theme");
 	assert.ok(phone.includes(".notch::before, .notch::after { display: none; }"), "no ears");
 	assert.ok(phone.includes("body.settings-home > .floating.bottom-right { bottom: auto; top: 1.25em;"), "the sign-out button goes to the top");
@@ -386,12 +387,12 @@ test("the capsule: on a phone held upright, at the bottom, the name and the glas
 	assert.ok(script.includes("function measure(button)") && script.includes("function openName(button)"));
 	assert.ok(script.includes("if (!first && !wide.matches && picked) openName(picked);"), "a tab change opens its name, on a phone only, never when the page opens");
 	assert.ok(script.includes("Date.now() > glideUntil"), "a tap's glide past the tabs in between doesn't open them");
-	assert.ok(script.includes('pill.style.width = picked.offsetWidth + "px";'), "the glass is as wide as its tab, name and all");
+	assert.ok(script.includes('pill.style.setProperty("--pill-w", picked.offsetWidth + "px");'), "the glass is as wide as its tab, name and all");
 	assert.ok(!settingsHome.TABS.some((tab) => tab.label.includes("\u2014")));
 });
 
 test("the update dot: green, with two radar rings that stop for reduced motion", () => {
-	const css = settingsHome.SETTINGS_HOME_CSS;
+	const css = theme.SETTINGS_HOME_CSS;
 	assert.ok(css.includes("--dot: #2fd47a;"), "green");
 	assert.ok(css.includes(".nb-dot::before,") && css.includes(".nb-dot::after { animation-delay: 1.2s; }"), "two rings, one after the other");
 	assert.ok(css.includes("@keyframes nb-radar"));
@@ -399,10 +400,10 @@ test("the update dot: green, with two radar rings that stop for reduced motion",
 });
 
 test("the notch on a wide screen: one shape on the picked tab, a fainter glass on the one under the pointer", () => {
-	const css = settingsHome.SETTINGS_HOME_CSS;
+	const css = theme.SETTINGS_HOME_CSS;
 	assert.ok(/@media \(hover: hover\) \{\s*\.nb:hover:not\(\[aria-current\]\)/.test(css), "hover glass only on the other tabs");
 	assert.ok(!/\.nb:hover \{/.test(css), "no grey hover shape on the picked tab");
 	const pill = css.slice(css.indexOf(".nb-pill {"), css.indexOf("}", css.indexOf(".nb-pill {")));
-	assert.ok(pill.includes("border-radius: 999px"), "a capsule that can hold a name");
+	assert.ok(pill.includes("border-radius: 999em"), "a capsule that can hold a name");
 	assert.ok(/\.nb-pill\.ready \{[^}]*width 0\.4s/.test(css), "it widens as it slides");
 });

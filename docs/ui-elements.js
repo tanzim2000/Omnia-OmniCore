@@ -438,6 +438,41 @@ const sections = [
 				demo: '<div class="modal-backdrop"><div class="modal"><h2>Delete this face?</h2><p class="dialog-text">Its widgets and settings go with it.</p><div class="buttons dialog-buttons"><button class="glass">Cancel</button><button class="glass glass-danger">Delete</button></div></div></div>',
 				code: 'const sure = await confirmDialog({\n\ttitle: "Delete this face?",\n\ttext: "Its widgets and settings go with it.",\n\tconfirm: "Delete",\n\tdanger: true\n});',
 				note: "Cancel, Escape and a click outside the panel are all a no. Cancel has the focus, so an Enter pressed out of habit is never the yes."
+			},
+			{
+				id: "link-tile",
+				base: "segment-clickable",
+				title: "Link tile",
+				sel: ".home-tile > svg · .tile-text",
+				desc: "A whole box that is a link, with a big icon at the top and its name and a line under it at the foot: the Resources tab's Network, Manage Faces, Installed Resources and Marketplace. It glows on hover like any clickable box, and takes whatever room its place on the grid gives it.",
+				demo: `<div style="display:grid;grid-template-columns:1fr 1fr;gap:1em;max-width:36em"><a class="segment clickable home-tile" href="#link-tile"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span class="tile-text"><strong>Manage Faces</strong><span>Create, edit and remove dashboards</span></span></a></div>`,
+				code: '<a class="segment clickable home-tile" href="/faces">\n\t<svg>…</svg>\n\t<span class="tile-text"><strong>Manage Faces</strong><span>Create, edit and remove dashboards</span></span>\n</a>\n\n// or let settings-home.js write it:\ntileHtml("/faces", "faces", "Manage Faces", "Create, edit and remove dashboards", "c4 row1")'
+			},
+			{
+				id: "tile-off",
+				base: "link-tile",
+				title: "Tile that leads nowhere",
+				sel: ".home-tile.home-tile-off",
+				desc: "The same box when there's nowhere to go: a plain box, not a link, with its icon faded so it doesn't look like something to press, and its line saying why (the Network tile when OmniCore can't change the Wi-Fi).",
+				demo: `<div style="display:grid;grid-template-columns:1fr 1fr;gap:1em;max-width:36em"><div class="segment home-tile home-tile-off"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 9a14 14 0 0 1 19 0"/><path d="M5.5 12.2a9.5 9.5 0 0 1 13 0"/><path d="M8.7 15.4a5 5 0 0 1 6.6 0"/><circle cx="12" cy="19" r="1.3" fill="currentColor" stroke="none"/></svg><span class="tile-text"><strong>Network</strong><span>This OmniCore can't change the server's Wi&#8209;Fi.</span></span></div></div>`,
+				code: '<div class="segment home-tile home-tile-off">…</div>\n\n// or:\nstaticTileHtml("network", "Network", reason, "c2 row2")'
+			},
+			{
+				id: "tile-slides",
+				base: "link-tile",
+				title: "Tile with pictures",
+				sel: ".home-tile.has-slides > .tile-slides > img (+ .on)",
+				desc: "A link tile with pictures filling it, crossfading one into the next (the one showing is <b>.on</b>), darkened towards the bottom so its name reads over any of them, in light mode too. The Marketplace tile, with each registry's banner. <b>.has-slides</b> is only added once a picture has loaded, so a tile whose pictures never arrive looks like any other. Still with reduced motion.",
+				demo: `<div style="display:grid;grid-template-columns:1fr 1fr;gap:1em;max-width:36em"><a class="segment clickable home-tile has-slides" href="#tile-slides"><span class="tile-slides" aria-hidden="true"><img class="on" alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Cdefs%3E%3ClinearGradient id='g' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23f2a65a'/%3E%3Cstop offset='.5' stop-color='%23b4476b'/%3E%3Cstop offset='1' stop-color='%231d4f7a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='4' height='3' fill='url(%23g)'/%3E%3C/svg%3E"></span><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span class="tile-text"><strong>Marketplace</strong><span>Modules and themes to install</span></span></a></div>`,
+				code: '<a class="segment clickable home-tile has-slides" href="/marketplace">\n\t<span class="tile-slides" aria-hidden="true"><img class="on" src="…" alt=""><img src="…" alt=""></span>\n\t<svg>…</svg>\n\t<span class="tile-text">…</span>\n</a>'
+			},
+			{
+				id: "facts",
+				title: "Fact rows",
+				sel: ".facts > .fact (.fact-label, .fact-value, .hint)",
+				desc: "A label on the left and its value on the right, one fact under another with a line between them: the About tab, the Network page's Wi&#8209;Fi, a face's page. A <b>.hint</b> in a row goes under it, across the whole row. A face's facts use <b>.fact-label</b> and <b>.fact-value</b>, which puts the value in bold.",
+				demo: `<div class="segment" style="max-width:26em"><div class="facts"><div class="fact"><span class="fact-label">Outport</span><span class="fact-value">4001</span></div><div class="fact"><span class="fact-label">Showing on</span><span class="fact-value">2 screens</span><span class="hint">OmniViews and browser tabs with this face open</span></div><div class="fact"><span>Version</span><span>OmniCore 2.0.0</span></div></div></div>`,
+				code: '<div class="facts">\n\t<div class="fact"><span class="fact-label">Showing on</span><span class="fact-value">2 screens</span>\n\t\t<span class="hint">OmniViews and browser tabs with this face open</span></div>\n\t<div class="fact"><span>Version</span><span>OmniCore 2.0.0</span></div>\n</div>'
 			}
 		]
 	},
@@ -607,6 +642,49 @@ const sections = [
 				stage: 170,
 				demo: '<span style="font-size:1.05em;font-weight:600">Background</span> <span class="info-tip" tabindex="0" role="button" aria-label="What can be used"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg><span class="info-bubble" role="tooltip">A picture, a GIF or a video, up to 50 MB.</span></span>',
 				code: 'infoTip("A picture, a GIF or a video, up to 50 MB.", "What can be used")'
+			}
+		]
+	},
+	{
+		id: "layouts",
+		title: "Page layouts",
+		intro: "The shapes a whole page can take. So far one: the Settings home, a page of tabs under a notch. Its script (<code>core/settings-home.js</code>) moves things and measures them, and only ever switches classes and sets CSS variables; every look is in <code>core/ui-theme.js</code>, like everything else.",
+		entries: [
+			{
+				id: "tabbed-page",
+				title: "Page of tabs",
+				sel: "body.settings-home > .home-head · .home-panes > .home-track > .home-pane (.pane-title) · html.home-tabs",
+				desc: "The Settings home: a heading at the top, and the tabs side by side on one strip that scrolls sideways, never up and down, each at least a screen wide. The script marks the page <b>html.home-tabs</b> before it's drawn, so it opens on the right tab without moving; without the script it's one long page, each tab under its <b>.pane-title</b>. A picture behind the page pans along as the strip moves (<code>--pan</code>, 0 to 1). On a phone held upright each tab scrolls up and down on its own, under the heading, and a swipe moves a whole tab.",
+				demo: `<header class="home-head" style="min-height:0;padding:0"><h1>Settings</h1></header><h2 class="pane-title" style="margin:0.5em 0 0">General</h2><p class="muted" style="margin:0.25em 0 0">Without the script, each tab's boxes come under its name, one tab after another.</p>`,
+				code: '<body class="settings-home">\n\t<header class="home-head"><h1>Settings</h1></header>\n\t<nav class="notch">…</nav>\n\t<div class="home-panes"><div class="home-track">\n\t\t<section class="home-pane" data-pane="general">\n\t\t\t<h2 class="pane-title" id="general">General</h2>\n\t\t\t<div class="home-bento">…</div>\n\t\t</section>\n\t</div></div>\n</body>\n\n// or let settings-home.js write it:\nhomeHtml(panes, updateReady)',
+				note: "The Back button keeps out of the way by itself: in the top left the heading starts after it, and on a phone held upright the sign-out button goes to the top right, since the capsule has the bottom."
+			},
+			{
+				id: "notch",
+				title: "Notch and capsule",
+				sel: ".notch (+ .notch-up, .measuring) > .nb-pill (+ .ready, .keeping-up) · .nb (+ .show, .peek, [aria-current]) > .nl · .nb-dot",
+				desc: "A black notch hanging from the top edge, shaped like a drop of water, with an icon for each tab (<b>.nb</b>). The picked tab (<code>aria-current</code>) has a piece of clear glass on it (<b>.nb-pill</b>), which slides from tab to tab once it's <b>.ready</b>. A tab's name (<b>.nl</b>) opens beside its icon on hover, keyboard focus or a long press (<b>.peek</b>), and the notch widens to make room. <b>.nb-dot</b> on About means an update is ready: green, with radar rings. <b>.notch-up</b> sends it up out of sight as the page fades out. On a phone held upright the same notch is a <b>capsule</b>: a narrow pill of frosted glass at the bottom, above the home bar, whose new tab's name opens (<b>.show</b>) for about a second.",
+				stage: 110,
+				demo: `<nav class="notch" aria-label="Settings sections"><span class="nb-pill ready" style="--pill-x:10px;--pill-w:2.75em" aria-hidden="true"></span><a class="nb" href="#notch" aria-current=\"page\" aria-label="General"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></svg><span class="nl" aria-hidden="true">General</span></a><a class="nb show" href="#notch" aria-label="Appearance"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg><span class="nl" aria-hidden="true">Appearance</span></a><a class="nb" href="#notch" aria-label="Resources"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6"/></svg><span class="nl" aria-hidden="true">Resources</span></a><a class="nb" href="#notch" aria-label="About"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.2"/><circle cx="12" cy="7.8" r="0.7" fill="currentColor"/></svg><span class="nb-dot" aria-hidden="true"></span><span class="nl" aria-hidden="true">About</span></a></nav>`,
+				code: 'notchHtml(updateReady)\n\n// The script puts the glass on the picked tab:\npill.style.setProperty("--pill-x", picked.offsetLeft + "px");\npill.style.setProperty("--pill-w", picked.offsetWidth + "px");',
+				note: "The glass has no blur, so the icon under it stays sharp. <b>.measuring</b> and <b>.keeping-up</b> are the script's: for a moment, nothing moves while it measures, and the glass keeps up with its tab frame by frame while a name opens."
+			},
+			{
+				id: "tab-grid",
+				title: "Tab grid",
+				sel: ".home-bento (+ .measuring) > .segment (.c2, .c3, .c4, .c6, .r2, .row1, .row2, .box-scroll, .float-open) · .home-bento .backdrop-preview",
+				desc: "A tab's boxes, on six columns: <b>.c2</b>, <b>.c3</b> and <b>.c4</b> span that many, <b>.c6</b> the whole width, <b>.r2</b> two rows. On a tab, the grid goes sideways: two rows that fit the screen's height (<b>.row1</b>, <b>.row2</b> say which a box is on), and columns that go on to the right, so more boxes make the tab wider, not taller. The script shares the height out fairly between the rows (<code>--rows</code>), and a box with more in it than its place holds scrolls inside itself (<b>.box-scroll</b>), unless a search list is open in it (<b>.float-open</b>). A background preview in it is a strip. On a phone held upright it's one column.",
+				demo: `<div class="home-bento" style="max-width:40em"><div class="segment c4"><h2>c4</h2></div><div class="segment c2"><h2>c2</h2></div><div class="segment c2"><h2>c2</h2></div><div class="segment c2"><h2>c2</h2></div><div class="segment c2"><h2>c2</h2></div></div>`,
+				code: '<div class="home-bento">\n\t<div class="segment c4 row1">…</div>\n\t<div class="segment c2 r2">…</div>\n\t<div class="segment c2 row2">…</div>\n</div>'
+			},
+			{
+				id: "lending-room",
+				base: "tab-grid",
+				title: "Lending room",
+				sel: ".lends-room · .borrows-room",
+				desc: "Two boxes side by side in a tab grid, where the first has empty room at its end: it gets narrower (<b>.lends-room</b>) and the one after it starts that much further left (<b>.borrows-room</b>), so the gap between them stays the same. A share of the box, never more than 5em. The Appearance tab's mode box gives the Text Size box room for its note on one line. Only where the boxes sit side by side.",
+				demo: `<div class="home-bento" style="max-width:40em"><div class="segment c3 lends-room"><h2>Lends</h2></div><div class="segment c3 borrows-room"><h2>Borrows</h2></div></div>`,
+				code: '<div class="segment c3 row2 lends-room">…</div>\n<div class="segment c3 row2 borrows-room">…</div>'
 			}
 		]
 	},

@@ -57,14 +57,13 @@ const OWN_LOOK = ["core/about-face.js", "core/about-face.css"];
 // What's left to move into the central theme, file by file. Lower a number
 // (or take a line out) when you move something; never raise one.
 const STILL_TO_MOVE = {
-	"core/admin-face.js": { styleBlocks: 1, cssRules: 274, styleAttributes: 51, scriptLooks: 12 },
+	"core/admin-face.js": { styleBlocks: 1, cssRules: 268, styleAttributes: 51, scriptLooks: 12 },
 	"core/backdrop.js": { styleBlocks: 0, cssRules: 0, styleAttributes: 2, scriptLooks: 5 },
 	"core/control-face.js": { styleBlocks: 1, cssRules: 16, styleAttributes: 1, scriptLooks: 0 },
 	"core/fallback-page.js": { styleBlocks: 1, cssRules: 3, styleAttributes: 0, scriptLooks: 0 },
 	"core/input-face-page.js": { styleBlocks: 2, cssRules: 13, styleAttributes: 0, scriptLooks: 0 },
 	"core/place-search-ui.js": { styleBlocks: 0, cssRules: 9, styleAttributes: 0, scriptLooks: 8 },
 	"core/priority-ui.js": { styleBlocks: 0, cssRules: 17, styleAttributes: 0, scriptLooks: 2 },
-	"core/settings-home.js": { styleBlocks: 0, cssRules: 95, styleAttributes: 0, scriptLooks: 6 },
 	"core/wizard-face.js": { styleBlocks: 1, cssRules: 29, styleAttributes: 4, scriptLooks: 3 }
 };
 
