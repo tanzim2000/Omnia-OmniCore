@@ -57,16 +57,11 @@ const OWN_LOOK = ["core/about-face.js", "core/about-face.css"];
 // What's left to move into the central theme, file by file. Lower a number
 // (or take a line out) when you move something; never raise one.
 const STILL_TO_MOVE = {
-	"core/admin-face.js": { styleBlocks: 1, cssRules: 276, styleAttributes: 51, scriptLooks: 12 },
+	"core/admin-face.js": { styleBlocks: 1, cssRules: 274, styleAttributes: 51, scriptLooks: 12 },
 	"core/backdrop.js": { styleBlocks: 0, cssRules: 0, styleAttributes: 2, scriptLooks: 5 },
 	"core/control-face.js": { styleBlocks: 1, cssRules: 16, styleAttributes: 1, scriptLooks: 0 },
-	"core/face-events.js": { styleBlocks: 1, cssRules: 0, styleAttributes: 0, scriptLooks: 0 },
 	"core/fallback-page.js": { styleBlocks: 1, cssRules: 3, styleAttributes: 0, scriptLooks: 0 },
 	"core/input-face-page.js": { styleBlocks: 2, cssRules: 13, styleAttributes: 0, scriptLooks: 0 },
-	"core/network-setup.js": { styleBlocks: 1, cssRules: 37, styleAttributes: 0, scriptLooks: 0 },
-	"core/network-status.js": { styleBlocks: 2, cssRules: 17, styleAttributes: 0, scriptLooks: 5 },
-	"core/notifications.js": { styleBlocks: 0, cssRules: 39, styleAttributes: 1, scriptLooks: 3 },
-	"core/page-motion.js": { styleBlocks: 1, cssRules: 2, styleAttributes: 0, scriptLooks: 0 },
 	"core/place-search-ui.js": { styleBlocks: 0, cssRules: 9, styleAttributes: 0, scriptLooks: 8 },
 	"core/priority-ui.js": { styleBlocks: 0, cssRules: 17, styleAttributes: 0, scriptLooks: 2 },
 	"core/settings-home.js": { styleBlocks: 0, cssRules: 95, styleAttributes: 0, scriptLooks: 6 },
@@ -144,13 +139,14 @@ test("no page keeps looks of its own: everything is the central theme's", () => 
 				problems.push(`${file} has more ${kind} than before (${counts[kind]}, was ${allowed[kind] || 0}). Use the central theme's elements instead.`);
 			}
 		}
-		if (total(counts) > 0) left.push(`  ${file}: ${JSON.stringify(counts)}`);
-		if (total(counts) < total(allowed)) left.push(`    (lower its line in STILL_TO_MOVE: it has less now)`);
+		if (total(counts) === 0) left.push(`  ${file}: clean now, take its line out of STILL_TO_MOVE`);
+		else if (total(counts) < total(allowed)) left.push(`  ${file}: ${JSON.stringify(counts)} (less than its line says: lower it)`);
+		else left.push(`  ${file}: ${JSON.stringify(counts)}`);
 	}
 
 	// Where work is left: printed every run, never a failure on its own
 	if (left.length) {
-		console.log(`Still to move into the central theme (${left.filter((l) => !l.startsWith("    ")).length} files):\n${left.join("\n")}`);
+		console.log(`Still to move into the central theme (${left.length} files):\n${left.join("\n")}`);
 	}
 	assert.deepEqual(problems, []);
 });

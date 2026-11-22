@@ -91,16 +91,31 @@ desktop and phone, taken before it, pixel by pixel.
    `.form-stack`, `.switch-row`, `.inline-buttons`, `.qr-box`, `.secret`,
    small and wide glass buttons, tight and short lists, a wider second
    box), and `[hidden]` hides whatever an element's own display rule says.
-2. **The overlays and Manual Setup**: the status drawer, the takeover,
-   notifications, the page fade (`network-status.js`, `notifications.js`,
-   `page-motion.js`, `face-events.js`), and the Manual Setup page
-   (`network-setup.js`), which also moves onto the Default UI.
+2. **The overlays and Manual Setup** (done): the status drawer, the
+   takeover, notifications and the page fade are one overlay bundle in
+   `ui-theme.js` (`STATUS_CSS`, `notificationStyles()`, `CURTAIN_CSS`,
+   `curtainStyles()`), sent with a theme's page through `styleTag()`, the
+   one way any page gets a `<style>`; their scripts only set classes,
+   `hidden` and `--omni-net-at` / `--remaining`. They're in the catalogue
+   under Overlays. Manual Setup is built from the Default UI (dark, on a
+   see-through page): the Network page's rows, a box heading with Look
+   again, the password box, glass buttons, and a centred stack for the
+   OmniSync code. Also: variants are a base plus a modifier that only adds
+   (`base` in the catalogue, shown as "Builds on"); one `.buttons` row with
+   `.dialog-buttons` for a pop-up's; one row padding for every list row;
+   the box heading (`.segment h2`, `.box-head`) moved out of
+   `admin-face.js`.
 3. **The Settings home** (`settings-home.js`): the notch, the capsule, the
    tabs and the grid.
 4. **The Settings pages** (`admin-face.js`): about 280 rules and 51
-   `style=""`, the biggest step, maybe in two.
+   `style=""`, the biggest step, maybe in two. Its page layout first
+   (`.bento`, `.bento-row` and its `.two` / `.three` / `.top`,
+   `.bento-column`, `.settings-head`, `.fact`): the Network page is built
+   on it, and `.bento-row.two.wide-second` is already central while its
+   base isn't.
 5. **The rest**: the setup wizard, the face setup (`control-face.js`), an
-   Inport's page, the fallback page, Info order lists, place search and
+   Inport's page, the fallback page (its own `.buttons` and its `<style>`
+   around the notification styles), Info order lists, place search and
    the background picker. Then `STILL_TO_MOVE` is empty and the test is
    strict for everything.
 

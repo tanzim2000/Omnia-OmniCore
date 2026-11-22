@@ -183,7 +183,8 @@ function broadcastMode(mode) {
 }
 
 // ---------------------------------------------------------------------
-// The client: one <style> and one <script>, the same on every page
+// The client, the same on every page: the central theme's drawer and
+// takeover (ui-theme.js, STATUS_CSS) and one <script> that moves them
 
 // The Wi-Fi logo: a dot and three arcs. `lit` is how many of the four
 // parts are bright (signal bars); the rest are faint.
@@ -197,90 +198,10 @@ function wifiSvg(extra) {
 	</svg>`;
 }
 
-const CLIENT_CSS = `
-	/* The status drawer. The pane is bigger than what's seen: it runs past
-	   the top and right edges of the screen, so only its bottom-left corner
-	   is round on screen. Every touch goes through it. */
-	.omni-net-drawer {
-		position: fixed;
-		top: 0;
-		right: 0;
-		z-index: 2147483000;
-		pointer-events: none;
-		font: 500 15px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-		color: #fff;
-	}
-	.omni-net-drawer[hidden] { display: none; }
-	.omni-net-pane {
-		position: absolute;
-		top: -1.25em;
-		right: -1.25em;
-		display: flex;
-		align-items: center;
-		gap: 0.75em;
-		padding: calc(1.25em + 0.7em) calc(1.25em + 1em) 0.7em 1em;
-		border-radius: 1.4em;
-		white-space: nowrap;
-		/* Clear glass: no blur, a faint tint, a bright rim, and what's
-		   behind a little darker so white stays readable on anything */
-		background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
-		border: 1px solid rgba(255, 255, 255, 0.32);
-		box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.25), 0 6px 22px rgba(0, 0, 0, 0.28);
-		-webkit-backdrop-filter: brightness(0.82) saturate(1.3);
-		backdrop-filter: brightness(0.82) saturate(1.3);
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
-		/* Out of sight until it moves (the script moves it) */
-		transform: translate(0, -150%);
-	}
-	.omni-net-pane svg { flex: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }
-	.omni-net-pane .omni-net-dim { opacity: 0.3; }
-	.omni-net-speeds { display: flex; gap: 0.9em; font-variant-numeric: tabular-nums; }
-	.omni-net-speeds span { min-width: 5.2em; }
-	.omni-net-hidden-text {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip: rect(0 0 0 0);
-		white-space: nowrap;
-	}
+// The drawer's and the takeover's look: the central theme's overlay bundle
+// (ui-theme.js), sent with this script onto every page, a theme's too
+const CLIENT_CSS = require("./ui-theme").STATUS_CSS;
 
-	/* The takeover: the whole screen, above everything, the page paused
-	   under it */
-	.omni-net-takeover {
-		position: fixed;
-		inset: 0;
-		z-index: 2147483600;
-		display: grid;
-		place-items: center;
-		padding: 2em;
-		background: rgba(0, 0, 0, 0.82);
-		-webkit-backdrop-filter: blur(24px) saturate(1.2);
-		backdrop-filter: blur(24px) saturate(1.2);
-		color: #fff;
-		font: 400 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-		text-align: center;
-		opacity: 0;
-		transition: opacity 0.4s ease;
-	}
-	.omni-net-takeover[hidden] { display: none; }
-	.omni-net-takeover.on { opacity: 1; }
-	.omni-net-takeover-card { width: min(34em, 100%); display: grid; justify-items: center; gap: 0.75em; }
-	.omni-net-setup {
-		width: 100%;
-		height: min(30em, 58vh);
-		margin-top: 0.75em;
-		border: 0;
-		background: transparent;
-		color-scheme: dark;
-	}
-	.omni-net-takeover svg { width: 4.5em; height: 4.5em; opacity: 0.9; }
-	.omni-net-takeover h1 { margin: 0.25em 0 0; font-size: 2em; font-weight: 600; letter-spacing: -0.01em; }
-	.omni-net-takeover p { margin: 0; color: rgba(255, 255, 255, 0.75); }
-	@media (prefers-reduced-motion: reduce) {
-		.omni-net-takeover { transition: none; }
-	}
-`;
 
 const CLIENT_SCRIPT = `
 (function () {
@@ -315,13 +236,15 @@ const CLIENT_SCRIPT = `
 	var UP = "translate(0, -150%)";
 
 	var showing = null; // "no-internet", "connected" or null
-	pane.style.transform = GONE;
 	var motion = null;
 	var closing = null;
 
+	// Where the pane rests between movements: a CSS variable the drawer's
+	// rule reads (its transform), so the script never sets a look itself
 	function setTransform(value) {
-		pane.style.transform = value;
+		pane.style.setProperty("--omni-net-at", value);
 	}
+	setTransform(GONE);
 
 	function play(frames, duration, easing) {
 		if (motion) motion.cancel();
@@ -347,8 +270,7 @@ const CLIENT_SCRIPT = `
 		pane.dataset.at = "open";
 		if (still.matches) {
 			setTransform(OPEN);
-			pane.style.opacity = "0";
-			play([{ opacity: 0, transform: OPEN }, { opacity: 1, transform: OPEN }], 200, "linear").then(function () { pane.style.opacity = ""; });
+			play([{ opacity: 0, transform: OPEN }, { opacity: 1, transform: OPEN }], 200, "linear");
 			return;
 		}
 		// Drop in (a quick fall that settles with a little give), then
@@ -371,7 +293,6 @@ const CLIENT_SCRIPT = `
 		leave.then(function () {
 			if (pane.dataset.at !== "up") return;
 			drawer.hidden = true;
-			pane.style.opacity = "";
 			setTransform(GONE);
 		});
 	}
@@ -516,7 +437,7 @@ const CLIENT_SCRIPT = `
 })();
 `;
 
-const CLIENT_HTML = `<style>${CLIENT_CSS}</style><script>${CLIENT_SCRIPT}</script>`;
+const CLIENT_HTML = `${require("./ui-theme").styleTag(CLIENT_CSS)}<script>${CLIENT_SCRIPT}</script>`;
 
 // For the tests: forget everything
 function reset() {

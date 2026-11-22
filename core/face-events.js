@@ -200,7 +200,7 @@ function clientBundle(face) {
 	const notifications = require("./notifications");
 
 	return (
-		`<style>${notifications.overlayStyles(face && face.notificationMode)}</style>\n` +
+		`${require("./ui-theme").styleTag(notifications.overlayStyles(face && face.notificationMode))}\n` +
 		`<script>${notifications.OVERLAY_SCRIPT}</script>\n` +
 		CLIENT_SCRIPT +
 		// The status drawer and the takeover (since 2.0.0): a theme's page

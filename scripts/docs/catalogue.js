@@ -36,6 +36,7 @@ const CATALOGUE_CSS = `
 	.el pre { margin: 0; }
 	.el .note { margin: 0.8em 0 0; font-size: 0.86em; color: var(--fg-muted); max-width: 52em; line-height: 1.55; }
 	.el .note b { color: var(--fg); }
+	.el .base { margin: -0.4em 0 1em; font-size: 0.86em; color: var(--fg-muted); }
 	.plain td:first-child { white-space: nowrap; padding-right: 1.2em; }
 	.colours td:nth-child(-n+3) { white-space: nowrap; }
 	.colours tr.group th { background: none; padding-top: 1.2em; }
@@ -102,14 +103,23 @@ function colourTable(palettes, notes, groups) {
 	return `<div class="table-wrap"><table><thead><tr><th>Variable</th><th>Dark</th><th>Light</th><th>Used for</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
+// Every entry's title by its id, for "Builds on ..." (filled in when the
+// page is drawn)
+let titles = new Map();
+
 function elementCard(entry) {
 	const fenced = entry.stage ? " fenced" : "";
+	// The element this one builds on: it's that element plus a modifier
+	const base = entry.base && titles.has(entry.base)
+		? `<p class="base">Builds on <a href="#${esc(entry.base)}">${esc(titles.get(entry.base))}</a>: everything it is, plus what this one adds.</p>`
+		: "";
 	const height = entry.stage ? ` style="height:${Number(entry.stage)}px"` : "";
 
 	return `
 <article class="segment el" id="${esc(entry.id)}">
 	<header><h3><a href="#${esc(entry.id)}">${esc(entry.title)}</a></h3><code class="sel">${esc(entry.sel)}</code></header>
 	<p class="desc">${entry.desc}</p>
+	${base}
 	<div class="stage${fenced}"${height}>${entry.demo}</div>
 	<pre><code>${esc(entry.code)}</code></pre>
 	${entry.note ? `<p class="note"><b>Note.</b> ${entry.note}</p>` : ""}
@@ -132,6 +142,8 @@ function renderCatalogue(theme, data, file) {
 	const { paletteNotes, paletteGroups, sections, helpers, elsewhere } = data;
 	const colourCount = Object.keys(theme.PALETTES.dark).length;
 	const elementCount = sections.reduce((n, s) => n + s.entries.length, 0);
+
+	titles = new Map(sections.flatMap((section) => section.entries.map((entry) => [entry.id, entry.title])));
 
 	const body = `
 <div class="page-head">
@@ -187,7 +199,9 @@ ${sections.map((section) => `
 		body,
 		outline,
 		searchEntries,
-		head: `<style>${CATALOGUE_CSS}</style>`,
+		// The overlays' own looks, so their samples are the real thing (a
+		// notification in its dark glass, the one a face starts with)
+		head: `<style>${CATALOGUE_CSS}</style>${theme.styleTag(theme.STATUS_CSS + theme.notificationStyles("dark"))}`,
 		scripts: sampleScripts(theme.PASSWORD_TOGGLE_SCRIPT)
 	};
 }

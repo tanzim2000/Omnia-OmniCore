@@ -759,7 +759,7 @@ const PAGE_BODY = `
 			<form id="net-join" class="form-stack" hidden autocomplete="off">
 				<label for="net-password" id="net-join-label">Password</label>
 				${passwordField('<input type="password" id="net-password" autocomplete="off" spellcheck="false" autocapitalize="off">')}
-				<div class="inline-buttons">
+				<div class="buttons">
 					<button type="submit" class="glass">Join</button>
 					<button type="button" class="glass" id="net-cancel">Cancel</button>
 				</div>
@@ -801,6 +801,16 @@ const PAGE_SCRIPT = `
 		if (className) element.className = className;
 		element.textContent = value;
 		return element;
+	}
+
+	// The password hidden again, and its Show button saying so (it said
+	// Hide if the last one was shown)
+	function hidePassword() {
+		password.type = "password";
+		var toggle = password.parentElement.querySelector("[data-password-toggle]");
+		toggle.textContent = "Show";
+		toggle.setAttribute("aria-pressed", "false");
+		toggle.setAttribute("aria-label", "Show password");
 	}
 
 	function say(where, message, tone, spinning) {
@@ -971,7 +981,7 @@ const PAGE_SCRIPT = `
 
 	function buttonRow(buttons) {
 		var row = document.createElement("div");
-		row.className = "dialog-buttons";
+		row.className = "buttons dialog-buttons";
 		buttons.forEach(function (button) { row.appendChild(button); });
 		return row;
 	}
@@ -1243,7 +1253,7 @@ const PAGE_SCRIPT = `
 		}
 		joinLabel.textContent = "Password for " + network.ssid;
 		password.value = "";
-		password.type = "password";
+		hidePassword();
 		form.hidden = false;
 		aroundList.hidden = true;
 		say(status, "");
@@ -1450,7 +1460,7 @@ const ADD_NETWORK_SCRIPT = `
 		status.setAttribute("role", "status");
 		panel.appendChild(status);
 		var buttonsRow = document.createElement("div");
-		buttonsRow.className = "dialog-buttons";
+		buttonsRow.className = "buttons dialog-buttons";
 		var close = plainButton("Cancel");
 		var check = plainButton("Check and add");
 		check.hidden = true;

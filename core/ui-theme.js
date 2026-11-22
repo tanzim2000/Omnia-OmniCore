@@ -17,6 +17,30 @@
 // control-face, input-face-page) and had already drifted between them:
 // different padding, different font sizes, one with a transition the
 // others lacked. Everything here exists so that never happens again.
+//
+// EVERY PAGE, ONLY THESE ELEMENTS (since 2.0.0)
+//
+// No page OmniCore draws keeps a look of its own: every element a page
+// needs is made here, described in docs/ui-elements.js, and reused by
+// every page that needs one like it. test/central-theme.test.js checks
+// it. The one exception is Face:1303 (the About face), which has its own.
+// Things that carry their look onto a theme's page (the status drawer,
+// the takeover, notifications, the page fade) are here too, in the
+// overlay bundle near the end, since a theme's page doesn't load the rest.
+//
+// A BASE, AND MODIFIERS THAT ONLY ADD
+//
+// A variant of an element is always the element itself plus a modifier
+// class that adds only what's different, never a copy of it:
+//
+//     .glass           the button
+//     .glass.small     the same button, smaller
+//
+// <button class="glass small"> is a glass button first. Change .glass (its
+// colour, its corners) and every small one changes with it; only the size
+// stays the small one's own. Values two elements must share (a row's
+// padding) are one variable used by both. Each entry in the catalogue says
+// which base it builds on.
 
 const { AsyncLocalStorage } = require("node:async_hooks");
 const { readSettings } = require("./settings-store");
@@ -412,6 +436,8 @@ function uiStyles(options) {
 		--font-size: ${Number(settings.uiFontSize) || 16}px;
 
 		--radius: 0.75em;
+		/* Room inside a row of a list, picked (.font-row) or not (.item) */
+		--row-padding: 0.7em 0.9em;
 	}
 	${colours}
 
@@ -439,6 +465,14 @@ function uiStyles(options) {
 		   the places you type. */
 		cursor: default;
 	}
+	/* A page shown in a frame over the takeover (Manual Setup): no
+	   background of its own, so the takeover's glass shows through, and
+	   a little room at its edges so a glow or a focus ring isn't cut off
+	   by the frame. Its colour scheme is the frame's (.omni-net-setup is
+	   dark): when the two differ, a browser paints the frame solid. */
+	html.see-through { color-scheme: dark; }
+	html.see-through body { background: transparent; padding: 0.25em; }
+
 	input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=button]):not([type=submit]):not([type=file]),
 	textarea,
 	[contenteditable]:not([contenteditable=false]) {
@@ -446,7 +480,7 @@ function uiStyles(options) {
 	}
 	${overPicture}
 
-	${pageMotion.CURTAIN_CSS}
+	${CURTAIN_CSS}
 
 	/* ---------------------------------------------------------------
 	   The picture behind the page (since v2), when one is set in
@@ -794,6 +828,16 @@ function uiStyles(options) {
 	   file, with the colours. */
 
 	/* ---------------------------------------------------------------
+	   Box heading — a box's title: a segment's, or one at the top of a
+	   form stack. In a .box-head it shares its line with something at
+	   the end (an ⓘ, a "Look again" button).
+	   --------------------------------------------------------------- */
+	.segment h2,
+	.box-head h2,
+	.form-stack > h2 { margin: 0 0 4px 0; font-size: 1.05em; font-weight: 600; }
+	.box-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5em; }
+
+	/* ---------------------------------------------------------------
 	   Scrollable list — the list scrolls, the page doesn't. Nothing
 	   else on screen should move just because a list happens to be
 	   long.
@@ -845,7 +889,7 @@ function uiStyles(options) {
 		background: transparent;
 		border: 1px solid transparent;
 		border-radius: 0.6em;
-		padding: 0.7em 0.9em;
+		padding: var(--row-padding);
 		cursor: pointer;
 	}
 
@@ -894,7 +938,7 @@ function uiStyles(options) {
 		gap: 0.5em 1em;
 		white-space: normal;
 	}
-	.item:not(.font-row) { padding: 0.55em 0.9em; }
+	.item:not(.font-row) { padding: var(--row-padding); }
 	.item-main { display: flex; align-items: center; gap: 0.75em; min-width: 0; flex: 1 1 9em; }
 	.item-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 9em; }
 	.item-text > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -947,7 +991,7 @@ function uiStyles(options) {
 	   Form stack — a form's labels, boxes and buttons one under another,
 	   evenly spaced: a pop-up's form, a password asked for under a list.
 	   A .switch-row is a label with its switch at the end of the line;
-	   .inline-buttons a few buttons side by side.
+	   Buttons under it go in a .buttons row.
 	   --------------------------------------------------------------- */
 	.form-stack { display: flex; flex-direction: column; gap: 0.6em; }
 	.form-stack select,
@@ -955,11 +999,22 @@ function uiStyles(options) {
 	.form-stack input[type="password"] { width: 100%; box-sizing: border-box; }
 	.form-stack .hint { margin: 0; }
 	.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
-	.inline-buttons { display: flex; flex-wrap: wrap; gap: 0.6em; }
+	/* The same, centred: a code to scan with a line under it, one thing
+	   at a time (Manual Setup's OmniSync view) */
+	.form-stack.centred { align-items: center; text-align: center; }
+	.form-stack.centred > p { margin: 0; max-width: 28em; }
+	/* ---------------------------------------------------------------
+	   Buttons in a row — a few buttons side by side, each as wide as its
+	   words, wrapping onto a second line when there isn't room. The
+	   pop-up's two buttons are the same row with .dialog-buttons: a
+	   little room above, and every button equally wide.
+	   --------------------------------------------------------------- */
+	.buttons { display: flex; flex-wrap: wrap; gap: 0.6em; }
 
-	/* A QR code on its own, in a pop-up: Core's drawing (qr.js), kept
-	   square and never bigger than a phone needs */
-	.qr-box { width: min(14em, 65vw); margin: 0.25em auto 0.5em; }
+	/* A QR code on its own, in a pop-up or a frame: Core's drawing
+	   (qr.js), kept square, never bigger than a phone needs, and never
+	   more than about half the screen's height */
+	.qr-box { width: min(14em, 65vw, 45vh); margin: 0.25em auto 0.5em; }
 	.qr-box svg { display: block; width: 100%; height: auto; border-radius: 0.5em; }
 
 	/* Something to read out or copy exactly, like a password shown on
@@ -1770,10 +1825,11 @@ function uiStyles(options) {
 
 	/* A question in a pop-up, from confirmDialog or askDialog (see
 	   DIALOG_SCRIPT): the question's text, an optional box to type into,
-	   then its two buttons side by side, equally wide. */
+	   then its two buttons: a .buttons row, equally wide
+	   (.buttons.dialog-buttons). */
 	.dialog-text { margin: 0; color: var(--fg-muted); line-height: 1.5; }
-	.dialog-buttons { display: flex; gap: 0.6em; margin-top: 0.4em; }
-	.dialog-buttons > button { flex: 1; }
+	.buttons.dialog-buttons { margin-top: 0.4em; }
+	.buttons.dialog-buttons > button { flex: 1; }
 	/* A hint behind an ⓘ (infoTip): the bubble shows after the pointer
 	   rests on the icon for half a second, at once on keyboard focus or a
 	   tap. The box it's in is lifted above its neighbours while it shows,
@@ -2130,7 +2186,7 @@ const DIALOG_SCRIPT = `
 			}
 
 			var buttons = document.createElement("div");
-			buttons.className = "dialog-buttons";
+			buttons.className = "buttons dialog-buttons";
 
 			var cancel = document.createElement("button");
 			cancel.type = "button";
@@ -2210,7 +2266,607 @@ const DIALOG_SCRIPT = `
 	}
 `;
 
+
+// ---------------------------------------------------------------------
+// THE OVERLAY BUNDLE
+//
+// The elements that are drawn on top of a theme's page as well as on
+// OmniCore's own: the page fade's curtain, the status drawer, the
+// takeover, and notifications. A theme's page doesn't load uiStyles (it's
+// the theme's own page), so these carry everything they need with them
+// and are sent on their own, through styleTag(). They're still the central
+// theme's elements: described in docs/ui-elements.js under Overlays, and
+// changed here and nowhere else.
+
+// A <style> element holding some of the central theme's CSS: the one way
+// a page gets one. No other file writes a <style> (see
+// test/central-theme.test.js).
+function styleTag(css) {
+	return `<style>${css}</style>`;
+}
+
+// The curtain's look: what a page fades in from and out to
+// (page-motion.js). Part of uiStyles, and sent on its own with a face that
+// has a theme.
+const CURTAIN_CSS = `
+	/* ---------------------------------------------------------------
+	   The curtain: what a page fades in from and out to (page-motion.js).
+	   Above everything, and never in the way of a click while it lifts.
+	   --------------------------------------------------------------- */
+	.omni-curtain {
+		position: fixed;
+		inset: 0;
+		z-index: 2147483000;
+		background: var(--curtain, ${DEFAULT_DARK});
+		opacity: 0;
+		visibility: hidden;
+		pointer-events: none;
+	}
+
+	html.omni-arriving .omni-curtain {
+		visibility: visible;
+		animation: omni-curtain-lift ${pageMotion.IN_MS}ms ease-out both;
+	}
+
+	html.omni-leaving .omni-curtain {
+		visibility: visible;
+		pointer-events: auto;
+		animation: omni-curtain-drop ${pageMotion.OUT_MS}ms ease-in both;
+	}
+
+	@keyframes omni-curtain-lift { from { opacity: 1; } to { opacity: 0; } }
+	@keyframes omni-curtain-drop { from { opacity: 0; } to { opacity: 1; } }
+`;
+
+// The curtain with its colour, for a page without uiStyles: dark, light,
+// or (null) whichever the device is set to
+function curtainStyles(light) {
+	const colour =
+		light === true
+			? `:root { --curtain: ${DEFAULT_LIGHT}; }`
+			: light === false
+				? `:root { --curtain: ${DEFAULT_DARK}; }`
+				: `:root { --curtain: ${DEFAULT_DARK}; } @media (prefers-color-scheme: light) { :root { --curtain: ${DEFAULT_LIGHT}; } }`;
+	return colour + CURTAIN_CSS;
+}
+
+// The status drawer and the takeover (network-status.js): on every page,
+// a theme's too
+const STATUS_CSS = `
+	/* The status drawer. The pane is bigger than what's seen: it runs past
+	   the top and right edges of the screen, so only its bottom-left corner
+	   is round on screen. Every touch goes through it. */
+	.omni-net-drawer {
+		position: fixed;
+		top: 0;
+		right: 0;
+		z-index: 2147483000;
+		pointer-events: none;
+		font: 500 15px/1.2 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		color: #fff;
+	}
+	.omni-net-drawer[hidden] { display: none; }
+	.omni-net-pane {
+		position: absolute;
+		top: -1.25em;
+		right: -1.25em;
+		display: flex;
+		align-items: center;
+		gap: 0.75em;
+		padding: calc(1.25em + 0.7em) calc(1.25em + 1em) 0.7em 1em;
+		border-radius: 1.4em;
+		white-space: nowrap;
+		/* Clear glass: no blur, a faint tint, a bright rim, and what's
+		   behind a little darker so white stays readable on anything */
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
+		border: 1px solid rgba(255, 255, 255, 0.32);
+		box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.25), 0 6px 22px rgba(0, 0, 0, 0.28);
+		-webkit-backdrop-filter: brightness(0.82) saturate(1.3);
+		backdrop-filter: brightness(0.82) saturate(1.3);
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+		/* Out of sight until it moves. The script says where it rests
+		   (--omni-net-at) and animates it between those places. */
+		transform: var(--omni-net-at, translate(0, -150%));
+	}
+	.omni-net-pane svg { flex: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }
+	.omni-net-pane .omni-net-dim { opacity: 0.3; }
+	.omni-net-speeds { display: flex; gap: 0.9em; font-variant-numeric: tabular-nums; }
+	.omni-net-speeds span { min-width: 5.2em; }
+	.omni-net-hidden-text {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	/* The takeover: the whole screen, above everything, the page paused
+	   under it */
+	.omni-net-takeover {
+		position: fixed;
+		inset: 0;
+		z-index: 2147483600;
+		display: grid;
+		place-items: center;
+		padding: 2em;
+		background: rgba(0, 0, 0, 0.82);
+		-webkit-backdrop-filter: blur(24px) saturate(1.2);
+		backdrop-filter: blur(24px) saturate(1.2);
+		color: #fff;
+		font: 400 17px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+		text-align: center;
+		opacity: 0;
+		transition: opacity 0.4s ease;
+	}
+	.omni-net-takeover[hidden] { display: none; }
+	.omni-net-takeover.on { opacity: 1; }
+	.omni-net-takeover-card { width: min(34em, 100%); display: grid; justify-items: center; gap: 0.75em; }
+	.omni-net-setup {
+		width: 100%;
+		height: min(30em, 58vh);
+		margin-top: 0.75em;
+		border: 0;
+		background: transparent;
+		color-scheme: dark;
+	}
+	.omni-net-takeover svg { width: 4.5em; height: 4.5em; opacity: 0.9; }
+	.omni-net-takeover h1 { margin: 0.25em 0 0; font-size: 2em; font-weight: 600; letter-spacing: -0.01em; }
+	.omni-net-takeover p { margin: 0; color: rgba(255, 255, 255, 0.75); }
+	@media (prefers-reduced-motion: reduce) {
+		.omni-net-takeover { transition: none; }
+	}
+`;
+
+// --- Notifications (notifications.js) ------------------------------------
+
+// How big a table's text is, as a share of Core's font size (Settings >
+// Font size). Tables are the one dense thing a notification can hold, so
+// they're set smaller than everything around them to fit.
+const TABLE_TEXT_SCALE = 0.5;
+
+// Emoji fonts, always at the end of every font list the overlay uses.
+// Not a setting: a message with an emoji in it should show the emoji,
+// whatever font the install has picked. A browser looks for each
+// character in the fonts in order, so letters still come from the
+// chosen font, and only what that font doesn't have -- the emoji --
+// falls through to these. One for each system's own: Apple, Windows,
+// Linux and Android, then two that are often added by hand.
+const EMOJI_FONTS =
+	'"Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", ' +
+	'"Noto Color Emoji", "Android Emoji", "Twemoji Mozilla", "EmojiOne Color"';
+
+const CODE_FONTS = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+
+// The frosted glass, per mode. These belong to the overlay alone, not
+// to the Default UI's palette: OmniCore's own pages sit on a plain
+// background, but a notification sits on whatever a theme drew -- a
+// photo, a bright tile -- so it needs its own tint to stay readable.
+//
+//   tint    the colour laid over the blur. Dark mode darkens what's
+//           behind a little; light mode greys it a little.
+//   edge    the thin border round every box
+//   screen  laid over the whole screen behind the boxes, which is
+//           blurred too, so the boxes stand out from it
+const NOTE_GLASS = {
+	dark: {
+		tint: "rgba(0, 0, 0, 0.32)",
+		edge: "rgba(255, 255, 255, 0.2)",
+		screen: "rgba(0, 0, 0, 0.28)"
+	},
+	light: {
+		tint: "rgba(170, 170, 175, 0.42)",
+		edge: "rgba(255, 255, 255, 0.55)",
+		screen: "rgba(255, 255, 255, 0.12)"
+	}
+};
+
+// `mode` is the face's notificationMode: "light", or anything else for
+// dark.
+function notificationStyles(mode) {
+	const settings = readSettings();
+	const light = mode === "light";
+	const palette = light ? PALETTES.light : PALETTES.dark;
+	const glass = light ? NOTE_GLASS.light : NOTE_GLASS.dark;
+	const size = Number(settings.uiFontSize) || 16;
+
+	return `
+	${fontFace(settings)}
+
+	/* The layer over the whole screen: it blurs and slightly dims (or,
+	   in light mode, lightens) whatever the theme drew. Sits above
+	   everything a theme draws, which is the whole point of an overlay.
+	   Everything inside reads its colours and font from here. */
+	.omni-note-layer {
+		--omni-note-fg: ${palette.fg};
+		--omni-note-muted: ${palette.fgMuted};
+		--omni-note-segment: ${glass.tint};
+		--omni-note-edge: ${glass.edge};
+		--omni-note-sheen: ${palette.glassSheen};
+		--omni-note-radius: 0.75em;
+		--omni-note-size: ${size}px;
+		/* How wide a QR code is drawn: big enough to scan from a few
+		   steps away, small enough that two stacked still fit on a
+		   short screen */
+		--omni-note-qr: min(22vh, 9.5em);
+
+		position: fixed;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: ${glass.screen};
+		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
+		z-index: 9000;
+		opacity: 0;
+		transition: opacity 260ms ease;
+		pointer-events: none;
+
+		color: var(--omni-note-fg);
+		font-family: ${fontStack(settings)}, ${EMOJI_FONTS};
+		font-size: var(--omni-note-size);
+		font-weight: normal;
+		line-height: normal;
+		text-align: left;
+	}
+
+	/* A theme's own rules -- "every h2 is red", "every p is Comic Sans"
+	   -- would otherwise reach inside the overlay and win over what it
+	   inherits from the layer. This puts the layer's font and colour back
+	   on everything inside. The overlay's own rules below come after
+	   this, so they still win where they set something different. */
+	.omni-note-layer * {
+		font-family: inherit;
+		font-size: inherit;
+		font-weight: inherit;
+		font-style: inherit;
+		color: inherit;
+		letter-spacing: normal;
+		text-transform: none;
+		text-shadow: none;
+		background: none;
+		border: 0;
+		margin: 0;
+		padding: 0;
+		box-sizing: border-box;
+	}
+
+	/* The reset above takes bold and italic off too; these put them back */
+	.omni-note-layer strong { font-weight: 700; }
+	.omni-note-layer em { font-style: italic; }
+
+	/* Hidden means hidden inside the overlay, whatever a theme's own
+	   rules say: a theme's page has no Default UI to say it */
+	.omni-note-layer [hidden] { display: none !important; }
+
+	.omni-note-layer.is-open { opacity: 1; }
+
+	/* The module's name on top, the message and its QR codes under it */
+	.omni-note-bento {
+		display: flex;
+		flex-direction: column;
+		gap: 0.8em;
+		width: min(94vw, 52em);
+		max-height: 94vh;
+	}
+
+	/* The message, and the column of QR boxes beside it. Stretched, so
+	   the message box is as tall as the QR column and the two end level. */
+	.omni-note-row {
+		display: flex;
+		align-items: stretch;
+		gap: 0.8em;
+		min-height: 0;
+	}
+
+	/* Every box: frosted glass. The blur is what makes it frosted --
+	   whatever is behind shows through, softened -- and the tint keeps
+	   text readable over a bright picture. No glow and no sheen: those
+	   belong to buttons, and nothing here can be pressed. */
+	.omni-note {
+		border-radius: var(--omni-note-radius);
+		border: 1px solid var(--omni-note-edge);
+		background: var(--omni-note-segment);
+		backdrop-filter: blur(18px) saturate(1.3);
+		-webkit-backdrop-filter: blur(18px) saturate(1.3);
+		position: relative;
+		overflow: hidden;
+
+		/* Start small. The open class scales it to 1 with an overshoot,
+		   which is what gives the bounce. */
+		transform: scale(0.82);
+		opacity: 0;
+		transition:
+			transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			opacity 200ms ease;
+	}
+
+	.omni-note-layer.is-open .omni-note {
+		transform: scale(1);
+		opacity: 1;
+	}
+
+	/* Leaving is deliberately not the reverse of arriving. A bounce on
+	   the way out reads as indecision -- it should simply go. */
+	.omni-note-layer.is-closing .omni-note {
+		transform: scale(0.9);
+		opacity: 0;
+		transition:
+			transform 220ms ease-in,
+			opacity 200ms ease-in;
+	}
+
+	/* The source box: the module's name (or the source it gave), drawn
+	   the way a page's own heading is in the Default UI -- light weight,
+	   1.75em -- so a notification reads like the top of a page. */
+	.omni-note-source {
+		display: flex;
+		align-items: center;
+		gap: 0.5em;
+		padding: 1em 1.5em;
+		font-size: 1.75em;
+		font-weight: 300;
+		line-height: 1.2;
+	}
+
+	/* Where a module's icon will go. Empty, and so not shown, until
+	   modules can have one. */
+	.omni-note-source-icon:empty { display: none; }
+
+	/* The message: takes whatever width the QR column leaves */
+	.omni-note-main {
+		flex: 1 1 auto;
+		min-width: 0;
+		padding: 1.5em;
+	}
+
+	.omni-note-title {
+		font-size: 1.25em;
+		font-weight: 600;
+		line-height: 1.25;
+		color: var(--omni-note-fg);
+	}
+
+	/* The description, rendered from Markdown. Capped in height: a wall
+	   of text was never going to be read in passing, and it mustn't push
+	   the title off the screen. */
+	.omni-note-description {
+		margin: 0.6em 0 0;
+		color: var(--omni-note-muted);
+		line-height: 1.45;
+		max-height: 45vh;
+		overflow: hidden;
+	}
+
+	/* No title above it: the description is the whole message, so it
+	   takes the full colour rather than the quieter one, and the gap a
+	   title would have needed goes */
+	.omni-note-description.is-alone {
+		margin-top: 0;
+		color: var(--omni-note-fg);
+	}
+
+	.omni-note-description p { margin: 0 0 0.5em; }
+	.omni-note-description > :last-child { margin-bottom: 0; }
+
+	/* Lists, indented as they are on any other page */
+	.omni-note-description ul,
+	.omni-note-description ol {
+		margin: 0 0 0.5em;
+		padding-left: 1.3em;
+	}
+
+	.omni-note-description code {
+		font-family: ${CODE_FONTS}, ${EMOJI_FONTS};
+		font-size: 0.9em;
+		padding: 0.05em 0.35em;
+		border-radius: 0.3em;
+		background: rgba(127, 127, 127, 0.18);
+	}
+
+	.omni-note-description strong { color: var(--omni-note-fg); }
+
+	.omni-md-subtitle {
+		color: var(--omni-note-fg);
+		font-weight: 600;
+		font-size: 1.1em;
+	}
+
+	/* A table. Its text is a fixed share of Core's font size (see
+	   TABLE_TEXT_SCALE), not of whatever surrounds it, so every table is
+	   the same size wherever it sits. */
+	.omni-note-description table {
+		font-size: calc(var(--omni-note-size) * ${TABLE_TEXT_SCALE});
+		border-collapse: collapse;
+		margin: 0.4em 0 1em;
+	}
+
+	.omni-note-description th,
+	.omni-note-description td {
+		padding: 0.35em 0.8em;
+		border-bottom: 1px solid var(--omni-note-edge);
+		vertical-align: top;
+		text-align: left;
+	}
+
+	.omni-note-description th {
+		color: var(--omni-note-fg);
+		font-weight: 600;
+		border-bottom-width: 2px;
+	}
+
+	.omni-note-description tr:last-child td { border-bottom: none; }
+
+	/* "...3 more rows not shown", under a table that was cut down */
+	.omni-note-description .omni-md-table-more {
+		margin-top: -0.6em;
+		font-size: 0.75em;
+		opacity: 0.8;
+	}
+
+	/* "3 earlier notifications skipped" -- small, under everything */
+	.omni-note-skipped {
+		margin: 0.9em 0 0;
+		font-size: 0.8em;
+		color: var(--omni-note-muted);
+		opacity: 0.8;
+	}
+
+	/* The QR column: one box per link, stacked. Not there at all when
+	   the notification has no link, and the message takes the row. */
+	.omni-note-links {
+		display: none;
+		flex-direction: column;
+		gap: 0.8em;
+	}
+
+	.omni-note-layer.has-link .omni-note-links { display: flex; }
+
+	/* One link: its code, and its address under it. Exactly as wide as
+	   the code plus the box's padding, so a long address can't widen it.
+	   Never shorter than what's in it; when the message is the taller
+	   side, the boxes share the spare height. */
+	.omni-note-link {
+		flex: 1 0 auto;
+		/* the code, the padding either side, and the 1px border */
+		width: calc(var(--omni-note-qr) + 2em + 2px);
+		padding: 1em;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+	}
+
+	.omni-note-qr svg {
+		display: block;
+		width: var(--omni-note-qr);
+		height: auto;
+		border-radius: 0.4em;
+	}
+
+	/* The address. One line, always: one too long to fit ends in "..."
+	   rather than wrapping. It's plain text, not a link -- nothing on a
+	   face's screen can be clicked -- there for anyone who'd rather type
+	   it than scan it. */
+	.omni-note-link-url {
+		margin: 0.6em 0 0;
+		width: 100%;
+		font-size: 0.7em;
+		color: var(--omni-note-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* A screen taller than it is wide: the QR boxes go under the
+	   message, side by side, rather than squeezing it into a sliver */
+	@media (max-aspect-ratio: 1/1) {
+		.omni-note-row { flex-direction: column; }
+
+		.omni-note-links {
+			flex-direction: row;
+			justify-content: center;
+		}
+
+		.omni-note-link { flex: 0 0 auto; }
+	}
+
+	/* The timer, bottom-left. Deliberately the same lamp the welcome
+	   face's auto-advance uses -- a draining amber wedge under a domed
+	   lens -- because "time is running out on this thing on screen"
+	   already has a look in OmniCore and should not grow a second one.
+	   Its housing is the same frosted glass as the boxes. Bottom-left is
+	   reserved for exactly this; the floating back button only ever
+	   offers bottom-right and top-left so the two can't collide. */
+	.omni-note-timer {
+		position: fixed;
+		bottom: 1.5em;
+		left: 1.5em;
+		width: 3.2em;
+		height: 3.2em;
+		border-radius: 50%;
+		border: 1px solid var(--omni-note-edge);
+		background: var(--omni-note-segment);
+		backdrop-filter: blur(18px) saturate(1.3);
+		-webkit-backdrop-filter: blur(18px) saturate(1.3);
+		overflow: hidden;
+		z-index: 9001;
+		opacity: 0;
+		transform: scale(0.82);
+		transition:
+			transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			opacity 200ms ease;
+	}
+
+	.omni-note-layer.is-open .omni-note-timer {
+		opacity: 1;
+		transform: scale(1);
+	}
+
+	.omni-note-layer.is-closing .omni-note-timer {
+		opacity: 0;
+		transform: scale(0.9);
+		transition:
+			transform 220ms ease-in,
+			opacity 200ms ease-in;
+	}
+
+	.omni-note-lamp {
+		/* How much time is left, 1 to 0: full until the script says */
+		--remaining: 1;
+		position: absolute;
+		inset: 0.45em;
+		border-radius: 50%;
+		background: conic-gradient(
+			#ffb43a calc(var(--remaining) * 1turn),
+			rgba(255, 180, 58, 0.12) 0
+		);
+		box-shadow: 0 0 0.75em rgba(255, 180, 58, 0.35);
+		transition: background 1s linear;
+	}
+
+	/* The lamp's domed lens: a sheen over its top half */
+	.omni-note-timer::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 50%;
+		background: linear-gradient(
+			to bottom, var(--omni-note-sheen), transparent
+		);
+		pointer-events: none;
+	}
+
+	/* Someone who has asked their system for less motion gets the same
+	   notification without the movement. It still arrives, holds and
+	   leaves -- only the scaling stops. */
+	@media (prefers-reduced-motion: reduce) {
+		.omni-note,
+		.omni-note-timer,
+		.omni-note-layer.is-closing .omni-note,
+		.omni-note-layer.is-closing .omni-note-timer {
+			transition: opacity 200ms ease;
+			transform: none;
+		}
+	}
+`;
+}
+
+
 module.exports = {
+	styleTag,
+	CURTAIN_CSS,
+	curtainStyles,
+	STATUS_CSS,
+	TABLE_TEXT_SCALE,
+	EMOJI_FONTS,
+	CODE_FONTS,
+	NOTE_GLASS,
+	notificationStyles,
 	MODE_CHOICES,
 	DIALOG_SCRIPT,
 	CONTROLS_SCRIPT,

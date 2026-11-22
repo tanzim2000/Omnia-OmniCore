@@ -363,7 +363,7 @@ function priorityClient() {
 		panel.appendChild(list);
 
 		var buttons = document.createElement("div");
-		buttons.className = "dialog-buttons";
+		buttons.className = "buttons dialog-buttons";
 
 		var cancel = document.createElement("button");
 		cancel.type = "button";

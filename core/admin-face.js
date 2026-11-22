@@ -136,10 +136,9 @@ const styles = `
 
 	.bento-row { display: grid; gap: 14px; grid-template-columns: 1fr; }
 
-	/* The boxes themselves are .segment, from ui-theme.js. Only how a
-	   heading and its description sit inside one is particular to the
-	   settings pages. */
-	.segment h2 { margin: 0 0 4px 0; font-size: 1.05em; font-weight: 600; }
+	/* The boxes and their headings are .segment, from ui-theme.js. Only
+	   how a description sits inside one is particular to the settings
+	   pages. */
 	.segment .lede { margin: 0 0 14px 0; }
 
 	.settings-head {
@@ -763,9 +762,6 @@ const styles = `
 		background: rgba(0, 0, 0, 0.45);
 	}
 	.corner-mark-bottom-right { bottom: 1.25em; right: 0.75em; }
-
-	/* A box's heading with an ⓘ at the end of the line */
-	.box-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5em; }
 
 	/* Background's Back button switch: two halves, the width of the box */
 	.back-corner { margin-top: 10px; }
@@ -2144,7 +2140,7 @@ function backgroundPanel(settings) {
 
 					<p class="status" id="upload-status" aria-live="polite"></p>
 
-					<div class="dialog-buttons">
+					<div class="buttons dialog-buttons">
 						<button type="button" class="glass" data-close="background-modal">Cancel</button>
 						<button type="button" class="glass" id="bg-use" disabled>Use</button>
 					</div>

@@ -40,13 +40,19 @@ test.after(() => {
 	fs.rmSync(settingsDir, { recursive: true, force: true });
 });
 
-// Every class name used in a selector in the stylesheet. Comments are
+// Every class name used in a selector in the central theme. Comments are
 // taken out first: they mention old names (.card, .tile) that aren't
 // rules any more. Only the part of each rule before its "{" is read, so a
 // number such as 0.5em or a file name in a url() is never mistaken for a
 // class.
 function stylesheetClasses() {
-	const css = theme.uiStyles({ forceMode: "dark" }) + theme.uiStyles({ forceMode: "light" });
+	// The Default UI, and the overlay bundle sent with a theme's page
+	const css =
+		theme.uiStyles({ forceMode: "dark" }) +
+		theme.uiStyles({ forceMode: "light" }) +
+		theme.STATUS_CSS +
+		theme.notificationStyles("dark") +
+		theme.notificationStyles("light");
 	const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "");
 	const classes = new Set();
 
@@ -139,6 +145,14 @@ test("default UI: every entry is complete, with its own id", () => {
 		assert.match(entry.id, /^[a-z0-9-]+$/, `${entry.id}: an id is lower case, digits and hyphens`);
 		assert.ok(!ids.has(entry.id), `${entry.id} is used twice`);
 		ids.add(entry.id);
+	}
+
+	// A base names another entry that's really there: the element this one
+	// is a modifier of
+	for (const entry of allEntries()) {
+		if (entry.base === undefined) continue;
+		assert.ok(ids.has(entry.base), `${entry.id}: its base, ${entry.base}, isn't an entry`);
+		assert.notEqual(entry.base, entry.id, `${entry.id} can't build on itself`);
 	}
 
 	// Section ids share the page with element ids, so they can't clash either

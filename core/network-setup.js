@@ -69,6 +69,7 @@ const express = require("express");
 
 const networkHelper = require("./network-helper");
 const networkStatus = require("./network-status");
+const theme = require("./ui-theme");
 
 const TRY_FOR_MS = 60 * 1000;
 const LOOK_EVERY_MS = 3000;
@@ -639,7 +640,7 @@ function attach(app) {
 		const host = String(req.hostname || "localhost").replace(/[^\w.:\-[\]]/g, "");
 		res.setHeader("Content-Security-Policy", `frame-ancestors 'self' http://${host}:* https://${host}:*`);
 		res.setHeader("Cache-Control", "no-store");
-		res.send(SETUP_PAGE);
+		res.send(setupPage());
 	});
 
 	app.get(NEARBY_PATH, async (req, res) => {
@@ -691,104 +692,47 @@ function attach(app) {
 
 const LOCK_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 
-const SETUP_PAGE = `<!DOCTYPE html>
-<html lang="en">
+// Manual Setup's page, built for each request so it's in the font and
+// text size chosen in Settings at the time. Only the central theme's
+// elements, in dark (it's always over the takeover's dark glass), with no
+// background of its own (html.see-through) so the takeover shows through
+// the frame.
+function setupPage() {
+	return `<!DOCTYPE html>
+<html lang="en" class="see-through">
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Manual Setup</title>
-	<style>
-		:root { color-scheme: dark; }
-		html, body { margin: 0; background: transparent; color: #fff; }
-		body { font: 400 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 0.25em; }
-		.head { display: flex; align-items: baseline; justify-content: space-between; gap: 1em; margin-bottom: 0.6em; }
-		h2 { margin: 0; font-size: 1.05em; font-weight: 600; }
-		button { font: inherit; color: inherit; cursor: pointer; }
-		.link { background: none; border: 0; padding: 0.3em 0.2em; color: rgba(255, 255, 255, 0.8); text-decoration: underline; text-underline-offset: 3px; }
-		.list { display: grid; gap: 0.4em; max-height: 40vh; overflow: auto; padding: 2px; }
-		.list[hidden] { display: none; }
-		.row {
-			display: grid;
-			grid-template-columns: auto 1fr auto;
-			align-items: center;
-			gap: 0.75em;
-			width: 100%;
-			text-align: left;
-			padding: 0.7em 0.9em;
-			border-radius: 0.9em;
-			border: 1px solid rgba(255, 255, 255, 0.16);
-			background: rgba(255, 255, 255, 0.07);
-		}
-		.row:hover, .row:focus-visible { background: rgba(255, 255, 255, 0.13); outline: none; }
-		.row:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
-		.row[aria-disabled="true"] { opacity: 0.45; cursor: default; }
-		.row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-		.row .why { display: block; font-size: 0.8em; color: rgba(255, 255, 255, 0.65); }
-		.row svg { display: block; }
-		.dim { opacity: 0.3; }
-		form { display: grid; gap: 0.7em; padding: 0.9em; border-radius: 0.9em; border: 1px solid rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.09); }
-		form[hidden] { display: none; }
-		label { font-weight: 600; }
-		.field { display: flex; gap: 0.5em; }
-		input {
-			flex: 1;
-			min-width: 0;
-			font: inherit;
-			color: #fff;
-			padding: 0.6em 0.8em;
-			border-radius: 0.6em;
-			border: 1px solid rgba(255, 255, 255, 0.3);
-			background: rgba(0, 0, 0, 0.35);
-		}
-		input:focus { outline: 2px solid rgba(255, 255, 255, 0.7); outline-offset: 1px; }
-		.buttons { display: flex; gap: 0.6em; justify-content: flex-end; }
-		.primary, .secondary { padding: 0.55em 1.1em; border-radius: 0.6em; border: 1px solid rgba(255, 255, 255, 0.3); }
-		.primary { background: #fff; color: #000; border-color: #fff; font-weight: 600; }
-		.secondary { background: rgba(255, 255, 255, 0.08); }
-		.hint { margin: 0; font-size: 0.85em; color: rgba(255, 255, 255, 0.65); }
-		.status { min-height: 1.5em; margin: 0.6em 0 0; color: rgba(255, 255, 255, 0.85); }
-		.status.bad { color: #ffb4a8; }
-		.spin { display: inline-block; width: 0.9em; height: 0.9em; margin-right: 0.45em; vertical-align: -0.1em; border: 2px solid rgba(255, 255, 255, 0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.9s linear infinite; }
-		@keyframes spin { to { transform: rotate(360deg); } }
-		[hidden] { display: none !important; }
-		.omnisync { display: grid; justify-items: center; gap: 0.8em; text-align: center; }
-		.omnisync h2 { font-size: 1.15em; }
-		.omnisync p { margin: 0; max-width: 28em; color: rgba(255, 255, 255, 0.75); }
-		.code { width: min(14em, 38vh); aspect-ratio: 1; border-radius: 0.9em; overflow: hidden; background: #fff; }
-		.code svg { display: block; width: 100%; height: 100%; }
-		.waiting { display: grid; place-items: center; min-height: 10em; }
-		@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
-	</style>
+	${theme.styleTag(theme.uiStyles({ forceMode: "dark" }))}
 </head>
 <body>
-	<section class="omnisync" id="omnisync" hidden>
+	<section class="form-stack centred" id="omnisync" hidden>
 		<h2>Set up with OmniSync</h2>
-		<div class="code" id="code" aria-label="A code for OmniSync to scan"></div>
-		<div class="waiting" id="waiting" hidden><p id="waiting-text"></p></div>
-		<p id="omnisync-text">Open OmniSync on your phone and scan this code. Your phone joins the server for a moment and tells it your Wi&#8209;Fi's name and password.</p>
-		<button type="button" class="secondary" id="manual">Set up manually</button>
+		<div class="qr-box" id="code" aria-label="A code for OmniSync to scan"></div>
+		<div id="waiting" hidden><p class="status" id="waiting-text"></p></div>
+		<p class="muted" id="omnisync-text">Open OmniSync on your phone and scan this code. Your phone joins the server for a moment and tells it your Wi&#8209;Fi's name and password.</p>
+		<button type="button" class="glass" id="manual">Set up manually</button>
 	</section>
-	<section id="manual-view" hidden>
-	<div class="head">
-		<h2>Choose a network</h2>
-		<button type="button" class="link" id="again">Look again</button>
-	</div>
-	<div class="list" id="list" role="list"></div>
-	<form id="join" hidden autocomplete="off">
-		<label for="password" id="join-label">Password</label>
-		<div class="field">
-			<input type="password" id="password" autocomplete="off" autocapitalize="off" spellcheck="false">
-			<button type="button" class="secondary" id="show">Show</button>
+	<section class="form-stack" id="manual-view" hidden>
+		<div class="box-head">
+			<h2>Choose a network</h2>
+			<button type="button" class="glass small" id="again">Look again</button>
 		</div>
-		<p class="hint">Type it on a keyboard connected to this screen.</p>
-		<div class="buttons">
-			<button type="button" class="secondary" id="cancel">Cancel</button>
-			<button type="submit" class="primary" id="go">Connect</button>
-		</div>
-	</form>
+		<div class="list tight" id="list" role="list"></div>
+		<form class="form-stack" id="join" hidden autocomplete="off">
+			<label for="password" id="join-label">Password</label>
+			${theme.passwordField('<input type="password" id="password" autocomplete="off" autocapitalize="off" spellcheck="false">')}
+			<p class="hint">Type it on a keyboard connected to this screen.</p>
+			<div class="buttons">
+				<button type="submit" class="glass" id="go">Connect</button>
+				<button type="button" class="glass" id="cancel">Cancel</button>
+			</div>
+		</form>
 	</section>
 	<p class="status" id="status" role="status" aria-live="polite"></p>
 	<script>
+	${theme.PASSWORD_TOGGLE_SCRIPT}
 	(function () {
 		var list = document.getElementById("list");
 		var form = document.getElementById("join");
@@ -799,19 +743,29 @@ const SETUP_PAGE = `<!DOCTYPE html>
 		var busy = false;
 		var LOCK = ${JSON.stringify(LOCK_SVG)};
 
+		// The central theme's signal icon: the bars it doesn't have are .off
 		function bars(n) {
 			var parts = [
 				'<circle cx="12" cy="19" r="1.3" fill="currentColor" stroke="none"/>',
-				'<path d="M8.7 15.4a5 5 0 0 1 6.6 0"' + (n < 2 ? ' class="dim"' : "") + '/>',
-				'<path d="M5.5 12.2a9.5 9.5 0 0 1 13 0"' + (n < 3 ? ' class="dim"' : "") + '/>',
-				'<path d="M2.5 9a14 14 0 0 1 19 0"' + (n < 4 ? ' class="dim"' : "") + '/>'
+				'<path d="M8.7 15.4a5 5 0 0 1 6.6 0"' + (n < 2 ? ' class="off"' : "") + '/>',
+				'<path d="M5.5 12.2a9.5 9.5 0 0 1 13 0"' + (n < 3 ? ' class="off"' : "") + '/>',
+				'<path d="M2.5 9a14 14 0 0 1 19 0"' + (n < 4 ? ' class="off"' : "") + '/>'
 			];
-			return '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">' + parts.join("") + "</svg>";
+			return '<svg class="signal" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">' + parts.join("") + "</svg>";
+		}
+
+		// The password hidden again, and its Show button saying so
+		function hidePassword() {
+			password.type = "password";
+			var toggle = password.parentElement.querySelector("[data-password-toggle]");
+			toggle.textContent = "Show";
+			toggle.setAttribute("aria-pressed", "false");
+			toggle.setAttribute("aria-label", "Show password");
 		}
 
 		function say(text, bad, spinning) {
 			status.className = "status" + (bad ? " bad" : "");
-			status.innerHTML = spinning ? '<span class="spin" aria-hidden="true"></span>' : "";
+			status.innerHTML = spinning ? '<span class="spinner" aria-hidden="true"></span>' : "";
 			status.appendChild(document.createTextNode(text || ""));
 		}
 
@@ -823,8 +777,7 @@ const SETUP_PAGE = `<!DOCTYPE html>
 			}
 			label.textContent = "Password for " + network.ssid;
 			password.value = "";
-			password.type = "password";
-			document.getElementById("show").textContent = "Show";
+			hidePassword();
 			form.hidden = false;
 			list.hidden = true;
 			say("");
@@ -839,25 +792,34 @@ const SETUP_PAGE = `<!DOCTYPE html>
 				say("No networks found. Move closer to the router, or look again.");
 				return;
 			}
+			// Each one a row of the central theme's list, the same as the
+			// Network page's: the bars and the name, a line under it when
+			// it can't be joined, and a lock when it needs a password
 			networks.forEach(function (network) {
 				var row = document.createElement("button");
 				row.type = "button";
-				row.className = "row";
+				row.className = "font-row item";
 				row.setAttribute("role", "listitem");
 				var can = network.auth !== "unsupported";
 				if (!can) row.setAttribute("aria-disabled", "true");
+				var main = document.createElement("span");
+				main.className = "item-main";
+				main.innerHTML = bars(network.bars);
+				var words = document.createElement("span");
+				words.className = "item-text";
 				var name = document.createElement("span");
-				name.className = "name";
 				name.textContent = network.ssid;
+				words.appendChild(name);
 				if (!can) {
 					var why = document.createElement("span");
-					why.className = "why";
+					why.className = "item-sub";
 					why.textContent = "OmniCore can't join this kind of network yet";
-					name.appendChild(why);
+					words.appendChild(why);
 				}
-				row.innerHTML = bars(network.bars);
-				row.appendChild(name);
+				main.appendChild(words);
+				row.appendChild(main);
 				var end = document.createElement("span");
+				end.className = "item-end";
 				end.innerHTML = network.auth === "open" ? "" : LOCK;
 				row.appendChild(end);
 				row.setAttribute("aria-label", network.ssid + (network.auth === "open" ? ", no password" : ", needs a password") + ", signal " + network.bars + " of 4");
@@ -944,7 +906,7 @@ const SETUP_PAGE = `<!DOCTYPE html>
 			waiting.hidden = false;
 			omnisyncText.hidden = true;
 			manualButton.hidden = mode === "joining";
-			waitingText.innerHTML = '<span class="spin" aria-hidden="true"></span>';
+			waitingText.innerHTML = '<span class="spinner" aria-hidden="true"></span>';
 			waitingText.appendChild(document.createTextNode(
 				mode === "starting" ? "Getting OmniSync ready\u2026"
 				: mode === "resting" ? "Looking for a Wi\u2011Fi this server knows\u2026"
@@ -974,15 +936,10 @@ const SETUP_PAGE = `<!DOCTYPE html>
 		document.getElementById("again").addEventListener("click", look);
 		document.getElementById("cancel").addEventListener("click", function () {
 			password.value = "";
+			hidePassword();
 			form.hidden = true;
 			list.hidden = false;
 			say("");
-		});
-		document.getElementById("show").addEventListener("click", function (event) {
-			var hidden = password.type === "password";
-			password.type = hidden ? "text" : "password";
-			event.target.textContent = hidden ? "Hide" : "Show";
-			password.focus();
 		});
 		form.addEventListener("submit", function (event) {
 			event.preventDefault();
@@ -997,7 +954,7 @@ const SETUP_PAGE = `<!DOCTYPE html>
 		// middle, where the code was; in Manual Setup, under the list
 		function sayStep(text, spinning) {
 			if (view && view !== "manual") {
-				waitingText.innerHTML = spinning ? '<span class="spin" aria-hidden="true"></span>' : "";
+				waitingText.innerHTML = spinning ? '<span class="spinner" aria-hidden="true"></span>' : "";
 				waitingText.appendChild(document.createTextNode(text));
 				return;
 			}
@@ -1022,6 +979,7 @@ const SETUP_PAGE = `<!DOCTYPE html>
 	</script>
 </body>
 </html>`;
+}
 
 module.exports = {
 	SETUP_PATH,
@@ -1054,5 +1012,5 @@ module.exports = {
 	NM_ACTIVE,
 	NM_RETURN,
 	attach,
-	SETUP_PAGE
+	setupPage
 };

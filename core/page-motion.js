@@ -50,12 +50,8 @@
 // notch up before the fade.
 
 // How long each part takes, in milliseconds. In a little slower than out:
-// the new page is what's worth looking at.
-// The two colours, the same as the Default background (ui-theme.js; kept
-// here too, since ui-theme.js needs this file and not the other way round)
-const DARK = "#000000";
-const LIGHT = "#eedec5";
-
+// the new page is what's worth looking at. (The curtain's colours and look
+// are the central theme's: ui-theme.js, CURTAIN_CSS.)
 const IN_MS = 420;
 const OUT_MS = 250;
 const GIVE_UP_MS = 5000;
@@ -106,37 +102,6 @@ function fadesIn(type) {
 	return type === "navigate" || type === undefined || type === null;
 }
 
-// The curtain's look. Part of uiStyles, and sent on its own with a face
-// that has a theme (see curtainHtml).
-const CURTAIN_CSS = `
-	/* ---------------------------------------------------------------
-	   The curtain: what a page fades in from and out to (page-motion.js).
-	   Above everything, and never in the way of a click while it lifts.
-	   --------------------------------------------------------------- */
-	.omni-curtain {
-		position: fixed;
-		inset: 0;
-		z-index: 2147483000;
-		background: var(--curtain, ${DARK});
-		opacity: 0;
-		visibility: hidden;
-		pointer-events: none;
-	}
-
-	html.omni-arriving .omni-curtain {
-		visibility: visible;
-		animation: omni-curtain-lift ${IN_MS}ms ease-out both;
-	}
-
-	html.omni-leaving .omni-curtain {
-		visibility: visible;
-		pointer-events: auto;
-		animation: omni-curtain-drop ${OUT_MS}ms ease-in both;
-	}
-
-	@keyframes omni-curtain-lift { from { opacity: 1; } to { opacity: 0; } }
-	@keyframes omni-curtain-drop { from { opacity: 0; } to { opacity: 1; } }
-`;
 
 // The browser half. Runs at the very start of <body>, before anything is
 // drawn, so a page that fades in is never seen before its curtain.
@@ -228,16 +193,10 @@ function curtainHtml(options) {
 	const settings = options || {};
 	const fadeIn = settings.fadeIn !== false;
 
-	let styles = "";
-	if (settings.styles) {
-		const colour =
-			settings.light === true
-				? `:root { --curtain: ${LIGHT}; }`
-				: settings.light === false
-				? `:root { --curtain: ${DARK}; }`
-				: `:root { --curtain: ${DARK}; } @media (prefers-color-scheme: light) { :root { --curtain: ${LIGHT}; } }`;
-		styles = `<style>${colour}${CURTAIN_CSS}</style>`;
-	}
+	// The curtain's look, from the central theme's overlay bundle
+	// (ui-theme.js), with the colour for this page
+	const theme = require("./ui-theme");
+	const styles = settings.styles ? theme.styleTag(theme.curtainStyles(settings.light)) : "";
 
 	return `${styles}<div class="omni-curtain" aria-hidden="true"></div><script>${curtainScript(fadeIn)}</script>`;
 }
@@ -260,7 +219,6 @@ module.exports = {
 	IN_MS,
 	OUT_MS,
 	GIVE_UP_MS,
-	CURTAIN_CSS,
 	leavingTarget,
 	fadesIn,
 	curtainScript,

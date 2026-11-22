@@ -33,6 +33,10 @@
 //           stylesheet, so it looks exactly like the real thing.
 //   code    the markup someone would copy. Plain text: shown as written.
 //   note    (optional) a catch worth knowing. HTML allowed.
+//   base    (optional) the id of the entry this one builds on, when it's
+//           that element plus a modifier class (.glass.small builds on
+//           .glass). Shown on the page as "Builds on ...", so the family
+//           tree can be read; the test checks the id is real.
 //   stage   (optional) a height in pixels. For an element that's normally
 //           pinned to the screen (position: fixed), such as the floating
 //           buttons or a pop-up: the sample gets a box of this height and
@@ -148,6 +152,15 @@ const sections = [
 				note: "Two rules apply by themselves: a page with a back button in the top-left corner starts below it, and one with the button bottom-right ends above it, so the button never covers anything."
 			},
 			{
+				id: "see-through",
+				title: "Page in a frame",
+				base: "body",
+				sel: "html.see-through",
+				desc: "A page shown in a frame over the takeover (Manual Setup): no background of its own, so the takeover's glass shows through, and a little room at its edges so a glow or a focus ring isn't cut off. Its colour scheme is dark, the same as the frame's, because a browser paints a frame solid when the two differ.",
+				demo: `<div style="padding:1em;border-radius:0.75em;background:linear-gradient(135deg,#3a6073,#16222a)"><p class="muted" style="margin:0;color:#fff">What's behind the frame shows through it.</p></div>`,
+				code: '<html class="see-through">\n\t<head>${styleTag(uiStyles({ forceMode: "dark" }))}</head>\n\t<body>…</body>\n</html>'
+			},
+			{
 				id: "backdrop",
 				title: "Picture or colour behind the page",
 				sel: ".omni-backdrop (.omni-colour, .omni-waiting) · .omni-backdrop-was (.going, .was-veil)",
@@ -199,6 +212,7 @@ const sections = [
 			},
 			{
 				id: "glass-danger",
+				base: "glass",
 				title: "Glass button for something final",
 				sel: ".glass.glass-danger",
 				desc: "The same glass button, in the danger colour, for something that can't be taken back: deleting a face, removing a widget. It reads as careful before anyone reads the word on it. Pointed at or focused, it glows red rather than the usual white (since 1.19.9).",
@@ -208,11 +222,20 @@ const sections = [
 			},
 			{
 				id: "glass-small",
+				base: "glass",
 				title: "Small and wide glass buttons",
 				sel: ".glass.small / .glass.wide",
 				desc: "The same glass button, smaller, for the buttons on a row or beside a box's heading (Look again, Show password, Edit); or as wide as its box, for a pop-up's last button (Forget this network). In a settings field, a small one keeps its own width rather than stretching.",
 				demo: '<button class="glass small">Edit</button> <button class="glass small">Look again</button><div style="max-width:18em;margin-top:0.8em"><button class="glass glass-danger wide">Forget this network</button></div>',
 				code: '<button class="glass small">Edit</button>\n<button class="glass glass-danger wide">Forget this network</button>'
+			},
+			{
+				id: "button-row",
+				title: "Buttons in a row",
+				sel: ".buttons",
+				desc: "A few buttons side by side, each as wide as its words, wrapping onto a second line when there isn't room (Join and Cancel under a password). A pop-up's last row is the same element with .dialog-buttons, which makes every button equally wide: see the pop-up question below.",
+				demo: '<div class="buttons"><button class="glass">Join</button><button class="glass">Cancel</button></div>',
+				code: '<div class="buttons">\n\t<button class="glass">Join</button>\n\t<button class="glass">Cancel</button>\n</div>'
 			},
 			{
 				id: "glossy",
@@ -234,6 +257,7 @@ const sections = [
 			},
 			{
 				id: "dock-disabled",
+				base: "dock",
 				title: "Capsule with a section turned off",
 				sel: ".dock button:disabled",
 				desc: "A section that can't be pressed right now (Back on the first step, Save while saving): faded, no glow.",
@@ -252,6 +276,7 @@ const sections = [
 			},
 			{
 				id: "mode-switch",
+				base: "floating",
 				title: "Light / Dark / Device switch",
 				sel: ".floating.top-right.mode-switch (.icon-sun, .icon-moon, .icon-device), .corner-button",
 				desc: "A smaller round floating button, top-right, on the sign-in and setup page and on the welcome face: everywhere else the choice is in Settings → Appearance. It shows the choice in force (a sun for Light, a moon for Dark, a monitor for Device) and each tap moves to the next: Light, Dark, Device, Light again. Device forgets the browser's choice, so the system decides. All three icons are in the markup; data-mode-current, written by the server, picks the one that shows. .corner-button gives any other round button in that corner the same size.",
@@ -262,6 +287,7 @@ const sections = [
 			},
 			{
 				id: "corner-second",
+				base: "floating",
 				title: "Second corner button",
 				sel: ".floating.top-right-second",
 				desc: "A round button just to the left of the switch, the same size (.corner-button). The welcome face's Settings button, a gear, sits here and opens the admin face.",
@@ -303,7 +329,16 @@ const sections = [
 				code: '<div class="segment">…</div>'
 			},
 			{
+				id: "box-head",
+				title: "Box heading",
+				sel: ".segment h2 · .form-stack > h2 · .box-head",
+				desc: "A box's title, in a segment or at the top of a form stack. In a .box-head it shares its line with something at the end: an ⓘ, or a small button like Look again.",
+				demo: '<div class="segment" style="max-width:24em"><div class="box-head"><h2>Networks around</h2><button type="button" class="glass small">Look again</button></div><p class="hint">The list is under the heading.</p></div>',
+				code: '<div class="segment">\n\t<div class="box-head">\n\t\t<h2>Networks around</h2>\n\t\t<button class="glass small">Look again</button>\n\t</div>\n\t…\n</div>'
+			},
+			{
 				id: "segment-clickable",
+				base: "segment",
 				title: "Clickable segment",
 				sel: ".segment.clickable",
 				desc: "A segment where the whole box is a link or a button. In dark mode it glows when pointed at; in light mode it lifts slightly instead, because a glow disappears against a pale page.",
@@ -328,6 +363,7 @@ const sections = [
 			},
 			{
 				id: "list-tight",
+				base: "list",
 				title: "Tight and short lists",
 				sel: ".list.tight / .list.short",
 				desc: "A scrolling list with less room around its rows (.tight), for rows that carry two lines and buttons; and one that scrolls after a few rows (.short), in a pop-up.",
@@ -368,9 +404,9 @@ const sections = [
 			},
 			{
 				id: "qr-box",
-				title: "QR code in a pop-up",
+				title: "QR code on its own",
 				sel: ".qr-box",
-				desc: "A QR code on its own in a pop-up (Show password): Core's own drawing (qr.js), kept square and never bigger than a phone needs. Put the svg Core gives you inside it, never one from anywhere else.",
+				desc: "A QR code on its own, in a pop-up (Show password) or a frame (Manual Setup's OmniSync code): Core's own drawing (qr.js), kept square, never bigger than a phone needs and never more than about half the screen's height. Put the svg Core gives you inside it, never one from anywhere else.",
 				demo: '<div class="qr-box" style="width:8em;margin:0"><svg viewBox="0 0 10 10" style="background:#fff"><rect x="1" y="1" width="3" height="3"/><rect x="6" y="1" width="3" height="3"/><rect x="1" y="6" width="3" height="3"/><rect x="6" y="6" width="1" height="1"/><rect x="8" y="8" width="1" height="1"/></svg></div>',
 				code: '<div class="qr-box">${qr.toSvg(value)}</div>'
 			},
@@ -394,11 +430,12 @@ const sections = [
 			},
 			{
 				id: "dialog",
+				base: "modal",
 				title: "Question pop-up (confirmDialog, askDialog)",
-				sel: ".modal (.dialog-text, .dialog-link, .dialog-buttons)",
+				sel: ".modal (.dialog-text, .dialog-link, .buttons.dialog-buttons)",
 				desc: "A question in a pop-up instead of the browser's own confirm() or prompt() box: a title, a line of text, and two buttons side by side. askDialog adds a box to type into and keeps its confirm button off until something is typed. Built by DIALOG_SCRIPT, which every page on the Default UI carries: <code>await confirmDialog({ title, text, confirm, danger })</code> answers true or false, <code>await askDialog({ title, text, placeholder, secret, confirm })</code> answers what was typed, or null. Either takes <code>link: { text, url }</code> for a small link under the text (.dialog-link), such as where to get an API key; only an https:// address becomes one.",
 				stage: 260,
-				demo: '<div class="modal-backdrop"><div class="modal"><h2>Delete this face?</h2><p class="dialog-text">Its widgets and settings go with it.</p><div class="dialog-buttons"><button class="glass">Cancel</button><button class="glass glass-danger">Delete</button></div></div></div>',
+				demo: '<div class="modal-backdrop"><div class="modal"><h2>Delete this face?</h2><p class="dialog-text">Its widgets and settings go with it.</p><div class="buttons dialog-buttons"><button class="glass">Cancel</button><button class="glass glass-danger">Delete</button></div></div></div>',
 				code: 'const sure = await confirmDialog({\n\ttitle: "Delete this face?",\n\ttext: "Its widgets and settings go with it.",\n\tconfirm: "Delete",\n\tdanger: true\n});',
 				note: "Cancel, Escape and a click outside the panel are all a no. Cancel has the focus, so an Enter pressed out of habit is never the yes."
 			}
@@ -477,10 +514,19 @@ const sections = [
 			{
 				id: "form-stack",
 				title: "Form stack",
-				sel: ".form-stack .switch-row .inline-buttons",
-				desc: "A form's labels, boxes and buttons one under another, evenly spaced, with its boxes as wide as the form: a pop-up's form, or a password asked for under a list. A .switch-row is a label with its switch at the end of the same line. .inline-buttons are a few buttons side by side, at their own width.",
-				demo: '<form class="form-stack" style="max-width:20em"><div class="switch-row"><label for="demo-auto">Join automatically</label><input type="checkbox" role="switch" id="demo-auto" checked></div><label for="demo-pass">Password</label><input type="password" id="demo-pass"><div class="inline-buttons"><button type="button" class="glass">Join</button><button type="button" class="glass">Cancel</button></div></form>',
-				code: '<form class="form-stack">\n\t<div class="switch-row"><label>Join automatically</label><input type="checkbox" role="switch"></div>\n\t<label>Password</label>\n\t<input type="password">\n\t<div class="inline-buttons"><button class="glass">Join</button><button class="glass">Cancel</button></div>\n</form>'
+				sel: ".form-stack .switch-row",
+				desc: "A form's labels, boxes and buttons one under another, evenly spaced, with its boxes as wide as the form: a pop-up's form, or a password asked for under a list. A .switch-row is a label with its switch at the end of the same line. Buttons under it go in a .buttons row.",
+				demo: '<form class="form-stack" style="max-width:20em"><div class="switch-row"><label for="demo-auto">Join automatically</label><input type="checkbox" role="switch" id="demo-auto" checked></div><label for="demo-pass">Password</label><input type="password" id="demo-pass"><div class="buttons"><button type="button" class="glass">Join</button><button type="button" class="glass">Cancel</button></div></form>',
+				code: '<form class="form-stack">\n\t<div class="switch-row"><label>Join automatically</label><input type="checkbox" role="switch"></div>\n\t<label>Password</label>\n\t<input type="password">\n\t<div class="buttons"><button class="glass">Join</button><button class="glass">Cancel</button></div>\n</form>'
+			},
+			{
+				id: "form-stack-centred",
+				title: "Centred stack",
+				base: "form-stack",
+				sel: ".form-stack.centred",
+				desc: "A form stack with everything centred, one thing under another: a code to scan, a line under it, and a button (Manual Setup's OmniSync view). Its lines of text keep to a readable width.",
+				demo: '<div class="form-stack centred" style="max-width:22em"><h2>Set up with OmniSync</h2><div class="qr-box" style="width:6em;margin:0"><svg viewBox="0 0 10 10" style="background:#fff"><rect x="1" y="1" width="3" height="3"/><rect x="6" y="1" width="3" height="3"/><rect x="1" y="6" width="3" height="3"/></svg></div><p class="muted">Open OmniSync on your phone and scan this code.</p><button type="button" class="glass">Set up manually</button></div>',
+				code: '<section class="form-stack centred">\n\t<h2>Set up with OmniSync</h2>\n\t<div class="qr-box">…</div>\n\t<p class="muted">…</p>\n\t<button class="glass">Set up manually</button>\n</section>'
 			},
 			{
 				id: "unit-row",
@@ -563,6 +609,44 @@ const sections = [
 				code: 'infoTip("A picture, a GIF or a video, up to 50 MB.", "What can be used")'
 			}
 		]
+	},
+	{
+		id: "overlays",
+		title: "Overlays",
+		intro: "Drawn on top of every page OmniCore serves, a theme's page too. A theme's page doesn't load the Default UI (it's the theme's own page), so each of these is sent with its own styles, through <code>styleTag()</code>. They're still the central theme's elements: their look is in <code>core/ui-theme.js</code> and changes there and nowhere else. The scripts that bring them up (<code>core/network-status.js</code>, <code>core/notifications.js</code>) only switch classes, set <code>hidden</code>, and set CSS variables.",
+		entries: [
+			{
+				id: "status-drawer",
+				title: "Status drawer",
+				sel: ".omni-net-drawer > .omni-net-pane (.omni-net-dim, .omni-net-speeds, .omni-net-hidden-text)",
+				desc: "A clear pane of glass that comes out of the top-right corner, with no buttons, letting every touch through. It shows the Wi-Fi logo with a question mark on every face while the Wi-Fi is connected but the internet isn't there, and the Wi-Fi logo with its signal and live speeds on a dashboard face for ten seconds when the Wi-Fi comes back. <b>.omni-net-dim</b> fades the parts of the logo that aren't lit; <b>.omni-net-hidden-text</b> is the words a screen reader says.",
+				stage: 120,
+				demo: `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#3a6073,#16222a)"></div>
+<div class="omni-net-drawer"><div class="omni-net-pane" style="--omni-net-at:translate(0,0)"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path class="omni-net-b3" d="M2.5 9a14 14 0 0 1 19 0"/><path class="omni-net-b2" d="M5.5 12.2a9.5 9.5 0 0 1 13 0"/><path class="omni-net-b1" d="M8.7 15.4a5 5 0 0 1 6.6 0"/><circle class="omni-net-b0" cx="12" cy="19" r="1.3" fill="currentColor" stroke="none"/></svg><span class="omni-net-speeds"><span>↓ 4.2 MB/s</span><span>↑ 860 KB/s</span></span><span class="omni-net-hidden-text">Wi-Fi connected</span></div></div>`,
+				code: '// Drawn by the script in core/network-status.js, on every page:\npane.style.setProperty("--omni-net-at", "translate(0, 0)");',
+				note: "The pane rests wherever <code>--omni-net-at</code> says (a transform), and the script moves it between those places with an animation; it never sets a look of its own. A face's theme can hide the drawer (<code>.omni-net-drawer { display: none }</code>), never the takeover."
+			},
+			{
+				id: "takeover",
+				title: "Takeover",
+				sel: ".omni-net-takeover (+ .on) > .omni-net-takeover-card (.omni-net-setup)",
+				desc: "When the Wi-Fi is disconnected, this covers every face, pauses it, and says so. Under the words, Manual Setup in a frame (<b>.omni-net-setup</b>) from the admin face's port, so a theme's script on the page can't read a password typed into it. It's added hidden and fades in with <b>.on</b>; nothing can hide it.",
+				stage: 320,
+				demo: `<div class="omni-net-takeover on"><div class="omni-net-takeover-card"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3l18 18" stroke-width="2.2"/><path class="omni-net-b3" d="M2.5 9a14 14 0 0 1 19 0"/><path class="omni-net-b2" d="M5.5 12.2a9.5 9.5 0 0 1 13 0"/><path class="omni-net-b1" d="M8.7 15.4a5 5 0 0 1 6.6 0"/><circle class="omni-net-b0" cx="12" cy="19" r="1.3" fill="currentColor" stroke="none"/></svg><h1>Wi-Fi disconnected</h1><p>OmniCore lost its Wi-Fi and has paused everything until it's back. It keeps trying to reconnect on its own.</p></div></div>`,
+				code: '<div class="omni-net-takeover on" role="alertdialog">\n\t<div class="omni-net-takeover-card">\n\t\t<svg>…</svg>\n\t\t<h1>Wi-Fi disconnected</h1>\n\t\t<p>…</p>\n\t\t<iframe class="omni-net-setup" title="Manual Setup"></iframe>\n\t</div>\n</div>'
+			},
+			{
+				id: "notification",
+				title: "Notification",
+				sel: ".omni-note-layer (+ .is-open, .is-closing, .has-link) > .omni-note-bento (.omni-note-source, .omni-note-source-icon, .omni-note-row, .omni-note, .omni-note-main, .omni-note-title, .omni-note-description (+ .is-alone), .omni-md-subtitle, .omni-md-table-more, .omni-note-skipped, .omni-note-links, .omni-note-link, .omni-note-qr, .omni-note-link-url) · .omni-note-timer > .omni-note-lamp",
+				desc: "A message from a module, over whatever the face shows: frosted glass boxes over a blurred screen. Where it came from on top, then the title and the message, and a QR code beside it for each link (<b>.has-link</b>), under it on a screen taller than it is wide. The round timer in the corner (<b>.omni-note-lamp</b>) empties as its time runs out, from <code>--remaining</code>: 1 (full) to 0. <b>.is-open</b> brings it in and <b>.is-closing</b> takes it away. Its glass is light or dark as the face's Notifications setting says, and its font and size are the ones chosen in Settings.",
+				stage: 360,
+				demo: `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#5b4636,#1d2b3a)"></div>
+<div class="omni-note-layer is-open"><div class="omni-note-bento"><div class="omni-note omni-note-source"><span class="omni-note-source-icon"></span><span class="omni-note-source-name">Weather</span></div><div class="omni-note-row"><div class="omni-note omni-note-main"><h2 class="omni-note-title">Rain in an hour</h2><div class="omni-note-description"><p>Bring the washing in. It should clear by the evening.</p></div><p class="omni-note-skipped" hidden></p></div><div class="omni-note-links"></div></div></div><div class="omni-note-timer"><div class="omni-note-lamp" style="--remaining:0.6"></div></div></div>`,
+				code: '// Shown by the script in core/notifications.js. A module only says\n// what (see Building modules.md):\nomni.notify({ title: "Rain in an hour", description: "Bring the washing in." });',
+				note: "A theme's own rules can't reach inside: the layer puts its font and colour back on everything in it, and <code>hidden</code> always hides there."
+			}
+		]
 	}
 ];
 
@@ -578,7 +662,10 @@ const helpers = [
 	["MODE_SWITCH_SCRIPT", "Makes the switch work: each tap moves to the next of Light, Dark and Device (MODE_CHOICES)."],
 	["PASSWORD_TOGGLE_SCRIPT", "One listener for the whole page that makes every Show / Hide button work."],
 	["rememberUiMode · uiModeFromRequest · currentUiMode", "Server side: read the cookie (only exactly \"light\" or \"dark\" counts) and hand it to uiStyles() for the request being answered."],
-	["PALETTES · SYSTEM_FONT · UI_MODE_COOKIE", "The two colour tables, the system font list, and the cookie's name."]
+	["PALETTES · SYSTEM_FONT · UI_MODE_COOKIE", "The two colour tables, the system font list, and the cookie's name."],
+	["styleTag(css)", "A <style> element holding some of the central theme's CSS. The one way a page gets one: no other file in core/ writes a <style>."],
+	["CURTAIN_CSS · curtainStyles(light)", "The page fade's look (already part of uiStyles), and the same with its colour for a page without uiStyles: light, dark, or null for whichever the device is set to."],
+	["STATUS_CSS · notificationStyles(mode)", "The overlays' looks (Overlays, above): the status drawer and the takeover, and notifications in \"light\" or dark glass."]
 ];
 
 // Things people look for in ui-theme.js that are really somewhere else
@@ -587,7 +674,7 @@ const elsewhere = [
 	[".mode-screen-split · .narrow-previews", "The layout of the Appearance tile. In core/admin-face.js."],
 	["The Settings grid and its tiles", "Page layout in core/admin-face.js, built out of segments."],
 	["The wizard's layout", "core/wizard-face.js. It uses .dock, .segment and .field from here."],
-	["Dashboards and notifications", "Not the Default UI at all. A dashboard face belongs to its theme; notifications are drawn by core/notifications.js."]
+	["Dashboards", "Not the Default UI at all: a dashboard face belongs to its theme. What OmniCore draws on top of one (notifications, the status drawer, the takeover) is the central theme's: see Overlays."]
 ];
 
 module.exports = { paletteNotes, paletteGroups, sections, helpers, elsewhere };
