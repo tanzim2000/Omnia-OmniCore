@@ -7,10 +7,10 @@
 
 const fs = require("fs");
 const path = require("path");
-const paths = require("./paths");
 const priority = require("./priority");
 const widgetTypes = require("./widget-types");
 const { usableFields } = require("./schema-fields");
+const builtIn = require("./built-in");
 
 // THE REFRESH SETTING
 //
@@ -56,15 +56,17 @@ function refreshValue(field, value) {
 	return fallback !== null ? fallback : REFRESH_FLOOR;
 }
 
-function modulesDir() {
-	return paths.modulesDir();
+// A module's folder: in the modules folder, or core/built-in/ for a
+// widget that ships inside OmniCore (built-in.js)
+function folderOf(moduleId) {
+	return builtIn.folderOf(moduleId);
 }
 
 // A module's manifest: a readable name and description, from a module.json
 // in its folder. Mirrors how themes describe themselves in theme.json.
 // Falls back to the folder name so a module without one still works.
 function readManifest(moduleId) {
-	const manifestPath = path.join(modulesDir(), moduleId, "module.json");
+	const manifestPath = path.join(folderOf(moduleId), "module.json");
 
 	// `provides` lists the block types this module can emit — "background",
 	// "image", and so on. It lets OmniCore offer only the modules that could
@@ -121,17 +123,36 @@ function readManifest(moduleId) {
 // clean `widgets` tag saying which types it belongs to, and a field that
 // doesn't say is left out (with a warning in the log). A module without
 // widget types gets its fields back exactly as written.
-function readSchema(moduleId) {
-	const schemaPath = path.join(modulesDir(), moduleId, "settings.json");
+//
+// A widget built into OmniCore can have a settings.js instead: a function
+// returning the same { settings: [...] }, run each time, so a choice can
+// list something that changes (built-in.js). Never for a module from a
+// Registry: its code doesn't run just to draw a form.
+function readRawSchema(moduleId) {
+	const scriptPath = path.join(folderOf(moduleId), "settings.js");
 
-	if (!fs.existsSync(schemaPath)) {
-		return [];
+	if (builtIn.isBuiltIn(moduleId) && fs.existsSync(scriptPath)) {
+		return require(scriptPath)();
 	}
 
+	const schemaPath = path.join(folderOf(moduleId), "settings.json");
+
+	if (!fs.existsSync(schemaPath)) {
+		return null;
+	}
+
+	return JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
+}
+
+function readSchema(moduleId) {
 	let fields;
 
 	try {
-		const parsed = JSON.parse(fs.readFileSync(schemaPath, "utf-8"));
+		const parsed = readRawSchema(moduleId);
+
+		if (!parsed) {
+			return [];
+		}
 
 		// A stray null or a field with no key is dropped here, once, so
 		// nothing that walks the list later has to check
@@ -170,7 +191,7 @@ function widgetTypeOf(moduleId, stored) {
 // its input.json. Empty means the module has no input face at all, same
 // "missing file means none of this" pattern as settings.json.
 function readInputSchema(moduleId) {
-	const schemaPath = path.join(modulesDir(), moduleId, "input.json");
+	const schemaPath = path.join(folderOf(moduleId), "input.json");
 
 	if (!fs.existsSync(schemaPath)) {
 		return [];

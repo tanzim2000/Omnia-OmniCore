@@ -12,7 +12,7 @@
 //   { type: "image",      url, alt, fit: "cover"|"contain" }
 //   { type: "background", url }
 //   { type: "progress",   value: 0..1, label }
-//   { type: "qr",         value, label? }
+//   { type: "qr",         value, label?, fallback? }
 //
 // A "pair" is a NAME and a VALUE kept apart. A module always sends both;
 // whether a theme draws the name, hides it, or puts it elsewhere is the
@@ -27,7 +27,10 @@
 //
 // "qr" is something to be scanned. The module sends only what the code
 // should hold; OmniCore draws the code itself and hands the theme an
-// `svg` alongside it (see withQrDrawing below, and core/qr.js).
+// `svg` alongside it (see withQrDrawing below, and core/qr.js). A theme
+// that can't draw one prints what's in it instead, unless the block has a
+// `fallback`: the words to print in its place. That's for a code holding
+// something that shouldn't be read out as text, like a Wi-Fi login.
 //
 // Every block also carries a `text` string: its plain-text rendering. A
 // theme that has never heard of a block type falls back to that and still
@@ -237,8 +240,15 @@ function withFallbackText(block) {
 		// A theme that can't draw the code can still print what's in it.
 		// For a link — which is what a QR code nearly always holds — that
 		// is genuinely usable: somebody can type it in by hand.
+		// A `fallback` says what to print instead (a Wi-Fi login prints the
+		// network's name, not the line of code it's written in)
 		const value = String(block.value === undefined ? "" : block.value);
-		text = block.label ? block.label + ": " + value : value;
+		text =
+			typeof block.fallback === "string"
+				? block.fallback
+				: block.label
+					? block.label + ": " + value
+					: value;
 	}
 
 	return { ...block, text: text };

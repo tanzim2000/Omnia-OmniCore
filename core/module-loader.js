@@ -42,6 +42,7 @@
 const fs = require("fs");
 const path = require("path");
 const paths = require("./paths");
+const builtIn = require("./built-in");
 
 function modulesDir() {
 	return paths.modulesDir();
@@ -86,10 +87,19 @@ function listModules() {
 		.map((entry) => entry.name);
 }
 
+// Every module a face can show: the installed ones, then the widgets
+// built into OmniCore (built-in.js). listModules() above stays installed
+// modules only, for what's about installing: Installed Resources, updates.
+function listAvailable() {
+	const builtIns = builtIn.ids();
+	return [...listModules().filter((id) => !builtIns.includes(id)), ...builtIns];
+}
+
 // Load a module's function. Returns null if it's missing or won't load —
-// a broken module shouldn't stop OmniCore from starting.
+// a broken module shouldn't stop OmniCore from starting. A built-in
+// widget is loaded from core/built-in/.
 function loadModule(moduleId) {
-	const modulePath = path.join(modulesDir(), moduleId);
+	const modulePath = builtIn.folderOf(moduleId);
 
 	if (!fs.existsSync(modulePath)) {
 		return null;
@@ -113,7 +123,7 @@ function loadModule(moduleId) {
 // just its index.js -- a module split across several files must not end
 // up half new and half old.
 function forgetModule(moduleId) {
-	const folder = path.join(modulesDir(), moduleId);
+	const folder = builtIn.folderOf(moduleId);
 
 	// Node files what it loaded under the REAL path, with every symlink
 	// resolved -- and a module folder linked in from elsewhere is the
@@ -133,4 +143,4 @@ function forgetModule(moduleId) {
 	}
 }
 
-module.exports = { listModules, loadModule, forgetModule };
+module.exports = { listModules, listAvailable, loadModule, forgetModule };

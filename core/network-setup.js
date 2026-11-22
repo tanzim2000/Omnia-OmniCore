@@ -35,8 +35,10 @@
 //   3. Wait up to a minute for the internet. With wpa_supplicant, once the
 //      card has joined the network, the DHCP client is nudged (udhcpc:
 //      release, then renew) so the server gets an address on it.
-//   4. Online: keep it (the copy of the old file is removed). Not online
-//      within the minute: put everything back as it was.
+//   4. Online: keep it (the copy of the old file is removed), and keep the
+//      password, encrypted, for the Guest Wi-Fi widget (network-passwords.js).
+//      Not online within the minute: put everything back as it was, and
+//      keep nothing.
 //
 // Every step is reported to the setup page as it happens ("setup" events
 // on the network stream).
@@ -339,6 +341,14 @@ function wait(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// A network that was joined: its password saved, encrypted, and the
+// widget told which network the server is on now (network-passwords.js)
+function savePassword(network) {
+	const passwords = require("./network-passwords");
+	passwords.save(network.ssid, network.password || "", network.auth);
+	passwords.noteCurrent(network.ssid);
+}
+
 // Join a network, or put everything back. `report` is told each step:
 // { phase: "connecting" | "joined" | "connected" | "failed", ssid, message }.
 // `deps` is for the tests.
@@ -411,6 +421,13 @@ async function connect(network, report, deps = {}) {
 			}
 			if (joined && (await online())) {
 				if (isWpa) await run(WPA_KEEP, helperOptions).catch(() => {});
+				// It works, so the password is kept (encrypted) for the Guest
+				// Wi-Fi widget. Never in the way of the join itself.
+				try {
+					(deps.savePassword || savePassword)(network);
+				} catch (error) {
+					console.log(`Couldn't save the password for ${network.ssid}: ${error.message}`);
+				}
 				say("connected");
 				const watcher = require("./network-watcher");
 				if (watcher.checkNow) watcher.checkNow();

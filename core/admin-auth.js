@@ -149,10 +149,22 @@ function clearSessionCookie(res) {
 	);
 }
 
+// Check only the password, for someone already signed in who is asked
+// again before something sensitive (the Network page's Show, for a saved
+// Wi-Fi password). There's one admin account, so its own name is used.
+function verifyPassword(password) {
+	if (!isSetUp() || typeof password !== "string") {
+		return false;
+	}
+
+	return verify(readAdmin().username, password);
+}
+
 module.exports = {
 	isSetUp,
 	createAdmin,
 	verify,
+	verifyPassword,
 	createSession,
 	destroySession,
 	isLoggedIn,

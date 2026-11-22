@@ -179,7 +179,7 @@ types OmniCore knows by name. There are ten:
 { type: "time",       kind: "clock", timestamp, timezone }
 { type: "graphdata",  points: [ { x, y } ], unit }
 { type: "event",      start, end, summary }
-{ type: "qr",         value, label }
+{ type: "qr",         value, label, fallback }
 ```
 
 Field-by-field specifications for every RCB, including which fields are
@@ -267,6 +267,15 @@ because a theme inserts that field into its page as raw markup.
 
 ```js
 { type: "qr", value: "https://ntfy.sh/GitHub", label: "Scan to subscribe" }
+```
+
+A theme that can't draw a code prints what's in it instead, which is fine
+for a link. If your code holds something that shouldn't be read out as
+text, send a `fallback` (since OmniCore 2.0.0): the words a theme prints in
+its place. A code holding a Wi-Fi login would send the network's name.
+
+```js
+{ type: "qr", value: "WIFI:T:WPA;S:Home;P:secret;;", label: "Join Home", fallback: "Home" }
 ```
 
 Keep `value` short where you can. A short link makes a small, coarse

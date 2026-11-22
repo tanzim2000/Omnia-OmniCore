@@ -33,7 +33,7 @@ const { ICON_LINK, attachIconRoute } = require("./icon");
 const { pageStart } = require("./page-motion");
 const backdropStore = require("./backdrop");
 const express = require("express");
-const { listModules } = require("./module-loader");
+const { listModules, listAvailable } = require("./module-loader");
 const {
 	readManifest,
 	readSchema,
@@ -6659,7 +6659,8 @@ function startAdminFace() {
 			return;
 		}
 
-		const modules = listModules()
+		// Installed modules, then the widgets built into OmniCore
+		const modules = listAvailable()
 			.map((moduleId) => {
 				const manifest = readManifest(moduleId);
 
@@ -6722,7 +6723,7 @@ function startAdminFace() {
 		const id = Number(req.params.id);
 		const moduleId = req.body.module;
 
-		if (!listModules().includes(moduleId)) {
+		if (!listAvailable().includes(moduleId)) {
 			res.status(400).json({ error: "No such module installed" });
 			return;
 		}

@@ -13,6 +13,10 @@
 //                     same safe way Manual Setup does it (network-setup.js):
 //                     if the new one doesn't reach the internet within a
 //                     minute, everything is put back as it was
+//   Saved passwords   the Wi-Fi passwords OmniCore keeps, encrypted, for the
+//                     Guest Wi-Fi widget (network-passwords.js): saved by
+//                     itself when a join works, or added here. Show asks for
+//                     the admin password first.
 //
 // WHEN OMNICORE CAN'T CHANGE THE WI-FI
 //
@@ -38,15 +42,20 @@
 //
 // WHAT IT NEVER DOES
 //
-// Print a password. Reading the known networks prints only their names
-// (wpa_supplicant's settings file is read for its ssid lines and nothing
-// else; a test checks), and NetworkManager is asked for names only.
+// Print a password from the server's Wi-Fi settings. Reading the known
+// networks prints only their names (wpa_supplicant's settings file is read
+// for its ssid lines and nothing else; a test checks), and NetworkManager
+// is asked for names only. The one password this page can show is one
+// OmniCore saved itself, after the admin password is typed again, and
+// five wrong tries in a quarter of an hour stop it for a while.
 
 const path = require("path");
 
 const networkHelper = require("./network-helper");
 const networkStatus = require("./network-status");
 const networkSetup = require("./network-setup");
+const networkPasswords = require("./network-passwords");
+const auth = require("./admin-auth");
 const { passwordField } = require("./ui-theme");
 
 const fs = require("fs");
@@ -58,6 +67,14 @@ const KNOWN_PATH = "/network/known";
 const AROUND_PATH = "/network/around";
 const JOIN_PATH = "/network/join";
 const FORGET_PATH = "/network/forget";
+const PASSWORDS_PATH = "/network/passwords";
+const PASSWORD_REMOVE_PATH = "/network/passwords/remove";
+const PASSWORD_SHOW_PATH = "/network/passwords/show";
+
+// Show: how many wrong admin passwords in how long before it stops
+// answering for a while
+const SHOW_TRIES = 5;
+const SHOW_WINDOW_MS = 15 * 60 * 1000;
 
 // How long the last join's outcome is kept for a page that missed it
 const LAST_STEP_KEPT_MS = 10 * 60 * 1000;
@@ -311,7 +328,16 @@ async function forget(ssid, deps = {}) {
 		answer = ids.length ? result(await run(FORGET_NM, { env: { OMNI_UUIDS: ids.join(" ") }, timeoutMs: 60000 })) : "nothing";
 	}
 
-	if (answer === "forgotten") return { forgotten: true };
+	if (answer === "forgotten") {
+		// Its saved password goes with it: a network you've told the
+		// server to forget shouldn't stay on a guest's QR code
+		try {
+			(deps.passwords || networkPasswords).forget(ssid);
+		} catch (error) {
+			// The network is forgotten either way
+		}
+		return { forgotten: true };
+	}
 	if (answer === "nothing") throw Object.assign(new Error("The server doesn't know a network by that name."), { status: 404 });
 	throw Object.assign(new Error("OmniCore couldn't change the server's Wi-Fi settings."), { status: 500 });
 }
@@ -321,6 +347,38 @@ let lastStep = null;
 
 function remember(step) {
 	lastStep = { ...step, at: Date.now() };
+}
+
+// Wrong admin passwords typed for Show, by when. Only the last quarter of
+// an hour counts.
+let wrongShows = [];
+
+function showsLeft(now) {
+	wrongShows = wrongShows.filter((at) => now - at < SHOW_WINDOW_MS);
+	return SHOW_TRIES - wrongShows.length;
+}
+
+// A saved password, opened for the page, after the admin password. Returns
+// { status, body }. `deps` is for the tests.
+function showPassword(body, deps = {}) {
+	const now = (deps.now || Date.now)();
+	const passwords = deps.passwords || networkPasswords;
+	const check = deps.verify || auth.verifyPassword;
+	if (showsLeft(now) <= 0) {
+		return { status: 429, body: { error: "Too many wrong passwords. Try again in a few minutes." } };
+	}
+	if (!check(body && body.adminPassword)) {
+		wrongShows.push(now);
+		return { status: 401, body: { error: "That isn't the admin password." } };
+	}
+	const saved = passwords.reveal(body && body.ssid);
+	if (!saved) return { status: 404, body: { error: "There's no saved password for that network that OmniCore can open." } };
+	return { status: 200, body: { ssid: saved.ssid, password: saved.password } };
+}
+
+// For the tests: the wrong tries forgotten
+function resetShows() {
+	wrongShows = [];
 }
 
 // ---------------------------------------------------------------------
@@ -429,6 +487,36 @@ function attach(app, { page }) {
 			res.status(error.status || 500).json({ error: error.message });
 		}
 	});
+
+	// The saved passwords: names and types only. They don't use the Wi-Fi
+	// card, so they work whatever the Wi-Fi is doing.
+	app.get(PASSWORDS_PATH, (req, res) => {
+		res.setHeader("Cache-Control", "no-store");
+		res.json({ networks: networkPasswords.list() });
+	});
+
+	// Add one, or replace one (the same name)
+	app.post(PASSWORDS_PATH, (req, res) => {
+		const body = req.body || {};
+		try {
+			networkPasswords.save(body.ssid, body.auth === "open" ? "" : body.password, body.auth);
+			res.json({ saved: true, networks: networkPasswords.list() });
+		} catch (error) {
+			res.status(error.status || 500).json({ error: error.status ? error.message : "OmniCore couldn't save it." });
+		}
+	});
+
+	app.post(PASSWORD_REMOVE_PATH, (req, res) => {
+		const removed = networkPasswords.forget(req.body && req.body.ssid);
+		res.json({ removed, networks: networkPasswords.list() });
+	});
+
+	// One password, as text, after the admin password
+	app.post(PASSWORD_SHOW_PATH, (req, res) => {
+		res.setHeader("Cache-Control", "no-store");
+		const answer = module.exports.showPassword(req.body);
+		res.status(answer.status).json(answer.body);
+	});
 }
 
 // ---------------------------------------------------------------------
@@ -450,7 +538,7 @@ const PAGE_CSS = `
 	   band, or why it can't be picked), and a lock if it has a password.
 	   The line is under the name, not beside it, so a phone keeps room
 	   for the name. */
-	#net-around, #net-known { padding: 0.5em; gap: 2px; }
+	#net-around, #net-known, #net-saved { padding: 0.5em; gap: 2px; }
 	.net-row { align-items: center; white-space: normal; }
 	.net-row .net-name { display: flex; align-items: center; gap: 0.75em; min-width: 0; }
 	.net-row .net-words { display: flex; flex-direction: column; min-width: 0; }
@@ -465,7 +553,19 @@ const PAGE_CSS = `
 	.net-known > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.net-known button { flex-shrink: 0; padding: 0.45em 0.9em; font-size: 0.85em; }
 	.net-known .hint { margin: 0; flex-shrink: 0; }
-	#net-join[hidden], #net-around[hidden] { display: none; }
+	#net-join[hidden], #net-around[hidden], #net-add-form[hidden] { display: none; }
+	/* Saved passwords: the name with its security under it, and the
+	   buttons at the end. On a phone the buttons go under the name. */
+	.net-saved { flex-wrap: wrap; }
+	.net-saved .net-words { display: flex; flex-direction: column; min-width: 0; flex: 1 1 10em; }
+	.net-saved .net-words > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.net-saved .net-line { color: var(--fg-muted); font-size: 0.8em; }
+	.net-saved .net-line.bad { color: var(--danger); }
+	.net-saved .net-shown { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; color: var(--fg); user-select: all; overflow-wrap: anywhere; }
+	.net-saved .net-actions { display: flex; gap: 0.4em; flex-shrink: 0; }
+	#net-add-form { display: flex; flex-direction: column; gap: 0.6em; margin-top: 0.5em; }
+	#net-add-form .net-buttons { display: flex; gap: 0.6em; }
+	#net-add-form input[type="text"], #net-add-form select { width: 100%; box-sizing: border-box; }
 	#net-join { display: flex; flex-direction: column; gap: 0.75em; margin-top: 0.5em; }
 	#net-join .net-buttons { display: flex; gap: 0.6em; }
 	.net-spin {
@@ -517,6 +617,31 @@ const PAGE_BODY = `
 				</div>
 			</form>
 			<p class="status" id="net-status" role="status" aria-live="polite"></p>
+		</div>
+		<div class="segment" id="net-saved-box">
+			<div class="box-head">
+				<h2>Saved passwords</h2>
+				<button type="button" class="glass" id="net-add" style="padding:0.55em 1em;font-size:0.85em">Add</button>
+			</div>
+			<p class="hint">Kept encrypted on the server, for the Guest Wi&#8209;Fi widget. A network joined through OmniCore is saved by itself once it works.</p>
+			<div class="list" id="net-saved" role="list"></div>
+			<form id="net-add-form" hidden autocomplete="off">
+				<label for="net-add-name">Network name</label>
+				<input type="text" id="net-add-name" maxlength="32" autocomplete="off" spellcheck="false" autocapitalize="off">
+				<label for="net-add-auth">Security</label>
+				<select id="net-add-auth">
+					<option value="psk">WPA2 or WPA (a password)</option>
+					<option value="sae">WPA3 only</option>
+					<option value="open">None (no password)</option>
+				</select>
+				<label for="net-add-password" id="net-add-password-label">Password</label>
+				<div id="net-add-password-box">${passwordField('<input type="password" id="net-add-password" autocomplete="off" spellcheck="false" autocapitalize="off">')}</div>
+				<div class="net-buttons">
+					<button type="submit" class="glass">Save</button>
+					<button type="button" class="glass" id="net-add-cancel">Cancel</button>
+				</div>
+			</form>
+			<p class="status" id="net-saved-status" role="status" aria-live="polite"></p>
 		</div>
 	</div>`;
 
@@ -680,7 +805,7 @@ const PAGE_SCRIPT = `
 	async function forgetNetwork(ssid, button) {
 		var sure = await confirmDialog({
 			title: "Forget " + ssid + "?",
-			text: "The server won't join it by itself any more. To use it again, join it here with its password.",
+			text: "The server won't join it by itself any more, and its saved password goes too. To use it again, join it here with its password.",
 			confirm: "Forget",
 			danger: true
 		});
@@ -694,6 +819,7 @@ const PAGE_SCRIPT = `
 					say(knownStatus, reply.answer.error || "Couldn't forget it.", "bad");
 					return;
 				}
+				lookSaved();
 				lookKnown().then(function () { say(knownStatus, "Forgot " + ssid + ".", "good"); });
 			})
 			.catch(function () {
@@ -750,6 +876,7 @@ const PAGE_SCRIPT = `
 	// After a join: the Wi-Fi now, what it knows, and the list again with
 	// the network it's on marked
 	function refresh() {
+		lookSaved();
 		return lookNow().then(lookKnown).then(function () {
 			if (lastNetworks) showAround(lastNetworks, true);
 		});
@@ -828,6 +955,187 @@ const PAGE_SCRIPT = `
 	});
 	lookButton.addEventListener("click", lookAround);
 
+	// --- Saved passwords ------------------------------------------------
+
+	var savedList = document.getElementById("net-saved");
+	var savedStatus = document.getElementById("net-saved-status");
+	var addButton = document.getElementById("net-add");
+	var addForm = document.getElementById("net-add-form");
+	var addName = document.getElementById("net-add-name");
+	var addAuth = document.getElementById("net-add-auth");
+	var addPassword = document.getElementById("net-add-password");
+	var addPasswordLabel = document.getElementById("net-add-password-label");
+	var addPasswordBox = document.getElementById("net-add-password-box");
+	var SECURITY = { psk: "WPA2 or WPA", sae: "WPA3", open: "No password" };
+	// How long a shown password stays on the page
+	var SHOWN_FOR_MS = 30000;
+
+	function showSaved(found) {
+		savedList.innerHTML = "";
+		if (!found || !found.networks) {
+			say(savedStatus, "OmniCore couldn't read the saved passwords.", "bad");
+			return;
+		}
+		if (!found.networks.length) {
+			savedList.appendChild(text("div", "None yet.", "empty"));
+			return;
+		}
+		found.networks.forEach(function (network) {
+			var row = document.createElement("div");
+			row.className = "net-known net-saved";
+			row.setAttribute("role", "listitem");
+			var words = document.createElement("span");
+			words.className = "net-words";
+			words.appendChild(text("span", network.ssid));
+			var line = network.readable
+				? text("span", SECURITY[network.auth] || "", "net-line")
+				: text("span", "Can't be opened any more. Add it again.", "net-line bad");
+			words.appendChild(line);
+			row.appendChild(words);
+
+			var actions = document.createElement("span");
+			actions.className = "net-actions";
+			if (network.readable && network.auth !== "open") {
+				var show = text("button", "Show", "glass");
+				show.type = "button";
+				show.setAttribute("aria-label", "Show the password for " + network.ssid);
+				// Show asks for the admin password; while it's shown, the
+				// same button hides it again
+				show.addEventListener("click", function () {
+					if (show.hideShown) show.hideShown();
+					else showPassword(network, line, show);
+				});
+				actions.appendChild(show);
+			}
+			var change = text("button", "Change", "glass");
+			change.type = "button";
+			change.setAttribute("aria-label", "Change the saved password for " + network.ssid);
+			change.addEventListener("click", function () { openAddForm(network); });
+			actions.appendChild(change);
+			var remove = text("button", "Remove", "glass");
+			remove.type = "button";
+			remove.setAttribute("aria-label", "Remove the saved password for " + network.ssid);
+			remove.addEventListener("click", function () { removeSaved(network.ssid, remove); });
+			actions.appendChild(remove);
+			row.appendChild(actions);
+			savedList.appendChild(row);
+		});
+	}
+
+	function lookSaved() {
+		return getJson(${JSON.stringify(PASSWORDS_PATH)})
+			.then(showSaved)
+			.catch(function () { showSaved(null); });
+	}
+
+	// The password, in place of its security line, for half a minute.
+	// Only after the admin password: the server asks for it again.
+	async function showPassword(network, line, button) {
+		var adminPassword = await askDialog({
+			title: "Show the password for " + network.ssid + "?",
+			text: "Type the admin password first.",
+			secret: true,
+			confirm: "Show"
+		});
+		if (!adminPassword) return;
+		button.disabled = true;
+		postJson(${JSON.stringify(PASSWORD_SHOW_PATH)}, { ssid: network.ssid, adminPassword: adminPassword })
+			.then(function (reply) {
+				if (!reply.ok) {
+					button.disabled = false;
+					say(savedStatus, reply.answer.error || "Couldn't show it.", "bad");
+					return;
+				}
+				say(savedStatus, "");
+				var before = line.textContent;
+				line.className = "net-shown";
+				line.textContent = reply.answer.password;
+				button.textContent = "Hide";
+				button.disabled = false;
+				var timer = null;
+				function hide() {
+					clearTimeout(timer);
+					line.className = "net-line";
+					line.textContent = before;
+					button.textContent = "Show";
+					button.hideShown = null;
+				}
+				button.hideShown = hide;
+				timer = setTimeout(hide, SHOWN_FOR_MS);
+			})
+			.catch(function () {
+				button.disabled = false;
+				say(savedStatus, "Couldn't show it. Try again.", "bad");
+			});
+	}
+
+	async function removeSaved(ssid, button) {
+		var sure = await confirmDialog({
+			title: "Remove the saved password for " + ssid + "?",
+			text: "A Guest Wi-Fi widget showing this network will ask for it to be added again. The server's own Wi-Fi isn't changed.",
+			confirm: "Remove",
+			danger: true
+		});
+		if (!sure) return;
+		button.disabled = true;
+		postJson(${JSON.stringify(PASSWORD_REMOVE_PATH)}, { ssid: ssid })
+			.then(function (reply) {
+				showSaved(reply.answer);
+				say(savedStatus, "Removed the saved password for " + ssid + ".", "good");
+			})
+			.catch(function () {
+				button.disabled = false;
+				say(savedStatus, "Couldn't remove it. Try again.", "bad");
+			});
+	}
+
+	function securityPicked() {
+		// style rather than hidden: a label's own display rule would win
+		var open = addAuth.value === "open";
+		addPasswordLabel.style.display = open ? "none" : "";
+		addPasswordBox.style.display = open ? "none" : "";
+	}
+
+	// Empty for Add; filled in for Change (the same name replaces it)
+	function openAddForm(network) {
+		addName.value = network ? network.ssid : "";
+		addAuth.value = network ? network.auth : "psk";
+		addPassword.value = "";
+		addPassword.type = "password";
+		securityPicked();
+		addForm.hidden = false;
+		say(savedStatus, "");
+		(network ? addPassword : addName).focus();
+		if (network && network.auth === "open") addAuth.focus();
+	}
+
+	function closeAddForm() {
+		addPassword.value = "";
+		addForm.hidden = true;
+	}
+
+	addButton.addEventListener("click", function () { openAddForm(null); });
+	addAuth.addEventListener("change", securityPicked);
+	document.getElementById("net-add-cancel").addEventListener("click", function () {
+		closeAddForm();
+		say(savedStatus, "");
+	});
+	addForm.addEventListener("submit", function (event) {
+		event.preventDefault();
+		var body = { ssid: addName.value, auth: addAuth.value, password: addAuth.value === "open" ? "" : addPassword.value };
+		postJson(${JSON.stringify(PASSWORDS_PATH)}, body)
+			.then(function (reply) {
+				if (!reply.ok) {
+					say(savedStatus, reply.answer.error || "Couldn't save it.", "bad");
+					return;
+				}
+				closeAddForm();
+				showSaved(reply.answer);
+				say(savedStatus, "Saved the password for " + body.ssid + ".", "good");
+			})
+			.catch(function () { say(savedStatus, "Couldn't save it. Try again.", "bad"); });
+	});
+
 	// --- How a join goes ------------------------------------------------
 
 	function showStep(step) {
@@ -880,6 +1188,9 @@ const PAGE_SCRIPT = `
 		document.getElementById("net-top").classList.remove("two");
 		if (events) events.close();
 	}
+
+	// The saved passwords straight away: they don't use the card
+	lookSaved();
 
 	// First the Wi-Fi now, then what it knows, then a look around (one
 	// thing at a time: they all use the card)
@@ -938,6 +1249,12 @@ module.exports = {
 	AROUND_PATH,
 	JOIN_PATH,
 	FORGET_PATH,
+	PASSWORDS_PATH,
+	PASSWORD_REMOVE_PATH,
+	PASSWORD_SHOW_PATH,
+	SHOW_TRIES,
+	showPassword,
+	resetShows,
 	KNOWN_WPA,
 	KNOWN_NM,
 	FORGET_WPA,

@@ -12,6 +12,9 @@
 //   - The routes: not while the Wi-Fi is disconnected or a join is under
 //     way, a join's steps kept for a page that lost the server meanwhile
 //   - The Resources tab's Network box leads here
+//   - Saved passwords: listed by name, added and removed, and shown only
+//     after the admin password, with a limit on wrong tries; forgetting a
+//     network takes its saved password too
 
 const test = require("node:test");
 const assert = require("node:assert");
@@ -21,7 +24,12 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const express = require("express");
 
+// A data folder of its own, for the saved passwords
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "omnicore-network-page-"));
+process.env.OMNICORE_DATA_DIR = dataDir;
+
 const networkPage = require("../core/network-page");
+const networkPasswords = require("../core/network-passwords");
 const networkSetup = require("../core/network-setup");
 const networkHelper = require("../core/network-helper");
 const status = require("../core/network-status");
@@ -210,6 +218,46 @@ test("forgetting: never the network the server is on; otherwise by name or by co
 	assert.deepEqual(nmRan[1].options.env, { OMNI_UUIDS: "0b8e3c52-1111-4c4c-9d9d-123456789abc" });
 });
 
+test("forgetting a network takes its saved password too, and only once it's forgotten", async () => {
+	const onHome = async () => ({ card: { connected: true, ssid: "Home" } });
+	const wpaTarget = async () => ({ manager: "wpa_supplicant", card: "wlan0", config: "/etc/wpa_supplicant/wpa_supplicant.conf" });
+	const removed = [];
+	const passwords = { forget: (ssid) => removed.push(ssid) };
+
+	await networkPage.forget("Cafe", { now: onHome, target: wpaTarget, run: async () => "@@ result forgotten", passwords });
+	assert.deepEqual(removed, ["Cafe"]);
+
+	await assert.rejects(networkPage.forget("Nowhere", { now: onHome, target: wpaTarget, run: async () => "@@ result nothing", passwords }));
+	await assert.rejects(networkPage.forget("Home", { now: onHome, passwords }), (error) => error.status === 409);
+	assert.deepEqual(removed, ["Cafe"], "nothing removed when the network wasn't forgotten");
+});
+
+test("Show: only after the admin password, and five wrong tries stop it for a while", () => {
+	networkPage.resetShows();
+	let clock = 1_000_000;
+	const saved = { reveal: (ssid) => (ssid === "Home" ? { ssid: "Home", auth: "psk", password: "secret-home-pass" } : null) };
+	const deps = { now: () => clock, passwords: saved, verify: (typed) => typed === "admin-password" };
+
+	assert.deepEqual(networkPage.showPassword({ ssid: "Home", adminPassword: "admin-password" }, deps), {
+		status: 200,
+		body: { ssid: "Home", password: "secret-home-pass" }
+	});
+	assert.equal(networkPage.showPassword({ ssid: "Nowhere", adminPassword: "admin-password" }, deps).status, 404);
+
+	for (let tries = 0; tries < networkPage.SHOW_TRIES; tries++) {
+		const answer = networkPage.showPassword({ ssid: "Home", adminPassword: "guess" }, deps);
+		assert.equal(answer.status, 401);
+		assert.ok(!JSON.stringify(answer).includes("secret-home-pass"));
+	}
+	const stopped = networkPage.showPassword({ ssid: "Home", adminPassword: "admin-password" }, deps);
+	assert.equal(stopped.status, 429, "even the right password waits");
+	assert.ok(!JSON.stringify(stopped).includes("secret-home-pass"));
+
+	clock += 15 * 60 * 1000;
+	assert.equal(networkPage.showPassword({ ssid: "Home", adminPassword: "admin-password" }, deps).status, 200, "after a quarter of an hour, it answers again");
+	networkPage.resetShows();
+});
+
 // --- The routes -------------------------------------------------------------
 
 async function serve() {
@@ -261,6 +309,52 @@ test("the routes: joining starts, is followed, and is kept for a page that lost 
 		assert.ok(page.includes("Known networks") && page.includes("Networks around"));
 	} finally {
 		networkSetup.connect = realConnect;
+		status.reset();
+		server.close();
+	}
+});
+
+test("the routes for saved passwords: names only, add, replace, remove, and Show asks first", async () => {
+	const { server, base, post } = await serve();
+	try {
+		networkPage.resetShows();
+		assert.deepEqual(await (await fetch(base + networkPage.PASSWORDS_PATH)).json(), { networks: [] });
+
+		const short = await post(networkPage.PASSWORDS_PATH, { ssid: "Guest", auth: "psk", password: "short" });
+		assert.equal(short.status, 400);
+		assert.match((await short.json()).error, /8 to 63/);
+
+		const added = await post(networkPage.PASSWORDS_PATH, { ssid: "Guest", auth: "psk", password: "guests-welcome-1" });
+		assert.equal(added.status, 200);
+		const list = await added.json();
+		assert.deepEqual(list.networks.map((n) => [n.ssid, n.auth, n.readable]), [["Guest", "psk", true]]);
+		assert.ok(!JSON.stringify(list).includes("guests-welcome-1"), "the list never has a password");
+
+		// The same name replaces it; an open network needs none
+		await post(networkPage.PASSWORDS_PATH, { ssid: "Guest", auth: "psk", password: "guests-welcome-2" });
+		await post(networkPage.PASSWORDS_PATH, { ssid: "Cafe", auth: "open", password: "ignored" });
+		assert.equal(networkPasswords.reveal("Guest").password, "guests-welcome-2");
+		assert.equal(networkPasswords.reveal("Cafe").password, "");
+
+		// No admin account in this folder, so no password is the admin's
+		const show = await post(networkPage.PASSWORD_SHOW_PATH, { ssid: "Guest", adminPassword: "anything" });
+		assert.equal(show.status, 401);
+		assert.ok(!(await show.text()).includes("guests-welcome"));
+		assert.equal(show.headers.get("cache-control"), "no-store");
+
+		const removed = await (await post(networkPage.PASSWORD_REMOVE_PATH, { ssid: "Guest" })).json();
+		assert.equal(removed.removed, true);
+		assert.deepEqual(removed.networks.map((n) => n.ssid), ["Cafe"]);
+
+		// They don't use the card, so they work while the Wi-Fi is down too
+		status.setState("disconnected");
+		assert.equal((await fetch(base + networkPage.PASSWORDS_PATH)).status, 200);
+
+		const page = await (await fetch(base + networkPage.PAGE_PATH)).text();
+		assert.ok(page.includes("Saved passwords") && page.includes("Guest Wi&#8209;Fi widget"));
+	} finally {
+		networkPage.resetShows();
+		networkPasswords.forget("Cafe");
 		status.reset();
 		server.close();
 	}
@@ -336,4 +430,8 @@ test("the Network box when it leads nowhere: a plain box with the reason, not a 
 	// The page itself, opened anyway: one box
 	assert.ok(networkPage.PAGE_SCRIPT.includes('getElementById("net-known-box").remove()'));
 	assert.ok(networkPage.PAGE_SCRIPT.includes('getElementById("net-around-box").remove()'));
+});
+
+test.after(() => {
+	fs.rmSync(dataDir, { recursive: true, force: true });
 });

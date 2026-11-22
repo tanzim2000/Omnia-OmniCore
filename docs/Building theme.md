@@ -290,7 +290,10 @@ your call** -- bars, a line, dots, whatever fits your theme. There's no
 **`qr` blocks arrive already drawn.** A module only sends `value` (what
 the code holds) and maybe a `label` (what scanning it does); OmniCore
 adds `svg`, a complete drawing of the code. Your job is placement and
-size, nothing else:
+size, nothing else. When there's no drawing, print `text`, never `value`:
+since 2.0.0 a module can give `text` words of its own (a `fallback`) when
+its code holds something that shouldn't be read out, like a Wi-Fi
+password:
 
 ```js
 if (block.type === "qr") {

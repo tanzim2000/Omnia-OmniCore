@@ -30,12 +30,57 @@ Decided to ship in 2.0.0 (Nov 2026). Built in steps, one zip each:
 5. **The Network page** (done), from the Network box on the Resources tab:
    the Wi-Fi now, known networks with Forget, and joining another network
    the safe way. Not yet: live speeds on the page, and a cable's details.
-6. **Saved passwords** (encrypted) **and the Guest Wi-Fi widget.**
-7. **Docs.**
+6. **Saved passwords and the Guest Wi-Fi widget** (done): every network
+   joined through OmniCore keeps its password, sealed with AES-256-GCM
+   (`core/network-passwords.js`), plus any added on the Network page; Show
+   after the admin password. Guest Wi-Fi is the first widget built into
+   OmniCore (`core/built-in/`). Not yet: a guest network the router runs
+   on a schedule, and a QR code that changes when the password does
+   without the widget's page being opened.
+7. **Docs** (done): the CHANGELOG's v2.0.0, `docs/upgrades/2.0.0.md`,
+   Architecture (Network Management in §8, built-in widgets in §5e), and
+   the `qr` block's `fallback` in the module and theme guides.
 
 Then on your server, before tagging: what `/network/probe?raw=1` says, the
 takeover, Manual Setup, a wrong password, the no-internet drawer, the
 reconnect drawer, the hotspot.
+
+## Next: appearance, for 2.0.0
+
+Decided (Nov 2026), built in this order, one zip each:
+
+- **A. Matching the background.** The tint offers **Dominant** (today's
+  "Match the background") and **Vibrant**, beside None and the fixed
+  colours. **Picture brightness** is a plain control, 10 to 90%, 50% being
+  the picture as it is (Core may start a bright picture lower when it's
+  picked, and the slider shows that), and never automatic. **Dim** darkens
+  the glass, not the picture. **Blur, Tint strength and Dim share one
+  Auto**, keeping the text readable: a slider moved by hand is pinned and
+  Auto leaves it alone. Auto moves the free ones in the order Dim, Blur,
+  Tint (nothing pinned: only Dim moves, Blur and Tint at their defaults),
+  each up to its limit before the next; a free Blur or Tint never goes
+  below its default; Blur that can't help (an evenly bright picture) or a
+  tint lighter than the picture counts as at its limit. **Font colour**
+  (white or black) is the last resort, only when nothing else can make the
+  text readable, and can be pinned too; then the page warns instead.
+- **B. Appearance profiles.** Light and Dark mode go away for good. A
+  profile is one `.ocap` file (OmniCore Appearance Profile) with its
+  settings and its wallpaper inside; it can't be made without a wallpaper
+  or a colour. Profiles are kept on the server, so every device sees the
+  same list; each browser remembers its own pick (one per device; OmniView
+  will remember up to two, to switch by time, like sunrise and sunset).
+  The profile's font colour decides its everyday colours: white text, the
+  dark set; black text, the light set (Beige Cream).
+- **C. The welcome wizard on Face:1303.** `1303/about-core` is today's
+  About face, `1303/welcome` the new wizard, `1303/themes` later. The
+  wizard has the first `.ocap` made. It runs once on a new install and
+  after the upgrade; Core remembers which steps were done, by id, and each
+  version's wizard adds or drops steps, so an existing install only sees
+  the new ones. Still to discuss.
+- **Later, after 2.0.0:** seasonal themes for `1303/about-core` (Lunar New
+  Year, Christmas, Halloween, Easter), from an open-source theme
+  distributor that stores nothing: the core sends its location, and the
+  themes are signed, not encrypted.
 
 ## Then: releasing 2.0.0
 

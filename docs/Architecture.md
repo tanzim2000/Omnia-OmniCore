@@ -159,6 +159,8 @@ until the Marketplace puts something in them.
 | `schema-fields.js`         | Cleans a list of fields read from a module's or theme's JSON: drops a `null`, a field with no key, a choice that isn't text. Used wherever those files are read.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `ask-first.js`             | A select setting whose options ask before they're taken (an API key, say): cleans `ask` for schema-fields.js, and the browser script that asks in a pop-up and puts the choice back on a No.                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `qr.js`                    | Turns a string into a QR code SVG. Used for `qr` content blocks and for a notification's link.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `built-in.js`              | Widgets that ship inside OmniCore (`core/built-in/`), offered beside installed modules but never listed as installed. Their folder always wins over a module folder of the same name, and only they may have a `settings.js`. See §5e. |
+| `network-passwords.js`     | Saved Wi-Fi passwords, each sealed with AES-256-GCM, for the Guest Wi-Fi widget and the Network page. What a Wi-Fi QR code holds. See Network Management in §8. |
 | `fallback-page.js`         | The built-in "pick a theme" screen shown when a face has no usable theme. Not part of any theme. Carries the same live connection as a theme page, so it swaps itself for a theme picked in Settings and is counted as a screen.                                                                                                                                                                                                                                                                                                                                                                                 |
 | `control-face.js`          | Port 4000. Face registry API, and the face setup wizard.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `admin-face.js`            | Port 3000. All settings UI, built from the Default UI's segments. Renders every settings form from declared schemas. The settings home's four tabs (with `settings-home.js`), including the updates and Update now on the About tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -554,11 +556,19 @@ Something to be scanned. The module says what goes in it; OmniCore draws the cod
 | `type`  | yes      | string | `"qr"`                                                 |
 | `value` | yes      | string | What the code holds -- a link, usually. Any text works |
 | `label` | no       | string | What scanning it does (`"Scan to subscribe"`)          |
+| `fallback` | no    | string | What a theme that can't draw the code prints instead (since 2.0.0) |
 | `svg`   | --       | string | **Added by OmniCore.** Never sent by a module          |
 
 ```
 { type: "qr", value: "https://ntfy.sh/GitHub", label: "Scan to subscribe" }
 ```
+
+A theme that can't draw the code prints the block's `text`, which is the
+`label` and the `value` ("Scan to subscribe: https://ntfy.sh/GitHub"):
+for a link, that's genuinely usable. A code holding something that
+shouldn't be read out (a Wi-Fi login, with its password) sends a
+`fallback`, and `text` is that instead. The Guest Wi-Fi widget's is the
+network's name.
 
 This is the first RCB where OmniCore adds content rather than only
 checking it. Encoding a QR code -- error correction, masking, picking the
@@ -1103,6 +1113,31 @@ deliberately.
 **Updates.** A module's code is loaded once per OmniCore process, same as
 before. A marketplace update to a background module takes effect, like
 any other module's, on the next OmniCore restart.
+
+### 5e. Built-in widgets (since 2.0.0)
+
+Nearly every widget belongs in a Registry, where it's updated on its own,
+removed, and written by anyone. A built-in widget is for the rare one that
+needs something only Core should ever hold. The first is Guest Wi-Fi,
+which draws a code from a saved Wi-Fi password (see Network Management in
+§8): a module from a Registry would have to be handed the password.
+
+A built-in widget is an ordinary module folder (`module.json`, `index.js`,
+its settings) in `core/built-in/`, named `omnicore-<something>`. Everything
+that draws, configures and names modules works on it unchanged, through
+`built-in.js`'s `folderOf()`. What's different:
+
+- **Offered, not installed.** `listAvailable()` (adding a widget to a face)
+  has the installed modules and then the built-in widgets; `listModules()`
+  stays installed modules only, so Installed Resources and updates never
+  see one. It can't be removed, and updates with OmniCore.
+- **Settings that change.** It can have a `settings.js` instead of
+  `settings.json`: a function returning `{ settings: [...] }`, run each
+  time the form is drawn, so a choice can list something that changes. A
+  module from a Registry never gets this: its code isn't run just to draw a
+  form (a test checks).
+- **Nothing stands in for it.** Its folder always wins over a module folder
+  of the same name.
 
 ## 6. The theme agreement
 
@@ -1798,6 +1833,49 @@ OmniSync's reply) sends the helper SIGTERM, and its trap puts things back.
 A hotspot helper is labelled `omnicore.helper=hotspot`, and one left over
 from before is removed when OmniCore starts, with the Wi-Fi put back.
 
+**Saved passwords** (`core/network-passwords.js`). The server's own
+Wi-Fi settings never hold a password as typed, so OmniCore keeps its own
+copy for guests: every network joined through it (Manual Setup, OmniSync,
+the Network page), saved once the join has worked (a join that fails
+saves nothing, and a failure to save never stops a join), and any network
+typed in on the Network page. Each password is sealed on its own with
+AES-256-GCM, a fresh 12-byte nonce every time, with the network's name and
+security type as additional data, so an entry moved onto another name
+won't open. `data/network-passwords.json` holds the list (names, types,
+sealed passwords) and `data/network-passwords.key` the 32-byte key, made
+the first time one is saved; both mode 600. Only the sealed list is held
+in memory: a password is opened when it's needed and let go.
+
+The key sits beside the list because OmniCore has to open a password by
+itself to draw a guest's code, with nobody there to type anything. So it
+protects against anything that gets the list alone (a copied folder, a
+backup without the key, a file shown on screen while fixing something),
+not against someone with the whole disk. A lost key leaves the names,
+marked "Can't be opened any more", to be added again.
+
+On the Network page, **Saved passwords** lists them by name and type, with
+**Add** (a name, the security, a password; the same limits as joining),
+**Change** (the same name replaces it) and **Remove**. **Show** asks for the
+admin password again (`admin-auth.verifyPassword`) and shows the password in
+place of its type for 30 seconds; five wrong passwords in fifteen minutes
+stop Show for the rest of that time, even with the right one. Forgetting a
+known network also removes its saved password. These routes don't use the
+card, so they work whatever the Wi-Fi is doing.
+
+**The Guest Wi-Fi widget** (`core/built-in/omnicore-guest-wifi/`) is the
+first widget built into OmniCore (§5e), because it needs a saved password
+and those never leave Core. Its settings pick the network (the saved
+ones, listed as they are when the form opens, or "The network the server
+is on", the default) and whether to show the password as text under the
+code (off). It returns a `qr` block holding `WIFI:T:WPA;S:<name>;P:<password>;;`
+(`T:nopass` for an open network; WPA3 says WPA too), with `\`, `;`, `,`,
+`:` and `"` escaped, and the network's name as its `fallback`, so a theme
+that can't draw the code never prints the password. More room adds the
+name, then a line saying what to do. With no saved password, or no
+Wi-Fi, it says so in words. The server's own network is looked up through
+the probe and remembered for five minutes, and told at once when OmniCore
+joins one.
+
 The drawer is clear glass with no blur, lets every touch through, and
 moves with the Web Animations API: it drops in at the top right as a
 sliver (0.25 s, settling with a little give), slides open left (0.4 s, no
@@ -2098,8 +2176,11 @@ tabs under a notch, with Updates, Place search and Background and glass on
 the tabs rather than pages of their own; a picture, an animation or a
 video behind OmniCore's pages under frosted glass; page fades, with a
 signal for a theme's entrance; place search from seven services; Info
-order lists dragged into place. See "The settings home and page fades",
-"Background and glass" and "Location" in §8, and the CHANGELOG.
+order lists dragged into place; Network Management (the takeover, the
+status drawer, Manual Setup, OmniSync's hotspot, the Network page, saved
+passwords and the Guest Wi-Fi widget). See "The settings home and page
+fades", "Background and glass", "Location" and "Network Management" in §8,
+§5e, and the CHANGELOG.
 
 **Widget types** (v1.18.0): a module can offer more than one shape for
 its data, picked per instance from a row of buttons at the top of its

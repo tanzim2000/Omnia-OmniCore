@@ -17,9 +17,18 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const express = require("express");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+// A data folder of its own: a join that works saves its password there
+// (network-passwords.js), never in the project's own data folder
+const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "omnicore-setup-"));
+process.env.OMNICORE_DATA_DIR = dataDir;
 
 const setup = require("../core/network-setup");
 const status = require("../core/network-status");
+const passwords = require("../core/network-passwords");
 
 test("what's typed is checked", () => {
 	assert.equal(setup.problemWith({ ssid: "Home", auth: "open" }), null);
@@ -98,6 +107,11 @@ test("joining: changed, joined, DHCP nudged, online, kept", async () => {
 	assert.deepEqual(apply.writable, ["/etc/wpa_supplicant"], "only the settings file's folder is writable");
 	assert.equal(apply.env.OMNI_SSID_QUOTED, '"New Place"');
 	assert.ok(!JSON.stringify(apply.env).includes("correct horse"), "the password never leaves as typed");
+
+	// It worked, so the password is kept, encrypted, for the Guest Wi-Fi
+	// widget, and the widget knows which network the server is on now
+	assert.deepEqual(passwords.reveal("New Place"), { ssid: "New Place", auth: "psk", password: "correct horse battery" });
+	assert.equal(await passwords.currentSsid({ probe: async () => { throw new Error("not asked"); } }), "New Place");
 });
 
 test("a wrong password: never joins, and within the minute it's all put back", async () => {
@@ -112,6 +126,7 @@ test("a wrong password: never joins, and within the minute it's all put back", a
 	assert.deepEqual(outcome, { ok: false, reason: "not-joined" });
 	assert.deepEqual(h.names(), ["apply", "link", "link", "link", "undo"]);
 	assert.deepEqual(steps, ["connecting", "failed: Couldn't join New Place. Check the password and try again."]);
+	assert.equal(passwords.reveal("New Place").password, "correct horse battery", "a wrong password is never saved over the right one");
 });
 
 test("joined, but no internet: put back too, and said so", async () => {
@@ -126,6 +141,30 @@ test("joined, but no internet: put back too, and said so", async () => {
 	assert.equal(outcome.reason, "no-internet");
 	assert.equal(h.names().at(-1), "undo");
 	assert.match(steps.at(-1), /has no internet, so OmniCore put the old settings back/);
+});
+
+test("a join that doesn't work keeps no password", async () => {
+	const h = host({ apply: "@@ result applied", link: "Not connected.", undo: "@@ result undone" });
+	await setup.connect(
+		{ ssid: "Never Joined", password: "some password here", auth: "psk" },
+		() => {},
+		{ run: h.run, target: WPA_TARGET, internetWorks: async () => false, ...clock(), tryForMs: 6000 }
+	);
+	assert.equal(passwords.has("Never Joined"), false);
+});
+
+test("a password that can't be saved never stops the join", async () => {
+	const h = host({ apply: "@@ result applied", link: "Connected to aa:bb\n\tSSID: Cafe", keep: "@@ result kept" });
+	const steps = [];
+	const outcome = await setup.connect({ ssid: "Cafe", auth: "open" }, (step) => steps.push(step.phase), {
+		run: h.run,
+		target: WPA_TARGET,
+		internetWorks: async () => true,
+		savePassword: () => { throw new Error("disk full"); },
+		...clock()
+	});
+	assert.deepEqual(outcome, { ok: true });
+	assert.equal(steps.at(-1), "connected");
 });
 
 test("a change that couldn't be made is undone and explained", async () => {
@@ -265,4 +304,8 @@ test("the setup page: framed only by this server's own faces, and never itself a
 test("the takeover shows Manual Setup from the admin face's port", () => {
 	assert.ok(status.CLIENT_SCRIPT.includes('":3000/omnicore-network/setup"'));
 	assert.ok(status.CLIENT_SCRIPT.includes('frame.title = "Manual Setup"'));
+});
+
+test.after(() => {
+	fs.rmSync(dataDir, { recursive: true, force: true });
 });
