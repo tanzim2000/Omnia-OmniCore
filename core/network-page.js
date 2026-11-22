@@ -731,100 +731,35 @@ function attach(app, { page }) {
 const LOCK_SVG =
 	'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
 
-// The page's own look: only what the Default UI doesn't already have
-const PAGE_CSS = `
-	.net-now { display: flex; align-items: center; gap: 1em; margin: 0.25em 0 1em; }
-	.net-now svg { flex-shrink: 0; }
-	.net-now strong { display: block; font-size: 1.35em; font-weight: 600; overflow-wrap: anywhere; }
-	.net-now span { color: var(--fg-muted); font-size: 0.95em; }
-	.net-now .net-good { color: var(--success); }
-	.net-now .net-bad { color: var(--danger); }
-	.net-bars .dim { opacity: 0.25; }
-	/* A network around: its signal, its name with a line under it (the
-	   band, or why it can't be picked), and a lock if it has a password.
-	   The line is under the name, not beside it, so a phone keeps room
-	   for the name. */
-	#net-around, #net-known { padding: 0.5em; gap: 2px; }
-	/* Known networks gets the wider half: its rows have two buttons */
-	@media (orientation: landscape) {
-		#net-top.two { grid-template-columns: 1fr 1.25fr; }
-	}
-	.net-row { align-items: center; white-space: normal; }
-	.net-row .net-name { display: flex; align-items: center; gap: 0.75em; min-width: 0; }
-	.net-row .net-words { display: flex; flex-direction: column; min-width: 0; }
-	.net-row .net-words > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.net-row .net-line { color: var(--fg-muted); font-size: 0.8em; }
-	.net-row .net-here .net-line, .net-row.net-here .net-line { color: var(--success); }
-	.net-row svg { flex-shrink: 0; }
-	.net-row[aria-disabled="true"] { cursor: default; }
-	.net-row[aria-disabled="true"]:not(.net-here) { opacity: 0.5; }
-	.net-row .net-end { display: flex; align-items: center; flex-shrink: 0; color: var(--fg-muted); }
-	/* A known network: its name with a line under it, and its buttons at
-	   the end. On a phone the buttons go under the name. */
-	.net-known { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5em 1em; padding: 0.55em 0.9em; }
-	.net-known .net-words { display: flex; flex-direction: column; min-width: 0; flex: 1 1 9em; }
-	.net-known .net-words > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.net-known .net-line { color: var(--fg-muted); font-size: 0.8em; }
-	.net-known .net-line.net-good { color: var(--success); }
-	.net-known .net-actions { display: flex; gap: 0.4em; flex-shrink: 0; }
-	.net-known button { padding: 0.45em 0.9em; font-size: 0.85em; }
-	/* The windows: Show password and Edit */
-	.net-window { max-width: 26em; }
-	.net-window .net-qr { width: min(14em, 65vw); margin: 0.25em auto 0.5em; }
-	.net-window .net-qr svg { display: block; width: 100%; height: auto; border-radius: 0.5em; }
-	.net-window .net-secret { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: center; font-size: 1.05em; user-select: all; overflow-wrap: anywhere; margin: 0 0 0.25em; }
-	.net-window form { display: flex; flex-direction: column; gap: 0.55em; }
-	.net-window .net-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
-	.net-window select, .net-window input[type="password"], .net-window input[type="text"] { width: 100%; box-sizing: border-box; }
-	.net-window .hint { margin: 0; }
-	.net-window .net-forget { width: 100%; margin-top: 0.4em; }
-	#net-join[hidden], #net-around[hidden] { display: none; }
-	#net-join { display: flex; flex-direction: column; gap: 0.75em; margin-top: 0.5em; }
-	#net-join .net-buttons { display: flex; gap: 0.6em; }
-	.net-spin {
-		display: inline-block;
-		width: 0.9em;
-		height: 0.9em;
-		margin-right: 0.5em;
-		vertical-align: -0.1em;
-		border: 2px solid currentColor;
-		border-right-color: transparent;
-		border-radius: 50%;
-		animation: net-spin 0.8s linear infinite;
-	}
-	@keyframes net-spin { to { transform: rotate(360deg); } }
-	@media (prefers-reduced-motion: reduce) { .net-spin { animation-duration: 2.4s; } }
-`;
 
 const PAGE_BODY = `
-	<style>${PAGE_CSS}</style>
 	<div class="settings-head">
 		<h1>Network</h1>
 	</div>
 	<div class="bento">
-		<div class="bento-row two top" id="net-top">
+		<div class="bento-row two top wide-second" id="net-top">
 			<div class="segment">
 				<h2>Wi&#8209;Fi</h2>
-				<div id="net-now" aria-live="polite"><p class="status"><span class="net-spin" aria-hidden="true"></span>Looking at the Wi&#8209;Fi&hellip;</p></div>
+				<div id="net-now" aria-live="polite"><p class="status"><span class="spinner" aria-hidden="true"></span>Looking at the Wi&#8209;Fi&hellip;</p></div>
 			</div>
 			<div class="segment" id="net-known-box">
 				<h2>Known networks</h2>
 				<p class="hint">Networks the server has the password for. It joins one automatically when it's around.</p>
-				<div class="list" id="net-known" role="list"></div>
+				<div class="list tight" id="net-known" role="list"></div>
 				<p class="status" id="net-known-status" role="status"></p>
 			</div>
 		</div>
 		<div class="segment" id="net-around-box">
 			<div class="box-head">
 				<h2>Networks around</h2>
-				<button type="button" class="glass" id="net-look" style="padding:0.55em 1em;font-size:0.85em" disabled>Look again</button>
+				<button type="button" class="glass small" id="net-look" disabled>Look again</button>
 			</div>
 			<p class="hint">If a new network doesn't reach the internet within a minute, OmniCore goes back to the one it was on. A phone or computer on this network can lose the server while it switches.</p>
-			<div class="list" id="net-around" role="list"></div>
-			<form id="net-join" hidden autocomplete="off">
+			<div class="list tight" id="net-around" role="list"></div>
+			<form id="net-join" class="form-stack" hidden autocomplete="off">
 				<label for="net-password" id="net-join-label">Password</label>
 				${passwordField('<input type="password" id="net-password" autocomplete="off" spellcheck="false" autocapitalize="off">')}
-				<div class="net-buttons">
+				<div class="inline-buttons">
 					<button type="submit" class="glass">Join</button>
 					<button type="button" class="glass" id="net-cancel">Cancel</button>
 				</div>
@@ -854,11 +789,11 @@ const PAGE_SCRIPT = `
 	function bars(n, size) {
 		var parts = [
 			'<circle cx="12" cy="19" r="1.3" fill="currentColor" stroke="none"/>',
-			'<path d="M8.7 15.4a5 5 0 0 1 6.6 0"' + (n < 2 ? ' class="dim"' : "") + "/>",
-			'<path d="M5.5 12.2a9.5 9.5 0 0 1 13 0"' + (n < 3 ? ' class="dim"' : "") + "/>",
-			'<path d="M2.5 9a14 14 0 0 1 19 0"' + (n < 4 ? ' class="dim"' : "") + "/>"
+			'<path d="M8.7 15.4a5 5 0 0 1 6.6 0"' + (n < 2 ? ' class="off"' : "") + "/>",
+			'<path d="M5.5 12.2a9.5 9.5 0 0 1 13 0"' + (n < 3 ? ' class="off"' : "") + "/>",
+			'<path d="M2.5 9a14 14 0 0 1 19 0"' + (n < 4 ? ' class="off"' : "") + "/>"
 		];
-		return '<svg class="net-bars" viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">' + parts.join("") + "</svg>";
+		return '<svg class="signal" viewBox="0 0 24 24" width="' + size + '" height="' + size + '" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">' + parts.join("") + "</svg>";
 	}
 
 	function text(tag, value, className) {
@@ -870,7 +805,7 @@ const PAGE_SCRIPT = `
 
 	function say(where, message, tone, spinning) {
 		where.className = "status" + (tone ? " " + tone : "");
-		where.innerHTML = spinning ? '<span class="net-spin" aria-hidden="true"></span>' : "";
+		where.innerHTML = spinning ? '<span class="spinner" aria-hidden="true"></span>' : "";
 		where.appendChild(document.createTextNode(message || ""));
 	}
 
@@ -916,13 +851,13 @@ const PAGE_SCRIPT = `
 		}
 		var card = found.card;
 		var head = document.createElement("div");
-		head.className = "net-now";
+		head.className = "headline";
 		head.innerHTML = bars(card && card.connected ? card.bars : 0, 44);
 		var words = document.createElement("div");
 		words.appendChild(text("strong", card && card.connected ? card.ssid : "Not on a Wi-Fi network"));
 		var line =
-			found.state === "online" ? ["Connected, and online", "net-good"]
-			: found.state === "no-internet" ? ["Connected, but no internet", "net-bad"]
+			found.state === "online" ? ["Connected, and online", "good"]
+			: found.state === "no-internet" ? ["Connected, but no internet", "bad"]
 			: card && card.connected ? ["Connected", ""]
 			: found.cable ? ["On a cable", ""]
 			: ["", ""];
@@ -967,31 +902,31 @@ const PAGE_SCRIPT = `
 		}
 		found.networks.forEach(function (network) {
 			var row = document.createElement("div");
-			row.className = "net-known";
+			row.className = "item";
 			row.setAttribute("role", "listitem");
 			var inUse = Boolean(current && current.card && current.card.connected && current.card.ssid === network.ssid);
 			var words = document.createElement("div");
-			words.className = "net-words";
+			words.className = "item-text";
 			words.appendChild(text("span", network.ssid));
 			words.appendChild(
 				inUse
-					? text("span", "In use", "net-line net-good")
-					: text("span", network.auto ? "Joins automatically" : "Doesn't join automatically", "net-line")
+					? text("span", "In use", "item-sub good")
+					: text("span", network.auto ? "Joins automatically" : "Doesn't join automatically", "item-sub")
 			);
 			row.appendChild(words);
 
 			var actions = document.createElement("div");
-			actions.className = "net-actions";
+			actions.className = "item-actions";
 			// Only when OmniCore has the password (it saw it when the
 			// network was joined, or it was typed in Edit)
 			if (network.saved) {
-				var show = text("button", "Show password", "glass");
+				var show = text("button", "Show password", "glass small");
 				show.type = "button";
 				show.setAttribute("aria-label", "Show the password for " + network.ssid);
 				show.addEventListener("click", function () { showPassword(network); });
 				actions.appendChild(show);
 			}
-			var editButton = text("button", "Edit", "glass");
+			var editButton = text("button", "Edit", "glass small");
 			editButton.type = "button";
 			editButton.setAttribute("aria-label", "Edit " + network.ssid);
 			editButton.addEventListener("click", function () { openEdit(network, inUse); });
@@ -1013,7 +948,7 @@ const PAGE_SCRIPT = `
 		var backdrop = document.createElement("div");
 		backdrop.className = "modal-backdrop";
 		var panel = document.createElement("div");
-		panel.className = "modal net-window";
+		panel.className = "modal";
 		panel.setAttribute("role", "dialog");
 		panel.setAttribute("aria-modal", "true");
 		panel.setAttribute("aria-label", title);
@@ -1067,15 +1002,15 @@ const PAGE_SCRIPT = `
 				var w = openWindow(network.ssid);
 				if (reply.answer.svg) {
 					var code = document.createElement("div");
-					code.className = "net-qr";
+					code.className = "qr-box";
 					// Core's own drawing of the code: squares only, never text
 					code.innerHTML = reply.answer.svg;
 					w.panel.appendChild(code);
 				}
 				w.panel.appendChild(
 					reply.answer.auth === "open"
-						? text("p", "No password", "net-secret")
-						: text("p", reply.answer.password, "net-secret")
+						? text("p", "No password", "secret")
+						: text("p", reply.answer.password, "secret")
 				);
 				w.panel.appendChild(text("p", "Point a phone's camera at the code to join.", "hint"));
 				var done = button("Close");
@@ -1092,10 +1027,11 @@ const PAGE_SCRIPT = `
 	function openEdit(network, inUse) {
 		var w = openWindow("Edit " + network.ssid);
 		var form = document.createElement("form");
+		form.className = "form-stack";
 		form.autocomplete = "off";
 
 		var switchRow = document.createElement("div");
-		switchRow.className = "net-switch-row";
+		switchRow.className = "switch-row";
 		var autoLabel = text("label", "Join automatically");
 		autoLabel.htmlFor = "net-edit-auto";
 		var auto = document.createElement("input");
@@ -1138,10 +1074,9 @@ const PAGE_SCRIPT = `
 			)
 		);
 		function securityPicked() {
-			// style rather than hidden: a label's own display rule would win
 			var none = security.value === "open";
-			passwordLabel.style.display = none ? "none" : "";
-			passwordBox.style.display = none ? "none" : "";
+			passwordLabel.hidden = none;
+			passwordBox.hidden = none;
 		}
 		security.addEventListener("change", securityPicked);
 		securityPicked();
@@ -1157,7 +1092,7 @@ const PAGE_SCRIPT = `
 		form.appendChild(buttonRow([cancel, save]));
 
 		// Forget: not the network the server is on
-		var forgetButton = button("Forget this network", "glass-danger net-forget");
+		var forgetButton = button("Forget this network", "glass-danger wide");
 		if (inUse) {
 			forgetButton.disabled = true;
 			form.appendChild(forgetButton);
@@ -1243,25 +1178,25 @@ const PAGE_SCRIPT = `
 		networks.forEach(function (network) {
 			var row = document.createElement("button");
 			row.type = "button";
-			row.className = "font-row net-row";
+			row.className = "font-row item";
 			row.setAttribute("role", "listitem");
 			var can = network.auth !== "unsupported";
 			var here = current && current.card && current.card.connected && current.card.ssid === network.ssid;
 			var name = document.createElement("span");
-			name.className = "net-name";
+			name.className = "item-main";
 			name.innerHTML = bars(network.bars, 22);
 			var words = document.createElement("span");
-			words.className = "net-words";
+			words.className = "item-text";
 			words.appendChild(text("span", network.ssid));
 			var line = here ? "Connected" : !can ? "OmniCore can't join this kind of network yet" : network.band || "";
-			if (line) words.appendChild(text("span", line, "net-line"));
+			if (line) words.appendChild(text("span", line, "item-sub"));
 			name.appendChild(words);
 			row.appendChild(name);
 			var end = document.createElement("span");
-			end.className = "net-end";
+			end.className = "item-end";
 			if (network.auth !== "open") end.innerHTML = LOCK;
 			row.appendChild(end);
-			if (here) row.classList.add("net-here");
+			if (here) row.classList.add("current");
 			row.setAttribute(
 				"aria-label",
 				network.ssid + (here ? ", connected" : "") + (network.auth === "open" ? ", no password" : ", needs a password") + ", signal " + network.bars + " of 4"
@@ -1441,8 +1376,8 @@ const PAGE_SCRIPT = `
 // it's added to the widget's network list and picked; Save keeps it.
 function addNetworkButtonHtml(field, escapeHtml) {
 	return (
-		`<button type="button" class="glass" data-wifi-add data-wifi-into="${escapeHtml(field.into || "network")}" ` +
-		`style="align-self:flex-start;padding:0.6em 1.1em;font-size:0.85em">Add a network around you</button>`
+		`<button type="button" class="glass small" data-wifi-add data-wifi-into="${escapeHtml(field.into || "network")}">` +
+		`Add a network around you</button>`
 	);
 }
 
@@ -1480,8 +1415,6 @@ const ADD_NETWORK_SCRIPT = `
 		});
 	}
 
-	// The list is hidden with style rather than hidden: the Default UI's
-	// .list has a display rule of its own, which would win
 	function plainButton(label) {
 		var element = text("button", label, "glass");
 		element.type = "button";
@@ -1494,21 +1427,17 @@ const ADD_NETWORK_SCRIPT = `
 		backdrop.className = "modal-backdrop";
 		var panel = document.createElement("div");
 		panel.className = "modal";
-		panel.style.maxWidth = "28em";
 		panel.setAttribute("role", "dialog");
 		panel.setAttribute("aria-modal", "true");
 		panel.appendChild(text("h2", "Add a network around you"));
 		panel.appendChild(text("p", "Pick the network your guests use and type its password. The server joins it for a moment to check the password, then goes back to its own network. It can drop off its network for up to a minute meanwhile.", "dialog-text"));
 		var list = document.createElement("div");
-		list.className = "list";
-		list.style.maxHeight = "16em";
-		list.style.overflowY = "auto";
+		list.className = "list short";
 		panel.appendChild(list);
 		var form = document.createElement("form");
+		form.className = "form-stack";
 		form.autocomplete = "off";
 		form.hidden = true;
-		form.style.flexDirection = "column";
-		form.style.gap = "0.6em";
 		var label = text("label", "Password");
 		label.htmlFor = "net-add-password";
 		form.appendChild(label);
@@ -1557,9 +1486,8 @@ const ADD_NETWORK_SCRIPT = `
 				start("");
 				return;
 			}
-			list.style.display = "none";
+			list.hidden = true;
 			form.hidden = false;
-			form.style.display = "flex";
 			label.textContent = "Password for " + network.ssid;
 			check.hidden = false;
 			close.textContent = "Back";
@@ -1571,8 +1499,7 @@ const ADD_NETWORK_SCRIPT = `
 			chosen = null;
 			password.value = "";
 			form.hidden = true;
-			form.style.display = "none";
-			list.style.display = "";
+			list.hidden = false;
 			check.hidden = true;
 			close.textContent = "Cancel";
 		}
@@ -1601,7 +1528,6 @@ const ADD_NETWORK_SCRIPT = `
 					select.dispatchEvent(new Event("change", { bubbles: true }));
 				}
 				form.hidden = true;
-				form.style.display = "none";
 				check.hidden = true;
 				close.textContent = "Done";
 				chosen = null;
@@ -1641,7 +1567,7 @@ const ADD_NETWORK_SCRIPT = `
 			checking = true;
 			check.disabled = true;
 			close.disabled = true;
-			list.style.display = "none";
+			list.hidden = true;
 			follow();
 			say(status, "Checking " + chosen.ssid + "\\u2026 The server may drop off its network for up to a minute.");
 			postJson(${JSON.stringify(CHECK_PATH)}, { ssid: chosen.ssid, auth: chosen.auth, password: typed })
@@ -1682,12 +1608,10 @@ const ADD_NETWORK_SCRIPT = `
 				networks.forEach(function (network) {
 					var row = document.createElement("button");
 					row.type = "button";
-					row.className = "font-row";
-					row.style.display = "flex";
-					row.style.justifyContent = "space-between";
-					row.style.alignItems = "center";
+					row.className = "font-row item";
 					row.appendChild(text("span", network.ssid));
 					var end = document.createElement("span");
+					end.className = "item-end";
 					end.innerHTML = network.auth === "open" ? "" : LOCK;
 					row.appendChild(end);
 					row.setAttribute("aria-label", network.ssid + (network.auth === "open" ? ", no password" : ", needs a password"));

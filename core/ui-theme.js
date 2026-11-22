@@ -630,6 +630,12 @@ function uiStyles(options) {
 		pointer-events: none;
 	}
 
+	/* A smaller glass button, for a row's or a box heading's buttons; and
+	   one as wide as its box (a pop-up's last, red button) */
+	.glass.small { padding: 0.45em 0.9em; font-size: 0.85em; }
+	.field > .glass.small { align-self: flex-start; }
+	.glass.wide { width: 100%; }
+
 	/* ---------------------------------------------------------------
 	   Coloured buttons — for the few moments that should stand out from
 	   the plain glass buttons: "Installed" in the Marketplace, and "Go
@@ -856,6 +862,116 @@ function uiStyles(options) {
 	/* A list inside a pop-up is part of the pop-up's glass: no frame of
 	   its own */
 	.modal .list { border: none; border-radius: 0; padding: 0; gap: 2px; }
+
+	/* A tighter list, for rows that carry two lines and buttons (the
+	   Network page's networks): less room around them */
+	.list.tight { padding: 0.5em; gap: 2px; }
+
+	/* A list that scrolls after a few rows, in a pop-up */
+	.list.short { max-height: 16em; }
+
+	/* ---------------------------------------------------------------
+	   Item — a row with a second line under its name, maybe an icon at
+	   the start (.item-main), and an icon or buttons at the end. On a
+	   .font-row it can be picked; on its own it's a plain row whose
+	   buttons do the picking. On a phone the buttons go under the name,
+	   which keeps its room.
+
+	     .item            the row
+	     .item-main       an icon and the words, side by side
+	     .item-text       the name, with .item-sub under it
+	     .item-sub        the second line (.good: green, as for "In use")
+	     .item-end        an icon at the end (a lock)
+	     .item-actions    buttons at the end
+	     .current         the one in use: its second line green
+	     aria-disabled    can't be picked: quieter, unless it's .current
+	   --------------------------------------------------------------- */
+	.item {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5em 1em;
+		white-space: normal;
+	}
+	.item:not(.font-row) { padding: 0.55em 0.9em; }
+	.item-main { display: flex; align-items: center; gap: 0.75em; min-width: 0; flex: 1 1 9em; }
+	.item-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 9em; }
+	.item-text > :first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.item-sub { color: var(--fg-muted); font-size: 0.8em; }
+	.item-sub.good, .item.current .item-sub { color: var(--success); }
+	.item svg { flex-shrink: 0; }
+	.item-end { display: flex; align-items: center; flex-shrink: 0; color: var(--fg-muted); }
+	.item-actions { display: flex; gap: 0.4em; flex-shrink: 0; }
+	.item[aria-disabled="true"] { cursor: default; }
+	.item[aria-disabled="true"]:not(.current) { opacity: 0.5; }
+
+	/* ---------------------------------------------------------------
+	   Headline — a big icon, a name in large type and a line under it:
+	   what something is right now (the Wi-Fi the server is on). The
+	   line is quiet, or .good / .bad.
+	   --------------------------------------------------------------- */
+	.headline { display: flex; align-items: center; gap: 1em; margin: 0.25em 0 1em; }
+	.headline svg { flex-shrink: 0; }
+	.headline strong { display: block; font-size: 1.35em; font-weight: 600; overflow-wrap: anywhere; }
+	.headline span { color: var(--fg-muted); font-size: 0.95em; }
+	.headline .good { color: var(--success); }
+	.headline .bad { color: var(--danger); }
+
+	/* A row of two boxes where the second is the wider one (the
+	   Network page: its Known networks have buttons on every row) */
+	@media (orientation: landscape) {
+		.bento-row.two.wide-second { grid-template-columns: 1fr 1.25fr; }
+	}
+
+	/* A signal-strength icon: the bars it doesn't have are .off */
+	.signal .off { opacity: 0.25; }
+
+	/* A small spinning ring before words that say something is under way
+	   ("Looking for networks...") */
+	.spinner {
+		display: inline-block;
+		width: 0.9em;
+		height: 0.9em;
+		margin-right: 0.5em;
+		vertical-align: -0.1em;
+		border: 2px solid currentColor;
+		border-right-color: transparent;
+		border-radius: 50%;
+		animation: spinner 0.8s linear infinite;
+	}
+	@keyframes spinner { to { transform: rotate(360deg); } }
+	@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+	/* ---------------------------------------------------------------
+	   Form stack — a form's labels, boxes and buttons one under another,
+	   evenly spaced: a pop-up's form, a password asked for under a list.
+	   A .switch-row is a label with its switch at the end of the line;
+	   .inline-buttons a few buttons side by side.
+	   --------------------------------------------------------------- */
+	.form-stack { display: flex; flex-direction: column; gap: 0.6em; }
+	.form-stack select,
+	.form-stack input[type="text"],
+	.form-stack input[type="password"] { width: 100%; box-sizing: border-box; }
+	.form-stack .hint { margin: 0; }
+	.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+	.inline-buttons { display: flex; flex-wrap: wrap; gap: 0.6em; }
+
+	/* A QR code on its own, in a pop-up: Core's drawing (qr.js), kept
+	   square and never bigger than a phone needs */
+	.qr-box { width: min(14em, 65vw); margin: 0.25em auto 0.5em; }
+	.qr-box svg { display: block; width: 100%; height: auto; border-radius: 0.5em; }
+
+	/* Something to read out or copy exactly, like a password shown on
+	   request: one tap selects all of it */
+	.secret {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		font-size: 1.05em;
+		text-align: center;
+		overflow-wrap: anywhere;
+		user-select: all;
+		margin: 0 0 0.25em;
+	}
 
 	/* ---------------------------------------------------------------
 	   Floating button — flat, NOT glossy, deliberately distinct from
@@ -1379,6 +1495,10 @@ function uiStyles(options) {
 	   exactly as tall as whatever text it holds, no taller, and
 	   collapses entirely rather than reserving space for a message
 	   that, most of the time, is never going to appear. */
+	/* Hidden means hidden, whatever display an element's own rule gives
+	   it (a .list is display: flex, which would otherwise win) */
+	[hidden] { display: none !important; }
+
 	.status { font-size: 0.875em; }
 	.status.good { color: var(--success); }
 	.status.bad { color: var(--danger); }
@@ -1619,6 +1739,9 @@ function uiStyles(options) {
 	}
 
 	.modal h2 { margin: 0; font-size: 1.05em; font-weight: 600; }
+	/* A hint in a pop-up sits close to what it's about: the pop-up's own
+	   gap spaces it */
+	.modal .hint { margin: 0; }
 
 	.modal-head {
 		display: flex;

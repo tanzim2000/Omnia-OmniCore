@@ -207,6 +207,14 @@ const sections = [
 				note: "Ask first, with confirmDialog and danger: true, so the yes in the question is the same red button."
 			},
 			{
+				id: "glass-small",
+				title: "Small and wide glass buttons",
+				sel: ".glass.small / .glass.wide",
+				desc: "The same glass button, smaller, for the buttons on a row or beside a box's heading (Look again, Show password, Edit); or as wide as its box, for a pop-up's last button (Forget this network). In a settings field, a small one keeps its own width rather than stretching.",
+				demo: '<button class="glass small">Edit</button> <button class="glass small">Look again</button><div style="max-width:18em;margin-top:0.8em"><button class="glass glass-danger wide">Forget this network</button></div>',
+				code: '<button class="glass small">Edit</button>\n<button class="glass glass-danger wide">Forget this network</button>'
+			},
+			{
 				id: "glossy",
 				title: "Coloured buttons",
 				sel: ".btn-glossy .btn-glossy-green / .btn-glossy-neutral",
@@ -319,12 +327,52 @@ const sections = [
 				code: '<button type="button" class="font-row">\n\t<strong>Name</strong><span class="hint">label</span>\n</button>'
 			},
 			{
+				id: "list-tight",
+				title: "Tight and short lists",
+				sel: ".list.tight / .list.short",
+				desc: "A scrolling list with less room around its rows (.tight), for rows that carry two lines and buttons; and one that scrolls after a few rows (.short), in a pop-up.",
+				demo: '<div class="list tight"><div class="item"><div class="item-text"><span>Mom\'s place</span><span class="item-sub">Joins automatically</span></div><div class="item-actions"><button class="glass small">Edit</button></div></div><div class="item"><div class="item-text"><span>Superstore Staff</span><span class="item-sub">Doesn\'t join automatically</span></div><div class="item-actions"><button class="glass small">Edit</button></div></div></div>',
+				code: '<div class="list tight">…</div>\n<div class="list short">…</div>'
+			},
+			{
+				id: "item",
+				title: "Item",
+				sel: ".item .item-main .item-text .item-sub .item-end .item-actions (+ .current)",
+				desc: "A row with a second line under its name (.item-sub), maybe an icon at the start (.item-main holds the icon and the words), and an icon (.item-end) or buttons (.item-actions) at the end. On a .font-row it can be picked, like a network around; on its own it's a plain row whose buttons do the picking, like a known network. .current marks the one in use: its second line turns green. A row that can't be picked has aria-disabled=\"true\" and is quieter, unless it's the current one. On a phone the buttons go under the name.",
+				demo: '<div class="list tight"><button type="button" class="font-row item current" aria-disabled="true"><span class="item-main"><span class="item-text"><span>Tanzim\'s 5G</span><span class="item-sub">Connected</span></span></span><span class="item-end"><svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><rect x=\"5\" y=\"11\" width=\"14\" height=\"10\" rx=\"2\"/><path d=\"M8 11V8a4 4 0 0 1 8 0v3\"/></svg></span></button><button type="button" class="font-row item"><span class="item-main"><span class="item-text"><span>Lobby Guests</span><span class="item-sub">2.4 GHz</span></span></span><span class="item-end"><svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" aria-hidden=\"true\"><rect x=\"5\" y=\"11\" width=\"14\" height=\"10\" rx=\"2\"/><path d=\"M8 11V8a4 4 0 0 1 8 0v3\"/></svg></span></button><div class="item"><div class="item-text"><span>Home</span><span class="item-sub good">In use</span></div><div class="item-actions"><button class="glass small">Show password</button><button class="glass small">Edit</button></div></div></div>',
+				code: '<button type="button" class="font-row item">\n\t<span class="item-main">\n\t\t<svg>…</svg>\n\t\t<span class="item-text"><span>Name</span><span class="item-sub">Second line</span></span>\n\t</span>\n\t<span class="item-end"><svg>…</svg></span>\n</button>\n\n<div class="item">\n\t<div class="item-text"><span>Name</span><span class="item-sub good">In use</span></div>\n\t<div class="item-actions"><button class="glass small">Edit</button></div>\n</div>'
+			},
+			{
 				id: "list-fill",
 				title: "Filling list",
 				sel: ".list-fill",
 				desc: "Like the scrolling list, but it grows to whatever height its parent gives it, and only scrolls once it really runs out of room. For a segment stretched to fill the screen. The parent has to be a flex column with a height.",
 				demo: '<div style="display:flex;flex-direction:column;height:11em"><div class="list-fill"><div class="segment">Row 1</div><div class="segment">Row 2</div><div class="segment">Row 3</div><div class="segment">Row 4</div><div class="segment">Row 5</div></div></div>',
 				code: '<div style="display:flex; flex-direction:column; height:…">\n\t<div class="list-fill">…</div>\n</div>'
+			},
+			{
+				id: "headline",
+				title: "Headline",
+				sel: ".headline (+ .signal .off)",
+				desc: "What something is right now, at the top of a box: a big icon, a name in large type and a line under it, quiet or .good / .bad (the Wi-Fi the server is on). A signal-strength icon is .signal, with the bars it doesn't have marked .off.",
+				demo: '<div class="headline"><svg class="signal" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="19" r="1.3" fill="currentColor" stroke="none"/><path d="M8.7 15.4a5 5 0 0 1 6.6 0"/><path d="M5.5 12.2a9.5 9.5 0 0 1 13 0"/><path class="off" d="M2.5 9a14 14 0 0 1 19 0"/></svg><div><strong>Tanzim\'s 5G</strong><span class="good">Connected, and online</span></div></div>',
+				code: '<div class="headline">\n\t<svg class="signal">… <path class="off" …/></svg>\n\t<div><strong>Name</strong><span class="good">Connected, and online</span></div>\n</div>'
+			},
+			{
+				id: "wide-second",
+				title: "Two boxes, the second wider",
+				sel: ".bento-row.two.wide-second",
+				desc: "Two boxes side by side where the second needs more room (its rows have buttons). On a screen held upright they stack, as any row of two does.",
+				demo: '<div class="bento-row two wide-second" style="display:grid;gap:14px"><div class="segment">Wi-Fi</div><div class="segment">Known networks</div></div>',
+				code: '<div class="bento-row two wide-second">\n\t<div class="segment">…</div>\n\t<div class="segment">…</div>\n</div>'
+			},
+			{
+				id: "qr-box",
+				title: "QR code in a pop-up",
+				sel: ".qr-box",
+				desc: "A QR code on its own in a pop-up (Show password): Core's own drawing (qr.js), kept square and never bigger than a phone needs. Put the svg Core gives you inside it, never one from anywhere else.",
+				demo: '<div class="qr-box" style="width:8em;margin:0"><svg viewBox="0 0 10 10" style="background:#fff"><rect x="1" y="1" width="3" height="3"/><rect x="6" y="1" width="3" height="3"/><rect x="1" y="6" width="3" height="3"/><rect x="6" y="6" width="1" height="1"/><rect x="8" y="8" width="1" height="1"/></svg></div>',
+				code: '<div class="qr-box">${qr.toSvg(value)}</div>'
 			},
 			{
 				id: "toolbar",
@@ -427,6 +475,14 @@ const sections = [
 				code: '<input type="text">\n<input type="url">\n<input type="number">\n<input type="password">\n<select><option>…</option></select>'
 			},
 			{
+				id: "form-stack",
+				title: "Form stack",
+				sel: ".form-stack .switch-row .inline-buttons",
+				desc: "A form's labels, boxes and buttons one under another, evenly spaced, with its boxes as wide as the form: a pop-up's form, or a password asked for under a list. A .switch-row is a label with its switch at the end of the same line. .inline-buttons are a few buttons side by side, at their own width.",
+				demo: '<form class="form-stack" style="max-width:20em"><div class="switch-row"><label for="demo-auto">Join automatically</label><input type="checkbox" role="switch" id="demo-auto" checked></div><label for="demo-pass">Password</label><input type="password" id="demo-pass"><div class="inline-buttons"><button type="button" class="glass">Join</button><button type="button" class="glass">Cancel</button></div></form>',
+				code: '<form class="form-stack">\n\t<div class="switch-row"><label>Join automatically</label><input type="checkbox" role="switch"></div>\n\t<label>Password</label>\n\t<input type="password">\n\t<div class="inline-buttons"><button class="glass">Join</button><button class="glass">Cancel</button></div>\n</form>'
+			},
+			{
 				id: "unit-row",
 				title: "Number with its unit",
 				sel: ".unit-row, .unit",
@@ -472,6 +528,22 @@ const sections = [
 				desc: "One line of feedback under an action (“Saved.”, “Couldn't save.”): green with .good, red with .bad. An empty one takes no room at all, so it can sit on the page waiting until there's something to say.",
 				demo: '<p class="status good">Saved.</p><p class="status bad">Couldn\'t save: that port is taken.</p><p class="status"></p><span class="muted">(an empty one is there too, taking no room)</span>',
 				code: '<p class="status" id="status"></p>\n\nstatus.textContent = "Saved.";\nstatus.className = "status good";'
+			},
+			{
+				id: "spinner",
+				title: "Spinner",
+				sel: ".spinner",
+				desc: "A small spinning ring before words that say something is under way (\"Looking for networks…\"). It slows right down when reduced motion is asked for, so it still says \"working\" without moving much.",
+				demo: '<p class="status"><span class="spinner" aria-hidden="true"></span>Looking for networks…</p>',
+				code: '<p class="status"><span class="spinner" aria-hidden="true"></span>Looking for networks…</p>'
+			},
+			{
+				id: "secret",
+				title: "Something to copy exactly",
+				sel: ".secret",
+				desc: "Text to read out or copy exactly, like a Wi-Fi password shown on request: in a fixed-width font, centred, and selected whole with one tap.",
+				demo: '<p class="secret">a-very-long-home-password</p>',
+				code: '<p class="secret">…</p>'
 			},
 			{
 				id: "badge",

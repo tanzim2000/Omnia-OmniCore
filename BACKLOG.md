@@ -43,46 +43,158 @@ Decided to ship in 2.0.0 (Nov 2026). Built in steps, one zip each:
    Architecture (Network Management in §8, built-in widgets in §5e), and
    the `qr` block's `fallback` in the module and theme guides.
 
-Then on your server, before tagging: what `/network/probe?raw=1` says, the
-takeover, Manual Setup, a wrong password, the no-internet drawer, the
-reconnect drawer, the hotspot.
+Then on your server, before tagging (none of it has run against real
+Wi-Fi hardware yet, only stand-ins and BusyBox):
+
+- What `/network/probe?raw=1` says: the manager, the card, its radio.
+- The takeover when the Wi-Fi goes, and Manual Setup on the server's
+  screen: joining, a wrong password (put back within the minute), a
+  network with no internet (put back).
+- The no-internet drawer, and the reconnect drawer with its speeds.
+- The OmniSync hotspot: it comes up, its QR code shows, ten-minute rounds,
+  "Set up manually" turns it off.
+- The Network page: joining from Networks around; the priorities in
+  `wpa_supplicant.conf` afterwards (every network that joins
+  automatically at 50, the one being tried at 99 only while it's tried).
+- Edit: Join automatically off and on (`disabled=1`), a new password for a
+  network the server isn't on, a new password for the one it's on (tried,
+  and put back when wrong), Forget from the bottom of Edit.
+- Show password: the admin password asked first, the QR code scanned with
+  a real phone, the five-wrong-tries stop.
+- The Guest Wi-Fi widget on a dashboard, scanned with a real phone; "Add a
+  network around you": the server leaves for the check, comes back to its
+  own network, and the network is kept with Join automatically off.
+
+## Now: one central theme
+
+Decided (Nov 2026): every page OmniCore draws is built only from the
+central theme's elements (`core/ui-theme.js`), with no looks of its own.
+An element a page needs is made there, described in `docs/ui-elements.js`,
+and reused wherever something looks the same. Things that have to carry
+their own look onto dashboards (the status drawer, the takeover,
+notifications, the page fade) are central elements too, handed out by
+`ui-theme.js` as a separate bundle, since a theme's page doesn't load the
+whole Default UI. Page scripts only switch classes, `hidden` and CSS
+variables (`--x`), never a colour, size or spacing. The one exception is
+Face:1303 (the About face, `about-face.js` and `about-face.css`), which
+never uses the central theme.
+
+`test/central-theme.test.js` checks every file in `core/` for style blocks,
+CSS rules, `style=""` attributes and scripts setting looks. What's still
+to move is listed in it (`STILL_TO_MOVE`), only warned about, and printed
+every run; a clean file that gets a look of its own, or a listed file that
+gets more, fails. Each step is compared with screenshots of every page,
+desktop and phone, taken before it, pixel by pixel.
+
+1. **The test, and the Network page** (done): the page's 42 rules became
+   central elements (`.item` rows, `.headline`, `.signal`, `.spinner`,
+   `.form-stack`, `.switch-row`, `.inline-buttons`, `.qr-box`, `.secret`,
+   small and wide glass buttons, tight and short lists, a wider second
+   box), and `[hidden]` hides whatever an element's own display rule says.
+2. **The overlays and Manual Setup**: the status drawer, the takeover,
+   notifications, the page fade (`network-status.js`, `notifications.js`,
+   `page-motion.js`, `face-events.js`), and the Manual Setup page
+   (`network-setup.js`), which also moves onto the Default UI.
+3. **The Settings home** (`settings-home.js`): the notch, the capsule, the
+   tabs and the grid.
+4. **The Settings pages** (`admin-face.js`): about 280 rules and 51
+   `style=""`, the biggest step, maybe in two.
+5. **The rest**: the setup wizard, the face setup (`control-face.js`), an
+   Inport's page, the fallback page, Info order lists, place search and
+   the background picker. Then `STILL_TO_MOVE` is empty and the test is
+   strict for everything.
 
 ## Next: appearance, for 2.0.0
 
-Decided (Nov 2026), built in this order, one zip each:
+Decided (Nov 2026), built in this order, one zip each, after the central
+theme. Each built from central elements from the start.
 
-- **A. Matching the background.** The tint offers **Dominant** (today's
-  "Match the background") and **Vibrant**, beside None and the fixed
-  colours. **Picture brightness** is a plain control, 10 to 90%, 50% being
-  the picture as it is (Core may start a bright picture lower when it's
-  picked, and the slider shows that), and never automatic. **Dim** darkens
-  the glass, not the picture. **Blur, Tint strength and Dim share one
-  Auto**, keeping the text readable: a slider moved by hand is pinned and
-  Auto leaves it alone. Auto moves the free ones in the order Dim, Blur,
-  Tint (nothing pinned: only Dim moves, Blur and Tint at their defaults),
-  each up to its limit before the next; a free Blur or Tint never goes
-  below its default; Blur that can't help (an evenly bright picture) or a
-  tint lighter than the picture counts as at its limit. **Font colour**
-  (white or black) is the last resort, only when nothing else can make the
-  text readable, and can be pinned too; then the page warns instead.
-- **B. Appearance profiles.** Light and Dark mode go away for good. A
-  profile is one `.ocap` file (OmniCore Appearance Profile) with its
-  settings and its wallpaper inside; it can't be made without a wallpaper
-  or a colour. Profiles are kept on the server, so every device sees the
-  same list; each browser remembers its own pick (one per device; OmniView
-  will remember up to two, to switch by time, like sunrise and sunset).
-  The profile's font colour decides its everyday colours: white text, the
-  dark set; black text, the light set (Beige Cream).
-- **C. The welcome wizard on Face:1303.** `1303/about-core` is today's
-  About face, `1303/welcome` the new wizard, `1303/themes` later. The
-  wizard has the first `.ocap` made. It runs once on a new install and
-  after the upgrade; Core remembers which steps were done, by id, and each
-  version's wizard adds or drops steps, so an existing install only sees
-  the new ones. Still to discuss.
-- **Later, after 2.0.0:** seasonal themes for `1303/about-core` (Lunar New
-  Year, Christmas, Halloween, Easter), from an open-source theme
-  distributor that stores nothing: the core sends its location, and the
-  themes are signed, not encrypted.
+### A. Matching the background
+
+- **The tint's choices:** None, **Dominant** (today's "Match the
+  background": the colour that covers most of the picture) and **Vibrant**
+  (its most saturated, eye-catching colour), then the fixed colours. Both
+  are worked out once, when the picture is picked, so nothing changes
+  colour while a video plays. A colour background gives the same colour
+  for both.
+- **Picture brightness:** a plain control, **10 to 90%, 50% being the
+  picture as it is**. Never automatic. Core may start a bright picture
+  lower when it's picked; the slider then shows that value.
+- **Dim** darkens the **glass** (darkness added to the tint), not the
+  picture. It no longer has anything to do with Picture brightness.
+- **One Auto for Blur, Tint strength and Dim**, keeping the page's text
+  readable (a contrast of at least 4.5 against what's behind the glass).
+  Moving one of the three by hand **pins** it: Auto leaves a pinned slider
+  alone. Picture brightness can never be pinned or automatic. Turning Auto
+  back on frees all three.
+- **Which free slider Auto moves:** Dim, then Blur, then Tint strength,
+  each up to its limit before the next. With nothing pinned, only Dim
+  moves; Blur and Tint stay at their defaults.
+
+  | Pinned | Auto moves, in order | Left as they are |
+  |---|---|---|
+  | Nothing | Dim (then Blur, then Tint, if Dim reaches its limit) | |
+  | Dim | Blur, then Tint | Dim |
+  | Blur | Dim, then Tint | Blur |
+  | Tint | Dim, then Blur | Tint |
+  | Dim and Blur | Tint | Dim, Blur |
+  | Dim and Tint | Blur | Dim, Tint |
+  | Blur and Tint | Dim | Blur, Tint |
+  | All three | Nothing | All three |
+
+  Then, in every row: with the font colour not pinned, if the text still
+  can't be read, Auto switches the font colour (white to black, or black
+  to white); with it pinned, the page warns that the text may be hard to
+  read.
+- **How far each moves:** a free Dim goes only as high as needed, and back
+  down when the picture is darker. A free Blur or Tint never goes below its
+  default, only above it when needed.
+- **When one can't help:** Blur only helps against bright spots and busy
+  detail; on an evenly bright picture it counts as at its limit and Auto
+  moves on. A tint only helps white text if its colour is darker than the
+  picture; a light tint on a bright picture counts as at its limit.
+- **Font colour:** white or black, Auto's **last resort** (only when nothing
+  else can make the text readable), and it can be pinned. When it switches
+  to black, darkening works against it, so Auto lowers whatever free
+  sliders it raised.
+
+### B. Appearance profiles
+
+- **Light and Dark mode go away for good.** User-made profiles replace
+  them, and the Appearance Mode box with them.
+- **A profile is one `.ocap` file** (OmniCore Appearance Profile): its
+  settings and its wallpaper inside. It **can't be made without a wallpaper
+  or a colour**.
+- **Kept on the server**, so every device sees the same list of profiles.
+- **Each browser remembers its own pick**, one profile per device. OmniView
+  will remember up to two, to switch by time (one while the sun is up,
+  another after it goes down).
+- **The profile's font colour decides its everyday colours** (the quieter
+  grey text, the input boxes, the glass's base): white text, the dark set;
+  black text, the light set (Beige Cream).
+
+### C. The welcome wizard on Face:1303
+
+- Face:1303 keeps its own look and never uses `ui-theme.js`.
+- `1303/about-core`: what the About face shows today. `1303/welcome`: the
+  new wizard. `1303/themes`: later.
+- The wizard has the user make the **first `.ocap`**.
+- It runs on a new install, and **once after the upgrade** to the version
+  that brings it.
+- **Core remembers which steps were done, by id**, not by whether a `.ocap`
+  exists (files can go missing). Each version's wizard adds or drops
+  steps: a new install goes through all of them, an existing one only
+  through the ones it hasn't done.
+- The wizard's name is still to be picked. More to discuss before
+  building it.
+
+### Later, after 2.0.0
+
+- **Seasonal themes for `1303/about-core`** (Lunar New Year, Christmas,
+  Halloween, Easter, ...), from an open-source **theme distributor**: the
+  core sends it its location, it sends back the theme, from a stash the
+  developer manages, and stores nothing. Themes are **signed**, not
+  encrypted, and Core refuses one without the developer's signature.
 
 ## Then: releasing 2.0.0
 
