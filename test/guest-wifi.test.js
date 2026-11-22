@@ -65,6 +65,18 @@ test("a module from a Registry never has code run to draw its settings form", ()
 	assert.equal(global.sneakyRan, undefined);
 });
 
+test("only a built-in widget can have Add a network around you", () => {
+	const folder = path.join(modulesDir, "copycat");
+	fs.mkdirSync(folder);
+	fs.writeFileSync(
+		path.join(folder, "settings.json"),
+		JSON.stringify({ settings: [{ key: "add", type: "wifi-add" }, { key: "name", type: "text" }] })
+	);
+	assert.deepEqual(moduleConfig.readSchema("copycat").map((field) => field.key), ["name"], "dropped from anyone else's");
+	const own = moduleConfig.readSchema(ID).find((field) => field.type === "wifi-add");
+	assert.equal(own.into, "network", "and it fills in the network list");
+});
+
 test("its settings list the saved networks as they are right now", () => {
 	const networkField = () => moduleConfig.readSchema(ID).find((field) => field.key === "network");
 	assert.deepEqual(networkField().options, ["The network the server is on"]);
@@ -76,7 +88,7 @@ test("its settings list the saved networks as they are right now", () => {
 
 	const config = moduleConfig.applyDefaults(ID, {});
 	assert.deepEqual(config, { network: "The network the server is on", showPassword: false });
-	assert.deepEqual(moduleConfig.cleanConfig(ID, { network: "Home 5G", showPassword: "on" }), { network: "Home 5G", showPassword: true });
+	assert.deepEqual(moduleConfig.cleanConfig(ID, { network: "Home 5G", showPassword: "on", addNetwork: "x" }), { network: "Home 5G", showPassword: true }, "the button is never saved");
 });
 
 test("the code, then the name, then a line, as there's room; the password only when asked", async () => {

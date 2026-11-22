@@ -1764,21 +1764,40 @@ joined yet; hidden networks can't be typed in yet.
 **The Network page** (`core/network-page.js`), from the Network box on the
 Resources tab, after sign-in like the rest of Settings: the Wi-Fi now (its
 name, signal, band, link speed, address, card, and who looks after it),
-**Known networks** with Forget, and **Networks around** to join another.
+**Known networks**, and **Networks around** to join another.
 Joining is Manual Setup's `connect()`, so it's just as safe: a network that
 doesn't reach the internet within a minute is undone and the old one comes
 back. Meanwhile the watcher says nothing bad (`networkSetup.busy()`): the
-Wi-Fi drops for a moment while it switches, and that's no outage. With
-wpa_supplicant a newly joined network gets a priority one above the highest
-in the file (at least 50), so it wins over the network the server is still
-on. The phone or computer the page is open on may lose the server while it
+Wi-Fi drops for a moment while it switches, and that's no outage. The phone
+or computer the page is open on may lose the server while it
 switches, so the last step is kept (`GET /network/join`) and the page asks
 for it when its stream comes back.
 
-Known networks are read by name only: the ssid line of each network in
-wpa_supplicant's file (never anything else; a test runs the script against
-a pretend file), or NetworkManager's Wi-Fi connections (not its hotspots).
-Forget takes the network out of the file the same way joining takes out an
+**Which network wins** is OmniCore's job, not a setting
+(`network-setup.js`, `SET_FLAGS`). Every network that joins automatically has
+the same priority (50), so with several around the strongest signal wins;
+one with **Join automatically** off is `disabled=1` (NetworkManager:
+`autoconnect no`) and never joined automatically. Whenever OmniCore writes
+the file, every network that joins automatically is put back at 50. The network
+being joined gets 99, only while it's tried; once it works it goes back to
+50 without wpa_supplicant being told, so the server stays on it until
+wpa_supplicant next reads its settings (telling it would make it let go of
+the network for a moment and pick again).
+
+Known networks are read by name and Join automatically only: the ssid and
+`disabled` lines of each network in wpa_supplicant's file (never anything
+else; a test runs the script against a pretend file, and the scripts are run
+under BusyBox too, as on the server), or NetworkManager's Wi-Fi connections
+and their `connection.autoconnect` (not its hotspots). Each row has **Edit**
+(`POST /network/edit`, `edit()`): Join automatically, and a new password and
+security when one is typed. For a network the server isn't on, its entry is
+rewritten (`WPA_EDIT`; with NetworkManager `nmcli connection modify`) and
+wpa_supplicant told. For the network it's on, Join automatically is written
+without telling wpa_supplicant, and a new password is tried like a join
+(`connect()`, put back if it doesn't work within a minute; with
+NetworkManager the old connections for that name go once it has worked).
+**Forget**, at the bottom of
+Edit, takes the network out of the file the same way joining takes out an
 older entry, and tells wpa_supplicant; with NetworkManager it deletes the
 connections for that name. The network the server is on can't be forgotten
 (join another first). Nothing here works while the Wi-Fi is disconnected:
@@ -1833,12 +1852,12 @@ OmniSync's reply) sends the helper SIGTERM, and its trap puts things back.
 A hotspot helper is labelled `omnicore.helper=hotspot`, and one left over
 from before is removed when OmniCore starts, with the Wi-Fi put back.
 
-**Saved passwords** (`core/network-passwords.js`). The server's own
+**Kept passwords** (`core/network-passwords.js`). The server's own
 Wi-Fi settings never hold a password as typed, so OmniCore keeps its own
-copy for guests: every network joined through it (Manual Setup, OmniSync,
-the Network page), saved once the join has worked (a join that fails
-saves nothing, and a failure to save never stops a join), and any network
-typed in on the Network page. Each password is sealed on its own with
+copy, for Show password and guests: every network joined through it
+(Manual Setup, OmniSync, the Network page, the widget's check), saved once
+the join has worked (a join that fails saves nothing, and a failure to save
+never stops a join), and any password typed in Edit. Each password is sealed on its own with
 AES-256-GCM, a fresh 12-byte nonce every time, with the network's name and
 security type as additional data, so an entry moved onto another name
 won't open. `data/network-passwords.json` holds the list (names, types,
@@ -1853,21 +1872,31 @@ backup without the key, a file shown on screen while fixing something),
 not against someone with the whole disk. A lost key leaves the names,
 marked "Can't be opened any more", to be added again.
 
-On the Network page, **Saved passwords** lists them by name and type, with
-**Add** (a name, the security, a password; the same limits as joining),
-**Change** (the same name replaces it) and **Remove**. **Show** asks for the
-admin password again (`admin-auth.verifyPassword`) and shows the password in
-place of its type for 30 seconds; five wrong passwords in fifteen minutes
-stop Show for the rest of that time, even with the right one. Forgetting a
-known network also removes its saved password. These routes don't use the
-card, so they work whatever the Wi-Fi is doing.
+A known network whose password OmniCore has gets **Show password**
+(`POST /network/show-password`): it asks for the admin password again
+(`admin-auth.verifyPassword`), then shows a window with the password and a
+QR code holding it (Core's own drawing, the format below) that any phone
+camera reads to join. Five wrong passwords in fifteen minutes stop it for
+the rest of that time, even with the right one. Forgetting a network also
+forgets its password.
 
 **The Guest Wi-Fi widget** (`core/built-in/omnicore-guest-wifi/`) is the
-first widget built into OmniCore (§5e), because it needs a saved password
-and those never leave Core. Its settings pick the network (the saved
-ones, listed as they are when the form opens, or "The network the server
-is on", the default) and whether to show the password as text under the
-code (off). It returns a `qr` block holding `WIFI:T:WPA;S:<name>;P:<password>;;`
+first widget built into OmniCore (§5e), because it needs a kept password
+and those never leave Core. Its settings pick the network (the known
+networks whose password OmniCore has, listed as they are when the form
+opens, or "The network the server is on", the default) and whether to show
+the password as text under the code (off). Under the list, **Add a network
+around you** (a `wifi-add` setting, which only a built-in widget may have)
+opens a window: the networks around, a password, then a **check**
+(`POST /network/check`, `connect()` with `check: true`). The server joins
+the network with the TRY priority, and as soon as the card has joined (no
+internet needed: a guest network may keep the server off it) it's kept
+with Join automatically off, wpa_supplicant is told so it goes back to the
+networks it joins automatically (NetworkManager: back to the connection the
+card was on), the DHCP client is nudged once it's on one of them, and the
+page hears "checked". The watcher holds its tongue meanwhile, as during a
+join. A wrong password puts everything back and keeps nothing. Once
+checked, the network is added to the list and picked; Save keeps it. It returns a `qr` block holding `WIFI:T:WPA;S:<name>;P:<password>;;`
 (`T:nopass` for an open network; WPA3 says WPA too), with `\`, `;`, `,`,
 `:` and `"` escaped, and the network's name as its `fallback`, so a theme
 that can't draw the code never prints the password. More room adds the

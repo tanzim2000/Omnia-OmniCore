@@ -30,13 +30,15 @@ Decided to ship in 2.0.0 (Nov 2026). Built in steps, one zip each:
 5. **The Network page** (done), from the Network box on the Resources tab:
    the Wi-Fi now, known networks with Forget, and joining another network
    the safe way. Not yet: live speeds on the page, and a cable's details.
-6. **Saved passwords and the Guest Wi-Fi widget** (done): every network
+6. **Kept passwords and the Guest Wi-Fi widget** (done): every network
    joined through OmniCore keeps its password, sealed with AES-256-GCM
-   (`core/network-passwords.js`), plus any added on the Network page; Show
-   after the admin password. Guest Wi-Fi is the first widget built into
-   OmniCore (`core/built-in/`). Not yet: a guest network the router runs
-   on a schedule, and a QR code that changes when the password does
-   without the widget's page being opened.
+   (`core/network-passwords.js`). Known networks have Edit (password and
+   security, Join automatically, Forget) and Show password (after the admin
+   password: the password and a QR code). OmniCore sets the priorities:
+   every network that joins automatically alike, so the strongest wins. Guest
+   Wi-Fi is the first widget built into OmniCore (`core/built-in/`), with
+   "Add a network around you", which checks a password and comes back.
+   Not yet: a guest network the router turns on and off on a schedule.
 7. **Docs** (done): the CHANGELOG's v2.0.0, `docs/upgrades/2.0.0.md`,
    Architecture (Network Management in §8, built-in widgets in §5e), and
    the `qr` block's `fallback` in the module and theme guides.

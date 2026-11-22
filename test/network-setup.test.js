@@ -73,6 +73,8 @@ function host(answers) {
 			: script === setup.NUDGE_DHCP ? "nudge"
 			: script === setup.NM_APPLY ? "nm-apply"
 			: script === setup.NM_UNDO ? "nm-undo"
+			: script === setup.NM_ACTIVE ? "nm-active"
+			: script === setup.NM_RETURN ? "nm-return"
 			: /iw dev "\$OMNI_CARD" link/.test(script) ? "link"
 			: "other";
 		ran.push({ name, options });
@@ -165,6 +167,77 @@ test("a password that can't be saved never stops the join", async () => {
 	});
 	assert.deepEqual(outcome, { ok: true });
 	assert.equal(steps.at(-1), "connected");
+});
+
+test("kept: written back to the ordinary priority, and wpa_supplicant left on it", async () => {
+	for (const [auto, mode] of [[undefined, "auto"], [false, "manual"]]) {
+		const h = host({ apply: "@@ result applied", link: "Connected to aa:bb\n\tSSID: Kitchen", keep: "@@ result kept" });
+		const network = { ssid: "Kitchen", password: "correct horse battery", auth: "psk" };
+		if (auto !== undefined) network.auto = auto;
+		await setup.connect(network, () => {}, { run: h.run, target: WPA_TARGET, internetWorks: async () => true, ...clock() });
+		const keep = h.ran.find((step) => step.name === "keep").options.env;
+		assert.equal(keep.OMNI_MODE, mode, "Join automatically as asked (on unless it's off)");
+		assert.equal(keep.OMNI_RELOAD, "0", "not told: it stays on the network it just joined");
+	}
+});
+
+test("a check: joined just long enough, kept with Join automatically off, and back again", async () => {
+	passwords.noteCurrent("Home");
+	let onLobby = true;
+	const h = host({
+		apply: "@@ result applied",
+		link: () => (onLobby ? "Connected to aa:bb\n\tSSID: Lobby" : "Connected to cc:dd\n\tSSID: Home"),
+		keep: () => {
+			onLobby = false;
+			return "@@ result kept";
+		}
+	});
+	const steps = [];
+	let askedForInternet = 0;
+	const outcome = await setup.connect(
+		{ ssid: "Lobby", password: "lobby-guests-1", auth: "psk", check: true },
+		(step) => steps.push(step.phase),
+		{ run: h.run, target: WPA_TARGET, internetWorks: async () => { askedForInternet++; return true; }, ...clock() }
+	);
+	assert.deepEqual(outcome, { ok: true, checked: true });
+	assert.deepEqual(steps, ["connecting", "joined", "checked"]);
+	assert.deepEqual(h.names(), ["apply", "link", "keep", "link", "nudge"], "no internet needed on the guest network; DHCP nudged once it's back");
+	const keep = h.ran.find((step) => step.name === "keep").options.env;
+	assert.equal(keep.OMNI_MODE, "manual", "kept, but never joined automatically");
+	assert.equal(keep.OMNI_RELOAD, "1", "and wpa_supplicant told, so it goes back");
+	assert.equal(askedForInternet, 1, "only once it's back");
+	assert.equal(passwords.reveal("Lobby").password, "lobby-guests-1", "the password saved for the widget");
+	assert.equal(await passwords.currentSsid({ probe: async () => { throw new Error("not asked"); } }), "Home", "the server is still on its own network");
+});
+
+test("a check with a wrong password: put back, nothing kept", async () => {
+	const h = host({ apply: "@@ result applied", link: "Not connected.", undo: "@@ result undone" });
+	const steps = [];
+	const outcome = await setup.connect(
+		{ ssid: "Wrong Lobby", password: "not-the-password", auth: "psk", check: true },
+		(step) => steps.push(step.message || step.phase),
+		{ run: h.run, target: WPA_TARGET, internetWorks: async () => true, ...clock(), tryForMs: 6000 }
+	);
+	assert.equal(outcome.ok, false);
+	assert.equal(h.names().at(-1), "undo");
+	assert.match(steps.at(-1), /Check the password/);
+	assert.equal(passwords.has("Wrong Lobby"), false);
+});
+
+test("a check with NetworkManager: never connects by itself, then back to the connection it was on", async () => {
+	const h = host({ "nm-active": "@@ active 0b8e3c52-1111-4c4c-9d9d-123456789abc", "nm-apply": "@@ result applied", "nm-return": "@@ result back" });
+	const steps = [];
+	await setup.connect({ ssid: "Lobby NM", password: "lobby-guests-2", auth: "psk", check: true }, (step) => steps.push(step.phase), {
+		run: h.run,
+		target: async () => ({ manager: "networkmanager", card: "wlan0" }),
+		internetWorks: async () => true,
+		...clock()
+	});
+	assert.deepEqual(h.names(), ["nm-active", "nm-apply", "nm-return"]);
+	const env = h.ran[1].options.env;
+	assert.equal(env.OMNI_AUTO, "no");
+	assert.equal(env.OMNI_PREV, "0b8e3c52-1111-4c4c-9d9d-123456789abc");
+	assert.deepEqual(steps, ["connecting", "joined", "checked"]);
 });
 
 test("a change that couldn't be made is undone and explained", async () => {

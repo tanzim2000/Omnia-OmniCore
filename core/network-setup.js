@@ -40,6 +40,26 @@
 //      Not online within the minute: put everything back as it was, and
 //      keep nothing.
 //
+// WHICH NETWORK WINS (since 2.0.0, set by OmniCore, not by hand)
+//
+// Every network that joins automatically ("Join automatically" on, the default)
+// gets the same priority, AUTO_PRIORITY, so when several are around the
+// server picks the one with the strongest signal. A network with "Join by
+// itself" off is never joined automatically (wpa_supplicant's disabled=1;
+// NetworkManager's autoconnect no). The one network being joined gets
+// TRY_PRIORITY, above all the others, only while it's being tried; once it
+// works its priority is written back to the ordinary one, without telling
+// wpa_supplicant (so it stays on the network it was just asked to join
+// until the next time it reads its settings).
+//
+// A CHECK, NOT A SWITCH (the Guest Wi-Fi widget)
+//
+// connect() with `check: true` joins a network only to make sure its
+// password works: as soon as the card has joined it (no internet needed,
+// a guest network may keep the server off it), the network is kept with
+// "Join automatically" off and the server goes back to the networks it
+// joins automatically.
+//
 // Every step is reported to the setup page as it happens ("setup" events
 // on the network stream).
 
@@ -119,6 +139,10 @@ function wpaBlock({ ssid, password, auth }) {
 // Where the script writes the priority in (see wpaBlock)
 const PRIORITY_MARK = "OMNICORE_PRIORITY";
 
+// Every network that joins automatically, and the one being tried, above it
+const AUTO_PRIORITY = 50;
+const TRY_PRIORITY = 99;
+
 // NetworkManager's name for the connection OmniCore makes for a network
 function nmName(ssid) {
 	return `omnicore-${toHex(ssid).slice(0, 24)}`;
@@ -166,6 +190,50 @@ const DROP_NAMED = `awk -v hexname="$OMNI_SSID_HEX" -v quoted="$OMNI_SSID_QUOTED
 	END { if (inside) printf "%s", note block }
 '`;
 
+// An awk command that copies a wpa_supplicant settings file with the
+// priorities OmniCore keeps: the network named $OMNI_SSID_HEX (or
+// $OMNI_SSID_QUOTED) set by $OMNI_MODE, and every other network that joins
+// automatically given the ordinary priority. A network with disabled=1
+// ("Join automatically" off) is left as it is, unless it's the one named.
+//
+//   try      the network being joined: above all the others
+//   auto     joins automatically: the ordinary priority, never disabled
+//   manual   never joined automatically: disabled=1
+//   leave    the named network as it is (only the others are tidied)
+const SET_FLAGS = `awk -v hexname="$OMNI_SSID_HEX" -v quoted="$OMNI_SSID_QUOTED" -v mode="$OMNI_MODE" '
+	function flush(   i, disabled, want) {
+		disabled = 0
+		for (i = 1; i <= count; i++) if (lines[i] ~ /^[[:space:]]*disabled[[:space:]]*=[[:space:]]*1/) disabled = 1
+		if (name == hexname || (quoted != "" && name == quoted)) {
+			want = (mode == "try") ? "priority=${TRY_PRIORITY}" : (mode == "auto") ? "priority=${AUTO_PRIORITY}" : (mode == "manual") ? "manual" : "leave"
+		} else {
+			want = disabled ? "leave" : "priority=${AUTO_PRIORITY}"
+		}
+		for (i = 1; i < count; i++) {
+			if (want != "leave" && (lines[i] ~ /^[[:space:]]*priority[[:space:]]*=/ || lines[i] ~ /^[[:space:]]*disabled[[:space:]]*=/)) continue
+			print lines[i]
+		}
+		if (want == "manual") { print "\tpriority=0"; print "\tdisabled=1" }
+		else if (want != "leave") print "\t" want
+		print lines[count]
+		count = 0; name = ""; inside = 0
+	}
+	!inside && /^[[:space:]]*network[[:space:]]*=[[:space:]]*\\{/ { inside = 1; count = 0; lines[++count] = $0; next }
+	inside {
+		lines[++count] = $0
+		if ($0 ~ /^[[:space:]]*ssid[[:space:]]*=/) {
+			value = $0
+			sub(/^[[:space:]]*ssid[[:space:]]*=[[:space:]]*/, "", value)
+			sub(/[[:space:]]+$/, "", value)
+			name = (tolower(value) == hexname) ? hexname : value
+		}
+		if ($0 ~ /^[[:space:]]*}/) flush()
+		next
+	}
+	{ print }
+	END { if (inside) for (i = 1; i <= count; i++) print lines[i] }
+'`;
+
 const WPA_APPLY = `
 H=${networkHelper.HOST}
 f="$H$OMNI_CONF"
@@ -177,22 +245,39 @@ cp -p "$f" "$before" || { echo "@@ result cant-write"; exit 0; }
 # The file without any network that has the same name, then the new one
 ${DROP_NAMED} "$before" > "$f.omnicore-new" || { rm -f "$f.omnicore-new" "$before"; echo "@@ result cant-write"; exit 0; }
 
-# One more than the highest priority left in the file, and at least 50
-top=$(awk '/^[[:space:]]*priority[[:space:]]*=/ { v = $0; sub(/^[^=]*=[[:space:]]*/, "", v); v += 0; if (v > m) m = v } END { print m + 0 }' "$f.omnicore-new")
-priority=50
-[ "$top" -ge 50 ] && priority=$((top + 1))
-printf '\\n%s\\n' "$(echo "$OMNI_BLOCK" | base64 -d | sed "s/^\\([[:space:]]*priority=\\)${PRIORITY_MARK}\\$/\\1$priority/")" >> "$f.omnicore-new"
-chmod "$(stat -c %a "$before")" "$f.omnicore-new"
-mv "$f.omnicore-new" "$f"
+# The new network, above every other one while it's tried; the others that
+# join automatically all at the ordinary priority
+printf '\\n%s\\n' "$(echo "$OMNI_BLOCK" | base64 -d | sed "s/^\\([[:space:]]*priority=\\)${PRIORITY_MARK}\\$/\\1${TRY_PRIORITY}/")" >> "$f.omnicore-new"
+OMNI_MODE=try ${SET_FLAGS} "$f.omnicore-new" > "$f.omnicore-flags" || { rm -f "$f.omnicore-new" "$f.omnicore-flags" "$before"; echo "@@ result cant-write"; exit 0; }
+rm -f "$f.omnicore-new"
+chmod "$(stat -c %a "$before")" "$f.omnicore-flags"
+mv "$f.omnicore-flags" "$f"
 
 pid=$(find_process wpa_supplicant | head -n 1)
 if [ -z "$pid" ]; then echo "@@ result no-process"; exit 0; fi
 kill -HUP "$pid" && echo "@@ result applied"
 `;
 
+// It worked: the network's priority written back to the ordinary one
+// ($OMNI_MODE auto) or "Join automatically" off ($OMNI_MODE manual), and the copy
+// of the old file removed. wpa_supplicant is told only with $OMNI_RELOAD=1
+// (a check, which then goes back to the networks it joins automatically);
+// otherwise it stays on the network it just joined.
 const WPA_KEEP = `
 f="${networkHelper.HOST}$OMNI_CONF"
-rm -f "$f.omnicore-before" && echo "@@ result kept"
+${FIND_PROCESS}
+if ${SET_FLAGS} "$f" > "$f.omnicore-flags"; then
+	chmod "$(stat -c %a "$f")" "$f.omnicore-flags"
+	mv "$f.omnicore-flags" "$f"
+else
+	rm -f "$f.omnicore-flags"
+fi
+rm -f "$f.omnicore-before"
+if [ "$OMNI_RELOAD" = 1 ]; then
+	pid=$(find_process wpa_supplicant | head -n 1)
+	[ -n "$pid" ] && kill -HUP "$pid"
+fi
+echo "@@ result kept"
 `;
 
 const WPA_UNDO = `
@@ -232,12 +317,31 @@ const NM_APPLY = `
 export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/host/run/dbus/system_bus_socket"
 nm() { timeout 60 chroot ${networkHelper.TOOLS} nmcli "$@" 2>&1; }
 nm connection delete "$OMNI_NAME" >/dev/null 2>&1
+# "Join automatically" ($OMNI_AUTO yes or no), at the ordinary priority (0)
+auto="\${OMNI_AUTO:-yes}"
 case "$OMNI_AUTH" in
-	open) nm connection add type wifi ifname "$OMNI_CARD" con-name "$OMNI_NAME" ssid "$OMNI_SSID" >/dev/null ;;
-	psk) nm connection add type wifi ifname "$OMNI_CARD" con-name "$OMNI_NAME" ssid "$OMNI_SSID" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$OMNI_KEY" >/dev/null ;;
-	sae) nm connection add type wifi ifname "$OMNI_CARD" con-name "$OMNI_NAME" ssid "$OMNI_SSID" wifi-sec.key-mgmt sae wifi-sec.psk "$OMNI_KEY" >/dev/null ;;
+	open) nm connection add type wifi ifname "$OMNI_CARD" con-name "$OMNI_NAME" ssid "$OMNI_SSID" connection.autoconnect "$auto" >/dev/null ;;
+	psk) nm connection add type wifi ifname "$OMNI_CARD" con-name "$OMNI_NAME" ssid "$OMNI_SSID" connection.autoconnect "$auto" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$OMNI_KEY" >/dev/null ;;
+	sae) nm connection add type wifi ifname "$OMNI_CARD" con-name "$OMNI_NAME" ssid "$OMNI_SSID" connection.autoconnect "$auto" wifi-sec.key-mgmt sae wifi-sec.psk "$OMNI_KEY" >/dev/null ;;
 esac || { echo "@@ result cant-write"; exit 0; }
 if nm --wait 45 connection up "$OMNI_NAME" >/dev/null; then echo "@@ result applied"; else echo "@@ result failed"; fi
+`;
+
+// Which connection the card is on now ("@@ active <uuid>"), so a check can
+// go back to it
+const NM_ACTIVE = `
+export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/host/run/dbus/system_bus_socket"
+echo "@@ active $(timeout 15 chroot ${networkHelper.TOOLS} nmcli -g GENERAL.CON-UUID device show "$OMNI_CARD" 2>/dev/null)"
+`;
+
+// After a check: back to the connection the card was on ($OMNI_PREV), or
+// whichever NetworkManager picks
+const NM_RETURN = `
+export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/host/run/dbus/system_bus_socket"
+nm() { timeout 60 chroot ${networkHelper.TOOLS} nmcli "$@" 2>&1; }
+if [ -n "$OMNI_PREV" ] && nm --wait 45 connection up uuid "$OMNI_PREV" >/dev/null; then echo "@@ result back"
+elif nm --wait 45 device connect "$OMNI_CARD" >/dev/null; then echo "@@ result back"
+else echo "@@ result not-back"; fi
 `;
 
 const NM_UNDO = `
@@ -343,15 +447,22 @@ function wait(ms) {
 
 // A network that was joined: its password saved, encrypted, and the
 // widget told which network the server is on now (network-passwords.js)
-function savePassword(network) {
+function savePassword(network, options = {}) {
 	const passwords = require("./network-passwords");
 	passwords.save(network.ssid, network.password || "", network.auth);
-	passwords.noteCurrent(network.ssid);
+	if (options.current !== false) passwords.noteCurrent(network.ssid);
 }
 
 // Join a network, or put everything back. `report` is told each step:
-// { phase: "connecting" | "joined" | "connected" | "failed", ssid, message }.
-// `deps` is for the tests.
+// { phase: "connecting" | "joined" | "connected" | "checked" | "failed",
+// ssid, message }. `deps` is for the tests.
+//
+// `network` is { ssid, password, auth }, and may also have:
+//
+//   auto: false   "Join automatically" off once it's kept (on by default)
+//   check: true   only make sure the password works (see the top): kept
+//                 with "Join automatically" off, then back to the networks the
+//                 server joins automatically; "checked" instead of "connected"
 async function connect(network, report, deps = {}) {
 	const problem = problemWith(network);
 	if (problem) throw Object.assign(new Error(problem), { status: 400 });
@@ -363,6 +474,9 @@ async function connect(network, report, deps = {}) {
 	const pause = deps.wait || wait;
 	const tryFor = deps.tryForMs || TRY_FOR_MS;
 	const say = (phase, message) => report({ phase, ssid: network.ssid, message: message || null });
+	const check = network.check === true;
+	// A check never joins automatically afterwards: the server stays on its own
+	const auto = check ? false : network.auto !== false;
 
 	attempt = network.ssid;
 	try {
@@ -389,10 +503,19 @@ async function connect(network, report, deps = {}) {
 				OMNI_SSID: network.ssid,
 				OMNI_NAME: nmName(network.ssid),
 				OMNI_AUTH: network.auth,
+				OMNI_AUTO: auto ? "yes" : "no",
 				OMNI_KEY: network.auth === "psk" && !/^[0-9a-fA-F]{64}$/.test(network.password) ? wpaKey(network.password, network.ssid) : network.password || ""
 			};
 		const writable = isWpa ? [path.posix.dirname(target.config)] : [];
 		const helperOptions = { env, writable, timeoutMs: 75000 };
+
+		// A check goes back afterwards: with NetworkManager, to the
+		// connection the card is on now
+		if (check && !isWpa) {
+			const line = String(await run(NM_ACTIVE, helperOptions).catch(() => "")).split("\n").find((l) => l.startsWith("@@ active "));
+			const uuid = line ? line.slice("@@ active ".length).trim() : "";
+			env.OMNI_PREV = /^[0-9a-fA-F-]{36}$/.test(uuid) ? uuid : "";
+		}
 
 		const applied = result(await run(isWpa ? WPA_APPLY : NM_APPLY, helperOptions));
 		if (applied !== "applied") {
@@ -406,28 +529,54 @@ async function connect(network, report, deps = {}) {
 			return { ok: false, reason: applied || "failed" };
 		}
 
-		// Wait for the internet, up to a minute
+		// It works: the password kept (encrypted) for the Guest Wi-Fi
+		// widget. Never in the way of the join itself.
+		const remember = () => {
+			try {
+				(deps.savePassword || savePassword)(network, { current: !check });
+			} catch (error) {
+				console.log(`Couldn't save the password for ${network.ssid}: ${error.message}`);
+			}
+		};
+
+		// Wait for the card to join, then (unless it's a check) for the
+		// internet, up to a minute
 		const until = now() + tryFor;
 		let joined = !isWpa;
+		if (joined && check) say("joined");
 		while (now() < until) {
-			await pause(LOOK_EVERY_MS);
 			if (!joined) {
+				await pause(LOOK_EVERY_MS);
 				const link = networkHelper.parseLink((await run(LINK, helperOptions)).split("\n"));
 				if (link.connected && link.ssid === network.ssid) {
 					joined = true;
 					say("joined");
-					await run(NUDGE_DHCP, helperOptions).catch(() => {});
+					if (!check) await run(NUDGE_DHCP, helperOptions).catch(() => {});
 				}
+				if (!joined) continue;
 			}
-			if (joined && (await online())) {
+
+			if (check) {
+				// The password works. Kept with "Join automatically" off, and
+				// back to the networks the server joins automatically.
+				env.OMNI_MODE = "manual";
+				env.OMNI_RELOAD = "1";
 				if (isWpa) await run(WPA_KEEP, helperOptions).catch(() => {});
-				// It works, so the password is kept (encrypted) for the Guest
-				// Wi-Fi widget. Never in the way of the join itself.
-				try {
-					(deps.savePassword || savePassword)(network);
-				} catch (error) {
-					console.log(`Couldn't save the password for ${network.ssid}: ${error.message}`);
-				}
+				else await run(NM_RETURN, helperOptions).catch(() => {});
+				remember();
+				await comeBack(network, { run, online, now, pause, tryFor, helperOptions, isWpa });
+				say("checked");
+				const watcher = require("./network-watcher");
+				if (watcher.checkNow) watcher.checkNow();
+				return { ok: true, checked: true };
+			}
+
+			await pause(LOOK_EVERY_MS);
+			if (await online()) {
+				env.OMNI_MODE = auto ? "auto" : "manual";
+				env.OMNI_RELOAD = "0";
+				if (isWpa) await run(WPA_KEEP, helperOptions).catch(() => {});
+				remember();
 				say("connected");
 				const watcher = require("./network-watcher");
 				if (watcher.checkNow) watcher.checkNow();
@@ -447,6 +596,27 @@ async function connect(network, report, deps = {}) {
 	} finally {
 		attempt = null;
 	}
+}
+
+// After a check: wait (up to a minute) for the server to be back on one of
+// its own networks. With wpa_supplicant, the DHCP client is nudged once the
+// card is on another network, so the server gets an address there again.
+// Whatever happens, the check is done: the watcher takes it from here.
+async function comeBack(network, { run, online, now, pause, tryFor, helperOptions, isWpa }) {
+	const until = now() + tryFor;
+	let nudged = !isWpa;
+	while (now() < until) {
+		await pause(LOOK_EVERY_MS);
+		if (!nudged) {
+			const link = networkHelper.parseLink(String(await run(LINK, helperOptions).catch(() => "")).split("\n"));
+			if (link.connected && link.ssid !== network.ssid) {
+				nudged = true;
+				await run(NUDGE_DHCP, helperOptions).catch(() => {});
+			}
+		}
+		if (nudged && (await online())) return true;
+	}
+	return false;
 }
 
 // ---------------------------------------------------------------------
@@ -878,6 +1048,11 @@ module.exports = {
 	connect,
 	busy,
 	PRIORITY_MARK,
+	AUTO_PRIORITY,
+	TRY_PRIORITY,
+	SET_FLAGS,
+	NM_ACTIVE,
+	NM_RETURN,
 	attach,
 	SETUP_PAGE
 };

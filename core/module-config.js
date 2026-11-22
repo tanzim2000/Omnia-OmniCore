@@ -56,6 +56,14 @@ function refreshValue(field, value) {
 	return fallback !== null ? fallback : REFRESH_FLOOR;
 }
 
+// Setting types only a widget built into OmniCore may have. "wifi-add" is
+// the Guest Wi-Fi widget's "Add a network around you" (network-page.js).
+const BUILT_IN_ONLY = ["wifi-add"];
+
+// Setting types that are a button, not a value: never given a default,
+// never saved
+const NO_VALUE = ["wifi-add"];
+
 // A module's folder: in the modules folder, or core/built-in/ for a
 // widget that ships inside OmniCore (built-in.js)
 function folderOf(moduleId) {
@@ -155,8 +163,12 @@ function readSchema(moduleId) {
 		}
 
 		// A stray null or a field with no key is dropped here, once, so
-		// nothing that walks the list later has to check
-		fields = usableFields(`Module "${moduleId}" settings.json`, parsed.settings);
+		// nothing that walks the list later has to check. A field only a
+		// widget built into OmniCore may have (wifi-add: it starts a Wi-Fi
+		// check) is dropped from anyone else's.
+		fields = usableFields(`Module "${moduleId}" settings.json`, parsed.settings).filter(
+			(field) => builtIn.isBuiltIn(moduleId) || !BUILT_IN_ONLY.includes(field.type)
+		);
 	} catch (error) {
 		console.log(`  Unreadable settings.json in module: ${moduleId}`);
 		return [];
@@ -227,6 +239,8 @@ function applyDefaults(moduleId, stored) {
 	}
 
 	for (const field of schema) {
+		if (NO_VALUE.includes(field.type)) continue;
+
 		const value =
 			stored && stored[field.key] !== undefined
 				? stored[field.key]
@@ -270,7 +284,7 @@ function cleanConfig(moduleId, values) {
 	}
 
 	for (const field of schema) {
-		if (!values || values[field.key] === undefined) {
+		if (!values || values[field.key] === undefined || NO_VALUE.includes(field.type)) {
 			continue;
 		}
 

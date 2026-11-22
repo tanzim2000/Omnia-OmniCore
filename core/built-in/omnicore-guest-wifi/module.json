@@ -1,4 +1,4 @@
 {
 	"name": "Guest Wi-Fi",
-	"description": "A code your guests scan to join the Wi-Fi. Built into OmniCore: the password stays on the server, on the Network page's Saved passwords."
+	"description": "A code your guests scan to join the Wi-Fi. Built into OmniCore: the password never leaves the server except inside the code."
 }

@@ -1809,6 +1809,10 @@ function renderFields(schema, config, context, scope) {
 					`<input type="checkbox" role="switch" data-key="${escapeHtml(field.key)}" ` +
 					`data-scope="${owner}" ` +
 					`data-type="boolean" ${value ? "checked" : ""}>`;
+			} else if (field.type === "wifi-add") {
+				// The Guest Wi-Fi widget's "Add a network around you" (only a
+				// built-in widget gets this far with it: module-config.js)
+				input = networkPage.addNetworkButtonHtml(field, escapeHtml);
 			} else if (field.type === "select") {
 				const options = (field.options || [])
 					.map(
@@ -6984,6 +6988,7 @@ function startAdminFace() {
 			${priorityScript}
 			${locationScript}
 			${widgetTypes.pickerScript}
+			${schema.some((field) => field.type === "wifi-add") ? networkPage.ADD_NETWORK_SCRIPT : ""}
 
 			applyWidgetFilter();
 

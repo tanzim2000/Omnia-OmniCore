@@ -8,15 +8,21 @@
 //                     address and link speed, the card, who looks after
 //                     the Wi-Fi, and whether the internet works
 //   Known networks    the networks the server already has a password
-//                     for, with Forget (not the one it's on)
+//                     for, each with Edit (password and security, "Join by
+//                     itself", Forget) and, when OmniCore has its password,
+//                     Show password (after the admin password: the password
+//                     and a QR code any phone camera reads)
 //   Networks around   a fresh look around, to join another network, the
 //                     same safe way Manual Setup does it (network-setup.js):
 //                     if the new one doesn't reach the internet within a
 //                     minute, everything is put back as it was
-//   Saved passwords   the Wi-Fi passwords OmniCore keeps, encrypted, for the
-//                     Guest Wi-Fi widget (network-passwords.js): saved by
-//                     itself when a join works, or added here. Show asks for
-//                     the admin password first.
+//
+// OmniCore keeps the password of every network joined through it,
+// encrypted (network-passwords.js), for Show password and the Guest Wi-Fi
+// widget. The widget can also add a network around for guests: OmniCore
+// joins it just long enough to check its password and comes back
+// (a check, network-setup.js), and it becomes a known network that doesn't
+// join automatically.
 //
 // WHEN OMNICORE CAN'T CHANGE THE WI-FI
 //
@@ -55,6 +61,7 @@ const networkHelper = require("./network-helper");
 const networkStatus = require("./network-status");
 const networkSetup = require("./network-setup");
 const networkPasswords = require("./network-passwords");
+const qr = require("./qr");
 const auth = require("./admin-auth");
 const { passwordField } = require("./ui-theme");
 
@@ -67,9 +74,9 @@ const KNOWN_PATH = "/network/known";
 const AROUND_PATH = "/network/around";
 const JOIN_PATH = "/network/join";
 const FORGET_PATH = "/network/forget";
-const PASSWORDS_PATH = "/network/passwords";
-const PASSWORD_REMOVE_PATH = "/network/passwords/remove";
-const PASSWORD_SHOW_PATH = "/network/passwords/show";
+const EDIT_PATH = "/network/edit";
+const PASSWORD_SHOW_PATH = "/network/show-password";
+const CHECK_PATH = "/network/check";
 
 // Show: how many wrong admin passwords in how long before it stops
 // answering for a while
@@ -82,24 +89,27 @@ const LAST_STEP_KEPT_MS = 10 * 60 * 1000;
 // ---------------------------------------------------------------------
 // The scripts the helper runs for it
 
-// The names of the networks in wpa_supplicant's settings file, one per
-// line: "omnicore|<name>" for one OmniCore added, "other|<name>" for the
-// rest. The name as the file has it (in quotes, in hex, or P"..."). Only
-// the ssid line of each network is ever printed.
+// The networks in wpa_supplicant's settings file, one per line:
+// "<who>|<join>|<name>", <who> being "omnicore" for one OmniCore added and
+// "other" for the rest, <join> "auto" when it joins automatically and "manual"
+// when it doesn't (disabled=1), and the name as the file has it (in quotes,
+// in hex, or P"..."). Only those are ever printed: never a password.
 const KNOWN_WPA = `
 f="${networkHelper.HOST}$OMNI_CONF"
 echo "@@ known"
 [ -r "$f" ] || exit 0
 awk '
-	!inside && /^[[:space:]]*network[[:space:]]*=[[:space:]]*\\{/ { inside = 1; name = ""; mine = (previous == "# Added by OmniCore"); next }
+	!inside && /^[[:space:]]*network[[:space:]]*=[[:space:]]*\\{/ { inside = 1; name = ""; off = 0; mine = (previous == "# Added by OmniCore"); next }
 	inside && /^[[:space:]]*ssid[[:space:]]*=/ { name = $0; sub(/^[[:space:]]*ssid[[:space:]]*=[[:space:]]*/, "", name); sub(/[[:space:]]+$/, "", name); next }
-	inside && /^[[:space:]]*}/ { if (name != "") print (mine ? "omnicore" : "other") "|" name; inside = 0; previous = ""; next }
+	inside && /^[[:space:]]*disabled[[:space:]]*=[[:space:]]*1/ { off = 1; next }
+	inside && /^[[:space:]]*}/ { if (name != "") print (mine ? "omnicore" : "other") "|" (off ? "manual" : "auto") "|" name; inside = 0; previous = ""; next }
 	!inside { previous = $0 }
 ' "$f"
 `;
 
-// NetworkManager's Wi-Fi connections: "<uuid>|<name>" for each. Its own
-// hotspots (mode ap, the setup hotspot among them) aren't networks to join.
+// NetworkManager's Wi-Fi connections: "<uuid>|<join>|<name>" for each,
+// <join> being "yes" when it joins automatically. Its own hotspots (mode
+// ap, the setup hotspot among them) aren't networks to join.
 const KNOWN_NM = `
 export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/host/run/dbus/system_bus_socket"
 nm() { timeout 15 chroot ${networkHelper.TOOLS} nmcli "$@" 2>/dev/null; }
@@ -107,7 +117,7 @@ echo "@@ known"
 nm -t -f UUID,TYPE connection show | while IFS=: read -r uuid type; do
 	[ "$type" = 802-11-wireless ] || continue
 	[ "$(nm -g 802-11-wireless.mode connection show "$uuid")" = ap ] && continue
-	echo "$uuid|$(nm -g 802-11-wireless.ssid connection show "$uuid")"
+	echo "$uuid|$(nm -g connection.autoconnect connection show "$uuid")|$(nm -g 802-11-wireless.ssid connection show "$uuid")"
 done
 `;
 
@@ -135,6 +145,56 @@ for uuid in $OMNI_UUIDS; do
 	timeout 30 chroot ${networkHelper.TOOLS} nmcli connection delete uuid "$uuid" >/dev/null 2>&1 && gone=1
 done
 [ "$gone" = 1 ] && echo "@@ result forgotten" || echo "@@ result nothing"
+`;
+
+// Editing a network in wpa_supplicant's settings file: its block replaced
+// when there's a new password ($OMNI_BLOCK), then "Join automatically" set
+// ($OMNI_MODE auto or manual, see network-setup.js's SET_FLAGS) and every
+// other network tidied the same way. wpa_supplicant is told only with
+// $OMNI_RELOAD=1 (never for the network the server is on: telling it makes
+// it let go of the network for a moment). "nothing" if there's no network
+// by that name.
+const WPA_EDIT = `
+H=${networkHelper.HOST}
+f="$H$OMNI_CONF"
+${networkSetup.FIND_PROCESS}
+if [ ! -w "$f" ]; then echo "@@ result cant-write"; exit 0; fi
+if ${networkSetup.DROP_NAMED} "$f" | cmp -s - "$f"; then echo "@@ result nothing"; exit 0; fi
+if [ -n "$OMNI_BLOCK" ]; then
+	${networkSetup.DROP_NAMED} "$f" > "$f.omnicore-new" || { rm -f "$f.omnicore-new"; echo "@@ result cant-write"; exit 0; }
+	printf '\\n%s\\n' "$(echo "$OMNI_BLOCK" | base64 -d | sed "s/^\\([[:space:]]*priority=\\)${networkSetup.PRIORITY_MARK}\\$/\\1${networkSetup.AUTO_PRIORITY}/")" >> "$f.omnicore-new"
+else
+	cp -p "$f" "$f.omnicore-new" || { echo "@@ result cant-write"; exit 0; }
+fi
+${networkSetup.SET_FLAGS} "$f.omnicore-new" > "$f.omnicore-flags" || { rm -f "$f.omnicore-new" "$f.omnicore-flags"; echo "@@ result cant-write"; exit 0; }
+rm -f "$f.omnicore-new"
+chmod "$(stat -c %a "$f")" "$f.omnicore-flags"
+mv "$f.omnicore-flags" "$f"
+if [ "$OMNI_RELOAD" = 1 ]; then
+	pid=$(find_process wpa_supplicant | head -n 1)
+	[ -n "$pid" ] && kill -HUP "$pid"
+fi
+echo "@@ result changed"
+`;
+
+// Editing NetworkManager connections, by their ids ($OMNI_UUIDS): "Join by
+// itself" ($OMNI_AUTO yes or no), and a new password ($OMNI_AUTH, $OMNI_KEY)
+// when there is one. NetworkManager doesn't let go of a connection that's
+// up when it's changed.
+const NM_EDIT = `
+export DBUS_SYSTEM_BUS_ADDRESS="unix:path=/host/run/dbus/system_bus_socket"
+nm() { timeout 30 chroot ${networkHelper.TOOLS} nmcli "$@" 2>&1; }
+done=0
+for uuid in $OMNI_UUIDS; do
+	nm connection modify uuid "$uuid" connection.autoconnect "$OMNI_AUTO" >/dev/null || continue
+	case "$OMNI_AUTH" in
+		psk) nm connection modify uuid "$uuid" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$OMNI_KEY" >/dev/null ;;
+		sae) nm connection modify uuid "$uuid" wifi-sec.key-mgmt sae wifi-sec.psk "$OMNI_KEY" >/dev/null ;;
+		open) nm connection modify uuid "$uuid" remove 802-11-wireless-security >/dev/null ;;
+	esac
+	done=1
+done
+[ "$done" = 1 ] && echo "@@ result changed" || echo "@@ result nothing"
 `;
 
 // ---------------------------------------------------------------------
@@ -173,28 +233,32 @@ function readNmValue(value) {
 	return String(value || "").replace(/\\([:\\])/g, "$1");
 }
 
-// What the known-networks script printed, as [{ ssid, mine, ids }]: one
-// entry per name, whichever way the server keeps them
+// What the known-networks script printed, as [{ ssid, mine, auto, ids }]:
+// one entry per name, whichever way the server keeps them. `auto` is
+// whether it joins automatically (true if any of its entries does).
 function parseKnown(output, manager) {
 	const lines = String(output || "").replace(/\r/g, "").split("\n");
 	const start = lines.indexOf("@@ known");
 	const byName = new Map();
 	for (const line of start === -1 ? [] : lines.slice(start + 1)) {
-		const at = line.indexOf("|");
-		if (at === -1) continue;
-		const first = line.slice(0, at);
-		const rest = line.slice(at + 1);
+		const first = line.indexOf("|");
+		const second = first === -1 ? -1 : line.indexOf("|", first + 1);
+		if (second === -1) continue;
+		const who = line.slice(0, first);
+		const join = line.slice(first + 1, second);
+		const rest = line.slice(second + 1);
 		let entry;
 		if (manager === "networkmanager") {
-			if (!/^[0-9a-fA-F-]{36}$/.test(first)) continue;
-			entry = { ssid: readNmValue(rest), mine: false, id: first.toLowerCase() };
+			if (!/^[0-9a-fA-F-]{36}$/.test(who)) continue;
+			entry = { ssid: readNmValue(rest), mine: false, auto: join !== "no", id: who.toLowerCase() };
 		} else {
-			if (first !== "omnicore" && first !== "other") continue;
-			entry = { ssid: readSsid(rest), mine: first === "omnicore", id: null };
+			if (who !== "omnicore" && who !== "other") continue;
+			entry = { ssid: readSsid(rest), mine: who === "omnicore", auto: join !== "manual", id: null };
 		}
 		if (!entry.ssid) continue;
-		const known = byName.get(entry.ssid) || { ssid: entry.ssid, mine: false, ids: [] };
+		const known = byName.get(entry.ssid) || { ssid: entry.ssid, mine: false, auto: false, ids: [] };
 		known.mine = known.mine || entry.mine;
+		known.auto = known.auto || entry.auto;
 		if (entry.id) known.ids.push(entry.id);
 		byName.set(entry.ssid, known);
 	}
@@ -290,8 +354,108 @@ async function known(deps = {}) {
 	const run = deps.run || networkHelper.runOnHost;
 	const isWpa = target.manager === "wpa_supplicant";
 	const output = await run(isWpa ? KNOWN_WPA : KNOWN_NM, { env: isWpa ? { OMNI_CONF: target.config } : {}, timeoutMs: 40000 });
-	const networks = parseKnown(output, target.manager).sort((a, b) => a.ssid.localeCompare(b.ssid));
+	// Which ones OmniCore has the password for (Show password), and of
+	// what kind, so Edit starts on the right security
+	const passwords = deps.passwords || networkPasswords;
+	const saved = new Map(
+		(typeof passwords.list === "function" ? passwords.list() : []).filter((n) => n.readable).map((n) => [n.ssid, n.auth])
+	);
+	const networks = parseKnown(output, target.manager)
+		.map((network) => ({ ...network, saved: saved.has(network.ssid), savedAuth: saved.get(network.ssid) || null }))
+		.sort((a, b) => a.ssid.localeCompare(b.ssid));
 	return { available: true, manager: target.manager, networks };
+}
+
+// Edit a known network: "Join automatically" (`auto`), and a new password and
+// security when `auth` is sent. Returns { saved: true }, or, for a new
+// password on the network the server is on, { join } to try it like a
+// join (put back if it doesn't work within a minute) and maybe `cleanup`
+// to run once it has worked. `deps` is for the tests.
+async function edit(body, deps = {}) {
+	const ssid = body && body.ssid;
+	if (typeof ssid !== "string" || !ssid.length || Buffer.byteLength(ssid, "utf-8") > 32) {
+		throw Object.assign(new Error("Choose a network."), { status: 400 });
+	}
+	const auto = body.auto !== false;
+	const changing = typeof body.auth === "string";
+	const network = changing ? { ssid, auth: body.auth, password: body.auth === "open" ? "" : body.password } : null;
+	if (network) {
+		const problem = networkSetup.problemWith(network);
+		if (problem) throw Object.assign(new Error(problem), { status: 400 });
+	}
+
+	const target = await (deps.target || (() => networkSetup.whatWeCanChange({ fresh: false })))();
+	if (target.problem) throw Object.assign(new Error(target.problem), { status: 409 });
+	const list = await known({ ...deps, target: async () => target });
+	const entry = (list.networks || []).find((other) => other.ssid === ssid);
+	if (!entry) throw Object.assign(new Error("The server doesn't know a network by that name."), { status: 404 });
+
+	const current = await (deps.now || now)();
+	const inUse = Boolean(current.card && current.card.connected && current.card.ssid === ssid);
+	const run = deps.run || networkHelper.runOnHost;
+	const isWpa = target.manager === "wpa_supplicant";
+
+	// A new password for the network the server is on: tried like a join
+	if (network && inUse) {
+		const oldIds = entry.ids.filter((id) => /^[0-9a-f-]{36}$/.test(id));
+		return {
+			join: { ...network, auto },
+			// NetworkManager: the join makes a connection of its own, so the
+			// old ones for that name go once it works
+			cleanup: !isWpa && oldIds.length ? () => run(FORGET_NM, { env: { OMNI_UUIDS: oldIds.join(" ") }, timeoutMs: 60000 }) : null
+		};
+	}
+
+	let answer;
+	if (isWpa) {
+		answer = result(
+			await run(WPA_EDIT, {
+				env: {
+					OMNI_CONF: target.config,
+					OMNI_SSID_HEX: networkSetup.toHex(ssid),
+					OMNI_SSID_QUOTED: /["\\\n]/.test(ssid) ? "" : `"${ssid}"`,
+					OMNI_MODE: auto ? "auto" : "manual",
+					OMNI_RELOAD: inUse ? "0" : "1",
+					OMNI_BLOCK: network ? Buffer.from(networkSetup.wpaBlock(network)).toString("base64") : ""
+				},
+				writable: [path.posix.dirname(target.config)],
+				timeoutMs: 40000
+			})
+		);
+	} else {
+		const ids = entry.ids.filter((id) => /^[0-9a-f-]{36}$/.test(id));
+		answer = ids.length
+			? result(
+					await run(NM_EDIT, {
+						env: {
+							OMNI_UUIDS: ids.join(" "),
+							OMNI_AUTO: auto ? "yes" : "no",
+							OMNI_AUTH: network ? network.auth : "",
+							OMNI_KEY:
+								network && network.auth === "psk" && !/^[0-9a-fA-F]{64}$/.test(network.password)
+									? networkSetup.wpaKey(network.password, ssid)
+									: network
+										? network.password
+										: ""
+						},
+						timeoutMs: 60000
+					})
+				)
+			: "nothing";
+	}
+
+	if (answer === "nothing") throw Object.assign(new Error("The server doesn't know a network by that name."), { status: 404 });
+	if (answer !== "changed") throw Object.assign(new Error("OmniCore couldn't change the server's Wi-Fi settings."), { status: 500 });
+
+	// The new password kept for Show password and the Guest Wi-Fi widget
+	if (network) {
+		try {
+			(deps.passwords || networkPasswords).save(ssid, network.password, network.auth);
+		} catch (error) {
+			// The Wi-Fi is changed either way
+		}
+	}
+	return { saved: true };
 }
 
 // Forget a network the server knows. Never the one it's on: that would
@@ -373,7 +537,12 @@ function showPassword(body, deps = {}) {
 	}
 	const saved = passwords.reveal(body && body.ssid);
 	if (!saved) return { status: 404, body: { error: "There's no saved password for that network that OmniCore can open." } };
-	return { status: 200, body: { ssid: saved.ssid, password: saved.password } };
+	// The password, and a QR code holding it that any phone camera reads
+	// (drawn by Core from squares alone: safe to put in the page)
+	return {
+		status: 200,
+		body: { ssid: saved.ssid, auth: saved.auth, password: saved.password, svg: qr.toSvg(networkPasswords.qrValue(saved)) }
+	};
 }
 
 // For the tests: the wrong tries forgotten
@@ -488,27 +657,64 @@ function attach(app, { page }) {
 		}
 	});
 
-	// The saved passwords: names and types only. They don't use the Wi-Fi
-	// card, so they work whatever the Wi-Fi is doing.
-	app.get(PASSWORDS_PATH, (req, res) => {
-		res.setHeader("Cache-Control", "no-store");
-		res.json({ networks: networkPasswords.list() });
-	});
-
-	// Add one, or replace one (the same name)
-	app.post(PASSWORDS_PATH, (req, res) => {
-		const body = req.body || {};
-		try {
-			networkPasswords.save(body.ssid, body.auth === "open" ? "" : body.password, body.auth);
-			res.json({ saved: true, networks: networkPasswords.list() });
-		} catch (error) {
-			res.status(error.status || 500).json({ error: error.status ? error.message : "OmniCore couldn't save it." });
+	// Edit a known network
+	app.post(EDIT_PATH, async (req, res) => {
+		const why = notNow();
+		if (why) {
+			res.status(409).json({ error: why });
+			return;
 		}
+		let answer;
+		try {
+			answer = await module.exports.edit(req.body);
+		} catch (error) {
+			res.status(error.status || 500).json({ error: error.message });
+			return;
+		}
+		if (!answer.join) {
+			res.json(answer);
+			return;
+		}
+		// A new password for the network the server is on: tried like a
+		// join, and followed the same way
+		res.status(202).json({ started: true });
+		const report = (step) => {
+			remember(step);
+			networkStatus.broadcastSetup(lastStep);
+		};
+		networkSetup
+			.connect(answer.join, report)
+			.then((outcome) => (outcome && outcome.ok && answer.cleanup ? answer.cleanup() : null))
+			.catch((error) => report({ phase: "failed", ssid: answer.join.ssid, message: error.message }));
 	});
 
-	app.post(PASSWORD_REMOVE_PATH, (req, res) => {
-		const removed = networkPasswords.forget(req.body && req.body.ssid);
-		res.json({ removed, networks: networkPasswords.list() });
+	// The Guest Wi-Fi widget's "Add a network around you": joined just long
+	// enough to check its password, then back (a check, network-setup.js)
+	app.post(CHECK_PATH, async (req, res) => {
+		const why = notNow();
+		if (why) {
+			res.status(409).json({ error: why });
+			return;
+		}
+		const network = {
+			ssid: req.body && req.body.ssid,
+			password: req.body && req.body.password,
+			auth: req.body && req.body.auth,
+			check: true
+		};
+		const problem = networkSetup.problemWith(network);
+		if (problem) {
+			res.status(400).json({ error: problem });
+			return;
+		}
+		res.status(202).json({ started: true });
+		const report = (step) => {
+			remember(step);
+			networkStatus.broadcastSetup(lastStep);
+		};
+		networkSetup.connect(network, report).catch((error) => {
+			report({ phase: "failed", ssid: network.ssid, message: error.message });
+		});
 	});
 
 	// One password, as text, after the admin password
@@ -538,7 +744,11 @@ const PAGE_CSS = `
 	   band, or why it can't be picked), and a lock if it has a password.
 	   The line is under the name, not beside it, so a phone keeps room
 	   for the name. */
-	#net-around, #net-known, #net-saved { padding: 0.5em; gap: 2px; }
+	#net-around, #net-known { padding: 0.5em; gap: 2px; }
+	/* Known networks gets the wider half: its rows have two buttons */
+	@media (orientation: landscape) {
+		#net-top.two { grid-template-columns: 1fr 1.25fr; }
+	}
 	.net-row { align-items: center; white-space: normal; }
 	.net-row .net-name { display: flex; align-items: center; gap: 0.75em; min-width: 0; }
 	.net-row .net-words { display: flex; flex-direction: column; min-width: 0; }
@@ -549,23 +759,26 @@ const PAGE_CSS = `
 	.net-row[aria-disabled="true"] { cursor: default; }
 	.net-row[aria-disabled="true"]:not(.net-here) { opacity: 0.5; }
 	.net-row .net-end { display: flex; align-items: center; flex-shrink: 0; color: var(--fg-muted); }
-	.net-known { display: flex; align-items: center; justify-content: space-between; gap: 1em; padding: 0.55em 0.9em; }
-	.net-known > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.net-known button { flex-shrink: 0; padding: 0.45em 0.9em; font-size: 0.85em; }
-	.net-known .hint { margin: 0; flex-shrink: 0; }
-	#net-join[hidden], #net-around[hidden], #net-add-form[hidden] { display: none; }
-	/* Saved passwords: the name with its security under it, and the
-	   buttons at the end. On a phone the buttons go under the name. */
-	.net-saved { flex-wrap: wrap; }
-	.net-saved .net-words { display: flex; flex-direction: column; min-width: 0; flex: 1 1 10em; }
-	.net-saved .net-words > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-	.net-saved .net-line { color: var(--fg-muted); font-size: 0.8em; }
-	.net-saved .net-line.bad { color: var(--danger); }
-	.net-saved .net-shown { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.9em; color: var(--fg); user-select: all; overflow-wrap: anywhere; }
-	.net-saved .net-actions { display: flex; gap: 0.4em; flex-shrink: 0; }
-	#net-add-form { display: flex; flex-direction: column; gap: 0.6em; margin-top: 0.5em; }
-	#net-add-form .net-buttons { display: flex; gap: 0.6em; }
-	#net-add-form input[type="text"], #net-add-form select { width: 100%; box-sizing: border-box; }
+	/* A known network: its name with a line under it, and its buttons at
+	   the end. On a phone the buttons go under the name. */
+	.net-known { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5em 1em; padding: 0.55em 0.9em; }
+	.net-known .net-words { display: flex; flex-direction: column; min-width: 0; flex: 1 1 9em; }
+	.net-known .net-words > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.net-known .net-line { color: var(--fg-muted); font-size: 0.8em; }
+	.net-known .net-line.net-good { color: var(--success); }
+	.net-known .net-actions { display: flex; gap: 0.4em; flex-shrink: 0; }
+	.net-known button { padding: 0.45em 0.9em; font-size: 0.85em; }
+	/* The windows: Show password and Edit */
+	.net-window { max-width: 26em; }
+	.net-window .net-qr { width: min(14em, 65vw); margin: 0.25em auto 0.5em; }
+	.net-window .net-qr svg { display: block; width: 100%; height: auto; border-radius: 0.5em; }
+	.net-window .net-secret { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: center; font-size: 1.05em; user-select: all; overflow-wrap: anywhere; margin: 0 0 0.25em; }
+	.net-window form { display: flex; flex-direction: column; gap: 0.55em; }
+	.net-window .net-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+	.net-window select, .net-window input[type="password"], .net-window input[type="text"] { width: 100%; box-sizing: border-box; }
+	.net-window .hint { margin: 0; }
+	.net-window .net-forget { width: 100%; margin-top: 0.4em; }
+	#net-join[hidden], #net-around[hidden] { display: none; }
 	#net-join { display: flex; flex-direction: column; gap: 0.75em; margin-top: 0.5em; }
 	#net-join .net-buttons { display: flex; gap: 0.6em; }
 	.net-spin {
@@ -596,7 +809,7 @@ const PAGE_BODY = `
 			</div>
 			<div class="segment" id="net-known-box">
 				<h2>Known networks</h2>
-				<p class="hint">Networks the server has the password for. It joins one by itself when it's around.</p>
+				<p class="hint">Networks the server has the password for. It joins one automatically when it's around.</p>
 				<div class="list" id="net-known" role="list"></div>
 				<p class="status" id="net-known-status" role="status"></p>
 			</div>
@@ -617,31 +830,6 @@ const PAGE_BODY = `
 				</div>
 			</form>
 			<p class="status" id="net-status" role="status" aria-live="polite"></p>
-		</div>
-		<div class="segment" id="net-saved-box">
-			<div class="box-head">
-				<h2>Saved passwords</h2>
-				<button type="button" class="glass" id="net-add" style="padding:0.55em 1em;font-size:0.85em">Add</button>
-			</div>
-			<p class="hint">Kept encrypted on the server, for the Guest Wi&#8209;Fi widget. A network joined through OmniCore is saved by itself once it works.</p>
-			<div class="list" id="net-saved" role="list"></div>
-			<form id="net-add-form" hidden autocomplete="off">
-				<label for="net-add-name">Network name</label>
-				<input type="text" id="net-add-name" maxlength="32" autocomplete="off" spellcheck="false" autocapitalize="off">
-				<label for="net-add-auth">Security</label>
-				<select id="net-add-auth">
-					<option value="psk">WPA2 or WPA (a password)</option>
-					<option value="sae">WPA3 only</option>
-					<option value="open">None (no password)</option>
-				</select>
-				<label for="net-add-password" id="net-add-password-label">Password</label>
-				<div id="net-add-password-box">${passwordField('<input type="password" id="net-add-password" autocomplete="off" spellcheck="false" autocapitalize="off">')}</div>
-				<div class="net-buttons">
-					<button type="submit" class="glass">Save</button>
-					<button type="button" class="glass" id="net-add-cancel">Cancel</button>
-				</div>
-			</form>
-			<p class="status" id="net-saved-status" role="status" aria-live="polite"></p>
 		</div>
 	</div>`;
 
@@ -781,17 +969,34 @@ const PAGE_SCRIPT = `
 			var row = document.createElement("div");
 			row.className = "net-known";
 			row.setAttribute("role", "listitem");
-			row.appendChild(text("span", network.ssid));
-			var inUse = current && current.card && current.card.connected && current.card.ssid === network.ssid;
-			if (inUse) {
-				row.appendChild(text("span", "In use", "hint"));
-			} else {
-				var button = text("button", "Forget", "glass");
-				button.type = "button";
-				button.setAttribute("aria-label", "Forget " + network.ssid);
-				button.addEventListener("click", function () { forgetNetwork(network.ssid, button); });
-				row.appendChild(button);
+			var inUse = Boolean(current && current.card && current.card.connected && current.card.ssid === network.ssid);
+			var words = document.createElement("div");
+			words.className = "net-words";
+			words.appendChild(text("span", network.ssid));
+			words.appendChild(
+				inUse
+					? text("span", "In use", "net-line net-good")
+					: text("span", network.auto ? "Joins automatically" : "Doesn't join automatically", "net-line")
+			);
+			row.appendChild(words);
+
+			var actions = document.createElement("div");
+			actions.className = "net-actions";
+			// Only when OmniCore has the password (it saw it when the
+			// network was joined, or it was typed in Edit)
+			if (network.saved) {
+				var show = text("button", "Show password", "glass");
+				show.type = "button";
+				show.setAttribute("aria-label", "Show the password for " + network.ssid);
+				show.addEventListener("click", function () { showPassword(network); });
+				actions.appendChild(show);
 			}
+			var editButton = text("button", "Edit", "glass");
+			editButton.type = "button";
+			editButton.setAttribute("aria-label", "Edit " + network.ssid);
+			editButton.addEventListener("click", function () { openEdit(network, inUse); });
+			actions.appendChild(editButton);
+			row.appendChild(actions);
 			knownList.appendChild(row);
 		});
 	}
@@ -802,30 +1007,225 @@ const PAGE_SCRIPT = `
 			.catch(function () { showKnown({ available: false, message: "OmniCore couldn't read the networks the server knows." }); });
 	}
 
-	async function forgetNetwork(ssid, button) {
+	// A window over the page, in the Default UI's pop-up style. Escape, a
+	// click outside it, or close() takes it away.
+	function openWindow(title) {
+		var backdrop = document.createElement("div");
+		backdrop.className = "modal-backdrop";
+		var panel = document.createElement("div");
+		panel.className = "modal net-window";
+		panel.setAttribute("role", "dialog");
+		panel.setAttribute("aria-modal", "true");
+		panel.setAttribute("aria-label", title);
+		panel.appendChild(text("h2", title));
+		backdrop.appendChild(panel);
+		document.body.appendChild(backdrop);
+		function onKey(event) {
+			if (event.key === "Escape") close();
+		}
+		function close() {
+			document.removeEventListener("keydown", onKey);
+			backdrop.remove();
+		}
+		document.addEventListener("keydown", onKey);
+		backdrop.addEventListener("click", function (event) {
+			if (event.target === backdrop) close();
+		});
+		return { panel: panel, close: close };
+	}
+
+	function buttonRow(buttons) {
+		var row = document.createElement("div");
+		row.className = "dialog-buttons";
+		buttons.forEach(function (button) { row.appendChild(button); });
+		return row;
+	}
+
+	function button(label, className) {
+		var element = text("button", label, "glass" + (className ? " " + className : ""));
+		element.type = "button";
+		return element;
+	}
+
+	// Show password: after the admin password, the password and a QR code
+	// any phone camera can read to join
+	async function showPassword(network) {
+		var adminPassword = await askDialog({
+			title: "Show the password for " + network.ssid + "?",
+			text: "Type the admin password first.",
+			secret: true,
+			confirm: "Show"
+		});
+		if (!adminPassword) return;
+		postJson(${JSON.stringify(PASSWORD_SHOW_PATH)}, { ssid: network.ssid, adminPassword: adminPassword })
+			.then(function (reply) {
+				if (!reply.ok) {
+					say(knownStatus, reply.answer.error || "Couldn't show it.", "bad");
+					return;
+				}
+				say(knownStatus, "");
+				var w = openWindow(network.ssid);
+				if (reply.answer.svg) {
+					var code = document.createElement("div");
+					code.className = "net-qr";
+					// Core's own drawing of the code: squares only, never text
+					code.innerHTML = reply.answer.svg;
+					w.panel.appendChild(code);
+				}
+				w.panel.appendChild(
+					reply.answer.auth === "open"
+						? text("p", "No password", "net-secret")
+						: text("p", reply.answer.password, "net-secret")
+				);
+				w.panel.appendChild(text("p", "Point a phone's camera at the code to join.", "hint"));
+				var done = button("Close");
+				done.addEventListener("click", w.close);
+				w.panel.appendChild(buttonRow([done]));
+				done.focus();
+			})
+			.catch(function () { say(knownStatus, "Couldn't show it. Try again.", "bad"); });
+	}
+
+	// Edit: "Join automatically", a new password and security, and Forget
+	var PASSWORD_FIELD = ${JSON.stringify(passwordField('<input type="password" id="net-edit-password" autocomplete="off" spellcheck="false" autocapitalize="off">'))};
+
+	function openEdit(network, inUse) {
+		var w = openWindow("Edit " + network.ssid);
+		var form = document.createElement("form");
+		form.autocomplete = "off";
+
+		var switchRow = document.createElement("div");
+		switchRow.className = "net-switch-row";
+		var autoLabel = text("label", "Join automatically");
+		autoLabel.htmlFor = "net-edit-auto";
+		var auto = document.createElement("input");
+		auto.type = "checkbox";
+		auto.id = "net-edit-auto";
+		auto.setAttribute("role", "switch");
+		auto.checked = Boolean(network.auto);
+		switchRow.appendChild(autoLabel);
+		switchRow.appendChild(auto);
+		form.appendChild(switchRow);
+
+		var securityLabel = text("label", "Security");
+		securityLabel.htmlFor = "net-edit-auth";
+		form.appendChild(securityLabel);
+		var security = document.createElement("select");
+		security.id = "net-edit-auth";
+		[["psk", "WPA2 or WPA (a password)"], ["sae", "WPA3 only"], ["open", "None (no password)"]].forEach(function (choice) {
+			var option = document.createElement("option");
+			option.value = choice[0];
+			option.textContent = choice[1];
+			security.appendChild(option);
+		});
+		security.value = network.savedAuth || "psk";
+		form.appendChild(security);
+
+		var passwordLabel = text("label", "New password");
+		passwordLabel.htmlFor = "net-edit-password";
+		form.appendChild(passwordLabel);
+		var passwordBox = document.createElement("div");
+		passwordBox.innerHTML = PASSWORD_FIELD;
+		form.appendChild(passwordBox);
+		var newPassword = passwordBox.querySelector("input");
+		form.appendChild(
+			text(
+				"p",
+				inUse
+					? "Leave it empty to keep the password. This is the network the server is on: a new password is tried first, and if it doesn't work within a minute, the old one comes back."
+					: "Leave it empty to keep the password. Saving makes the Wi-Fi read its settings again, so the server may drop off its network for a few seconds.",
+				"hint"
+			)
+		);
+		function securityPicked() {
+			// style rather than hidden: a label's own display rule would win
+			var none = security.value === "open";
+			passwordLabel.style.display = none ? "none" : "";
+			passwordBox.style.display = none ? "none" : "";
+		}
+		security.addEventListener("change", securityPicked);
+		securityPicked();
+
+		var windowStatus = text("p", "", "status");
+		windowStatus.setAttribute("role", "status");
+		form.appendChild(windowStatus);
+
+		var save = button("Save");
+		save.type = "submit";
+		var cancel = button("Cancel");
+		cancel.addEventListener("click", w.close);
+		form.appendChild(buttonRow([cancel, save]));
+
+		// Forget: not the network the server is on
+		var forgetButton = button("Forget this network", "glass-danger net-forget");
+		if (inUse) {
+			forgetButton.disabled = true;
+			form.appendChild(forgetButton);
+			form.appendChild(text("p", "The server is on this network. Join another one first to forget it.", "hint"));
+		} else {
+			forgetButton.addEventListener("click", function () {
+				w.close();
+				forgetNetwork(network.ssid);
+			});
+			form.appendChild(forgetButton);
+		}
+
+		form.addEventListener("submit", function (event) {
+			event.preventDefault();
+			var body = { ssid: network.ssid, auto: auto.checked };
+			// A new password, or a change to an open network: the security
+			// and password go too. Nothing typed: only "Join automatically".
+			var changing = newPassword.value !== "" || (security.value === "open" && network.savedAuth !== "open");
+			if (changing) {
+				body.auth = security.value;
+				body.password = security.value === "open" ? "" : newPassword.value;
+			}
+			save.disabled = true;
+			say(windowStatus, "Saving\\u2026", "", true);
+			postJson(${JSON.stringify(EDIT_PATH)}, body)
+				.then(function (reply) {
+					newPassword.value = "";
+					if (reply.status === 202) {
+						// Tried like a join: followed under Networks around
+						w.close();
+						return;
+					}
+					if (!reply.ok) {
+						save.disabled = false;
+						say(windowStatus, reply.answer.error || "Couldn't save it.", "bad");
+						return;
+					}
+					w.close();
+					lookKnown().then(function () { say(knownStatus, "Saved " + network.ssid + ".", "good"); });
+				})
+				.catch(function () {
+					save.disabled = false;
+					say(windowStatus, "Couldn't save it. Try again.", "bad");
+				});
+		});
+
+		w.panel.appendChild(form);
+		auto.focus();
+	}
+
+	async function forgetNetwork(ssid) {
 		var sure = await confirmDialog({
 			title: "Forget " + ssid + "?",
-			text: "The server won't join it by itself any more, and its saved password goes too. To use it again, join it here with its password.",
+			text: "The server won't join it automatically any more, and OmniCore forgets its password too. To use it again, join it here with its password.",
 			confirm: "Forget",
 			danger: true
 		});
 		if (!sure) return;
-		button.disabled = true;
 		say(knownStatus, "Forgetting " + ssid + "\\u2026", "", true);
 		postJson(${JSON.stringify(FORGET_PATH)}, { ssid: ssid })
 			.then(function (reply) {
 				if (!reply.ok) {
-					button.disabled = false;
 					say(knownStatus, reply.answer.error || "Couldn't forget it.", "bad");
 					return;
 				}
-				lookSaved();
 				lookKnown().then(function () { say(knownStatus, "Forgot " + ssid + ".", "good"); });
 			})
-			.catch(function () {
-				button.disabled = false;
-				say(knownStatus, "Couldn't forget it. Try again.", "bad");
-			});
+			.catch(function () { say(knownStatus, "Couldn't forget it. Try again.", "bad"); });
 	}
 
 	// --- Networks around ------------------------------------------------
@@ -876,7 +1276,6 @@ const PAGE_SCRIPT = `
 	// After a join: the Wi-Fi now, what it knows, and the list again with
 	// the network it's on marked
 	function refresh() {
-		lookSaved();
 		return lookNow().then(lookKnown).then(function () {
 			if (lastNetworks) showAround(lastNetworks, true);
 		});
@@ -955,187 +1354,6 @@ const PAGE_SCRIPT = `
 	});
 	lookButton.addEventListener("click", lookAround);
 
-	// --- Saved passwords ------------------------------------------------
-
-	var savedList = document.getElementById("net-saved");
-	var savedStatus = document.getElementById("net-saved-status");
-	var addButton = document.getElementById("net-add");
-	var addForm = document.getElementById("net-add-form");
-	var addName = document.getElementById("net-add-name");
-	var addAuth = document.getElementById("net-add-auth");
-	var addPassword = document.getElementById("net-add-password");
-	var addPasswordLabel = document.getElementById("net-add-password-label");
-	var addPasswordBox = document.getElementById("net-add-password-box");
-	var SECURITY = { psk: "WPA2 or WPA", sae: "WPA3", open: "No password" };
-	// How long a shown password stays on the page
-	var SHOWN_FOR_MS = 30000;
-
-	function showSaved(found) {
-		savedList.innerHTML = "";
-		if (!found || !found.networks) {
-			say(savedStatus, "OmniCore couldn't read the saved passwords.", "bad");
-			return;
-		}
-		if (!found.networks.length) {
-			savedList.appendChild(text("div", "None yet.", "empty"));
-			return;
-		}
-		found.networks.forEach(function (network) {
-			var row = document.createElement("div");
-			row.className = "net-known net-saved";
-			row.setAttribute("role", "listitem");
-			var words = document.createElement("span");
-			words.className = "net-words";
-			words.appendChild(text("span", network.ssid));
-			var line = network.readable
-				? text("span", SECURITY[network.auth] || "", "net-line")
-				: text("span", "Can't be opened any more. Add it again.", "net-line bad");
-			words.appendChild(line);
-			row.appendChild(words);
-
-			var actions = document.createElement("span");
-			actions.className = "net-actions";
-			if (network.readable && network.auth !== "open") {
-				var show = text("button", "Show", "glass");
-				show.type = "button";
-				show.setAttribute("aria-label", "Show the password for " + network.ssid);
-				// Show asks for the admin password; while it's shown, the
-				// same button hides it again
-				show.addEventListener("click", function () {
-					if (show.hideShown) show.hideShown();
-					else showPassword(network, line, show);
-				});
-				actions.appendChild(show);
-			}
-			var change = text("button", "Change", "glass");
-			change.type = "button";
-			change.setAttribute("aria-label", "Change the saved password for " + network.ssid);
-			change.addEventListener("click", function () { openAddForm(network); });
-			actions.appendChild(change);
-			var remove = text("button", "Remove", "glass");
-			remove.type = "button";
-			remove.setAttribute("aria-label", "Remove the saved password for " + network.ssid);
-			remove.addEventListener("click", function () { removeSaved(network.ssid, remove); });
-			actions.appendChild(remove);
-			row.appendChild(actions);
-			savedList.appendChild(row);
-		});
-	}
-
-	function lookSaved() {
-		return getJson(${JSON.stringify(PASSWORDS_PATH)})
-			.then(showSaved)
-			.catch(function () { showSaved(null); });
-	}
-
-	// The password, in place of its security line, for half a minute.
-	// Only after the admin password: the server asks for it again.
-	async function showPassword(network, line, button) {
-		var adminPassword = await askDialog({
-			title: "Show the password for " + network.ssid + "?",
-			text: "Type the admin password first.",
-			secret: true,
-			confirm: "Show"
-		});
-		if (!adminPassword) return;
-		button.disabled = true;
-		postJson(${JSON.stringify(PASSWORD_SHOW_PATH)}, { ssid: network.ssid, adminPassword: adminPassword })
-			.then(function (reply) {
-				if (!reply.ok) {
-					button.disabled = false;
-					say(savedStatus, reply.answer.error || "Couldn't show it.", "bad");
-					return;
-				}
-				say(savedStatus, "");
-				var before = line.textContent;
-				line.className = "net-shown";
-				line.textContent = reply.answer.password;
-				button.textContent = "Hide";
-				button.disabled = false;
-				var timer = null;
-				function hide() {
-					clearTimeout(timer);
-					line.className = "net-line";
-					line.textContent = before;
-					button.textContent = "Show";
-					button.hideShown = null;
-				}
-				button.hideShown = hide;
-				timer = setTimeout(hide, SHOWN_FOR_MS);
-			})
-			.catch(function () {
-				button.disabled = false;
-				say(savedStatus, "Couldn't show it. Try again.", "bad");
-			});
-	}
-
-	async function removeSaved(ssid, button) {
-		var sure = await confirmDialog({
-			title: "Remove the saved password for " + ssid + "?",
-			text: "A Guest Wi-Fi widget showing this network will ask for it to be added again. The server's own Wi-Fi isn't changed.",
-			confirm: "Remove",
-			danger: true
-		});
-		if (!sure) return;
-		button.disabled = true;
-		postJson(${JSON.stringify(PASSWORD_REMOVE_PATH)}, { ssid: ssid })
-			.then(function (reply) {
-				showSaved(reply.answer);
-				say(savedStatus, "Removed the saved password for " + ssid + ".", "good");
-			})
-			.catch(function () {
-				button.disabled = false;
-				say(savedStatus, "Couldn't remove it. Try again.", "bad");
-			});
-	}
-
-	function securityPicked() {
-		// style rather than hidden: a label's own display rule would win
-		var open = addAuth.value === "open";
-		addPasswordLabel.style.display = open ? "none" : "";
-		addPasswordBox.style.display = open ? "none" : "";
-	}
-
-	// Empty for Add; filled in for Change (the same name replaces it)
-	function openAddForm(network) {
-		addName.value = network ? network.ssid : "";
-		addAuth.value = network ? network.auth : "psk";
-		addPassword.value = "";
-		addPassword.type = "password";
-		securityPicked();
-		addForm.hidden = false;
-		say(savedStatus, "");
-		(network ? addPassword : addName).focus();
-		if (network && network.auth === "open") addAuth.focus();
-	}
-
-	function closeAddForm() {
-		addPassword.value = "";
-		addForm.hidden = true;
-	}
-
-	addButton.addEventListener("click", function () { openAddForm(null); });
-	addAuth.addEventListener("change", securityPicked);
-	document.getElementById("net-add-cancel").addEventListener("click", function () {
-		closeAddForm();
-		say(savedStatus, "");
-	});
-	addForm.addEventListener("submit", function (event) {
-		event.preventDefault();
-		var body = { ssid: addName.value, auth: addAuth.value, password: addAuth.value === "open" ? "" : addPassword.value };
-		postJson(${JSON.stringify(PASSWORDS_PATH)}, body)
-			.then(function (reply) {
-				if (!reply.ok) {
-					say(savedStatus, reply.answer.error || "Couldn't save it.", "bad");
-					return;
-				}
-				closeAddForm();
-				showSaved(reply.answer);
-				say(savedStatus, "Saved the password for " + body.ssid + ".", "good");
-			})
-			.catch(function () { say(savedStatus, "Couldn't save it. Try again.", "bad"); });
-	});
-
 	// --- How a join goes ------------------------------------------------
 
 	function showStep(step) {
@@ -1189,9 +1407,6 @@ const PAGE_SCRIPT = `
 		if (events) events.close();
 	}
 
-	// The saved passwords straight away: they don't use the card
-	lookSaved();
-
 	// First the Wi-Fi now, then what it knows, then a look around (one
 	// thing at a time: they all use the card)
 	lookNow()
@@ -1214,6 +1429,278 @@ const PAGE_SCRIPT = `
 			});
 		})
 		.catch(function (why) { if (why !== "stop") lookButton.disabled = false; });
+})();
+`;
+
+// "Add a network around you", on the Guest Wi-Fi widget's page (a
+// `wifi-add` setting, which only a widget built into OmniCore can have:
+// see module-config.js). The button opens a window: the networks around,
+// then a password, then a check (CHECK_PATH): the server joins the network
+// just long enough to make sure the password works, comes back, and keeps
+// it as a known network that doesn't join automatically. Once it's checked,
+// it's added to the widget's network list and picked; Save keeps it.
+function addNetworkButtonHtml(field, escapeHtml) {
+	return (
+		`<button type="button" class="glass" data-wifi-add data-wifi-into="${escapeHtml(field.into || "network")}" ` +
+		`style="align-self:flex-start;padding:0.6em 1.1em;font-size:0.85em">Add a network around you</button>`
+	);
+}
+
+const ADD_NETWORK_SCRIPT = `
+(function () {
+	var buttons = document.querySelectorAll("[data-wifi-add]");
+	if (!buttons.length) return;
+	var LOCK = ${JSON.stringify(LOCK_SVG)};
+	var PASSWORD_FIELD = ${JSON.stringify(passwordField('<input type="password" id="net-add-password" autocomplete="off" spellcheck="false" autocapitalize="off">'))};
+
+	function text(tag, value, className) {
+		var element = document.createElement(tag);
+		if (className) element.className = className;
+		element.textContent = value;
+		return element;
+	}
+
+	function say(where, message, tone) {
+		where.className = "status" + (tone ? " " + tone : "");
+		where.textContent = message || "";
+	}
+
+	function getJson(url) {
+		return fetch(url, { cache: "no-store", credentials: "same-origin" }).then(function (r) { return r.json(); });
+	}
+
+	function postJson(url, body) {
+		return fetch(url, {
+			method: "POST",
+			credentials: "same-origin",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body)
+		}).then(function (r) {
+			return r.json().then(function (answer) { return { ok: r.ok, status: r.status, answer: answer || {} }; });
+		});
+	}
+
+	// The list is hidden with style rather than hidden: the Default UI's
+	// .list has a display rule of its own, which would win
+	function plainButton(label) {
+		var element = text("button", label, "glass");
+		element.type = "button";
+		return element;
+	}
+
+	function open(trigger) {
+		var select = document.querySelector('select[data-key="' + trigger.getAttribute("data-wifi-into") + '"]');
+		var backdrop = document.createElement("div");
+		backdrop.className = "modal-backdrop";
+		var panel = document.createElement("div");
+		panel.className = "modal";
+		panel.style.maxWidth = "28em";
+		panel.setAttribute("role", "dialog");
+		panel.setAttribute("aria-modal", "true");
+		panel.appendChild(text("h2", "Add a network around you"));
+		panel.appendChild(text("p", "Pick the network your guests use and type its password. The server joins it for a moment to check the password, then goes back to its own network. It can drop off its network for up to a minute meanwhile.", "dialog-text"));
+		var list = document.createElement("div");
+		list.className = "list";
+		list.style.maxHeight = "16em";
+		list.style.overflowY = "auto";
+		panel.appendChild(list);
+		var form = document.createElement("form");
+		form.autocomplete = "off";
+		form.hidden = true;
+		form.style.flexDirection = "column";
+		form.style.gap = "0.6em";
+		var label = text("label", "Password");
+		label.htmlFor = "net-add-password";
+		form.appendChild(label);
+		var box = document.createElement("div");
+		box.innerHTML = PASSWORD_FIELD;
+		form.appendChild(box);
+		var password = box.querySelector("input");
+		panel.appendChild(form);
+		var status = text("p", "", "status");
+		status.setAttribute("role", "status");
+		panel.appendChild(status);
+		var buttonsRow = document.createElement("div");
+		buttonsRow.className = "dialog-buttons";
+		var close = plainButton("Cancel");
+		var check = plainButton("Check and add");
+		check.hidden = true;
+		buttonsRow.appendChild(close);
+		buttonsRow.appendChild(check);
+		panel.appendChild(buttonsRow);
+		backdrop.appendChild(panel);
+		document.body.appendChild(backdrop);
+
+		var chosen = null;
+		var checking = false;
+		var events = null;
+		var lastSeen = 0;
+
+		function shut() {
+			if (checking) return;
+			if (events) events.close();
+			document.removeEventListener("keydown", onKey);
+			backdrop.remove();
+		}
+		function onKey(event) {
+			if (event.key === "Escape") shut();
+		}
+		document.addEventListener("keydown", onKey);
+		close.addEventListener("click", shut);
+		backdrop.addEventListener("click", function (event) {
+			if (event.target === backdrop) shut();
+		});
+
+		function pick(network) {
+			chosen = network;
+			if (network.auth === "open") {
+				start("");
+				return;
+			}
+			list.style.display = "none";
+			form.hidden = false;
+			form.style.display = "flex";
+			label.textContent = "Password for " + network.ssid;
+			check.hidden = false;
+			close.textContent = "Back";
+			say(status, "");
+			password.focus();
+		}
+
+		function backToList() {
+			chosen = null;
+			password.value = "";
+			form.hidden = true;
+			form.style.display = "none";
+			list.style.display = "";
+			check.hidden = true;
+			close.textContent = "Cancel";
+		}
+
+		close.addEventListener("click", function (event) {
+			if (chosen && !checking) {
+				event.stopImmediatePropagation();
+				backToList();
+			}
+		}, true);
+
+		function finished(step) {
+			checking = false;
+			check.disabled = false;
+			close.disabled = false;
+			if (step.phase === "checked") {
+				if (select) {
+					var exists = Array.prototype.some.call(select.options, function (option) { return option.value === step.ssid; });
+					if (!exists) {
+						var option = document.createElement("option");
+						option.value = step.ssid;
+						option.textContent = step.ssid;
+						select.appendChild(option);
+					}
+					select.value = step.ssid;
+					select.dispatchEvent(new Event("change", { bubbles: true }));
+				}
+				form.hidden = true;
+				form.style.display = "none";
+				check.hidden = true;
+				close.textContent = "Done";
+				chosen = null;
+				say(status, "The password works. " + step.ssid + " is picked for this widget: Save to keep it.", "good");
+			} else {
+				say(status, step.message || "Couldn't check it.", "bad");
+			}
+		}
+
+		function showStep(step) {
+			if (!step || !step.phase || !chosen || step.ssid !== chosen.ssid) return;
+			if (step.at) {
+				if (step.at <= lastSeen) return;
+				lastSeen = step.at;
+			}
+			if (step.phase === "joined") say(status, "Joined " + step.ssid + ". Going back to the server's own network\\u2026");
+			if (step.phase === "checked" || step.phase === "failed") finished(step);
+		}
+
+		function follow() {
+			if (events || !window.EventSource) return;
+			events = new EventSource(${JSON.stringify(networkStatus.EVENTS_PATH)});
+			var opened = false;
+			events.addEventListener("setup", function (event) {
+				try { showStep(JSON.parse(event.data)); } catch (error) {}
+			});
+			// Back after the server dropped off: ask for the step it missed
+			events.addEventListener("open", function () {
+				if (!opened) { opened = true; return; }
+				getJson(${JSON.stringify(JOIN_PATH)}).then(function (answer) {
+					if (answer && answer.last) showStep(answer.last);
+				}).catch(function () {});
+			});
+		}
+
+		function start(typed) {
+			checking = true;
+			check.disabled = true;
+			close.disabled = true;
+			list.style.display = "none";
+			follow();
+			say(status, "Checking " + chosen.ssid + "\\u2026 The server may drop off its network for up to a minute.");
+			postJson(${JSON.stringify(CHECK_PATH)}, { ssid: chosen.ssid, auth: chosen.auth, password: typed })
+				.then(function (reply) {
+					password.value = "";
+					if (reply.status === 202) return;
+					finished({ phase: "failed", message: reply.answer.error || "Couldn't start the check." });
+					if (chosen && chosen.auth === "open") backToList();
+				})
+				.catch(function () {
+					// The server may have dropped off already: the stream says
+					// how it went once it's back
+				});
+		}
+
+		check.addEventListener("click", function () {
+			if (!chosen || checking) return;
+			start(password.value);
+		});
+		form.addEventListener("submit", function (event) {
+			event.preventDefault();
+			check.click();
+		});
+
+		say(status, "Looking for networks\\u2026");
+		getJson(${JSON.stringify(AROUND_PATH)})
+			.then(function (found) {
+				if (!found || !found.available) {
+					say(status, (found && (found.message || found.error)) || "OmniCore couldn't look for networks.", "bad");
+					return;
+				}
+				say(status, "");
+				var networks = (found.networks || []).filter(function (network) { return network.auth !== "unsupported"; });
+				if (!networks.length) {
+					list.appendChild(text("div", "No networks found. Try again in a moment.", "empty"));
+					return;
+				}
+				networks.forEach(function (network) {
+					var row = document.createElement("button");
+					row.type = "button";
+					row.className = "font-row";
+					row.style.display = "flex";
+					row.style.justifyContent = "space-between";
+					row.style.alignItems = "center";
+					row.appendChild(text("span", network.ssid));
+					var end = document.createElement("span");
+					end.innerHTML = network.auth === "open" ? "" : LOCK;
+					row.appendChild(end);
+					row.setAttribute("aria-label", network.ssid + (network.auth === "open" ? ", no password" : ", needs a password"));
+					row.addEventListener("click", function () { pick(network); });
+					list.appendChild(row);
+				});
+			})
+			.catch(function () { say(status, "OmniCore couldn't look for networks. Try again.", "bad"); });
+	}
+
+	Array.prototype.forEach.call(buttons, function (trigger) {
+		trigger.addEventListener("click", function () { open(trigger); });
+	});
 })();
 `;
 
@@ -1249,9 +1736,14 @@ module.exports = {
 	AROUND_PATH,
 	JOIN_PATH,
 	FORGET_PATH,
-	PASSWORDS_PATH,
-	PASSWORD_REMOVE_PATH,
+	EDIT_PATH,
 	PASSWORD_SHOW_PATH,
+	CHECK_PATH,
+	WPA_EDIT,
+	NM_EDIT,
+	edit,
+	addNetworkButtonHtml,
+	ADD_NETWORK_SCRIPT,
 	SHOW_TRIES,
 	showPassword,
 	resetShows,

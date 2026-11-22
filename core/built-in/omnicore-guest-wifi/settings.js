@@ -1,7 +1,9 @@
 // core/built-in/omnicore-guest-wifi/settings.js
 // The Guest Wi-Fi widget's settings. A function rather than a
-// settings.json, so the list of networks is the saved ones at the moment
-// the form is drawn (only a built-in widget can do this: see built-in.js).
+// settings.json, so the list of networks is the ones OmniCore has the
+// password for at the moment the form is drawn (only a built-in widget
+// can do this: see built-in.js). Under the list, "Add a network around
+// you" (a wifi-add setting, also only for a built-in widget).
 
 const passwords = require("../../network-passwords");
 
@@ -24,9 +26,18 @@ module.exports = function () {
 				key: "network",
 				type: "select",
 				label: "Network",
-				help: "The saved networks are on the Network page, in Settings. A network joined through OmniCore is saved by itself.",
+				help: "The networks the server knows whose password OmniCore has: every network joined through OmniCore, and any added below.",
 				options: [SERVERS_OWN, ...saved],
 				default: SERVERS_OWN
+			},
+			{
+				// A button, not a value: the network it adds goes into the
+				// list above (network-page.js, ADD_NETWORK_SCRIPT)
+				key: "addNetwork",
+				type: "wifi-add",
+				label: "Not in the list?",
+				help: "Add a network around you, like a guest network the server doesn't use. Its password is checked first.",
+				into: "network"
 			},
 			{
 				key: "showPassword",
