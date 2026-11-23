@@ -411,7 +411,9 @@ test("about tab: an upgrade row in Updates, and the dot on About, only while a n
 
 test("an update's message never shows an empty button under it", async () => {
 	const html = await (await get("/")).text();
-	assert.match(html, /\.update-progress \[hidden\] \{ display: none; \}/);
+	// Hidden always hides, whatever an element's own display says (one
+	// rule for the whole central theme)
+	assert.match(html, /\n\t\[hidden\] \{ display: none !important; \}/);
 	assert.match(html, /<button class="glass glass-block" id="progress-action" hidden><\/button>/);
 });
 

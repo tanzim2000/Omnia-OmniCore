@@ -17,14 +17,17 @@
 //
 //   style blocks   a <style> written into a page
 //   CSS rules      ".selector { property: value; }" anywhere in the file
-//   style=""       a style attribute on an element
+//   style=""       a style attribute on an element (one that only sets CSS
+//                  variables, style="--hue: 210", is fine: see below)
 //   script looks   a page script setting a look: element.style.color = ...,
 //                  style.cssText, setAttribute("style", ...)
 //
 // What a script may still do: switch classes, set `hidden`, and set CSS
 // variables (element.style.setProperty("--x", ...)) for things that really
 // move, like a slider's fill or a tab strip being dragged. The variable is
-// then used by a rule in ui-theme.js.
+// then used by a rule in ui-theme.js. The same goes for markup: a value
+// only the page knows (a listing's colour, a font's name) can be handed
+// over as a variable, style="--hue: 210".
 //
 // THE ONE EXCEPTION
 //
@@ -57,7 +60,6 @@ const OWN_LOOK = ["core/about-face.js", "core/about-face.css"];
 // What's left to move into the central theme, file by file. Lower a number
 // (or take a line out) when you move something; never raise one.
 const STILL_TO_MOVE = {
-	"core/admin-face.js": { styleBlocks: 1, cssRules: 268, styleAttributes: 51, scriptLooks: 12 },
 	"core/backdrop.js": { styleBlocks: 0, cssRules: 0, styleAttributes: 2, scriptLooks: 5 },
 	"core/control-face.js": { styleBlocks: 1, cssRules: 16, styleAttributes: 1, scriptLooks: 0 },
 	"core/fallback-page.js": { styleBlocks: 1, cssRules: 3, styleAttributes: 0, scriptLooks: 0 },
@@ -103,8 +105,13 @@ function looksIn(file, text) {
 		counts.cssRules++;
 	}
 
-	counts.styleAttributes =
-		(text.match(/\sstyle=\\?["']/g) || []).length + (text.match(/setAttribute\(\s*["']style["']/g) || []).length;
+	// A style attribute, unless all it does is set CSS variables
+	for (const match of text.matchAll(/\sstyle=\\?["']/g)) {
+		const value = text.slice(match.index + match[0].length, match.index + match[0].length + 200).split(/\\?["'>]/)[0];
+		const onlyVariables = /^\s*--/.test(value) && !/;\s*(?!--)[a-z-]+\s*:/.test(value);
+		if (!onlyVariables) counts.styleAttributes++;
+	}
+	counts.styleAttributes += (text.match(/setAttribute\(\s*["']style["']/g) || []).length;
 
 	// element.style.something = ..., style.cssText, and style.setProperty
 	// of anything but a CSS variable
@@ -161,6 +168,7 @@ test("the checker spots each kind of look, and leaves plain code alone", () => {
 	const page = [
 		"const PAGE = `<style>.box { color: red; }</style>",
 		'<div style="margin: 0">`;',
+		'<span style="--hue: 2; color: red">`;',
 		"const CSS = `",
 		"	.row .name { display: flex; gap: 1em; }",
 		"	@media (orientation: landscape) {",
@@ -171,7 +179,7 @@ test("the checker spots each kind of look, and leaves plain code alone", () => {
 		"box.style.cssText = \"x\";",
 		'box.style.setProperty("color", "red");'
 	].join("\n");
-	assert.deepEqual(looksIn("core/x.js", page), { styleBlocks: 1, cssRules: 3, styleAttributes: 1, scriptLooks: 3 });
+	assert.deepEqual(looksIn("core/x.js", page), { styleBlocks: 1, cssRules: 3, styleAttributes: 2, scriptLooks: 3 });
 
 	const plain = [
 		"function go(a) {",
@@ -180,6 +188,8 @@ test("the checker spots each kind of look, and leaves plain code alone", () => {
 		"	return { ok: true, name: 'x' };",
 		"}",
 		'box.style.setProperty("--fill", "40%");',
+		'const tile = `<span class="tile" style="--hue:${hue}">`;',
+		"const name = '<strong style=\"--font:' + font + '\">';",
 		"if (box.style.display === \"none\") {}",
 		"do { count = count + 1; } while (count < 3);",
 		"switch (kind) { case \"a\": break; }"

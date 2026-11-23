@@ -176,7 +176,7 @@ test("widget page: a long list is a button among the settings, a list of four is
 	const { html } = await get(ADMIN, `/faces/${face.id}/modules/${instance.id}`);
 
 	// The button is inside the Settings box, with its label and help
-	const settings = html.slice(html.indexOf("<h2 style=\"margin-bottom:14px\">Settings</h2>"), html.indexOf("order-segment"));
+	const settings = html.slice(html.indexOf("<h2 class=\"spaced\">Settings</h2>"), html.indexOf("order-segment"));
 	assert.ok(settings.includes("<label>Info order</label>"));
 	assert.ok(buttonOn(settings));
 	assert.ok(settings.includes("Temperature, Condition, Alert and 8 more"));

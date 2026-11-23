@@ -230,12 +230,47 @@ const sections = [
 				code: '<button class="glass small">Edit</button>\n<button class="glass glass-danger wide">Forget this network</button>'
 			},
 			{
+				id: "glass-medium",
+				base: "glass",
+				title: "Medium glass button",
+				sel: ".glass.medium · .search-row > .glass",
+				desc: "Between the full size and <b>.small</b>: Search beside a search box, Save location. In a <b>.search-row</b> it keeps its width and the box takes the rest.",
+				demo: `<div class="search-row" style="max-width:26em"><input type="text" placeholder="Regina"><button class="glass medium">Search</button></div>`,
+				code: "<button class=\"glass medium\">Search</button>"
+			},
+			{
+				id: "glass-block",
+				base: "glass",
+				title: "Full-width glass button",
+				sel: ".glass-block",
+				desc: "A glass button as wide as its box, its words in the middle: Check now, Sign in, Go to Marketplace. A link can be one too.",
+				demo: `<div style="max-width:22em"><button class="glass glass-block">Check now</button></div>`,
+				code: "<button class=\"glass glass-block\">Check now</button>\n<a class=\"glass glass-block\" href=\"/marketplace\">Go to Marketplace</a>"
+			},
+			{
+				id: "glass-off",
+				base: "glass",
+				title: "Button that can't be pressed yet",
+				sel: ".glass.is-off",
+				desc: "Looks off and doesn't glow, but still shows its title on hover, saying why (a disabled button shows none in most browsers): Upgrade, until the backup is made. On a phone, with no hover, the reason is written under it.",
+				demo: `<button class="glass is-off" title="Make a backup first">Upgrade</button>`,
+				code: "<button class=\"glass is-off\" title=\"Why it can't be pressed yet\" aria-disabled=\"true\">Upgrade</button>"
+			},
+			{
 				id: "button-row",
 				title: "Buttons in a row",
 				sel: ".buttons",
 				desc: "A few buttons side by side, each as wide as its words, wrapping onto a second line when there isn't room (Join and Cancel under a password). A pop-up's last row is the same element with .dialog-buttons, which makes every button equally wide: see the pop-up question below.",
 				demo: '<div class="buttons"><button class="glass">Join</button><button class="glass">Cancel</button></div>',
 				code: '<div class="buttons">\n\t<button class="glass">Join</button>\n\t<button class="glass">Cancel</button>\n</div>'
+			},
+			{
+				id: "segment-actions",
+				title: "Actions at the end of a box",
+				sel: ".segment-actions · .update-buttons",
+				desc: "What a box does at the end, one under another with even room between: Save and its message, Check now and Go to Marketplace (<b>.segment-actions</b>). <b>.update-buttons</b> puts Check now and Update now side by side, wrapping when there isn't room, with a hint under them on a line of its own.",
+				demo: `<div class="segment-actions" style="max-width:22em"><button class="glass glass-block">Check now</button><p class="status good">Up to date.</p><a class="glass glass-block" href="#segment-actions">Go to Marketplace</a></div>`,
+				code: "<div class=\"segment-actions\">\n\t<button class=\"glass glass-block\">Check now</button>\n\t<p class=\"status\" id=\"check-status\"></p>\n\t<a class=\"glass glass-block\" href=\"/marketplace\">Go to Marketplace</a>\n</div>"
 			},
 			{
 				id: "glossy",
@@ -337,6 +372,15 @@ const sections = [
 				code: '<div class="segment">\n\t<div class="box-head">\n\t\t<h2>Networks around</h2>\n\t\t<button class="glass small">Look again</button>\n\t</div>\n\t…\n</div>'
 			},
 			{
+				id: "spaced",
+				base: "box-head",
+				title: "Room under it",
+				sel: ".segment .spaced",
+				desc: "A box's heading, or a line in it, with room under it: for one followed by a list, rows or a form rather than a line of text (Modules, a widget's Settings, the location switch).",
+				demo: `<div class="segment" style="max-width:22em"><h2 class="spaced">Settings</h2><div class="field" style="margin:0"><label>Label</label><input type="text"></div></div>`,
+				code: "<h2 class=\"spaced\">Settings</h2>"
+			},
+			{
 				id: "segment-clickable",
 				base: "segment",
 				title: "Clickable segment",
@@ -344,6 +388,14 @@ const sections = [
 				desc: "A segment where the whole box is a link or a button. In dark mode it glows when pointed at; in light mode it lifts slightly instead, because a glow disappears against a pale page.",
 				demo: '<div class="segment clickable" tabindex="0">Point at me: a clickable segment.</div>',
 				code: '<a class="segment clickable" href="/faces/001">…</a>'
+			},
+			{
+				id: "row-link",
+				title: "Row link",
+				sel: ".row (+ .glass)",
+				desc: "A line that goes somewhere, with a quieter line under its name: a face in the Faces list, Widgets and Theme on a face's page, a module to add. As <b>.row.glass</b> it's a glass button laid out as a row, with the same glow, fade and press.",
+				demo: `<div class="settings-page" style="max-width:24em"><a class="row glass" href="#row-link"><strong>Widgets</strong><span>1 widget</span></a></div>`,
+				code: "<a class=\"row glass\" href=\"/faces/4001/modules\">\n\t<strong>Widgets</strong>\n\t<span>1 widget</span>\n</a>"
 			},
 			{
 				id: "list",
@@ -440,6 +492,26 @@ const sections = [
 				note: "Cancel, Escape and a click outside the panel are all a no. Cancel has the focus, so an Enter pressed out of habit is never the yes."
 			},
 			{
+				id: "major-modal",
+				base: "modal",
+				title: "Major version pop-up",
+				sel: ".modal.major-modal > .major-doc (.major-ours) · .major-actions (.major-why)",
+				desc: "What a new major version changes: wider and taller than other pop-ups, the document scrolling inside it (<b>.major-doc</b>, with OmniCore's own part after a line, <b>.major-ours</b>), and Upgrade under it (<b>.major-actions</b>). <b>.major-why</b> says why Upgrade can't be pressed yet, on a phone.",
+				stage: 260,
+				demo: `<div class="modal-backdrop"><div class="modal major-modal"><h2>OmniCore 3</h2><div class="major-doc"><p>What's changing, and what to do first.</p><p class="major-ours">From OmniCore itself.</p></div><div class="major-actions"><button class="glass">Upgrade</button></div></div></div>`,
+				code: "<div class=\"modal major-modal\">\n\t<h2>OmniCore 3</h2>\n\t<div class=\"major-doc\">…</div>\n\t<div class=\"major-actions\">\n\t\t<button class=\"glass is-off\" title=\"…\">Upgrade</button>\n\t\t<p class=\"hint major-why\">…</p>\n\t</div>\n</div>"
+			},
+			{
+				id: "background-modal",
+				base: "modal",
+				title: "Background pop-up",
+				sel: ".modal.modal-wide > .bg-preview (.bg-preview-colour, .bg-preview-veil, .bg-preview-card) · .bg-tabs · .bg-pane",
+				desc: "Change background: a wider pop-up, a live preview with a piece of glass on it to judge the text by (<b>.bg-preview-card</b>), then Picture, Colour and Default (<b>.bg-tabs</b>, a pane each, <b>.bg-pane</b>). The preview's colour is <code>--colour</code> and the veil over a picture <code>--veil</code>, set by the pop-up's script as the choice changes.",
+				stage: 440,
+				demo: `<div class="modal-backdrop"><div class="modal modal-wide"><h2>Change background</h2><div class="bg-preview"><span class="bg-preview-colour" style="--colour:#24423b"></span><span class="bg-preview-veil"></span><span class="bg-preview-card">Text on the glass</span></div><div class="tabs bg-tabs"><button type="button" class="tab-btn">Picture</button><button type="button" class="tab-btn active">Colour</button><button type="button" class="tab-btn">Default</button></div></div></div>`,
+				code: "<div class=\"modal modal-wide\">\n\t<div class=\"bg-preview\">\n\t\t<span class=\"bg-preview-colour\"></span>\n\t\t<img alt=\"\" hidden>\n\t\t<span class=\"bg-preview-veil\"></span>\n\t\t<span class=\"bg-preview-card\">Text on the glass</span>\n\t</div>\n\t<div class=\"tabs bg-tabs\">…</div>\n\t<div class=\"bg-pane\" data-bg-pane=\"picture\">…</div>\n</div>"
+			},
+			{
 				id: "link-tile",
 				base: "segment-clickable",
 				title: "Link tile",
@@ -473,6 +545,73 @@ const sections = [
 				desc: "A label on the left and its value on the right, one fact under another with a line between them: the About tab, the Network page's Wi&#8209;Fi, a face's page. A <b>.hint</b> in a row goes under it, across the whole row. A face's facts use <b>.fact-label</b> and <b>.fact-value</b>, which puts the value in bold.",
 				demo: `<div class="segment" style="max-width:26em"><div class="facts"><div class="fact"><span class="fact-label">Outport</span><span class="fact-value">4001</span></div><div class="fact"><span class="fact-label">Showing on</span><span class="fact-value">2 screens</span><span class="hint">OmniViews and browser tabs with this face open</span></div><div class="fact"><span>Version</span><span>OmniCore 2.0.0</span></div></div></div>`,
 				code: '<div class="facts">\n\t<div class="fact"><span class="fact-label">Showing on</span><span class="fact-value">2 screens</span>\n\t\t<span class="hint">OmniViews and browser tabs with this face open</span></div>\n\t<div class="fact"><span>Version</span><span>OmniCore 2.0.0</span></div>\n</div>'
+			},
+			{
+				id: "inset",
+				title: "Inset strip",
+				sel: ".inset > .inset-text (.inset-label, .inset-value .coords) · .inset > .glass",
+				desc: "A value, not a control: a sunken strip in a box with a small label over the value, and maybe a small button at its end (the location detected, with Refresh; the font, with Change). <b>.coords</b> puts a place's coordinates a little apart, quieter.",
+				demo: `<div class="inset" style="max-width:26em"><div class="inset-text"><div class="inset-label">CURRENTLY DETECTED</div><div class="inset-value">Regina<span class="coords">50.445, -104.619</span></div></div><button class="glass">Refresh</button></div>`,
+				code: "<div class=\"inset\">\n\t<div class=\"inset-text\">\n\t\t<div class=\"inset-label\">FONT</div>\n\t\t<div class=\"inset-value\">System font</div>\n\t</div>\n\t<button class=\"glass\">Change</button>\n</div>"
+			},
+			{
+				id: "major-box",
+				base: "inset",
+				title: "Major version box",
+				sel: ".inset.major-box (.major-box-text, .major-box-go)",
+				desc: "A new major version of OmniCore, at the top of the Updates box: an inset strip that's a button, glowing on hover, with what's new and an arrow. It opens the major version pop-up.",
+				demo: `<button type="button" class="inset major-box" style="max-width:26em"><span class="major-box-text"><strong>OmniCore 3 is here!</strong><span>See what's changing</span></span><span class="major-box-go" aria-hidden="true">&#8250;</span></button>`,
+				code: "<button type=\"button\" class=\"inset major-box\">\n\t<span class=\"major-box-text\"><strong>OmniCore 3 is here!</strong><span>…</span></span>\n\t<span class=\"major-box-go\">&rsaquo;</span>\n</button>"
+			},
+			{
+				id: "saved-key",
+				title: "Saved key row",
+				sel: ".saved-key (.saved-key-text, .saved-key-buttons)",
+				desc: "One saved key: the service, a quieter line under it, and its buttons at the end, with a line above it. Saved keys, under the Location Service.",
+				demo: `<div style="max-width:28em"><div class="saved-key"><div class="saved-key-text"><strong>GeoNames</strong><span>Username saved</span></div><div class="saved-key-buttons"><button class="glass">Change</button><button class="glass">Remove</button></div></div></div>`,
+				code: "<div class=\"saved-key\">\n\t<div class=\"saved-key-text\"><strong>GeoNames</strong><span>Username saved</span></div>\n\t<div class=\"saved-key-buttons\">…</div>\n</div>"
+			},
+			{
+				id: "release-notes",
+				title: "Release notes",
+				sel: ".release-notes > .notes-body > .notes-part > .changelog (h3, ul, li, p, strong, code)",
+				desc: "The notes of a release, read inside their box: each part side by side when there's room (<b>.notes-part</b>), each scrolling on its own. On the About tab the box takes the room left under the boxes above it. A name written between backticks is drawn as code.",
+				demo: `<div class="notes-body"><div class="notes-part"><h3>2.0.0</h3><div class="changelog"><h3>Added</h3><ul><li><strong>Frosted glass.</strong> Every box on OmniCore's pages, over the background.</li><li>A <code>qr</code> block can say what to print instead.</li></ul></div></div></div>`,
+				code: "<div class=\"segment release-notes\">\n\t<div class=\"notes-body\">\n\t\t<div class=\"notes-part\"><h3>2.0.0</h3><div class=\"changelog\">…</div></div>\n\t</div>\n</div>"
+			},
+			{
+				id: "about-box",
+				base: "segment-clickable",
+				title: "About box",
+				sel: ".about-box > .about-box-head",
+				desc: "The OmniCore box on the About tab: the whole box is a link to System info, its heading with an arrow at the end, then its facts.",
+				demo: `<a class="segment clickable about-box" href="#about-box" style="max-width:24em"><div class="about-box-head"><h2>OmniCore</h2><span aria-hidden="true">&#8599;</span></div><div class="fact"><span>Version</span><span>OmniCore 2.0.0</span></div></a>`,
+				code: "<a class=\"segment clickable about-box\" href=\"#\">\n\t<div class=\"about-box-head\"><h2>OmniCore</h2><svg>…</svg></div>\n\t<div class=\"fact\"><span>Version</span><span>…</span></div>\n</a>"
+			},
+			{
+				id: "resource-facts",
+				title: "Installed resource facts",
+				sel: ".resource-facts · .resource-status (+ .good, .bad)",
+				desc: "What's installed, in small quiet words under its name, side by side as there's room: its version, where it came from, and how current it is (<b>.resource-status</b>, green when up to date, red when something's wrong).",
+				demo: `<div class="segment" style="max-width:26em"><h2>Weather</h2><div class="resource-facts"><span>v1.4.0</span><span>Omnia Registry</span><span class="resource-status good">Up to date</span></div></div>`,
+				code: "<div class=\"resource-facts\">\n\t<span>v1.4.0</span>\n\t<span class=\"resource-status good\">Up to date</span>\n</div>"
+			},
+			{
+				id: "backdrop-preview",
+				title: "Background preview",
+				sel: ".backdrop-stage > .backdrop-preview (+ .plain) > .preview-colour (+ .preview-default), .preview-kind · .corner-mark (.corner-mark-top-left, .corner-mark-bottom-right) · .change-label · .back-corner",
+				desc: "The Background box: what's behind the pages, drawn small (a picture, or a colour from <code>--colour</code>, or the Default, <b>.preview-default</b>), with what it is in its corner (<b>.preview-kind</b>) and the Back button drawn where it sits (<b>.corner-mark</b>). The whole preview is a button (<b>.backdrop-stage</b>): it dims on hover and says Change background (<b>.change-label</b>); on a touch screen a small Change sits in its corner instead. <b>.back-corner</b> is the Back button switch under it, two halves the width of the box.",
+				demo: `<div style="max-width:22em"><button type="button" class="backdrop-stage"><span class="backdrop-preview"><span class="preview-colour" style="--colour:#1e2a44"></span><span class="preview-kind">#1e2a44</span></span><span class="corner-mark corner-mark-bottom-right" aria-hidden="true">&#8592;</span><span class="change-label" aria-hidden="true">Change background</span></button></div>`,
+				code: "<button type=\"button\" class=\"backdrop-stage\" aria-label=\"Change background\">\n\t<span class=\"backdrop-preview\">\n\t\t<span class=\"preview-colour\" style=\"--colour:#1e2a44\"></span>\n\t\t<span class=\"preview-kind\">#1e2a44</span>\n\t</span>\n\t<span class=\"corner-mark corner-mark-bottom-right\">&#8592;</span>\n\t<span class=\"change-label\">Change background</span>\n</button>",
+				note: "A colour only the page knows comes in as a CSS variable on the element (<code>style=\"--colour:#1e2a44\"</code>), never as a style of its own."
+			},
+			{
+				id: "glass-fields",
+				title: "Glass fields",
+				sel: ".glass-fields > .field (+ .wide-field)",
+				desc: "The Frosted glass box's settings: two to a row (Blur and Tint strength, then brightness and Dim), with a <b>.wide-field</b> taking a row of its own (the Tint colours). One to a row on a phone held upright.",
+				demo: `<div class="glass-fields" style="max-width:30em"><div class="field"><label>Blur 20 px</label><input type="range" value="40"></div><div class="field"><label>Tint strength 12%</label><input type="range" value="30"></div></div>`,
+				code: "<div class=\"glass-fields\">\n\t<div class=\"field wide-field\">…</div>\n\t<div class=\"field\">…</div>\n\t<div class=\"field\">…</div>\n</div>"
 			}
 		]
 	},
@@ -522,6 +661,38 @@ const sections = [
 				desc: "A bordered row holding a radio button and its words, or words and a toggle at the end; the whole row can be clicked. A stack of radio rows is a pick-one.",
 				demo: '<label class="option"><input type="radio" name="demo-option" checked> Automatic</label><label class="option" style="margin-bottom:0"><input type="radio" name="demo-option"> Set it myself</label>',
 				code: '<label class="option"><input type="radio" name="o"> Automatic</label>'
+			},
+			{
+				id: "mode-previews",
+				title: "Mode previews",
+				sel: ".mode-previews (+ .narrow-previews) > .mode-preview (+ .active) > .mode-screen (+ .dark, .light, .note-dark, .note-light, .mode-screen-split) > .line (+ .head, .mid) · .mode-preview-label",
+				desc: "A choice made by looking: a few little screens rather than a switch, each showing what it is, the one picked with a stronger edge (<b>.active</b>). A screen is the page's colour (<b>.dark</b>, <b>.light</b>), or a notification's (<b>.note-dark</b>, <b>.note-light</b>), with lines of \"text\" on it: a heading line, then fainter ones. <b>.mode-screen-split</b> is half and half, for Device. <b>.narrow-previews</b> keeps them the size they are in a half-width box.",
+				demo: `<div class="mode-previews narrow-previews"><div class="mode-preview active" role="button" tabindex="0"><div class="mode-screen dark"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Dark</div></div><div class="mode-preview" role="button" tabindex="0"><div class="mode-screen light"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Light</div></div><div class="mode-preview" role="button" tabindex="0"><div class="mode-screen mode-screen-split"><div class="dark"><span class="line head"></span></div><div class="light"><span class="line head"></span></div></div><div class="mode-preview-label">Device</div></div></div>`,
+				code: "<div class=\"mode-previews\">\n\t<div class=\"mode-preview active\" role=\"button\" tabindex=\"0\">\n\t\t<div class=\"mode-screen dark\"><span class=\"line head\"></span><span class=\"line\"></span></div>\n\t\t<div class=\"mode-preview-label\">Dark</div>\n\t</div>\n\t…\n</div>"
+			},
+			{
+				id: "tint-chips",
+				title: "Tint chips",
+				sel: ".tint-chips > .tint-chip (+ .active, .tint-custom) > .tint-swatch",
+				desc: "Pick-one chips: a word (None, Match the background) or a colour (<b>.tint-swatch</b>, its colour <code>--colour</code>), the one picked edged in the text colour (<b>.active</b>). <b>.tint-custom</b> is the browser's own colour box, made round, for any colour.",
+				demo: `<div class="tint-chips"><button type="button" class="tint-chip active"><span>None</span></button><button type="button" class="tint-chip"><span>Match the background</span></button><button type="button" class="tint-chip" aria-label="Blue"><span class="tint-swatch" style="--colour:#5b8def"></span></button><button type="button" class="tint-chip" aria-label="Rose"><span class="tint-swatch" style="--colour:#e46a8f"></span></button><label class="tint-chip tint-custom" title="Pick a colour"><input type="color" value="#37393e"></label></div>`,
+				code: "<div class=\"tint-chips\">\n\t<button type=\"button\" class=\"tint-chip active\"><span>None</span></button>\n\t<button type=\"button\" class=\"tint-chip\" aria-label=\"Blue\"><span class=\"tint-swatch\" style=\"--colour:#5b8def\"></span></button>\n\t<label class=\"tint-chip tint-custom\"><input type=\"color\"></label>\n</div>"
+			},
+			{
+				id: "colour-wheel",
+				title: "Colour wheel",
+				sel: ".wheel-row > .wheel > canvas, .wheel-knob · .wheel-side · .swatches > .swatch",
+				desc: "OmniCore's own colour wheel, the same on every device: drag or use the arrow keys, the knob where the colour is (<code>--knob-x</code>, <code>--knob-y</code>, <code>--colour</code>), the wheel darker as Brightness goes down (<code>--brightness</code>). Beside it (<b>.wheel-side</b>), the Brightness slider, a box for a code, and a few ready-made colours (<b>.swatch</b>, each its <code>--colour</code>).",
+				demo: `<div class="swatches"><button type="button" class="swatch" style="--colour:#0f1115" aria-label="#0f1115"></button><button type="button" class="swatch" style="--colour:#1e2a44" aria-label="#1e2a44"></button><button type="button" class="swatch" style="--colour:#24423b" aria-label="#24423b"></button><button type="button" class="swatch" style="--colour:#eedec5" aria-label="#eedec5"></button></div>`,
+				code: "<div class=\"wheel-row\">\n\t<div class=\"wheel\" tabindex=\"0\" role=\"slider\"><canvas></canvas><span class=\"wheel-knob\"></span></div>\n\t<div class=\"wheel-side\">…<div class=\"swatches\"><button class=\"swatch\" style=\"--colour:#1e2a44\"></button></div></div>\n</div>\n\n// the script moves the knob:\nknob.style.setProperty(\"--knob-x\", \"62%\");"
+			},
+			{
+				id: "auto-toggle",
+				title: "A label with Auto at its end",
+				sel: ".dim-head > .auto-dim · .dim-warning",
+				desc: "A field's label with a small Auto toggle at the other end of the line (Dim), and a note under the slider when what's picked by hand may make the text hard to read (<b>.dim-warning</b>, in the text colour).",
+				demo: `<div class="field" style="max-width:24em;margin:0"><div class="dim-head"><label>Dim 23%</label><label class="auto-dim"><input type="checkbox" role="switch" checked><span>Auto</span></label></div><input type="range" value="23"></div>`,
+				code: "<div class=\"dim-head\">\n\t<label for=\"dim\">Dim</label>\n\t<label class=\"auto-dim\"><input type=\"checkbox\" role=\"switch\"><span>Auto</span></label>\n</div>"
 			}
 		]
 	},
@@ -537,6 +708,31 @@ const sections = [
 				desc: "A label, the box, and an optional note under it, with space below. The basic unit of every form.",
 				demo: '<div class="field" style="margin:0"><label>Server name</label><input type="text" value="Omnia"><div class="help">Shown in the browser tab.</div></div>',
 				code: '<div class="field">\n\t<label>Server name</label>\n\t<input type="text">\n\t<div class="help">A note.</div>\n</div>'
+			},
+			{
+				id: "field-pair",
+				base: "field",
+				title: "Two fields side by side",
+				sel: ".field.pair",
+				desc: "Two fields sharing a row, each half of it: Latitude and Longitude.",
+				demo: `<div class="field pair" style="max-width:26em;margin:0"><div><label>Latitude</label><input type="number" value="50.445"></div><div><label>Longitude</label><input type="number" value="-104.619"></div></div>`,
+				code: "<div class=\"field pair\">\n\t<div><label>Latitude</label><input type=\"number\"></div>\n\t<div><label>Longitude</label><input type=\"number\"></div>\n</div>"
+			},
+			{
+				id: "type-head",
+				title: "Heading with a control",
+				sel: ".type-head > .type-head-text",
+				desc: "A box's heading and its note on the left and a control on the right (Text Size's stepper), the font or whatever follows underneath. On a narrow screen the control drops under the note rather than squeezing it.",
+				demo: `<div class="type-head" style="max-width:30em"><div class="type-head-text"><h2 style="margin:0">Text Size</h2><p class="hint">Applies immediately.</p></div><div class="stepper"><button class="glass" aria-label="Smaller">&minus;</button><input type="number" value="16"><span class="unit">px</span><button class="glass" aria-label="Bigger">+</button></div></div>`,
+				code: "<div class=\"type-head\">\n\t<div class=\"type-head-text\"><h2>Text Size</h2><p class=\"hint\">…</p></div>\n\t<div class=\"stepper\">…</div>\n</div>"
+			},
+			{
+				id: "location-manual",
+				title: "Boxes that open under a choice",
+				sel: ".location-manual",
+				desc: "Fields that only belong to one choice, shown under it once it's picked, with a little room above: the location's own boxes under Set it myself.",
+				demo: `<div class="location-manual" style="max-width:26em"><div class="field" style="margin:0"><label>Place name</label><input type="text" placeholder="Home"></div></div>`,
+				code: "<div class=\"location-manual\" hidden>\n\t<div class=\"field\">…</div>\n</div>"
 			},
 			{
 				id: "inputs",
@@ -594,6 +790,14 @@ const sections = [
 				desc: "A box with a button beside it (the box takes the room), and under it a stack of full-width results to pick from. The location search uses it.",
 				demo: '<div class="search-row"><input type="text" placeholder="Search a place" aria-label="Search a place"><button class="glass" type="button">Search</button></div><button class="result" type="button">Regina, Saskatchewan</button><button class="result" type="button">Dhaka, Bangladesh</button>',
 				code: '<div class="search-row">\n\t<input type="text"><button class="glass">Search</button>\n</div>\n<button class="result">A result</button>'
+			},
+			{
+				id: "font-search",
+				title: "Font search box",
+				sel: ".font-search",
+				desc: "The search box at the top of the font picker: a plain outlined box rather than a glass one, with the list of fonts right under it.",
+				demo: `<input class="font-search" placeholder="Search Google Fonts..." style="max-width:26em">`,
+				code: "<input class=\"font-search\" placeholder=\"Search Google Fonts...\">"
 			}
 		]
 	},
@@ -609,6 +813,22 @@ const sections = [
 				desc: "One line of feedback under an action (“Saved.”, “Couldn't save.”): green with .good, red with .bad. An empty one takes no room at all, so it can sit on the page waiting until there's something to say.",
 				demo: '<p class="status good">Saved.</p><p class="status bad">Couldn\'t save: that port is taken.</p><p class="status"></p><span class="muted">(an empty one is there too, taking no room)</span>',
 				code: '<p class="status" id="status"></p>\n\nstatus.textContent = "Saved.";\nstatus.className = "status good";'
+			},
+			{
+				id: "update-progress",
+				title: "Update progress",
+				sel: ".update-progress (+ .working, .good, .bad) > .update-progress-dot · .lede.update-ready",
+				desc: "While an update is installed: one line saying what's happening, a quieter one under it saying what to expect, and a dot that pulses while something is still going on (<b>.working</b>), green when it's done (<b>.good</b>), red when it isn't (<b>.bad</b>). <b>.update-ready</b> is the line saying a version is available, in the full text colour.",
+				demo: `<div class="update-progress working" style="max-width:28em;margin:0"><span class="update-progress-dot"></span><div><strong>Downloading 2.0.1</strong><span class="hint">This takes a minute or two.</span></div></div>`,
+				code: "<div class=\"update-progress working\" aria-live=\"polite\">\n\t<span class=\"update-progress-dot\"></span>\n\t<div><strong>…</strong><span class=\"hint\">…</span></div>\n</div>"
+			},
+			{
+				id: "place-warning",
+				title: "Warning in a box",
+				sel: ".place-warning",
+				desc: "A note in a quiet well that something won't work as it reads: Place search, when the Primary needs a key with none saved.",
+				demo: `<p class="place-warning" style="max-width:28em">GeoNames has no key saved, so every search goes straight to Nominatim.</p>`,
+				code: "<p class=\"place-warning\" hidden>…</p>"
 			},
 			{
 				id: "spinner",
@@ -646,6 +866,71 @@ const sections = [
 		]
 	},
 	{
+		id: "marketplace",
+		title: "Marketplace",
+		intro: "The Marketplace's own elements: its pages, a listing, tags, a listing's own page, the Sources page and the warning before a third-party source is added.",
+		entries: [
+			{
+				id: "market-page",
+				title: "Marketplace page",
+				sel: ".market (+ .reading) > .market-head (+ .has-banner > .market-banner) · .market-toolbar · .market-section",
+				desc: "Every Marketplace page: a column of boxes, wider than Settings' so the listings get up to three columns (<b>.reading</b> for a page that's mostly words). <b>.market-head</b> is the title and a line or two on the left and the page's one button on the right; with the registry's banner behind it (<b>.has-banner</b>) it's darkened towards the bottom so the words stay readable. <b>.market-toolbar</b> (the search, Modules and Themes) stays at the top while the listings scroll under it, never blurred less than 16px. <b>.market-section</b> is a heading between groups of listings.",
+				demo: `<div class="market"><div class="segment market-head"><div><h1>Marketplace</h1><p class="lede">Modules and themes reviewed into the registry.</p></div><button class="glass market-action">Sources</button></div></div>`,
+				code: "<div class=\"market\">\n\t<div class=\"segment market-head\">\n\t\t<div><h1>Marketplace</h1><p class=\"lede\">…</p></div>\n\t\t<a class=\"glass market-action\" href=\"/marketplace/sources\">Sources</a>\n\t</div>\n\t<div class=\"segment market-toolbar\">…</div>\n\t…\n</div>"
+			},
+			{
+				id: "market-listing",
+				base: "segment-clickable",
+				title: "Listing",
+				sel: ".market-list > .market-item > .market-link · .market-icon (+ .big), .market-initial · .market-item-text (h3, .market-by, .market-desc, .market-tags) · .market-action",
+				desc: "One module or theme: its icon (its own picture, or a tile in a colour of its own with its first letter, <b>.market-initial</b>, its hue <code>--hue</code>), its name, who made it and what it does, tags under that, and its button. The whole box is a link to its page (<b>.market-link</b>, stretched over it) except the button, which sits above. As many columns as fit, each at least 30em. <b>.big</b> is the icon on a listing's own page.",
+				demo: `<div class="market-list" style="max-width:34em"><div class="segment clickable market-item"><a class="market-link" href="#market-listing" aria-label="Weather"></a><span class="market-icon market-initial" style="--hue:95" aria-hidden="true">W</span><div class="market-item-text"><h3>Weather</h3><div class="market-by">by tanzim2000</div><div class="market-desc">Current conditions from Open-Meteo</div><div class="market-tags"><span class="provides-tag">OmniCore 1.0.0 or newer</span></div></div><button class="glass market-action">Install</button></div></div>`,
+				code: "<div class=\"segment clickable market-item\">\n\t<a class=\"market-link\" href=\"/marketplace/modules/weather\" aria-label=\"Weather\"></a>\n\t<span class=\"market-icon market-initial\" style=\"--hue:95\">W</span>\n\t<div class=\"market-item-text\"><h3>Weather</h3><div class=\"market-by\">…</div><div class=\"market-desc\">…</div></div>\n\t<button class=\"glass market-action\">Install</button>\n</div>"
+			},
+			{
+				id: "provides-tag",
+				title: "Tag",
+				sel: ".provides-tag (+ .warn)",
+				desc: "A small outlined tag: what a listing does beyond its tile (runs in the background, takes input) and the OmniCore it needs. <b>.warn</b>, in the danger colour, is a need this OmniCore doesn't meet.",
+				demo: `<span class="provides-tag">Runs in the background</span><span class="provides-tag warn">OmniCore 9.0.0 or newer</span>`,
+				code: "<span class=\"provides-tag\">Runs in the background</span>\n<span class=\"provides-tag warn\">OmniCore 9.0.0 or newer</span>"
+			},
+			{
+				id: "market-detail",
+				title: "A listing's own page",
+				sel: ".market-about · .market-traits (li.warn) · .market-shots (figure, img, figcaption) · .market-url",
+				desc: "What a listing's page adds: its whole description in paragraphs (<b>.market-about</b>), what it does in plain sentences (<b>.market-traits</b>, a need not met in the danger colour), its screenshots in a grid (<b>.market-shots</b>), and a web address that wraps anywhere on a phone (<b>.market-url</b>).",
+				demo: `<div class="segment" style="max-width:30em"><h2>Good to know</h2><ul class="market-traits"><li>Keeps running the whole time OmniCore is on.</li><li class="warn">Works on OmniCore 9.0.0 or newer.</li></ul></div>`,
+				code: "<div class=\"segment market-about\"><p>…</p></div>\n<ul class=\"market-traits\"><li>…</li><li class=\"warn\">…</li></ul>"
+			},
+			{
+				id: "market-source",
+				title: "Source row",
+				sel: ".market-source > .market-source-name > .market-source-banner",
+				desc: "One registry on the Sources page: its banner, small, beside its name and address, and its button at the end, with a thin line between one and the next.",
+				demo: `<div class="segment" style="max-width:32em"><div class="market-source"><div class="market-source-name"><span class="market-source-banner" style="background:linear-gradient(135deg,#3a6073,#16222a)"></span><div><strong>Omnia Registry</strong><div class="hint">Built in</div></div></div></div></div>`,
+				code: "<div class=\"market-source\">\n\t<div class=\"market-source-name\"><img class=\"market-source-banner\" src=\"…\" alt=\"\"><div>…</div></div>\n\t<button class=\"glass market-action\">Remove</button>\n</div>"
+			},
+			{
+				id: "market-error",
+				base: "segment",
+				title: "Registry error",
+				sel: ".market-error",
+				desc: "The registry couldn't be read: what went wrong and a way to try again, in a box edged in the danger colour.",
+				demo: `<div class="segment market-error" style="max-width:32em"><div><h2>Couldn't reach the registry</h2><p class="lede">Connection timed out.</p></div><button class="glass market-action">Try again</button></div>`,
+				code: "<div class=\"segment market-error\">\n\t<div><h2>Couldn't reach the registry</h2><p class=\"lede\">…</p></div>\n\t<a class=\"glass market-action\" href=\"\">Try again</a>\n</div>"
+			},
+			{
+				id: "market-warning",
+				title: "Third-party warning",
+				sel: ".market-warning > h3, p · .market-warning-actions",
+				desc: "Shown once, right before a source OmniCore hasn't reviewed is added: on purpose not like anything else on the page, since it's the one moment worth standing out. Its two buttons (<b>.market-warning-actions</b>) are Go back and I understand.",
+				demo: `<div class="market-warning" style="max-width:32em"><h3>This adds a source OmniCore hasn't reviewed</h3><p>A module is a full, unrestricted Node program.</p><div class="market-warning-actions"><button type="button" class="btn-glossy btn-glossy-green">Go back</button><button type="button" class="btn-glossy btn-glossy-neutral">I understand</button></div></div>`,
+				code: "<div class=\"market-warning\" hidden>\n\t<h3>…</h3>\n\t<p>…</p>\n\t<div class=\"market-warning-actions\">…</div>\n</div>"
+			}
+		]
+	},
+	{
 		id: "layouts",
 		title: "Page layouts",
 		intro: "The shapes a whole page can take. So far one: the Settings home, a page of tabs under a notch. Its script (<code>core/settings-home.js</code>) moves things and measures them, and only ever switches classes and sets CSS variables; every look is in <code>core/ui-theme.js</code>, like everything else.",
@@ -658,6 +943,33 @@ const sections = [
 				demo: `<header class="home-head" style="min-height:0;padding:0"><h1>Settings</h1></header><h2 class="pane-title" style="margin:0.5em 0 0">General</h2><p class="muted" style="margin:0.25em 0 0">Without the script, each tab's boxes come under its name, one tab after another.</p>`,
 				code: '<body class="settings-home">\n\t<header class="home-head"><h1>Settings</h1></header>\n\t<nav class="notch">…</nav>\n\t<div class="home-panes"><div class="home-track">\n\t\t<section class="home-pane" data-pane="general">\n\t\t\t<h2 class="pane-title" id="general">General</h2>\n\t\t\t<div class="home-bento">…</div>\n\t\t</section>\n\t</div></div>\n</body>\n\n// or let settings-home.js write it:\nhomeHtml(panes, updateReady)',
 				note: "The Back button keeps out of the way by itself: in the top left the heading starts after it, and on a phone held upright the sign-out button goes to the top right, since the capsule has the bottom."
+			},
+			{
+				id: "settings-page",
+				title: "Settings page",
+				sel: "body.settings-page (+ .centered) > .settings-head · .bento (+ .narrow) > .bento-row (+ .two, .three, .top) · .bento-column",
+				desc: "Every page of the admin face (port 3000) but the Settings home: a column of boxes down the middle of the screen, as wide as the screen allows and never too wide to read. <b>.settings-head</b> is its heading row. In the <b>.bento</b>, a <b>.bento-row</b> puts boxes side by side when the screen is wider than it is tall: <b>.two</b> (the first a little wider), <b>.three</b> even thirds, <b>.top</b> lined up at the top rather than stretched. A <b>.bento-column</b> stacks boxes inside one column of a row. <b>.narrow</b> is for a page that's one short form (signing in, Not found), and <b>body.centered</b> puts it in the middle of the screen. Links on a Settings page are plain words in the text colour, and a box's lede has room under it.",
+				demo: `<div class="bento" style="max-width:36em"><div class="bento-row two"><div class="segment"><h2>Wider</h2><p class="hint">.bento-row.two</p></div><div class="segment"><h2>Narrower</h2></div></div><div class="segment"><h2>A whole row</h2></div></div>`,
+				code: "<body class=\"settings-page\">\n\t<div class=\"settings-head\"><h1>Network</h1></div>\n\t<div class=\"bento\">\n\t\t<div class=\"bento-row two\">\n\t\t\t<div class=\"segment\">…</div>\n\t\t\t<div class=\"segment\">…</div>\n\t\t</div>\n\t</div>\n</body>\n\n// admin-face.js's page() writes the body and its class",
+				note: "A row's boxes are as tall as the taller one. On a phone held upright every row is one column."
+			},
+			{
+				id: "docked-page",
+				base: "settings-page",
+				title: "Docked page",
+				sel: "body.docked (+ .back-br) · .page-dock · .dock-button",
+				desc: "A Settings page that's exactly the window's height and never scrolls itself (a widget's page): its capsule of actions (<b>.page-dock</b>, a dock with the page's status line under it) is always at the bottom, and whatever is too long scrolls inside its own box. <b>.back-br</b> says the Back button is in the bottom right, so on a narrow screen the capsule leaves it room. A page whose only action is one button uses <b>.dock-button</b>: the capsule's place and width, a glass button's shape.",
+				demo: `<div class="page-dock" style="margin:0"><div class="dock"><button>Save</button><button class="danger">Remove</button></div><p class="status good">Saved.</p></div>`,
+				code: "<body class=\"settings-page docked\">\n\t<div class=\"bento\">…</div>\n\t<div class=\"page-dock\">\n\t\t<div class=\"dock\">…</div>\n\t\t<p class=\"status\" id=\"status\"></p>\n\t</div>\n</body>"
+			},
+			{
+				id: "face-page",
+				base: "settings-page",
+				title: "A face's page",
+				sel: ".face-columns · .resource-pair > .resources, .face-actions > .face-buttons · .note-segment",
+				desc: "The parts of a face's page. <b>.face-columns</b>: two columns that end level, the last box in each taking up the difference. <b>.resource-pair</b>: Manage resources (<b>.resources</b>, its rows a little taller) beside This face (<b>.face-actions</b>, Open face and Delete face in <b>.face-buttons</b>, stacked and filling the box on a wide screen, side by side and first on a phone). <b>.note-segment</b>: the Notifications box, whose two previews fill its height.",
+				demo: `<div class="settings-page"><div class="resource-pair" style="max-width:34em"><div class="segment resources"><h2>Manage resources</h2><a class="row glass" href="#face-page"><strong>Widgets</strong><span>1 widget</span></a></div><div class="segment face-actions"><div class="face-buttons"><button class="glass">Open face</button><button class="glass glass-danger">Delete face</button></div></div></div></div>`,
+				code: "<div class=\"resource-pair\">\n\t<div class=\"segment resources\">…</div>\n\t<div class=\"segment face-actions\">\n\t\t<div class=\"face-buttons\"><button class=\"glass\">Open face</button>…</div>\n\t</div>\n</div>"
 			},
 			{
 				id: "notch",

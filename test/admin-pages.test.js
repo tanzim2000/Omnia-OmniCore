@@ -102,7 +102,7 @@ test("every page under a face is segments, with a way back up", async () => {
 test("a module's settings page: its own segment, the theme's segment, and Save | Remove", async () => {
 	const page = (await html(`/faces/${face.id}/modules/${encodeURIComponent(instanceId)}`)).text;
 
-	assert.ok(page.includes("<h2 style=\"margin-bottom:14px\">Settings</h2>"));
+	assert.ok(page.includes("<h2 class=\"spaced\">Settings</h2>"));
 	assert.ok(page.includes("In Tiles Theme"), "the theme's own segment");
 	assert.ok(page.includes('data-key="city"'), "the module's field");
 	assert.ok(page.includes('data-key="size"') && page.includes('data-scope="theme"'), "the theme's field");

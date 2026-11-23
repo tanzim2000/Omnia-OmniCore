@@ -264,7 +264,7 @@ test("pages: a face fades in right after <body>, unless its theme does its own e
 test("pages: the settings home has four tabs, and no version pill", async () => {
 	const { status, text } = await get(3000, "/");
 	assert.equal(status, 200);
-	assert.ok(text.includes('<body class="settings-home">'));
+	assert.ok(text.includes('<body class="settings-page settings-home">'));
 	assert.ok(text.includes("data-omni-notch"));
 	assert.ok(!text.includes("version-pill"), "the About tab has the version");
 
@@ -348,7 +348,7 @@ test("pages: a development build's Updates box says it doesn't check", async () 
 	assert.ok(text.includes("A development build doesn't check for updates."));
 	assert.ok(!text.includes('id="check"'), "nothing to check");
 	assert.ok(!text.includes('id="apply"'), "nothing to install");
-	assert.ok(text.includes('<div class="segment c6 row2" id="release-notes">'), "its notes instead");
+	assert.ok(text.includes('<div class="segment c6 row2 release-notes" id="release-notes">'), "its notes instead");
 });
 
 test("the notch: a dewdrop with clear glass, and a name only on hover, focus or a long press", () => {

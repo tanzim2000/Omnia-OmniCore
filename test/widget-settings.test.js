@@ -273,7 +273,7 @@ test("refresh: under the module's settings when there's no theme box", async () 
 
 	assert.ok(html.includes('<div class="bento-row top">'));
 	assert.ok(!html.includes('<div class="bento-row two face-columns">'), "one column");
-	assert.ok(html.indexOf("<h2 style=\"margin-bottom:14px\">Settings</h2>") < html.indexOf("refresh-segment"));
+	assert.ok(html.indexOf("<h2 class=\"spaced\">Settings</h2>") < html.indexOf("refresh-segment"));
 	// The only setting it had was refresh, so the Settings box says so
 	assert.ok(html.includes("This module has nothing else to configure."));
 });
@@ -376,7 +376,7 @@ test("docked: the page fills the window, its capsule stays at the bottom", async
 	const address = `/faces/${withTheme.id}/modules/${instance.id}`;
 
 	const { html } = await get(ADMIN, address);
-	assert.match(html, /<body class="docked back-br">/, "Back bottom right: the capsule makes room for it");
+	assert.match(html, /<body class="settings-page docked back-br">/, "Back bottom right: the capsule makes room for it");
 
 	// The page never scrolls itself; Settings scrolls in its own box
 	assert.ok(html.includes("body.docked {"));
@@ -392,13 +392,13 @@ test("docked: the page fills the window, its capsule stays at the bottom", async
 	settingsStore.writeSettings({ backButtonCorner: "top-left" });
 	try {
 		const topLeft = await get(ADMIN, address);
-		assert.match(topLeft.html, /<body class="docked">/);
+		assert.match(topLeft.html, /<body class="settings-page docked">/);
 	} finally {
 		settingsStore.writeSettings({ backButtonCorner: before });
 	}
 
 	// Only a widget's page is docked
 	const list = await get(ADMIN, `/faces/${withTheme.id}/modules`);
-	assert.ok(!/<body class="docked/.test(list.html));
+	assert.ok(!/<body class="settings-page docked/.test(list.html));
 });
 

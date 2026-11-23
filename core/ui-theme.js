@@ -397,6 +397,1225 @@ function modeRules(light) {
 //   - otherwise BOTH, dark first and light inside a
 //     prefers-color-scheme query, so the browser picks by itself with
 //     no script and no flash of the wrong colours on load.
+// The Settings pages' elements (admin-face.js draws the pages): the page
+// and its bento, the docked page, inset strips, the mode previews, a face's
+// page, the update boxes and release notes, rows, Location, Place search
+// and Saved keys, the major version box, the Background and glass pickers
+// (the preview, the colour wheel, tint chips) and the Marketplace. At the very end of uiStyles, in
+// the order they had when they were admin-face.js's own, so nothing
+// changes which rule wins. (Written after SETTINGS_HOME_CSS below, which
+// they read nothing from.)
+function settingsPagesCss() {
+	return `	/* ---------------------------------------------------------------
+	   Settings page — every page on the admin face (port 3000) is a
+	   column down the middle of the screen: body.settings-page, its
+	   boxes in a .bento. Links on it are plain text, in the text colour.
+	   :where() keeps these as easy to override as plain "body" and "a"
+	   rules, which is what they were before 2.0.0's central theme.
+	   --------------------------------------------------------------- */
+	body:where(.settings-page) {
+		min-height: 100vh;
+		padding: 3em 1.5em;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 28px;
+	}
+
+	/* Only the sign-in and setup screens centre vertically. "safe" falls
+	   back to top-aligned if content is ever taller than the screen, so
+	   nothing gets cut off with no way to scroll to it. */
+	body.centered { justify-content: safe center; }
+
+	/* ---------------------------------------------------------------
+	   Settings bento.
+
+	   Everything on one screen with nothing hidden behind a tab or a
+	   scroll: the page has four sections and two links, which is small
+	   enough to just show. Tabs would add state to manage and a click
+	   before reaching anything, to solve a problem this page does not
+	   currently have. If Settings ever outgrows one screen, tabs layer
+	   on top of this without rebuilding it.
+
+	   Portrait is the same segments in one column -- not a second design.
+	   --------------------------------------------------------------- */
+	/* Scales with the viewport rather than a single fixed number, so a
+	   wide window doesn't leave a large stripe of unused space either
+	   side -- but still capped, so a genuinely ultrawide monitor
+	   doesn't stretch a description line edge-to-edge or leave a
+	   segment looking like mostly empty space. */
+	.bento { width: 100%; max-width: clamp(62em, 70vw, 90em); display: flex; flex-direction: column; gap: 14px; }
+
+	.bento-row { display: grid; gap: 14px; grid-template-columns: 1fr; }
+
+	/* The boxes and their headings are .segment, from ui-theme.js. Only
+	   how a description sits inside one is particular to the settings
+	   pages. */
+	:where(.settings-page) .segment .lede { margin: 0 0 14px 0; }
+
+	/* A box's heading, or a line, with room under it: for one followed
+	   by a list, rows or a form rather than a line of text */
+	.segment .spaced { margin-bottom: 14px; }
+
+	.settings-head {
+		width: 100%;
+		max-width: clamp(62em, 70vw, 90em);
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+	}
+
+	/* Mode picker: two miniature screens rather than a switch, so the
+	   choice shows what it actually looks like instead of naming it */
+	.mode-previews { display: flex; gap: 10px; }
+
+	.mode-preview {
+		flex: 1;
+		cursor: pointer;
+		border-radius: 0.625em;
+		border: 1px solid var(--segment-border);
+		padding: 0.5em;
+		text-align: center;
+		transition: border-color 0.2s ease;
+	}
+
+	.mode-preview.active { border: 2px solid var(--fg-muted); padding: 0.4375em; }
+	.mode-preview-label { font-size: 0.78em; color: var(--fg-muted); margin-top: 8px; }
+	.mode-preview.active .mode-preview-label { color: var(--fg); font-weight: 600; }
+
+	.mode-screen { border-radius: 0.3125em; height: 64px; padding: 0.5em; text-align: left; }
+	.mode-screen span { display: block; border-radius: 0.125em; margin-bottom: 5px; }
+
+	/* The little screen in each: the page's colour (.dark, .light) or a
+	   notification's (.note-dark, .note-light), and a few lines of
+	   "text": a heading line, then shorter, fainter lines */
+	.mode-screen.dark, .mode-screen-split > .dark { background: ${DEFAULT_DARK}; }
+	.mode-screen.light, .mode-screen-split > .light { background: ${DEFAULT_LIGHT}; }
+	.mode-screen.note-dark { background: #0c0d10; }
+	.mode-screen.note-light { background: #e5e7eb; }
+	.mode-screen .line { width: 70%; height: 4px; }
+	.mode-screen .line.head { width: 40%; height: 5px; }
+	.mode-screen .line.mid { width: 55%; }
+	.mode-screen-split .line.head { width: 60%; }
+	.mode-screen:is(.dark, .note-dark) > .line,
+	.mode-screen-split > .dark > .line { background: rgba(255, 255, 255, 0.3); }
+	.mode-screen:is(.dark, .note-dark) > .line.head,
+	.mode-screen-split > .dark > .line.head { background: rgba(255, 255, 255, 0.8); }
+	.mode-screen:is(.light, .note-light) > .line,
+	.mode-screen-split > .light > .line { background: #9ca3af; }
+	.mode-screen:is(.light, .note-light) > .line.head,
+	.mode-screen-split > .light > .line.head { background: #4b5563; }
+
+	/* Device: half dark, half light, since it's whichever the device
+	   is set to */
+	.mode-screen-split { display: flex; padding: 0; overflow: hidden; }
+	.mode-screen-split > div { flex: 1; padding: 0.5em; }
+
+	/* On a full-width row two previews would stretch into long strips;
+	   kept to the size they are in a half-width box */
+	.narrow-previews { max-width: 24em; }
+
+
+	/* An inset strip inside a segment: the detected location, the current
+	   font. Reads as "this is a value, not a control". */
+	.inset {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		background: var(--input-bg);
+		border: 1px solid var(--segment-border);
+		border-radius: 0.625em;
+		padding: 0.6875em 0.875em;
+	}
+
+	/* Without flex-basis a flex item won't shrink past its own content's
+	   natural width by default -- backwards here, since the long value
+	   is exactly the thing that should take the available space and
+	   wrap sensibly, not get squeezed into a few characters per line
+	   while the short button sits at whatever width is left over.
+	   min-width: 0 is what actually lets it shrink at all; flex-basis
+	   0 is what lets it grow to fill the row rather than sizing to its
+	   unwrapped content first. */
+	.inset-text { flex: 1 1 0; min-width: 0; }
+
+	/* A small button at the end of the strip (Refresh, Change) */
+	.inset > .glass { flex-shrink: 0; padding: 0.641em 1.1218em; font-size: 0.78em; }
+
+	/* Text Size & Typography: the heading and its note on the left, the
+	   size stepper on the right, then the font underneath. On a narrow
+	   screen the stepper drops under the note rather than squeezing it
+	   (flex-wrap, and the text keeps at least 12em). */
+	.type-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px 14px;
+		margin-bottom: 14px;
+	}
+	.type-head-text { flex: 1 1 12em; min-width: 0; }
+	.type-head-text .hint { margin: 0; }
+	.type-head .stepper { flex-shrink: 0; }
+
+	.inset-label { font-size: 0.7em; color: var(--fg-muted); }
+	.inset-value { font-size: 0.85em; margin-top: 2px; }
+	/* The coordinates after a place's name: a little apart, quieter, kept
+	   together */
+	.inset-value .coords { margin-left: 1.25em; color: var(--fg-muted); white-space: nowrap; }
+
+
+
+	/* Landscape: width against height rather than a pixel threshold.
+	   A phone can report more CSS pixels than an old desktop monitor,
+	   so any fixed number would misjudge real devices in both
+	   directions. */
+	@media (orientation: landscape) {
+		.bento-row.two { grid-template-columns: 1.3fr 1fr; }
+		.bento-row.three { grid-template-columns: 1fr 1fr 1fr; }
+	}
+
+	/* A narrow bento, for a page that is one short form and nothing
+	   else: signing in, "not found". The same segments, just not stretched
+	   across a wide screen. */
+	.bento.narrow { max-width: 28em; }
+
+	/* Two segments side by side are as tall as the taller one. Lined up at
+	   the top rather than stretched, a short segment next to a long form
+	   would otherwise be mostly empty space. */
+	.bento-row.top { align-items: start; }
+
+	/* Two or more segments stacked in one column of a .bento-row, so a
+	   column can hold a pair of segments beside one taller one (a face's
+	   page: its facts and its links on the left, its name on the right) */
+	.bento-column { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+	/* A face's page: two columns that end level. The grid stretches
+	   both columns to the taller one's height, and the last box in each
+	   takes up the difference, so neither column ends short. */
+	.face-columns > .bento-column > :last-child { flex: 1; }
+
+	/* Manage resources: the Widgets and Theme buttons, a little taller
+	   than an ordinary row so the box holds its own beside the facts */
+	.resources a.row { padding-top: 1.4em; padding-bottom: 1.4em; }
+
+	/* Notifications on a face's page: the Dark and Light buttons fill
+	   the box's height, so a box stretched to line up with its
+	   neighbour has no empty band under them. They keep their usual
+	   width (narrow-previews) and sit in the middle of the box. */
+	.note-segment { display: flex; flex-direction: column; }
+	.note-segment .mode-previews { flex: 1; width: 100%; margin: 0 auto; }
+	.note-segment .mode-preview { display: flex; flex-direction: column; }
+	.note-segment .mode-screen { flex: 1; height: auto; min-height: 64px; }
+
+	/* Manage resources and This face, one pair of boxes (since v1.19.8).
+	   This face has no heading, only Open face and Delete face.
+
+	   Portrait (a phone held upright): the boxes stack, This face first,
+	   straight under the face's facts, its buttons side by side.
+
+	   Landscape: the boxes sit side by side, This face on the right and
+	   narrower, its buttons stacked and filling its whole height, so the
+	   pair ends level with Manage resources. */
+	.resource-pair { display: grid; gap: 14px; grid-template-columns: 1fr; }
+	.resource-pair > .segment { min-width: 0; }
+	.face-actions { order: -1; display: flex; flex-direction: column; }
+	.face-buttons { display: flex; gap: 0.6em; flex: 1; }
+	.face-buttons > button { flex: 1; white-space: nowrap; }
+	.face-actions .status { margin: 0.6em 0 0 0; }
+
+	@media (orientation: landscape) {
+		.resource-pair { grid-template-columns: 1.45fr 1fr; }
+		.face-actions { order: 0; }
+		.face-buttons { flex-direction: column; gap: 10px; }
+
+		/* A phone held sideways leaves this box narrow: less padding at
+		   the sides, so "Delete face" still fits on one line */
+		.face-buttons > button { padding-left: 0.5em; padding-right: 0.5em; min-width: 0; }
+	}
+
+	/* A segment's last row shouldn't leave a gap under itself */
+	.segment > a.row:last-child { margin-bottom: 0; }
+
+
+	/* Everything a segment does at the end of a form: Save and its message,
+	   and anything after it, with even space between them */
+	.segment-actions { display: flex; flex-direction: column; gap: 12px; }
+
+	/* The capsule (.dock, from the shared theme) at the foot of a page,
+	   centred under the segments, with the page's status line under it */
+	.page-dock {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75em;
+		margin: 1.5em auto 0;
+	}
+
+	.page-dock .status { margin: 0; text-align: center; }
+
+	/* ---------------------------------------------------------------
+	   A docked page (since v1.19.9): a widget's page.
+
+	   The page is exactly the height of the window and never scrolls
+	   itself, the same as the setup wizard. The Save | Remove capsule
+	   is always at the bottom, and whatever is too long scrolls inside
+	   its own box instead of pushing the capsule off the screen.
+
+	   Landscape: the widget's Settings box scrolls inside itself, and
+	   the column beside it (the theme's box and Refresh) scrolls on its
+	   own if it ever has to.
+
+	   Portrait (a phone held upright): the boxes are stacked, so the
+	   whole stack scrolls as one, between the name and the capsule.
+	   --------------------------------------------------------------- */
+	html:has(body.docked) { height: 100%; }
+
+	body.docked {
+		height: 100vh;
+		height: 100dvh;
+		min-height: 0;
+		overflow: hidden;
+		box-sizing: border-box;
+		padding-bottom: 1.5em;
+		gap: 1.25em;
+	}
+
+	body.docked .bento { flex: 1 1 auto; min-height: 0; }
+
+	/* The widget's name and description never shrink away */
+	body.docked .bento > .segment:first-child { flex-shrink: 0; }
+
+	body.docked .bento > .bento-row { flex: 1 1 auto; min-height: 0; }
+
+	body.docked .page-dock { flex-shrink: 0; margin: 0 auto; }
+
+	/* Thin, quiet scrollbars, like the wizard's */
+	body.docked .bento > .bento-row,
+	body.docked .bento-column,
+	body.docked .bento-column > .segment {
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	body.docked .bento > .bento-row::-webkit-scrollbar,
+	body.docked .bento-column::-webkit-scrollbar,
+	body.docked .bento-column > .segment::-webkit-scrollbar { width: 8px; }
+
+	body.docked .bento > .bento-row::-webkit-scrollbar-thumb,
+	body.docked .bento-column::-webkit-scrollbar-thumb,
+	body.docked .bento-column > .segment::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 0.25em;
+	}
+
+	@media (orientation: portrait) {
+		body.docked .bento > .bento-row { overflow-y: auto; align-content: start; }
+	}
+
+	@media (orientation: landscape) {
+		/* One row as tall as the space left, so the columns have a real
+		   height to fill and to scroll within */
+		body.docked .bento > .bento-row {
+			grid-template-rows: minmax(0, 1fr);
+			align-items: stretch;
+		}
+
+		body.docked .bento-column { min-height: 0; }
+
+		/* The widget's own Settings box: the first box of the first column */
+		body.docked .bento-row > .bento-column:first-child > .segment:first-child {
+			flex: 1 1 auto;
+			min-height: 0;
+			overflow-y: auto;
+		}
+
+		/* The theme's box and Refresh, beside it */
+		body.docked .bento-row.two > .bento-column:last-child { overflow-y: auto; }
+	}
+
+	/* A phone held sideways has very little height: less space above
+	   and between, so the widget's settings get as much as possible */
+	@media (orientation: landscape) and (max-height: 32em) {
+		body.docked { gap: 0.75em; }
+		body.docked .bento { gap: 0.75em; }
+
+		/* Unless the Back button is top left: then the room above is
+		   what keeps it off the widget's name (ui-theme.js) */
+		body.docked:not(:has(> .floating.top-left)) { padding-top: 1em; }
+	}
+
+	/* The Back button bottom right. Every other page keeps room under
+	   itself for the button (ui-theme.js), so its last box never ends
+	   up underneath. A docked page doesn't need that: the capsule is
+	   always at the bottom, level with the button, so the room would
+	   just be a gap under it. */
+	body.docked:has(> .floating.bottom-right) { padding-bottom: 1.5em; }
+
+	/* On a phone held upright, or any narrow window, the capsule spans
+	   the screen and would sit under the button, so it leaves room for
+	   the button on its right instead. Wider, the capsule is a settled
+	   width in the middle and never reaches the corner. */
+	@media (orientation: portrait), (max-width: 42em) {
+		/* No auto margins here: they would stop the stretch and shrink
+		   the capsule to the width of its two words */
+		body.docked.back-br .page-dock {
+			align-self: stretch;
+			margin: 0;
+			padding-right: calc(3.4em + 0.75em);
+			box-sizing: border-box;
+		}
+
+		body.docked.back-br .page-dock .dock { width: 100%; }
+	}
+
+	/* A page whose only action is one button: it sits where the capsule
+	   would, at the same width, but keeps the ordinary glass button's
+	   shape -- a capsule with one section in it would just be a pill */
+	.dock-button { width: calc(100vw - 3em); max-width: 26em; }
+
+	@media (orientation: landscape) {
+		.dock-button { width: 30em; max-width: 30em; }
+	}
+
+	/* Settings' About tab while an update is being installed: one line
+	   saying what's happening, one quieter line under it saying what to
+	   expect. The dot pulses while something is still going on. */
+	.update-progress {
+		display: flex;
+		gap: 12px;
+		align-items: flex-start;
+		background: var(--input-bg);
+		border: 1px solid var(--segment-border);
+		border-radius: 0.625em;
+		padding: 0.875em;
+		margin-top: 14px;
+	}
+
+	.update-progress-dot {
+		flex: none;
+		width: 10px;
+		height: 10px;
+		margin-top: 5px;
+		border-radius: 50%;
+		background: var(--fg-muted);
+	}
+
+	.update-progress.working .update-progress-dot { animation: update-pulse 1.2s ease-in-out infinite; }
+	.update-progress.good .update-progress-dot { background: var(--success); }
+	.update-progress.bad .update-progress-dot { background: var(--danger); }
+
+	@keyframes update-pulse {
+		0%, 100% { opacity: 0.25; }
+		50% { opacity: 1; }
+	}
+
+	.update-progress strong { display: block; font-size: 0.95em; }
+	.update-progress .hint { margin: 4px 0 0 0; }
+	.update-progress .glass { margin-top: 12px; }
+
+
+
+	:where(.settings-page) a { color: var(--fg); text-decoration: none; }
+
+	.row {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 0.875em 1.25em;
+		border: 1px solid var(--border);
+		border-radius: 0.75em;
+		margin-bottom: 10px;
+	}
+
+	.row span { opacity: 0.55; font-size: 13px; }
+
+	/* A row you can click (a face in the list, Widgets and Theme on a
+	   face's page) is a glass button (.glass in ui-theme.js), laid out
+	   as a row: the same glow, fade and press as every other button.
+	   Before v2 it had its own copy of the look, which only turned grey
+	   on hover. */
+	.row.glass { border-color: var(--glass-border); }
+
+
+
+	/* The About tab: Check now and Update now side by side */
+	.update-buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+	.update-buttons { align-items: center; }
+	.update-buttons .glass-block { flex: 1 1 12em; width: auto; margin: 0; }
+	.update-buttons + .hint, .update-buttons > .glass-block + .hint { flex-basis: 100%; }
+
+	/* Its release notes: each part side by side when there's room */
+	.notes-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(20em, 1fr)); gap: 1.5em; }
+	.notes-part h3 { margin: 0 0 0.6em; font-size: 1em; }
+
+	/* The OmniCore box is a link to System info: its heading with an
+	   arrow, then its facts */
+	.about-box { display: block; color: var(--fg); text-decoration: none; }
+	.about-box-head { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+	.about-box-head svg { color: var(--fg-muted); flex: none; }
+	.about-box-head + .fact { border-top: 0; }
+
+	/* The release notes take the room left under the two boxes above
+	   (the second row of the sideways grid, settings-home.js) and scroll
+	   inside it, each part on its own. A phone held upright scrolls as
+	   usual. */
+	@media (min-width: 42.01em) {
+		html.home-tabs .release-notes {
+			align-self: stretch;
+			display: flex;
+			flex-direction: column;
+			min-height: 0;
+		}
+		html.home-tabs .notes-body { flex: 1; min-height: 0; grid-auto-rows: minmax(0, 100%); overflow-y: auto; }
+		html.home-tabs .notes-part { display: flex; flex-direction: column; min-height: 0; }
+		html.home-tabs .notes-part .changelog { flex: 1; min-height: 0; max-height: none; }
+	}
+
+	/* Location Service's own boxes, under "Set it myself" */
+	.location-manual { margin-top: 14px; }
+	.update-ready { color: var(--fg); }
+
+	/* Place search: what's chosen won't work as it reads */
+	.place-warning {
+		margin: 12px 0 0;
+		padding: 0.7em 0.9em;
+		border-radius: 0.6em;
+		background: var(--well-bg);
+		border: 1px solid var(--segment-border);
+		color: var(--fg);
+		font-size: 0.9em;
+		line-height: 1.5;
+	}
+
+	/* Saved keys: the service and "API key saved", Change and Remove */
+	.saved-key {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 0.6em 1em;
+		padding: 0.75em 0;
+		border-top: 1px solid var(--segment-border);
+	}
+	.saved-key-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+	.saved-key-text span { color: var(--fg-muted); font-size: 0.85em; }
+	.saved-key-buttons { display: flex; gap: 0.5em; }
+	.saved-key-buttons .glass { padding: 0.6em 1.1em; }
+
+
+
+
+	/* Explanatory text under a control — quieter than the label it
+	   belongs to, for the "why" rather than the "what" */
+	/* A new major version (since 1.20.0): a box on the settings home
+	   that opens what's changing. The whole box is the button. */
+	.major-box {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+		width: 100%;
+		text-align: left;
+		font: inherit;
+		color: var(--fg);
+	}
+	.inset.major-box {
+		margin: 0.4em 0 0.9em;
+		cursor: pointer;
+		transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+		box-shadow: 0 0 0 1px transparent, 0 0 24px transparent;
+	}
+	.inset.major-box:hover,
+	.inset.major-box:focus-visible {
+		outline: none;
+		border-color: var(--glass-border);
+		box-shadow: 0 0 0 1px var(--glass-border), 0 0 24px rgba(255, 255, 255, 0.08);
+	}
+	.major-box-text { display: flex; flex-direction: column; gap: 4px; }
+	.major-box-text strong { font-size: 1.05em; }
+	.major-box-text span { color: var(--fg-muted); font-size: 0.9em; }
+	.major-box-go { font-size: 1.4em; color: var(--fg-muted); flex-shrink: 0; }
+
+	/* Its pop-up: wider and taller than the others, the document
+	   scrolling inside it, Upgrade below it */
+	.modal.major-modal { max-width: 46em; max-height: 88vh; }
+	.major-doc {
+		flex: 1;
+		min-height: 8em;
+		overflow-y: auto;
+		padding-right: 0.75em;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+		line-height: 1.55;
+	}
+	.major-doc > :first-child { margin-top: 0; }
+	.major-doc h3 { font-size: 1em; margin: 1.3em 0 0.4em; }
+	.major-doc h4 { font-size: 0.95em; margin: 1.1em 0 0.3em; color: var(--fg-muted); }
+	.major-doc p, .major-doc li, .major-doc blockquote { font-size: 0.92em; }
+	.major-doc blockquote { margin: 0.8em 0; padding-left: 0.9em; border-left: 3px solid var(--glass-border); color: var(--fg-muted); }
+	.major-doc pre { overflow-x: auto; padding: 0.7em 0.9em; border-radius: 0.5em; background: var(--glass-bg); font-size: 0.85em; }
+	.major-doc a { color: inherit; }
+	.major-doc .major-ours { margin-top: 1.6em; padding-top: 0.4em; border-top: 1px solid var(--glass-border); }
+	.major-actions { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+
+	/* Upgrade, while it can't be pressed: it looks off, and its title
+	   (on hover) says why. Not the disabled attribute, because a disabled
+	   button shows no title in most browsers. */
+	.glass.is-off { opacity: 0.45; cursor: not-allowed; }
+	.glass.is-off:hover, .glass.is-off:focus-visible { box-shadow: none; }
+
+	/* On a phone there's no hover, so the reason is written under it */
+	.major-actions .major-why { display: none; margin: 0; text-align: center; }
+	@media (max-width: 42em) {
+		.major-actions .major-why { display: block; }
+		.modal.major-modal { max-height: 92vh; padding: 1.1em; }
+	}
+
+	/* Release notes scroll inside their own segment rather than making
+	   the page as long as the longest changelog: the version and its
+	   buttons beside them stay in view. As tall as the window allows,
+	   never shorter than a comfortable read. */
+	.changelog {
+		max-height: max(18em, calc(100vh - 20em));
+		overflow-y: auto;
+		padding-right: 0.75em;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.changelog::-webkit-scrollbar { width: 8px; }
+	.changelog::-webkit-scrollbar-track { background: transparent; }
+	.changelog::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border-radius: 0.25em; }
+
+	.changelog > :first-child { margin-top: 0; }
+
+	.changelog h3 { font-size: 14px; margin: 16px 0 6px 0; opacity: 0.75; }
+	.changelog ul { margin: 0; padding-left: 1.25em; }
+	.changelog li { font-size: 14px; line-height: 1.65; margin-bottom: 8px; }
+	.changelog p { font-size: 14px; line-height: 1.65; }
+	.changelog strong { font-weight: 600; }
+	/* A name written between backticks in the notes */
+	.changelog code {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+		font-size: 0.9em;
+		padding: 0.1em 0.35em;
+		border-radius: 0.3em;
+		background: var(--glass-bg);
+		border: 1px solid var(--segment-border);
+	}
+
+
+
+	/* Installed Resources: what's installed, and how current it is.
+	   Each one is a plain .segment -- not clickable, so no hover glow. */
+
+	.resource-facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 14px;
+		font-size: 13px;
+		color: var(--fg-muted);
+	}
+
+	.resource-status.good { color: var(--success); }
+	.resource-status.bad { color: var(--danger); }
+
+	/* The search box in the font picker */
+	.font-search {
+		width: 100%;
+		padding: 0.8571em 1.1429em;
+		border: 1px solid var(--border);
+		border-radius: 0.7143em;
+		background: transparent;
+		color: var(--fg);
+		font-size: 14px;
+		font-family: inherit;
+		box-sizing: border-box;
+	}
+
+	.font-search::placeholder { color: var(--fg-muted); }
+	.font-search:focus { outline: none; border-color: var(--glass-border); }
+	/* .glass itself is defined once, in core/ui-theme.js. It used to be
+	   redefined here too, from before the shared component library
+	   existed, and because this stylesheet is emitted after that one the
+	   stale copy silently won -- overriding the appearance reset, the
+	   hover glow, :focus-visible and the disabled styling with an older
+	   and worse version of each.
+	   
+	   The real damage was a width of 100% in that copy. Harmless for a
+	   standalone button, but a small button sitting in a flex row next
+	   to text would try to occupy the entire row and render on top of
+	   it. Every full-width button below now says so explicitly with
+	   .glass-block instead of relying on a global default that also hit
+	   buttons which should never have been full width. */
+	.glass-block { display: block; width: 100%; box-sizing: border-box; text-align: center; }
+
+	/* A medium button: between the full size and .small (Search beside a
+	   search box, Save location) */
+	.glass.medium { padding: 0.75em 1.25em; }
+	.search-row > .glass { flex: none; }
+
+	/* Two fields side by side, each half the row (Latitude, Longitude) */
+	.field.pair { display: flex; gap: 12px; }
+	.field.pair > * { flex: 1; }
+
+	/* The font picker: each font's name in its own font (--sample-font,
+	   set on the name) */
+	.font-row strong { font-family: var(--sample-font, inherit); }
+	/* The Background and glass page: what's behind these pages now */
+	.backdrop-preview {
+		aspect-ratio: 16 / 10;
+		border-radius: 0.6em;
+		overflow: hidden;
+		border: 1px solid var(--segment-border);
+		margin: 4px 0 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.backdrop-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+	/* The preview, with the back button drawn in its corner */
+	/* The preview is a button: it opens Change background. It dims on
+	   hover (or keyboard focus) and says so; on a touch screen, with no
+	   hover, a small "Change" label sits in its top right corner. */
+	.backdrop-stage {
+		position: relative;
+		display: block;
+		width: 100%;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+		border-radius: 0.6em;
+	}
+	.backdrop-stage .backdrop-preview { display: flex; }
+	.backdrop-stage:focus-visible { outline: 2px solid var(--glow-strong); outline-offset: 2px; }
+	.change-label {
+		position: absolute;
+		inset: 4px 0 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.6em;
+		background: rgba(0, 0, 0, 0.5);
+		color: #fff;
+		font-weight: 600;
+		opacity: 0;
+		transition: opacity 0.2s ease;
+		pointer-events: none;
+	}
+	.backdrop-stage:hover .change-label,
+	.backdrop-stage:focus-visible .change-label { opacity: 1; }
+	@media (hover: none) {
+		/* The words are swapped for one: "Change background" is too long
+		   for a corner */
+		.change-label {
+			opacity: 1;
+			inset: calc(4px + 0.6em) 0.6em auto auto;
+			padding: 0.2em 0.6em;
+			border-radius: 0.5em;
+			font-size: 0;
+		}
+		.change-label::before { content: "Change"; font-size: 0.75rem; }
+	}
+
+	/* A colour behind the pages, or the Default, in the preview (the
+	   colour is --colour, set on it) */
+	.preview-colour { position: absolute; inset: 0; background: var(--colour); }
+	.preview-default { background: var(--bg); }
+
+	/* Change background: a wider pop-up, its preview with a piece of glass
+	   on it to judge the text by, the three choices and the colour wheel */
+	.modal.modal-wide { max-width: 40em; max-height: 92vh; overflow-y: auto; }
+
+	/* Frosted glass: the Tint colours on a row of their own, then the
+	   sliders two to a row (Blur and Tint strength, then brightness and
+	   Dim), so the box stays short enough to leave the row under it the
+	   room it needs. One to a row on a phone held upright. */
+	.glass-fields {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0 1.75em;
+		align-items: start;
+	}
+	@media (max-width: 42em) {
+		.glass-fields { grid-template-columns: minmax(0, 1fr); }
+	}
+	.glass-fields > .field { margin-bottom: 0.9em; min-width: 0; }
+	.glass-fields > .wide-field { grid-column: 1 / -1; }
+
+	.bg-preview {
+		position: relative;
+		aspect-ratio: 16 / 7;
+		border-radius: 0.6em;
+		overflow: hidden;
+		border: 1px solid var(--segment-border);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+	}
+	.bg-preview-colour, .bg-preview-veil, .bg-preview img { position: absolute; inset: 0; width: 100%; height: 100%; }
+	/* What's behind (--colour) and the veil over a picture (--veil), from
+	   the pop-up's script as the choice changes */
+	.bg-preview-colour { background: var(--colour, transparent); }
+	.bg-preview-veil { background: var(--veil, transparent); }
+	.bg-preview img { object-fit: cover; }
+	.bg-preview-card {
+		position: relative;
+		padding: 0.6em 1em;
+		border-radius: 0.6em;
+		border: 1px solid var(--segment-border);
+		background: var(--segment-bg);
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		color: var(--fg);
+		font-size: 0.9em;
+	}
+
+	.bg-tabs { display: flex; }
+	.bg-tabs .tab-btn { flex: 1; }
+	.bg-pane .hint { margin: 0 0 0.6em; line-height: 1.5; }
+	.bg-pane .buttons { margin-bottom: 4px; }
+	.bg-pane .buttons .glass { padding: 0.65em 1.2em; }
+
+	.wheel-row { display: flex; gap: 1.25em; align-items: center; justify-content: center; flex-wrap: wrap; }
+	.wheel {
+		position: relative;
+		width: 220px;
+		height: 220px;
+		flex: none;
+		border-radius: 50%;
+		touch-action: none;
+		cursor: crosshair;
+		outline: none;
+	}
+	.wheel:focus-visible { box-shadow: 0 0 0 3px var(--glow-strong); }
+	/* Darker as Brightness goes down (--brightness, 0.15 to 1) */
+	.wheel canvas { width: 100%; height: 100%; display: block; border-radius: 50%; filter: brightness(var(--brightness, 1)); }
+	/* Where the colour is on the wheel (--knob-x, --knob-y) and the colour
+	   itself (--colour), from the script */
+	.wheel-knob {
+		position: absolute;
+		left: var(--knob-x, auto);
+		top: var(--knob-y, auto);
+		background: var(--colour, transparent);
+		width: 18px;
+		height: 18px;
+		margin: -9px 0 0 -9px;
+		border-radius: 50%;
+		border: 2px solid #fff;
+		box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.5);
+		pointer-events: none;
+	}
+	.wheel-side { flex: 1 1 12em; min-width: 0; display: flex; flex-direction: column; gap: 0.25em; }
+	.swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+	.swatch {
+		background: var(--colour);
+		width: 1.9em;
+		height: 1.9em;
+		border-radius: 50%;
+		border: 1px solid var(--glass-border);
+		padding: 0;
+		cursor: pointer;
+	}
+	.swatch:hover, .swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--glow-strong); }
+
+	/* Dim: its label, with the Auto toggle at the other end of the line */
+	.dim-head { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
+	.auto-dim { display: inline-flex; align-items: center; gap: 0.5em; font-size: 0.85em; color: var(--fg-muted); cursor: pointer; }
+	.dim-warning { color: var(--fg); }
+	.corner-mark {
+		position: absolute;
+		width: 2em;
+		height: 2em;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.85em;
+		color: var(--fg);
+		border: 1px solid var(--glass-border);
+		background: var(--segment-bg);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+		pointer-events: none;
+	}
+	.corner-mark-top-left { top: 0.75em; left: 0.75em; }
+
+	/* "A video", say, in the preview's bottom left corner */
+	.backdrop-preview { position: relative; }
+	.preview-kind {
+		position: absolute;
+		left: 0.6em;
+		bottom: 0.6em;
+		padding: 0.15em 0.55em;
+		border-radius: 0.5em;
+		font-size: 0.72em;
+		color: #fff;
+		background: rgba(0, 0, 0, 0.45);
+	}
+	.corner-mark-bottom-right { bottom: 1.25em; right: 0.75em; }
+
+	/* Background's Back button switch: two halves, the width of the box */
+	.back-corner { margin-top: 10px; }
+	.back-corner .tabs { display: flex; }
+	.back-corner .tab-btn { flex: 1; }
+	.backdrop-preview.plain { background: var(--bg); color: var(--fg-muted); font-size: 0.9em; }
+
+	/* Its tint choices: None, Match the picture, a few colours, a picker */
+	.tint-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+	.tint-chip {
+		appearance: none;
+		-webkit-appearance: none;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 2.4em;
+		height: 2.4em;
+		padding: 0 0.7em;
+		border-radius: 1.2em;
+		border: 1px solid var(--segment-border);
+		background: var(--glass-bg);
+		color: var(--fg);
+		font: inherit;
+		font-size: 0.85em;
+		cursor: pointer;
+		position: relative;
+	}
+
+	.tint-chip:disabled { opacity: 0.35; cursor: default; }
+	.tint-chip.active { border-color: var(--fg); box-shadow: 0 0 0 1px var(--fg); }
+	.tint-chip:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--glow-strong); }
+
+	.tint-swatch {
+		background: var(--colour);
+		width: 1.1em;
+		height: 1.1em;
+		border-radius: 50%;
+		border: 1px solid rgba(255, 255, 255, 0.35);
+		flex: none;
+	}
+
+	/* A chip that's only a colour has no words: the swatch fills it */
+	.tint-chip:not(:has(span:not(.tint-swatch))) { padding: 0; justify-content: center; }
+
+	/* The picker: the browser's own colour box, made round */
+	.tint-custom input[type="color"] {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 1.4em;
+		height: 1.4em;
+		border: none;
+		border-radius: 50%;
+		padding: 0;
+		background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+		cursor: pointer;
+	}
+
+	.tint-custom input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+	.tint-custom input[type="color"]::-webkit-color-swatch { border: none; border-radius: 50%; }
+	.tint-custom { padding: 0; justify-content: center; }
+
+
+	/* ---------------------------------------------------------------
+	   Marketplace.
+
+	   Every Marketplace page is a column of segments, like Settings, only
+	   wider: the home page needs room for up to three columns of listings
+	   on a big screen. The page itself scrolls. Nothing scrolls inside a
+	   box any more -- that clipped the hover glow, and on a phone it meant
+	   scrolling inside a scroll.
+	   --------------------------------------------------------------- */
+	.market {
+		width: 100%;
+		max-width: 100em;
+		display: flex;
+		flex-direction: column;
+		gap: 1em;
+	}
+
+	/* Pages that are mostly reading (a listing's own page, Sources): a
+	   line of text much wider than this gets hard to follow */
+	.market.reading { max-width: 62em; }
+
+	/* The header: title and a line or two under it on the left, the
+	   page's one button on the right. On a phone the button drops under
+	   the text rather than squeezing it. */
+	.market-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 1em;
+	}
+
+	.market-head > div { flex: 1 1 20em; min-width: 0; }
+	.market-head .lede { max-width: 40em; margin-top: 0.4em; }
+
+	/* The last line in a box needs no space under it -- the box's own
+	   padding already gives it room */
+	.market .segment .lede:last-child { margin-bottom: 0; }
+
+	/* The search, the Modules / Themes switch and the count: pinned at
+	   the top while the listings scroll under it. Frosted glass like
+	   every other box (since v2: before, a fill of its own, mostly the
+	   page's black). The blur is never less than 16px here, so the
+	   listings passing underneath stay a smudge and never collide with
+	   the search text, even with the blur turned down in Settings. */
+	.market-toolbar {
+		position: sticky;
+		top: 1em;
+		z-index: 5;
+		backdrop-filter: blur(max(var(--glass-blur), 16px)) saturate(var(--glass-saturate));
+		-webkit-backdrop-filter: blur(max(var(--glass-blur), 16px)) saturate(var(--glass-saturate));
+	}
+
+	/* As many columns as fit, each at least 30em wide: one on a phone, two
+	   on a laptop, three on a wide screen. .market's max-width is what
+	   stops a fourth. min() keeps one column from being wider than a
+	   narrow phone screen. Measured in em, so a bigger text size in
+	   Settings means fewer, wider columns. */
+	.market-list {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(30em, 100%), 1fr));
+		gap: 1em;
+	}
+
+	/* One listing: name, author and description on the left, its button
+	   on the right. The box is a .segment.clickable. */
+	.market-item {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+	}
+
+	.market-item-text { flex: 1; min-width: 0; }
+
+	/* A listing's icon: its own picture (an entry's \`icon\` in the
+	   registry, since 2.0.0) or, without one, a tile in a colour of its
+	   own with its first letter. Under the link stretched over the
+	   listing, so a click on it opens the listing like the rest. */
+	.market-icon {
+		flex: none;
+		align-self: flex-start;
+		width: 3.25em;
+		height: 3.25em;
+		box-sizing: border-box;
+		border-radius: 0.85em;
+		object-fit: cover;
+		background: var(--glass-bg);
+		border: 1px solid var(--segment-border);
+	}
+	.market-icon.big { width: 4.75em; height: 4.75em; border-radius: 1.1em; }
+	.market-initial {
+		display: grid;
+		place-items: center;
+		color: #fff;
+		font-weight: 600;
+		font-size: 1.35em;
+		width: 2.41em;
+		height: 2.41em;
+		border-radius: 0.63em;
+		border-color: rgba(255, 255, 255, 0.18);
+		background: linear-gradient(145deg, hsl(var(--hue) 55% 52%), hsl(calc(var(--hue) + 35) 60% 36%));
+		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+	}
+	.market-initial.big { font-size: 1.9em; width: 2.5em; height: 2.5em; border-radius: 0.58em; }
+
+	/* A narrow screen: the description gets the width beside the icon, and
+	   the button goes on a line of its own under it */
+	@media (max-width: 42em) {
+		.market-item { flex-wrap: wrap; align-items: flex-start; }
+		.market-item > .market-item-text { flex: 1 1 calc(100% - 4.25em); }
+		.market-item > .market-action { margin-left: 4.25em; }
+	}
+
+	/* The registry's banner behind the Marketplace's heading, darkened
+	   towards the bottom so the heading stays readable over any picture.
+	   A banner that won't load is taken away (marketPictureScript) and the
+	   heading looks as it always has. */
+	.market-head.has-banner {
+		position: relative;
+		overflow: hidden;
+		min-height: 12em;
+		align-items: flex-end;
+		color: #fff;
+	}
+	.market-banner {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		z-index: 0;
+	}
+	.market-head.has-banner::before {
+		content: "";
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0.25) 60%, rgba(0, 0, 0, 0.05));
+	}
+	.market-head.has-banner > div,
+	.market-head.has-banner > .market-action { position: relative; z-index: 2; }
+	.market-head.has-banner h1 { color: #fff; }
+	.market-head.has-banner .lede,
+	.market-head.has-banner .help { color: rgba(255, 255, 255, 0.85); }
+	.market-item h3 { margin: 0; font-size: 1.05em; font-weight: 600; }
+	.market-by { color: var(--fg-muted); font-size: 0.8em; margin: 0.15em 0 0.5em 0; }
+	.market-desc { color: var(--fg-muted); font-size: 0.9em; line-height: 1.4; }
+
+	/* What a listing does beyond its tile (runs in the background, takes
+	   input, sends notifications) and the OmniCore it needs, as small
+	   tags under its description. A requirement this OmniCore doesn't
+	   meet is drawn in the danger colour. */
+	.market-tags { display: flex; flex-wrap: wrap; gap: 0.4em; margin-top: 0.6em; }
+	.market-tags .provides-tag { margin: 0; }
+	.provides-tag.warn { color: var(--danger); border-color: var(--danger-border); opacity: 1; }
+
+	/* The same facts on a listing's own page, one plain sentence each */
+	.market-traits { margin: 0; padding-left: 1.2em; }
+	.market-traits li { margin: 0.35em 0; line-height: 1.5; }
+	.market-traits li.warn { color: var(--danger); }
+
+	/* The whole listing is a link to its own page, EXCEPT the Install
+	   button, which needs its own click. The link is stretched over the
+	   listing; the button sits above it. "Installed" isn't a button, so a
+	   click on it goes through to the link underneath. */
+	.market-link {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		border-radius: inherit;
+	}
+
+	.market-link:focus-visible {
+		outline: 2px solid var(--glow-strong);
+		outline-offset: 2px;
+	}
+
+	/* A listing's button, and the one in each header. Smaller than a
+	   full-size glass button, the same size whichever kind it is. */
+	.market-action {
+		position: relative;
+		z-index: 2;
+		flex: none;
+		padding: 0.6em 1.1em;
+		font-size: 0.95em;
+		white-space: nowrap;
+	}
+
+	span.market-action { pointer-events: none; cursor: default; }
+
+	/* The registry couldn't be read: what went wrong, and a way to try
+	   again, in a box edged in the danger colour */
+	.market-error {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 1em;
+		border-color: var(--danger-border);
+	}
+
+	.market-error h2 { color: var(--danger); }
+	.market-error .lede { margin: 0; }
+
+	/* A heading between groups of listings (an author's modules, then
+	   their themes) */
+	.market-section { margin: 0.75em 0 0 0.25em; font-size: 1.05em; font-weight: 600; }
+
+	/* A listing's own page */
+	.market-about p { margin: 0 0 0.9em 0; line-height: 1.55; }
+	.market-about p:last-child { margin-bottom: 0; }
+
+	.market-shots {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(min(18em, 100%), 1fr));
+		gap: 1em;
+		margin-top: 0.75em;
+	}
+
+	.market-shots figure { margin: 0; }
+
+	.market-shots img {
+		width: 100%;
+		display: block;
+		border-radius: 0.5em;
+		border: 1px solid var(--segment-border);
+	}
+
+	.market-shots figcaption { color: var(--fg-muted); font-size: 0.85em; margin-top: 0.5em; }
+
+	/* A web address that has to wrap somewhere on a phone */
+	.market-url { overflow-wrap: anywhere; }
+
+	/* Sources: one line per registry, divided by a thin rule */
+	.market-source {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+		padding: 0.875em 0;
+		border-top: 1px solid var(--border);
+	}
+
+	.market-source:first-child { border-top: none; padding-top: 0; }
+	.market-source:last-child { padding-bottom: 0; }
+	.market-source > div { min-width: 0; }
+
+	/* A source's banner, small, beside its name */
+	.market-source-name { display: flex; align-items: center; gap: 0.875em; min-width: 0; }
+	.market-source-banner {
+		flex: none;
+		width: 6.4em;
+		aspect-ratio: 16 / 9;
+		object-fit: cover;
+		border-radius: 0.5em;
+		border: 1px solid var(--segment-border);
+	}
+
+
+	/* Shown once, right before a third-party source is actually added.
+	   Deliberately not styled like anything else on this page — this is
+	   the one moment worth standing out. */
+	.market-warning {
+		background: linear-gradient(165deg, var(--danger-bg), var(--danger-bg));
+		border: 1px solid var(--danger-border);
+		border-radius: 0.75em;
+		padding: 1.375em;
+	}
+
+	.market-warning h3 { color: var(--danger); margin: 0 0 12px 0; font-size: 17px; }
+	.market-warning p { color: var(--danger-text); font-size: 14px; line-height: 1.6; margin: 0 0 12px 0; }
+	.market-warning p:last-of-type { margin-bottom: 0; }
+
+	.market-warning-actions { display: flex; flex-wrap: wrap; gap: 0.75em; margin-top: 1.25em; }
+
+	.provides-tag {
+		display: inline-block;
+		padding: 0.3333em 0.8333em;
+		border: 1px solid var(--glass-border);
+		border-radius: 999em;
+		font-size: 0.75em;
+		opacity: 0.75;
+		margin: 0.5em 0.5em 0 0;
+	}
+`;
+}
+
 // The Settings home's elements (settings-home.js draws the page): the
 // notch and the capsule, the strip of tabs, a tab's grid, the tiles, and
 // fact rows. At the end of uiStyles, where they've always been on the page.
@@ -1818,7 +3037,10 @@ function uiStyles(options) {
 
 	.field { margin-bottom: 20px; }
 	.help { font-size: 0.75em; color: var(--fg-muted); margin-top: 6px; }
-	.hint { font-size: 0.75em; color: var(--fg-muted); display: block; }
+	/* Quieter words under or beside something, saying why or what to
+	   expect. One for every page since 2.0.0's central theme (the
+	   Settings pages had a copy of their own, which won there). */
+	.hint { display: block; color: var(--fg-muted); font-size: 13px; margin: 4px 0 8px 0; }
 	.empty { color: var(--fg-muted); font-size: 0.875em; }
 
 	input[type="text"],
@@ -2534,7 +3756,8 @@ function uiStyles(options) {
 		margin: 0;
 	}
 	.stepper input[type="number"] { -moz-appearance: textfield; }
-${SETTINGS_HOME_CSS}`;
+${SETTINGS_HOME_CSS}
+${settingsPagesCss()}`;
 }
 
 // The floating back button's markup, or nothing when a page shouldn't

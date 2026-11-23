@@ -115,17 +115,38 @@ desktop and phone, taken before it, pixel by pixel.
    replaces the Appearance tab's own mode and type box rules. The notch's
    padding is in em, so it grows with the text size like everything
    else.
-4. **The Settings pages** (`admin-face.js`): about 280 rules and 51
-   `style=""`, the biggest step, maybe in two. Its page layout first
-   (`.bento`, `.bento-row` and its `.two` / `.three` / `.top`,
-   `.bento-column`, `.settings-head`, `.fact`): the Network page is built
-   on it, and `.bento-row.two.wide-second` is already central while its
-   base isn't.
+4. **The Settings pages** (done, `admin-face.js` has no looks of its own),
+   in two:
+   - **4a**: the Settings page itself (`body.settings-page`, the
+     bento, its rows and columns), the docked page, inset strips, the
+     mode previews (their little screens drawn by classes, not
+     `style=""`), a face's page, rows, the update boxes and release
+     notes, the About box, Location, Place search's warning, Saved keys,
+     the major version box and pop-up, Installed Resources' facts, the
+     font search, and full-width, medium and "not yet" glass buttons.
+     One `.hint` for every page (the Settings pages' had its own, which
+     won there). A style attribute that only sets CSS variables
+     (`style="--hue: 210"`) no longer counts as a look.
+   - **4b**: the Background preview and pop-up, the colour wheel and its
+     knob, tint chips, glass fields, Dim's Auto, and the Marketplace (its
+     pages, listings, tags, a listing's page, Sources, the registry error
+     and the third-party warning). Colours only the page knows (a
+     swatch's, the wheel's knob, the preview's) come in as CSS
+     variables. The picture pane's buttons are the central `.buttons`
+     row. `admin-face.js` still includes `PRIORITY_CSS` and
+     `PLACE_SEARCH_CSS`, which are `priority-ui.js`'s and
+     `place-search-ui.js`'s and move in step 5.
 5. **The rest**: the setup wizard, the face setup (`control-face.js`), an
    Inport's page, the fallback page (its own `.buttons` and its `<style>`
    around the notification styles), Info order lists, place search and
    the background picker. Then `STILL_TO_MOVE` is empty and the test is
    strict for everything.
+
+Found while moving (not done yet): some words people read still have a
+long dash in them: the third-party source warning in the Marketplace
+(`admin-face.js`), a few Marketplace and update error messages
+(`marketplace.js`, `core-updater.js`), and an event's time and summary
+(`envelope.js`). Tests check some of these words as written.
 
 ## Next: appearance, for 2.0.0
 

@@ -227,7 +227,7 @@ test("updates: the About tab has the version, the updates, and a box for the not
 	const { html } = await get(ADMIN, "/");
 	const about = html.slice(html.indexOf('data-pane="about"'));
 	assert.match(about, /<div class="segment c4 row1">\s*<h2>Updates<\/h2>/);
-	assert.match(about, /<div class="segment c6 row2" id="release-notes">/);
+	assert.match(about, /<div class="segment c6 row2 release-notes" id="release-notes">/);
 	assert.ok(html.includes('fetch("/updates/notes"'), "the notes come after the page is up");
 });
 
@@ -276,7 +276,7 @@ test("updates: the notes scroll inside their box, which fits the screen", async 
 
 	// On the About tab (not a phone held upright) the box takes the room
 	// that's left, and each part scrolls in it, so the tab doesn't
-	assert.match(html, /html\.home-tabs #release-notes \{[^}]*align-self: stretch;/, "the second row of the sideways grid, filled");
+	assert.match(html, /html\.home-tabs \.release-notes \{[^}]*align-self: stretch;/, "the second row of the sideways grid, filled");
 	assert.match(html, /html\.home-tabs \.notes-part \.changelog \{ flex: 1; min-height: 0; max-height: none; \}/);
 });
 
