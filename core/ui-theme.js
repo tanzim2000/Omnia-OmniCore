@@ -1616,6 +1616,653 @@ function settingsPagesCss() {
 `;
 }
 
+// Info order lists, short and long (priority-ui.js draws them, on a
+// widget's page and in the wizard): a list to put in order by dragging or
+// with its arrows. The row being dragged follows --drag-y.
+const PRIORITY_CSS = `
+	/* A reorderable list. Looks like the .option rows, since it's the
+	   same kind of choice made a different way. */
+	[data-priority] { position: relative; }
+
+	.priority-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 0.5em 0.6em 0.5em 0.4em;
+		border: 1px solid var(--segment-border);
+		border-radius: 0.6579em;
+		margin-bottom: 8px;
+		font-size: 0.95em;
+		user-select: none;
+		-webkit-user-select: none;
+		cursor: grab;
+		position: relative;
+	}
+
+	.priority-row:last-child { margin-bottom: 0; }
+
+	/* The row being dragged sits above the others and follows the
+	   pointer. It's given the page's own colour so the rows it passes
+	   over don't show through it. */
+	.priority-row.dragging {
+		/* Where the pointer has pulled it (--drag-y, from the script) */
+		transform: translateY(var(--drag-y, 0px));
+		z-index: 2;
+		cursor: grabbing;
+		border-color: var(--glass-border);
+		background: var(--bg);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	}
+
+	.sorting, .sorting * { cursor: grabbing; }
+
+	.priority-grip {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 32px;
+		flex: none;
+		color: var(--fg-muted);
+		fill: currentColor;
+		opacity: 0.6;
+		/* A finger on the grip drags instead of scrolling the page */
+		touch-action: none;
+	}
+
+	.priority-row:hover .priority-grip { opacity: 1; }
+
+	.priority-rank {
+		color: var(--fg-muted);
+		font-size: 0.8em;
+		min-width: 16px;
+		text-align: right;
+	}
+
+	.priority-name { flex: 1; }
+
+	.priority-move {
+		appearance: none;
+		-webkit-appearance: none;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		margin: 0;
+		flex: none;
+		font-size: 0.85em;
+		line-height: 1;
+		cursor: pointer;
+		color: inherit;
+		border-radius: 0.5882em;
+		border: 1px solid var(--segment-border);
+		background: var(--glass-bg);
+	}
+
+	.priority-move:hover:not(:disabled) { background: var(--glass-bg-hover); }
+	.priority-move:disabled { opacity: 0.2; cursor: default; }
+
+	/* A long list's button: the order in short form, and "Change" */
+	.glass.priority-open {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1em;
+		width: 100%;
+		text-align: left;
+		padding: 0.75em 1em;
+	}
+
+	.priority-summary {
+		flex: 1;
+		min-width: 0;
+		line-height: 1.4;
+	}
+
+	.priority-open-hint {
+		flex: none;
+		color: var(--fg-muted);
+		font-size: 0.9em;
+	}
+
+	.priority-open-hint::after { content: " ›"; }
+
+	/* The pop-up: taller than a question, and its list scrolls while the
+	   heading and the buttons stay put */
+	.modal.priority-modal { max-width: 28em; max-height: 85vh; max-height: 85dvh; }
+
+	.priority-list {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		padding: 0.125em;
+		margin: 0 -2px;
+	}`;
+
+// Place search's floating list of matches and the lines under it
+// (place-search-ui.js, on Settings, a widget's page and the wizard)
+const PLACE_SEARCH_CSS = `
+	.place-anchor { position: relative; }
+
+	/* While open: over the page, under or over its search row (the script
+	   says where, --float-top or --float-bottom, and how tall it can be,
+	   --float-max). The box it's in is lifted above the boxes after it. Its own
+	   fill is mostly solid: it sits over other boxes' text, and a box's
+	   blur only reaches what's inside that box. */
+	.place-float {
+		position: absolute;
+		left: 0;
+		right: 0;
+		z-index: 30;
+		top: var(--float-top, auto);
+		bottom: var(--float-bottom, auto);
+		max-height: var(--float-max, 19em);
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 0.375em;
+		border-radius: 0.75em;
+		border: 1px solid var(--segment-border);
+		background-color: color-mix(in srgb, var(--bg) 97%, transparent);
+		background-image: linear-gradient(var(--glass-tint), var(--glass-tint));
+		box-shadow: inset 0 1px 0 var(--segment-edge), 0 12px 36px rgba(0, 0, 0, 0.45);
+		backdrop-filter: blur(16px);
+		-webkit-backdrop-filter: blur(16px);
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.place-float .result { margin: 0; flex-shrink: 0; }
+	.place-float .place-note, .place-float .place-credit { margin: 4px 6px; }
+	.place-empty { margin: 6px; }
+	.segment.float-open { position: relative; z-index: 20; }
+
+	.place-note, .place-credit {
+		margin: 8px 0 0;
+		font-size: 0.78em;
+		line-height: 1.5;
+		color: var(--fg-muted);
+	}
+
+	.place-credit a { color: inherit; }
+	.place-credit a:hover { color: var(--fg); }`;
+
+// The pages that aren't Settings: the wizard (body.wizard-page), the
+// welcome face (body.welcome-page), and the centred pages (a face with no
+// theme yet, an Inport's page). Each page's own rules are scoped to its
+// body's class with :where(), which keeps them exactly as easy to override
+// as the plain rules they were before 2.0.0's central theme.
+function otherPagesCss() {
+	return `
+	/* ===============================================================
+	   THE WIZARD (wizard-face.js, port 3999)
+	   =============================================================== */
+	/* The page is exactly the height of the window and never scrolls
+	   itself -- scrolling happens inside whichever region actually has
+	   too much content. Set here unconditionally rather than added by
+	   JavaScript once a step renders: a height that only appears after
+	   the first paint means everything sized against it collapses to
+	   nothing until then, which is exactly what happened when this was
+	   applied by a class from draw(). */
+	html:where(:has(> body.wizard-page)),
+	body:where(.wizard-page) { height: 100%; }
+
+	body:where(.wizard-page) {
+		margin: 0;
+		padding: 2em 1.5em 1.5em;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1.25em;
+		overflow: hidden;
+		box-sizing: border-box;
+
+		/* A wizard is a screen to move through, not a document to read
+		   and copy from */
+		-webkit-user-select: none;
+		-moz-user-select: none;
+		-ms-user-select: none;
+		user-select: none;
+	}
+
+	.wizard-head { text-align: center; flex-shrink: 0; }
+	.wizard-head h1 { margin: 0; }
+
+	/* The step's content takes whatever height is left between the
+	   heading and the dock, and never more. Everything inside it that
+	   needs to scroll measures itself against this. */
+	/* Takes the space between the heading and the dock. Children are
+	   stretched to fill it, which is what gives the split steps' lists
+	   a real height to divide -- without it they have nothing to size
+	   against and collapse to a sliver.
+	   
+	   The two kinds of step want opposite things here, so they say so
+	   individually below rather than sharing one compromise: a split
+	   step is a workspace and should fill the screen, a single segment is
+	   a form and should be only as tall as it needs. */
+	.wizard-content {
+		flex: 1 1 auto;
+		min-height: 0;
+		width: 100%;
+		display: flex;
+		justify-content: center;
+		align-items: stretch;
+	}
+
+	/* A split step needs .wizard-content to claim all the leftover space, since
+	   that's where its real height comes from. A single segment opting out
+	   of the stretch above wasn't enough on its own -- .wizard-content itself
+	   was still claiming that space regardless, just leaving the dead
+	   gap below the segment instead of inside it. This makes .wizard-content
+	   itself stop claiming space it has nothing to fill it with,
+	   whenever what's actually inside it is a single segment. */
+	.wizard-content:has(> .wizard-single) {
+		flex: 0 1 auto;
+	}
+
+	/* One segment, for the steps that only have one thing to show. It
+	   scrolls inside itself rather than growing the page, the same as
+	   the split steps do -- a long theme form or review list was
+	   previously the one thing that could still push the whole page
+	   taller and slide underneath the dock. */
+	.wizard-single {
+		width: 100%;
+		max-width: clamp(28em, 50vw, 40em);
+		/* Opts out of .wizard-content's stretch: a form should be as tall as
+		   its fields and no taller. Stretching it left a short step
+		   standing full height with its content at the top and a large
+		   dead gap above the dock. */
+		align-self: flex-start;
+		max-height: 100%;
+		overflow-y: auto;
+		box-sizing: border-box;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.wizard-single::-webkit-scrollbar { width: 8px; }
+	.wizard-single::-webkit-scrollbar-track { background: transparent; }
+	.wizard-single::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 0.25em;
+	}
+
+	/* ---------------------------------------------------------------
+	   The two-segment steps.
+
+	   Unlike the settings bento, where segments size to their own content
+	   and the page scrolls past them, these fill the screen: a wizard
+	   step is one task to focus on now, not a page to scan. Each half
+	   takes an equal share of whatever space there is and stretches to
+	   fill it, so the lists inside them can do the same.
+
+	   Which way they divide follows the screen's own shape rather than
+	   a pixel threshold, for the same reason everywhere else does: a
+	   phone can report more CSS pixels than an older monitor, so any
+	   fixed number misjudges real devices in both directions.
+	   --------------------------------------------------------------- */
+	/* Stays stretched by .wizard-content, which is what gives the segments and
+	   the lists inside them a real height to divide. */
+	.wizard-split {
+		width: 100%;
+		max-width: clamp(40em, 85vw, 72em);
+		min-height: 0;
+		display: flex;
+		gap: 14px;
+
+		/* Portrait: divided horizontally — stacked, each full width */
+		flex-direction: column;
+	}
+
+	@media (orientation: landscape) {
+		/* Landscape: divided vertically — side by side, each full height */
+		.wizard-split { flex-direction: row; }
+	}
+
+	.wizard-split > .segment {
+		flex: 1 1 0;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	/* The boxes themselves are .segment, from ui-theme.js -- the same
+	   ones Settings uses. Only the wizard's quieter headings are its
+	   own. */
+	:where(.wizard-page) .segment h2 {
+		margin: 0 0 14px 0;
+		font-weight: 400;
+		font-size: 0.95em;
+		color: var(--fg-muted);
+	}
+
+	/* A segment heading with an action beside it. The heading keeps its own
+	   bottom margin so a segment without an action looks no different. */
+	.segment-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1em;
+		flex-shrink: 0;
+	}
+
+	/* Sized to sit beside a heading rather than stand on its own -- close
+	   to the text it accompanies, not a full control competing with the
+	   list below it. */
+	.mini {
+		appearance: none;
+		-webkit-appearance: none;
+		flex-shrink: 0;
+		margin-bottom: 14px;
+		background: var(--glass-bg);
+		border: 1px solid var(--glass-border);
+		border-radius: 999em;
+		color: var(--fg);
+		font-family: inherit;
+		font-size: 0.8em;
+		padding: 0.3906em 0.9375em;
+		cursor: pointer;
+		transition: background 0.15s ease, box-shadow 0.15s ease;
+	}
+
+	.mini:hover,
+	.mini:focus-visible {
+		outline: none;
+		background: var(--glass-bg-hover);
+		box-shadow: 0 0 14px var(--glow-strong);
+	}
+
+	/* The settings form inside a split step scrolls on its own too,
+	   rather than growing its segment past the screen */
+	.segment-scroll {
+		flex: 1 1 0;
+		min-height: 0;
+		overflow-y: auto;
+		padding-right: 0.4em;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.segment-scroll::-webkit-scrollbar { width: 8px; }
+	.segment-scroll::-webkit-scrollbar-track { background: transparent; }
+	.segment-scroll::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 0.25em;
+	}
+
+	/* A module in the picker, and a module already added. Same shape on
+	   purpose — it's the same thing, on two sides of one decision. */
+	.flat,
+	.picked {
+		display: block;
+		width: 100%;
+		text-align: left;
+		background: var(--segment-bg);
+		border: 1px solid var(--segment-border);
+		border-radius: 0.5263em;
+		color: var(--fg);
+		font-size: 0.95em;
+		font-family: inherit;
+		padding: 0.7895em 1.0526em;
+		flex-shrink: 0;
+	}
+
+	.flat {
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+	.flat:hover {
+		/* The exact same treatment On this face gets on hover, just in
+		   green instead of red: a tinted fill, a coloured border, and a
+		   minimal glow -- not just the glow on its own, which read as a
+		   halo around an otherwise plain grey hover state. */
+		background: var(--success-bg);
+		border-color: var(--success-border);
+		box-shadow: 0 0 14px rgba(62, 214, 122, 0.45);
+	}
+
+	.flat small,
+	.picked small {
+		display: block;
+		color: var(--fg-muted);
+		font-size: 0.8em;
+		margin-top: 3px;
+	}
+
+	/* Removing is destructive, so it says so on hover rather than
+	   looking like every other clickable row */
+	.picked.removable {
+		cursor: pointer;
+		transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+	.picked.removable:hover {
+		background: var(--danger-bg);
+		border-color: var(--danger-border);
+		box-shadow: 0 0 14px rgba(255, 107, 107, 0.45);
+	}
+
+	/* The instance being configured right now */
+	.picked.current {
+		background: var(--glass-bg-hover);
+		border-color: var(--glass-border);
+	}
+
+	.review-row {
+		display: flex;
+		justify-content: space-between;
+		gap: 16px;
+		padding: 0.7237em 0;
+		border-bottom: 1px solid var(--segment-border);
+		font-size: 0.95em;
+	}
+
+	.review-row span { color: var(--fg-muted); }
+
+	/* A later part of a step's box, a little apart from what's above it
+	   (a theme's own settings, the review's modules). Written twice so a
+	   heading keeps it too: ".segment h2" sets every heading's margins
+	   in a box, and counts for more than a class on its own. */
+	.part,
+	.segment h2.part { margin-top: 22px; }
+
+	/* ===============================================================
+	   THE WELCOME FACE (control-face.js, port 4000)
+	   =============================================================== */
+	body:where(.welcome-page) {
+		min-height: 100vh;
+		padding: 3em 1.5em;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 1.75em;
+	}
+
+	:where(.welcome-page) .panel { width: 100%; max-width: 460px; }
+
+	:where(.welcome-page) .actions { display: flex; gap: 0.75em; justify-content: center; }
+
+	/* ---------------------------------------------------------------
+	   The face picker: a fixed-height framed region, not a box that
+	   grows to fit its content -- one face or twenty, the frame is
+	   the same size, with a visible border so its edge is obvious.
+	   Content sits centered within it; only becomes actually
+	   scrollable once it genuinely overflows.
+
+	   Centred with auto margins on the first and last face, NOT with
+	   justify-content: center. When the faces are taller than the box,
+	   justify-content: center pushes the overflow out of the top as well
+	   as the bottom, and the top part is above where a scroll bar can
+	   ever reach: the first face was cut off and couldn't be scrolled
+	   to (v1.19.5 and earlier). An auto margin shares out only the
+	   space that's actually left, so when there's none it's zero and
+	   the list starts at the top.
+
+	   Generously padded on the sides on purpose: a clickable segment's hover
+	   glow paints outside its own box, and this container clips
+	   anything crossing its edge the moment overflow-y is set at
+	   all -- not enough horizontal room here and the glow gets cut
+	   off exactly where it should be brightest.
+	   --------------------------------------------------------------- */
+	.face-list {
+		width: 100%;
+		max-width: 640px;
+		height: min(620px, 62vh);
+		border: 1px solid var(--segment-border);
+		border-radius: var(--radius);
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75em;
+		padding: 2em 3em;
+		box-sizing: border-box;
+		scrollbar-width: thin;
+		scrollbar-color: var(--scroll-thumb) transparent;
+	}
+
+	.face-list > :first-child { margin-top: auto; }
+	.face-list > :last-child { margin-bottom: auto; }
+
+	.face-list::-webkit-scrollbar { width: 8px; }
+	.face-list::-webkit-scrollbar-track { background: transparent; }
+	.face-list::-webkit-scrollbar-thumb {
+		background: var(--scroll-thumb);
+		border-radius: 0.25em;
+	}
+
+	/* ---------------------------------------------------------------
+	   The auto-advance timer: a small round lamp under a domed glass
+	   lens, echoing the glossy buttons rather than introducing a new
+	   visual idiom. The amber wedge drains as the seconds run out, so
+	   the redirect is never a surprise.
+
+	   Fixed bottom-left, always. The floating back button deliberately
+	   only offers bottom-right and top-left, so the two can never
+	   collide.
+	   --------------------------------------------------------------- */
+	:where(.welcome-page) .timer {
+		position: fixed;
+		bottom: 1.5em;
+		left: 1.5em;
+		width: 3.2em;
+		height: 3.2em;
+		border-radius: 50%;
+		border: 1px solid var(--glass-border);
+		background: var(--segment-bg);
+		backdrop-filter: blur(12px);
+		overflow: hidden;
+		z-index: 50;
+	}
+
+	/* The lamp itself. A conic gradient is what makes the wedge: the
+	   filled portion is amber, the rest is nothing, and shrinking the
+	   angle drains it like a pie chart losing its slice. */
+	.timer-lamp {
+		position: absolute;
+		inset: 0.45em;
+		border-radius: 50%;
+		background: conic-gradient(
+			#ffb43a calc(var(--remaining) * 1turn),
+			rgba(255, 180, 58, 0.12) 0
+		);
+		box-shadow: 0 0 0.75em rgba(255, 180, 58, 0.35);
+		transition: background 1s linear;
+	}
+
+	/* The dome: a sheen across the upper half, same treatment the glass
+	   buttons get, so the lamp reads as sitting under a lens. */
+	:where(.welcome-page) .timer::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: 50%;
+		background: linear-gradient(
+			to bottom, var(--glass-sheen), transparent
+		);
+		pointer-events: none;
+	}
+
+	:where(.welcome-page) .face {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25em;
+		/* Spacing between faces comes from .face-list's own gap now,
+		   not a margin on each one -- otherwise the last one would
+		   carry unwanted space below it too */
+		width: 100%;
+	}
+
+	:where(.welcome-page) .face span { color: var(--fg-muted); font-size: 0.8em; }
+
+	/* ---------------------------------------------------------------
+	   Centred page — one short thing in the middle of the screen, its
+	   title over it: a face with no theme yet (.fallback-page, its
+	   themes to pick from) and an Inport's page (.inport-page, the
+	   controls a phone uses, with a smaller, quieter title since the
+	   controls are the point, and nothing to select by accident).
+	   --------------------------------------------------------------- */
+	body:where(.centred-page) {
+		/* min-height, not height: with more than fits, a fixed height
+		   plus centring cuts the top off where it can't be scrolled to */
+		min-height: 100vh;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2em;
+		padding: 1.5em;
+	}
+	:where(.centred-page) h1 { text-align: center; }
+
+	:where(.fallback-page) .buttons { gap: 1em; justify-content: center; }
+
+	body:where(.inport-page) { -webkit-user-select: none; user-select: none; }
+	/* ...except what's typed: a number box stays one you can select in
+	   (and, on some phones, one you can type in at all) */
+	:where(.inport-page) input { -webkit-user-select: text; user-select: text; }
+	:where(.inport-page) h1 { font-size: 1.4em; opacity: 0.85; }
+	:where(.inport-page) .controls { display: flex; flex-wrap: wrap; gap: 1em; justify-content: center; }
+	:where(.inport-page) .list { width: 100%; max-width: 24em; }
+	:where(.inport-page) .segment.clickable { text-decoration: none; color: var(--fg); }
+
+	/* A big glass button: a tap target meant to be hit from a phone at
+	   arm's length, not clicked with a mouse */
+	.glass.big { padding: 1.5em 2.5em; font-size: 1.15em; }
+
+	/* A number to type on an Inport's page: a plain box (not a button, so
+	   no glow) holding its label, a big box to type in, and its own Save */
+	.field.number-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75em;
+		min-width: 12em;
+		cursor: default;
+	}
+	.number-field label { font-size: 0.85em; opacity: 0.7; }
+	.number-field input {
+		background: var(--bg);
+		border: 1px solid var(--glass-border);
+		border-radius: 0.3333em;
+		color: var(--fg);
+		font-family: inherit;
+		font-size: 1.5em;
+		padding: 0.5em;
+		width: 100%;
+		text-align: center;
+	}
+	.number-field input:focus { outline: none; border-color: var(--fg-muted); }
+
+	/* Done: a moment of green after a tap, so someone on a phone knows it
+	   registered before the control resets itself */
+	.done { background: rgba(120, 255, 160, 0.25) !important; }
+`;
+}
+
 // The Settings home's elements (settings-home.js draws the page): the
 // notch and the capsule, the strip of tabs, a tab's grid, the tiles, and
 // fact rows. At the end of uiStyles, where they've always been on the page.
@@ -2200,6 +2847,96 @@ const SETTINGS_HOME_CSS = `
 	.fact .hint { grid-column: 1 / -1; margin: 2px 0 0 0; }
 `;
 
+// The round floating button (Back, and the corner buttons) and the room
+// it keeps free at the top or bottom of the page. Part of uiStyles, and
+// sent on its own (backButtonStyles) to the About face, whose pages keep
+// their own look.
+const FLOATING_CSS = `
+	/* ---------------------------------------------------------------
+	   Floating button — flat, NOT glossy, deliberately distinct from
+	   the glass buttons above. Flashes on tap rather than glowing or
+	   lifting.
+	   --------------------------------------------------------------- */
+	.floating {
+		appearance: none;
+		-webkit-appearance: none;
+		position: fixed;
+		z-index: 50;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 3.4em;
+		height: 3.4em;
+		border-radius: 50%;
+		border: 1px solid var(--glass-border);
+		background: var(--segment-bg);
+		color: var(--fg);
+		font-family: inherit;
+		font-size: 1em;
+		cursor: pointer;
+		backdrop-filter: blur(12px);
+		-webkit-backdrop-filter: blur(12px);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 30px transparent;
+		transition: background-color 0.2s ease, box-shadow 0.25s ease;
+	}
+
+	/* It glows like any other button */
+	.floating:hover,
+	.floating:focus-visible {
+		background-color: var(--glass-bg-hover);
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 30px var(--glow-strong);
+		outline: none;
+	}
+
+	.floating:active,
+	.floating.flash { background: var(--flash); }
+
+	/* Corner is a user setting. Bottom-left is never offered — it's
+	   reserved for the welcome face's auto-advance timer, so the two
+	   can never collide. */
+	.floating.bottom-right { bottom: 1.5em; right: 1.5em; }
+	.floating.top-left { top: 1.5em; left: 1.5em; }
+
+	/* With the button in the top-left corner, every page starts below
+	   it instead of under it -- otherwise it sits on top of the page's
+	   title. Room for the button (1.5em from the top, 3.4em tall) plus a
+	   gap the same size as the one above it.
+
+	   One rule for every page OmniCore draws, the About face's too,
+	   whatever each page's own padding is: :has() asks "does this body
+	   contain a top-left back button?", and that question outranks a
+	   plain body { padding } wherever it's written. A browser too old to
+	   know :has() just doesn't reserve the room -- the page looks
+	   exactly as it did before.
+
+	   Bottom-right gets the same at the bottom. A page scrolled all the
+	   way down would otherwise end with its last segment under the button
+	   -- and the last thing on a page is often a button of its own
+	   (a module's Save | Remove). */
+	body:has(> .floating.top-left) { padding-top: calc(1.5em + 3.4em + 1.5em); }
+	body:has(> .floating.bottom-right) { padding-bottom: calc(1.5em + 3.4em + 1.5em); }
+`;
+
+// The back button Core puts on Face:1303's pages (about-face.js), which
+// don't load uiStyles: the floating button, with the colours it needs
+// set on the button itself, in the mode this browser is in (the device's,
+// when it hasn't picked one).
+function backButtonStyles() {
+	const mode = currentUiMode();
+	const colours = (palette) => `
+		--glass-border: ${palette.glassBorder};
+		--segment-bg: ${palette.segmentBg};
+		--fg: ${palette.fg};
+		--glass-bg-hover: ${palette.glassBgHover};
+		--glow-strong: ${palette.glowStrong};
+		--flash: ${palette.flash};`;
+	const variables = mode
+		? `.floating {${colours(PALETTES[mode])}}`
+		: `.floating {${colours(PALETTES.dark)}}
+	@media (prefers-color-scheme: light) { .floating {${colours(PALETTES.light)}} }`;
+	return variables + FLOATING_CSS;
+}
+
 function uiStyles(options) {
 	const settings = readSettings();
 	const forced = options && options.forceMode;
@@ -2306,10 +3043,12 @@ function uiStyles(options) {
 
 	/* A colour behind the pages instead of a picture: dimmed by
 	   Brightness like a picture, and veiled the same way */
+	/* A colour behind the pages: its colour is --colour, on it */
 	.omni-colour {
 		display: block;
 		width: 100%;
 		height: 100%;
+		background: var(--colour);
 		filter: brightness(var(--backdrop-brightness));
 	}
 
@@ -2340,12 +3079,17 @@ function uiStyles(options) {
 	/* Just after a reload that changed the background (a new one, or Dark
 	   and Light): a copy of the old one, on top of the new one, fading
 	   away once the new one is ready */
+	/* What was behind the last page, fading into this one's: how it
+	   looked comes from the script as variables (--was-bg, --was-width,
+	   --was-transform, --was-filter, --was-veil) */
 	.omni-backdrop-was {
 		position: fixed;
 		top: 0;
 		bottom: 0;
 		left: 0;
-		width: 100%;
+		width: var(--was-width, 100%);
+		transform: var(--was-transform, none);
+		background: var(--was-bg, transparent);
 		z-index: -1;
 		overflow: hidden;
 		pointer-events: none;
@@ -2359,7 +3103,9 @@ function uiStyles(options) {
 		height: 100%;
 		object-fit: cover;
 	}
-	.omni-backdrop-was .was-veil { position: absolute; inset: 0; }
+	.omni-backdrop-was img { filter: var(--was-filter, none); }
+	.omni-backdrop-was .omni-colour { filter: var(--was-filter, brightness(var(--backdrop-brightness))); }
+	.omni-backdrop-was .was-veil { position: absolute; inset: 0; background: var(--was-veil, transparent); }
 
 	@media (prefers-reduced-motion: reduce) {
 		.omni-backdrop picture,
@@ -2831,50 +3577,7 @@ function uiStyles(options) {
 		margin: 0 0 0.25em;
 	}
 
-	/* ---------------------------------------------------------------
-	   Floating button — flat, NOT glossy, deliberately distinct from
-	   the glass buttons above. Flashes on tap rather than glowing or
-	   lifting.
-	   --------------------------------------------------------------- */
-	.floating {
-		appearance: none;
-		-webkit-appearance: none;
-		position: fixed;
-		z-index: 50;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 3.4em;
-		height: 3.4em;
-		border-radius: 50%;
-		border: 1px solid var(--glass-border);
-		background: var(--segment-bg);
-		color: var(--fg);
-		font-family: inherit;
-		font-size: 1em;
-		cursor: pointer;
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 30px transparent;
-		transition: background-color 0.2s ease, box-shadow 0.25s ease;
-	}
-
-	/* It glows like any other button */
-	.floating:hover,
-	.floating:focus-visible {
-		background-color: var(--glass-bg-hover);
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 30px var(--glow-strong);
-		outline: none;
-	}
-
-	.floating:active,
-	.floating.flash { background: var(--flash); }
-
-	/* Corner is a user setting. Bottom-left is never offered — it's
-	   reserved for the welcome face's auto-advance timer, so the two
-	   can never collide. */
-	.floating.bottom-right { bottom: 1.5em; right: 1.5em; }
-	.floating.top-left { top: 1.5em; left: 1.5em; }
+${FLOATING_CSS}
 
 	/* ---------------------------------------------------------------
 	   Corner buttons — the same round floating button, a size smaller,
@@ -2931,25 +3634,6 @@ function uiStyles(options) {
 		width: 1.25em;
 		height: 1.25em;
 	}
-
-	/* With the button in the top-left corner, every page starts below
-	   it instead of under it -- otherwise it sits on top of the page's
-	   title. Room for the button (1.5em from the top, 3.4em tall) plus a
-	   gap the same size as the one above it.
-
-	   One rule for every page OmniCore draws, whatever each page's own
-	   padding is: :has() asks "does this body contain a top-left back
-	   button?", and that question outranks a plain body { padding }
-	   wherever it's written. A browser too old to know :has() just
-	   doesn't reserve the room -- the page looks exactly as it did
-	   before.
-
-	   Bottom-right gets the same at the bottom. A page scrolled all the
-	   way down would otherwise end with its last segment under the button
-	   -- and the last thing on a page is often a button of its own
-	   (a module's Save | Remove). */
-	body:has(> .floating.top-left) { padding-top: calc(1.5em + 3.4em + 1.5em); }
-	body:has(> .floating.bottom-right) { padding-bottom: calc(1.5em + 3.4em + 1.5em); }
 
 	.muted { color: var(--fg-muted); }
 
@@ -3757,7 +4441,10 @@ function uiStyles(options) {
 	}
 	.stepper input[type="number"] { -moz-appearance: textfield; }
 ${SETTINGS_HOME_CSS}
-${settingsPagesCss()}`;
+${settingsPagesCss()}
+${PRIORITY_CSS}
+${PLACE_SEARCH_CSS}
+${otherPagesCss()}`;
 }
 
 // The floating back button's markup, or nothing when a page shouldn't
@@ -4665,7 +5352,11 @@ function notificationStyles(mode) {
 
 
 module.exports = {
+	FLOATING_CSS,
+	backButtonStyles,
 	SETTINGS_HOME_CSS,
+	PRIORITY_CSS,
+	PLACE_SEARCH_CSS,
 	styleTag,
 	CURTAIN_CSS,
 	curtainStyles,

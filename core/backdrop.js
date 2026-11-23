@@ -553,7 +553,7 @@ const BACKDROP_SCRIPT = `
 					var filter = shown ? getComputedStyle(shown).filter : "none";
 					if (picture) kept.html = '<img src="' + (picture.currentSrc || picture.src) + '" alt="">';
 					else if (video && video.poster) kept.html = '<img src="' + video.poster + '" alt="">';
-					else if (colour) kept.html = '<span class="omni-colour" style="background:' + colour.style.background + '"></span>';
+					else if (colour) kept.html = '<span class="omni-colour" style="--colour:' + colour.style.getPropertyValue("--colour") + '"></span>';
 					kept.filter = filter === "none" ? "" : filter;
 					kept.veil = getComputedStyle(now, "::after").backgroundColor;
 				}
@@ -593,16 +593,16 @@ const BACKDROP_SCRIPT = `
 			var old = document.createElement("div");
 			old.className = "omni-backdrop-was";
 			old.setAttribute("aria-hidden", "true");
-			old.style.background = was.bg;
-			if (was.width) old.style.width = was.width;
-			if (was.transform) old.style.transform = was.transform;
+			// What it looked like, as CSS variables its rules read (ui-theme.js)
+			old.style.setProperty("--was-bg", was.bg);
+			if (was.width) old.style.setProperty("--was-width", was.width);
+			if (was.transform) old.style.setProperty("--was-transform", was.transform);
+			if (was.filter) old.style.setProperty("--was-filter", was.filter);
 			old.innerHTML = was.html || "";
-			var shown = old.firstElementChild;
-			if (shown && was.filter) shown.style.filter = was.filter;
 			if (was.veil) {
 				var veil = document.createElement("span");
 				veil.className = "was-veil";
-				veil.style.background = was.veil;
+				old.style.setProperty("--was-veil", was.veil);
 				old.appendChild(veil);
 			}
 			// On top of this page's own background, under everything else
@@ -647,7 +647,7 @@ function backdropHtml(given) {
 	// A colour: one layer of it, dimmed and veiled like a picture
 	if (hasColour(settings)) {
 		return `
-<div class="omni-backdrop" aria-hidden="true"><span class="omni-colour" style="background:${hexColour(settings.backgroundColor)}"></span></div>${BACKDROP_SCRIPT}`;
+<div class="omni-backdrop" aria-hidden="true"><span class="omni-colour" style="--colour:${hexColour(settings.backgroundColor)}"></span></div>${BACKDROP_SCRIPT}`;
 	}
 
 	// The Default: nothing to draw, but the script still runs, for the

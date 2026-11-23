@@ -65,7 +65,7 @@ Wi-Fi hardware yet, only stand-ins and BusyBox):
   network around you": the server leaves for the check, comes back to its
   own network, and the network is kept with Join automatically off.
 
-## Now: one central theme
+## Done: one central theme
 
 Decided (Nov 2026): every page OmniCore draws is built only from the
 central theme's elements (`core/ui-theme.js`), with no looks of its own.
@@ -77,13 +77,14 @@ notifications, the page fade) are central elements too, handed out by
 whole Default UI. Page scripts only switch classes, `hidden` and CSS
 variables (`--x`), never a colour, size or spacing. The one exception is
 Face:1303 (the About face, `about-face.js` and `about-face.css`), which
-never uses the central theme.
+never uses the central theme: Core adds only its own elements there (the
+Back button, the page fade, the status drawer and the takeover), and its
+look is its own, following Dark and Light only.
 
 `test/central-theme.test.js` checks every file in `core/` for style blocks,
-CSS rules, `style=""` attributes and scripts setting looks. What's still
-to move is listed in it (`STILL_TO_MOVE`), only warned about, and printed
-every run; a clean file that gets a look of its own, or a listed file that
-gets more, fails. Each step is compared with screenshots of every page,
+CSS rules, `style=""` attributes and scripts setting looks. While the
+pages were moved, what was left was listed in it (`STILL_TO_MOVE`) and
+only warned about; the list is empty now, so any look of its own fails. Each step is compared with screenshots of every page,
 desktop and phone, taken before it, pixel by pixel.
 
 1. **The test, and the Network page** (done): the page's 42 rules became
@@ -136,17 +137,25 @@ desktop and phone, taken before it, pixel by pixel.
      row. `admin-face.js` still includes `PRIORITY_CSS` and
      `PLACE_SEARCH_CSS`, which are `priority-ui.js`'s and
      `place-search-ui.js`'s and move in step 5.
-5. **The rest**: the setup wizard, the face setup (`control-face.js`), an
-   Inport's page, the fallback page (its own `.buttons` and its `<style>`
-   around the notification styles), Info order lists, place search and
-   the background picker. Then `STILL_TO_MOVE` is empty and the test is
-   strict for everything.
+5. **The rest** (done): the wizard (`body.wizard-page`), the welcome face
+   (`body.welcome-page`), the centred pages (a face with no theme yet,
+   `.fallback-page`, and an Inport's page and its picker, `.inport-page`),
+   Info order lists (`PRIORITY_CSS`) and place search's matches
+   (`PLACE_SEARCH_CSS`), and the background's fade from the last page
+   (its colours as `--was-*` variables). The About face stopped loading
+   the central stylesheet: `about-face.css` has its own colours, dark and
+   light (`data-mode` on `<html>`, or the device's own), its own
+   background and its own buttons; Core sends its Back button
+   (`backButtonStyles()`, with the room the button keeps free at the top
+   or bottom of a page), the page fade, the drawer and the takeover.
+   `STILL_TO_MOVE` is empty. An Inport's page joined its picker in
+   selecting no words on a tap (what's typed into its number box still
+   can be).
 
-Found while moving (not done yet): some words people read still have a
-long dash in them: the third-party source warning in the Marketplace
-(`admin-face.js`), a few Marketplace and update error messages
-(`marketplace.js`, `core-updater.js`), and an event's time and summary
-(`envelope.js`). Tests check some of these words as written.
+Also in step 5: no long dash in anything Core says
+(`test/long-dashes.test.js` checks `core/`, comments aside; a widget's
+long dash for no value is allowed), and `npm test` prints one line per file
+(`test/reporter.js`), with `npm run test:full` for every test.
 
 ## Next: appearance, for 2.0.0
 

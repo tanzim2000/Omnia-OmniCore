@@ -22,8 +22,10 @@ them first (section 6 of the CLA).
 
 ## Making a change
 
-- **Run the tests** before you send anything: `npm test`. Add tests for
-  what you change.
+- **Run the tests** before you send anything: `npm test`. It prints one
+  line per test file (green when it passed, red with the reason when it
+  didn't) and how all of them went at the end. `npm run test:full` prints
+  every test instead. Add tests for what you change.
 - **Tabs** for indenting, everywhere except YAML files (which need spaces).
 - **Comments a beginner can follow.** Say why something is done, not only
   what.

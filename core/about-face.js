@@ -18,15 +18,18 @@
 // /about.css, so this page's look can be changed without touching any
 // JavaScript.
 
-const { attachBackdropRoute } = require("./backdrop");
 const { ICON_LINK, attachIconRoute } = require("./icon");
-const { pageStart } = require("./page-motion");
+const { curtainHtml } = require("./page-motion");
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const paths = require("./paths");
 
-const { uiStyles, rememberUiMode, versionHtml } = require("./ui-theme");
+// Face:1303 keeps a look of its own (about-face.css) and never loads the
+// central theme's stylesheet. Core adds only its own elements: the Back
+// button (backButtonStyles), the page fade, the status drawer and the
+// takeover. currentUiMode says which of its own colours to use.
+const { rememberUiMode, versionHtml, currentUiMode, styleTag, backButtonStyles, curtainStyles } = require("./ui-theme");
 const omnicoreVersion = require("./version");
 const { portLinkScript, escapeHtml } = require("./face-links");
 const systemInfo = require("./system-info");
@@ -177,18 +180,24 @@ function renderPage(info) {
 
 	const health = healthPill(info);
 
+	// Dark or light: picked in this browser (Settings, Appearance), or the
+	// device's own when it hasn't been (no data-mode, about-face.css asks
+	// the device)
+	const mode = currentUiMode();
+
 	return `<!DOCTYPE html>
-<html>
+<html${mode ? ` data-mode="${mode}"` : ""}>
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>About</title>
 	${ICON_LINK}
-	<style>${uiStyles()}</style>
 	<link rel="stylesheet" href="/about.css">
+	${styleTag(backButtonStyles() + curtainStyles(mode === "light" ? true : mode === "dark" ? false : null))}
 </head>
 <body>
-${pageStart()}
+${curtainHtml()}
+${require("./network-status").CLIENT_HTML}
 	<h1 class="omnia-title">Omnia</h1>
 
 	${health}
@@ -205,9 +214,9 @@ ${pageStart()}
 	</div>
 
 	<div class="actions">
-		<a class="glass" href="https://github.com/tanzim2000/Omnia-OmniCore"
+		<a class="about-button" href="https://github.com/tanzim2000/Omnia-OmniCore"
 			target="_blank" rel="noopener">Source on GitHub</a>
-		<button class="glass" disabled>Donate</button>
+		<button class="about-button" disabled>Donate</button>
 	</div>
 
 	<div class="credits">
@@ -269,10 +278,6 @@ function startAboutFace() {
 
 	// Light or dark for whichever browser is asking. See ui-theme.js.
 	app.use(rememberUiMode);
-
-	// The picture behind OmniCore's own pages, when one is set. See
-	// backdrop.js.
-	attachBackdropRoute(app);
 
 	// Served from a real file rather than inlined, so the stylesheet
 	// stays editable on its own.

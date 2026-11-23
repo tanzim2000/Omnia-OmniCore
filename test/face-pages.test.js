@@ -337,7 +337,8 @@ test("pick-a-theme screen: grows with its themes instead of cutting them off", a
 		Array.from({ length: 30 }, (_, i) => ({ id: "t" + i, name: "Theme " + i })),
 		{ id: 4001 }
 	);
-	const body = ruleFor(html, "body");
+	// The centred page's body (ui-theme.js), which this screen is
+	const body = ruleFor(html, "body:where(.centred-page)");
 
 	assert.match(body, /min-height: 100vh/);
 	assert.doesNotMatch(body, /(^|[^-])height: 100vh/);

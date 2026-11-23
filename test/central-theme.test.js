@@ -36,14 +36,14 @@
 // in themes/ or from a Registry, are their own look by definition and
 // aren't in core/ at all.
 //
-// WHILE THE OLD PAGES ARE BEING MOVED
+// STRICT SINCE 2.0.0
 //
-// Pages written before this rule still have looks of their own. They're
-// listed in STILL_TO_MOVE with how much each has left, and the test only
-// warns about them (the list is printed, so it shows where work is left).
-// It fails when a file that's clean gets a look of its own, or a listed
-// file gets more than it has now. When a page has been moved, its line is
-// lowered or taken out, and it can never go back.
+// The pages written before this rule were moved onto the central theme in
+// five steps, each listed in STILL_TO_MOVE with how much it had left until
+// it had none. The list is empty now, so a look of its own anywhere under
+// core/ (but Face:1303's) fails the test. STILL_TO_MOVE stays for the day
+// a big change has to be made in steps again: a listed file only warns,
+// and can never get more than its line says.
 
 const test = require("node:test");
 const assert = require("node:assert");
@@ -57,17 +57,11 @@ const CORE = path.join(ROOT, "core");
 const CENTRAL = ["core/ui-theme.js"];
 const OWN_LOOK = ["core/about-face.js", "core/about-face.css"];
 
-// What's left to move into the central theme, file by file. Lower a number
-// (or take a line out) when you move something; never raise one.
-const STILL_TO_MOVE = {
-	"core/backdrop.js": { styleBlocks: 0, cssRules: 0, styleAttributes: 2, scriptLooks: 5 },
-	"core/control-face.js": { styleBlocks: 1, cssRules: 16, styleAttributes: 1, scriptLooks: 0 },
-	"core/fallback-page.js": { styleBlocks: 1, cssRules: 3, styleAttributes: 0, scriptLooks: 0 },
-	"core/input-face-page.js": { styleBlocks: 2, cssRules: 13, styleAttributes: 0, scriptLooks: 0 },
-	"core/place-search-ui.js": { styleBlocks: 0, cssRules: 9, styleAttributes: 0, scriptLooks: 8 },
-	"core/priority-ui.js": { styleBlocks: 0, cssRules: 17, styleAttributes: 0, scriptLooks: 2 },
-	"core/wizard-face.js": { styleBlocks: 1, cssRules: 29, styleAttributes: 4, scriptLooks: 3 }
-};
+// What's left to move into the central theme, file by file. Nothing, since
+// 2.0.0: every page is built from the central theme's elements, so any
+// look of its own fails the test. (Lower a number, or take a line out, if
+// one ever has to be listed again; never raise one.)
+const STILL_TO_MOVE = {};
 
 // Every file under core/, as a path from the project folder
 function coreFiles(folder = CORE) {
@@ -162,6 +156,19 @@ test("the one exception is Face:1303, and only it", () => {
 	// No stylesheet file in core/ but the About face's
 	const sheets = coreFiles().filter((file) => file.endsWith(".css"));
 	assert.deepEqual(sheets, ["core/about-face.css"]);
+
+	// And it never loads the central theme's stylesheet: Core adds only its
+	// own elements there (the Back button, the page fade, the status drawer
+	// and the takeover), each with its own look
+	const about = fs.readFileSync(path.join(ROOT, "core/about-face.js"), "utf-8");
+	assert.ok(!/uiStyles\(/.test(about), "no uiStyles() on Face:1303");
+	assert.ok(!/pageStart\(/.test(about), "no pageStart() either: it would draw the Settings background");
+	assert.match(about, /backButtonStyles\(\)/, "its Back button is Core's");
+	// ...with the room it keeps free, so the end of the page is never
+	// under it
+	const { backButtonStyles } = require("../core/ui-theme");
+	assert.match(backButtonStyles(), /body:has\(> \.floating\.bottom-right\) \{ padding-bottom/);
+	assert.match(backButtonStyles(), /body:has\(> \.floating\.top-left\) \{ padding-top/);
 });
 
 test("the checker spots each kind of look, and leaves plain code alone", () => {

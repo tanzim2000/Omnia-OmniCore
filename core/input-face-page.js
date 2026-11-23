@@ -14,7 +14,7 @@
 
 const { pageStart } = require("./page-motion");
 const { ICON_LINK } = require("./icon");
-const { uiStyles } = require("./ui-theme");
+const { uiStyles, styleTag } = require("./ui-theme");
 
 function escapeHtml(text) {
 	return String(text).replace(/[&<>"]/g, function (character) {
@@ -58,7 +58,7 @@ function renderControl(control) {
 			: "";
 
 		return `
-		<div class="field segment">
+		<div class="field segment number-field">
 			${label}
 			<input
 				id="field-${key}"
@@ -89,73 +89,9 @@ function renderInputFacePage(label, controls, postTo) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(label)}</title>
 	${ICON_LINK}
-	<style>
-${uiStyles()}
-
-		body {
-			min-height: 100vh;
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
-			gap: 2em;
-			padding: 1.5em;
-		}
-
-		h1 {
-			font-weight: 300;
-			font-size: 1.4em;
-			opacity: 0.85;
-			text-align: center;
-			margin: 0;
-		}
-
-		.controls {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 1em;
-			justify-content: center;
-		}
-
-		/* A tap target meant to be hit from a phone at arm's length,
-		   not clicked with a mouse */
-		.glass.big { padding: 1.5em 2.5em; font-size: 1.15em; }
-
-		/* A plain .segment holding one control -- a box, not a button,
-		   so no hover glow. */
-		.field {
-			display: flex;
-			flex-direction: column;
-			gap: 0.75em;
-			min-width: 12em;
-			cursor: default;
-		}
-
-		.field label { font-size: 0.85em; opacity: 0.7; }
-
-		.field input {
-			background: var(--bg);
-			border: 1px solid var(--glass-border);
-			border-radius: 0.3333em;
-			color: var(--fg);
-			font-family: inherit;
-			font-size: 1.5em;
-			padding: 0.5em;
-			width: 100%;
-			text-align: center;
-		}
-
-		.field input:focus {
-			outline: none;
-			border-color: var(--fg-muted);
-		}
-
-		/* Momentary feedback after a tap, so someone on a phone knows
-		   it actually registered before the control resets itself */
-		.done { background: rgba(120, 255, 160, 0.25) !important; }
-	</style>
+	${styleTag(uiStyles())}
 </head>
-<body>
+<body class="centred-page inport-page">
 ${pageStart()}
 	<h1>${escapeHtml(label)}</h1>
 	<div class="controls">${rendered}</div>
@@ -233,34 +169,9 @@ function renderInputPickerPage(faceName, entries) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(faceName)}</title>
 	${ICON_LINK}
-	<style>
-${uiStyles()}
-
-		body {
-			min-height: 100vh;
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
-			gap: 1.5em;
-			padding: 1.5em;
-			-webkit-user-select: none;
-			user-select: none;
-		}
-
-		h1 {
-			font-weight: 300;
-			font-size: 1.4em;
-			opacity: 0.85;
-			text-align: center;
-			margin: 0;
-		}
-
-		.list { width: 100%; max-width: 24em; }
-		.segment.clickable { text-decoration: none; color: var(--fg); }
-	</style>
+	${styleTag(uiStyles())}
 </head>
-<body>
+<body class="centred-page inport-page">
 ${pageStart()}
 	<h1>${escapeHtml(faceName)}</h1>
 	<div class="list">${rows}</div>

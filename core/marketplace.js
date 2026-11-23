@@ -73,7 +73,7 @@ function fetchUrl(url, redirectsLeft) {
 
 	if (!/^https:\/\//i.test(String(url || ""))) {
 		return Promise.reject(
-			new Error(`Registry URLs must start with https:// — got: ${url}`)
+			new Error(`Registry URLs must start with https:// (this one is ${url})`)
 		);
 	}
 
@@ -434,7 +434,7 @@ async function assertLooksReal(stagingDir, kind) {
 		await fsp.access(markerPath);
 	} catch (error) {
 		throw new Error(
-			`Downloaded ${kind} has no ${marker} — doesn't look right`
+			`Downloaded ${kind} has no ${marker}, so it doesn't look right`
 		);
 	}
 }
@@ -504,7 +504,7 @@ async function installFromEntry(kind, entry, update) {
 
 	if (fsSync.existsSync(destDir) && !update) {
 		throw new Error(
-			`${entry.id} is already installed — pass update to replace it`
+			`${entry.id} is already installed: pass update to replace it`
 		);
 	}
 
@@ -813,7 +813,7 @@ function addSource(url) {
 	}
 
 	if (clean === DEFAULT_REGISTRY_URL) {
-		throw new Error("That's the built-in registry — it's already included");
+		throw new Error("That's the built-in registry: it's already included");
 	}
 
 	const settings = readSettings();

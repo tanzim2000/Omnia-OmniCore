@@ -257,6 +257,15 @@ const sections = [
 				code: "<button class=\"glass is-off\" title=\"Why it can't be pressed yet\" aria-disabled=\"true\">Upgrade</button>"
 			},
 			{
+				id: "glass-big",
+				base: "glass",
+				title: "Big glass button",
+				sel: ".glass.big · .done",
+				desc: "A tap target meant to be hit from a phone at arm's length, not clicked with a mouse: an Inport's buttons. <b>.done</b> turns a button or a box green for a moment after a tap, so someone on a phone knows it registered.",
+				demo: `<button class="glass big">On</button> <button class="glass big done">Off</button>`,
+				code: "<button class=\"glass big\">On</button>\n\n// for a moment after a tap:\nbutton.classList.add(\"done\");"
+			},
+			{
 				id: "button-row",
 				title: "Buttons in a row",
 				sel: ".buttons",
@@ -303,7 +312,7 @@ const sections = [
 				id: "floating",
 				title: "Floating round button",
 				sel: ".floating + .bottom-right / .top-left (+ .flash)",
-				desc: "A flat round button pinned to a corner of the screen: the Back button (&#8592;). On the settings home it signs out instead, so backButton(\"/logout\") draws a sign-out icon and says \"Sign out\". It's deliberately not glossy: it glows softly on hover and flashes when tapped (.flash, or while pressed). Which corner is a setting. Bottom-left is never offered: that's where the welcome face's timer lives.",
+				desc: "A flat round button pinned to a corner of the screen: the Back button (&#8592;). On the settings home it signs out instead, so backButton(\"/logout\") draws a sign-out icon and says \"Sign out\". It's deliberately not glossy: it glows softly on hover and flashes when tapped (.flash, or while pressed). Which corner is a setting. Bottom-left is never offered: that's where the welcome face's timer lives. The page keeps room free for it, at the top or the bottom, so nothing ends up under it. The About face, which has its own look, gets this button and its room from backButtonStyles().",
 				stage: 150,
 				demo: '<button class="floating top-left" aria-label="Back">&#8592;</button><button class="floating bottom-right" aria-label="Back">&#8592;</button><span class="muted stage-caption">top-left and bottom-right</span>',
 				code: '<button class="floating bottom-right" aria-label="Back"\n\tonclick="location.href=\'/\'">&#8592;</button>\n\n// or let the helper write it, in the corner from Settings:\nbackButton("/")',
@@ -396,6 +405,22 @@ const sections = [
 				desc: "A line that goes somewhere, with a quieter line under its name: a face in the Faces list, Widgets and Theme on a face's page, a module to add. As <b>.row.glass</b> it's a glass button laid out as a row, with the same glow, fade and press.",
 				demo: `<div class="settings-page" style="max-width:24em"><a class="row glass" href="#row-link"><strong>Widgets</strong><span>1 widget</span></a></div>`,
 				code: "<a class=\"row glass\" href=\"/faces/4001/modules\">\n\t<strong>Widgets</strong>\n\t<span>1 widget</span>\n</a>"
+			},
+			{
+				id: "module-rows",
+				title: "Module rows",
+				sel: ".flat · .picked (+ .removable, .current) · .review-row",
+				desc: "The wizard's two sides of one decision, the same shape on purpose: a module to add (<b>.flat</b>, green on hover) and one already added (<b>.picked</b>; red on hover when clicking it removes it, <b>.removable</b>; brighter when it's the one being set up, <b>.current</b>). <b>.review-row</b> is a line of the review: what, and what it's set to.",
+				demo: `<div style="display:grid;gap:0.5em;max-width:22em"><button type="button" class="flat">Weather<small>The weather where you are</small></button><button type="button" class="picked removable">Weather<small>Click to remove</small></button><div class="review-row"><strong>Theme</strong><span>Windows 8</span></div></div>`,
+				code: "<button class=\"flat\">Weather<small>…</small></button>\n<button class=\"picked removable\">Weather<small>…</small></button>\n<div class=\"review-row\"><strong>Theme</strong><span>Windows 8</span></div>"
+			},
+			{
+				id: "info-order",
+				title: "Info order list",
+				sel: ".priority-row (+ .dragging) > .priority-grip, .priority-rank, .priority-name, .priority-move · .sorting · .glass.priority-open > .priority-summary, .priority-open-hint · .modal.priority-modal > .priority-list",
+				desc: "Things to put in order: dragged by the grip, or moved with the arrows, numbered as they go. The row being dragged sits above the others in the page's own colour and follows the pointer (<b>.dragging</b>, how far is <code>--drag-y</code>); the whole list is <b>.sorting</b> meanwhile. A long list is a button showing the order in short form (<b>.priority-open</b>) that opens a taller pop-up whose list scrolls (<b>.priority-modal</b>).",
+				demo: `<div style="max-width:24em"><div class="priority-row"><span class="priority-grip" aria-hidden="true">⋮⋮</span><span class="priority-rank">1</span><span class="priority-name">Temperature</span><button type="button" class="priority-move" disabled aria-label="Up">▲</button><button type="button" class="priority-move" aria-label="Down">▼</button></div><div class="priority-row"><span class="priority-grip" aria-hidden="true">⋮⋮</span><span class="priority-rank">2</span><span class="priority-name">Condition</span><button type="button" class="priority-move" aria-label="Up">▲</button><button type="button" class="priority-move" disabled aria-label="Down">▼</button></div></div>`,
+				code: "// priority-ui.js writes it:\npriorityFieldHtml(field, value)"
 			},
 			{
 				id: "list",
@@ -735,6 +760,15 @@ const sections = [
 				code: "<div class=\"location-manual\" hidden>\n\t<div class=\"field\">…</div>\n</div>"
 			},
 			{
+				id: "number-field",
+				base: "field",
+				title: "A number to send",
+				sel: ".field.number-field",
+				desc: "On an Inport's page: a plain box (not a button, so no glow) holding its label, a big box to type a number in, and its own button to send it.",
+				demo: `<div class="field segment number-field" style="max-width:16em;margin:0"><label>Brightness</label><input type="number" placeholder="0 to 100"><button class="glass">Set</button></div>`,
+				code: "<div class=\"field segment number-field\">\n\t<label for=\"field-level\">Brightness</label>\n\t<input id=\"field-level\" type=\"number\">\n\t<button class=\"glass\">Set</button>\n</div>"
+			},
+			{
 				id: "inputs",
 				title: "Text, address, number, password and drop-down",
 				sel: "input[type=text | url | number | password], select",
@@ -790,6 +824,15 @@ const sections = [
 				desc: "A box with a button beside it (the box takes the room), and under it a stack of full-width results to pick from. The location search uses it.",
 				demo: '<div class="search-row"><input type="text" placeholder="Search a place" aria-label="Search a place"><button class="glass" type="button">Search</button></div><button class="result" type="button">Regina, Saskatchewan</button><button class="result" type="button">Dhaka, Bangladesh</button>',
 				code: '<div class="search-row">\n\t<input type="text"><button class="glass">Search</button>\n</div>\n<button class="result">A result</button>'
+			},
+			{
+				id: "place-matches",
+				base: "search",
+				title: "Place search matches",
+				sel: ".place-anchor > .place-float · .place-note · .place-credit · .place-empty",
+				desc: "The matches of a place search, floating over the page under its search row, or over it when there's more room above (the script says where and how tall: <code>--float-top</code>, <code>--float-bottom</code>, <code>--float-max</code>). Mostly solid, since it covers other boxes' words. Under the matches, a quiet line or two: a note (<b>.place-note</b>), where they came from (<b>.place-credit</b>), or that there were none (<b>.place-empty</b>).",
+				demo: `<div class="place-anchor" style="max-width:24em;height:9em"><div class="search-row"><input type="text" value="Regina"><button class="glass medium">Search</button></div><div class="place-float" style="--float-top:3.5em"><button class="result" type="button">Regina, Saskatchewan</button><p class="place-credit">From Nominatim</p></div></div>`,
+				code: "<div class=\"place-anchor\">\n\t<div class=\"search-row\">…</div>\n\t<div class=\"place-float\">\n\t\t<button class=\"result\">…</button>\n\t\t<p class=\"place-credit\">From Nominatim</p>\n\t</div>\n</div>"
 			},
 			{
 				id: "font-search",
@@ -970,6 +1013,30 @@ const sections = [
 				desc: "The parts of a face's page. <b>.face-columns</b>: two columns that end level, the last box in each taking up the difference. <b>.resource-pair</b>: Manage resources (<b>.resources</b>, its rows a little taller) beside This face (<b>.face-actions</b>, Open face and Delete face in <b>.face-buttons</b>, stacked and filling the box on a wide screen, side by side and first on a phone). <b>.note-segment</b>: the Notifications box, whose two previews fill its height.",
 				demo: `<div class="settings-page"><div class="resource-pair" style="max-width:34em"><div class="segment resources"><h2>Manage resources</h2><a class="row glass" href="#face-page"><strong>Widgets</strong><span>1 widget</span></a></div><div class="segment face-actions"><div class="face-buttons"><button class="glass">Open face</button><button class="glass glass-danger">Delete face</button></div></div></div></div>`,
 				code: "<div class=\"resource-pair\">\n\t<div class=\"segment resources\">…</div>\n\t<div class=\"segment face-actions\">\n\t\t<div class=\"face-buttons\"><button class=\"glass\">Open face</button>…</div>\n\t</div>\n</div>"
+			},
+			{
+				id: "wizard-page",
+				title: "Wizard page",
+				sel: "body.wizard-page > .wizard-head · .wizard-content > .wizard-split, .wizard-single · .segment-head > .mini · .segment-scroll · .part",
+				desc: "The wizard (port 3999): exactly the window's height, never scrolling itself, its step's heading at the top (<b>.wizard-head</b>) and the dock at the bottom. In between (<b>.wizard-content</b>), a step is either two boxes sharing the room (<b>.wizard-split</b>, side by side on a screen wider than it is tall, stacked on one taller than it is wide) or one box only as tall as its form (<b>.wizard-single</b>); whatever is too long scrolls inside its box (<b>.segment-scroll</b>). Its box headings are quieter than Settings' ones. <b>.segment-head</b> is a heading with a small button beside it (<b>.mini</b>, Download themes); <b>.part</b> is a later part of a box, a little apart from what's above it.",
+				demo: `<div class="wizard-page"><div class="wizard-split" style="max-width:40em"><div class="segment"><div class="segment-head"><h2>Available modules</h2><button type="button" class="mini">Download modules</button></div><button type="button" class="flat">Weather<small>The weather where you are</small></button></div><div class="segment"><h2>On this face</h2><button type="button" class="picked removable">Weather<small>Weather · click to remove</small></button></div></div></div>`,
+				code: "<body class=\"wizard-page\">\n\t<div class=\"wizard-head\" id=\"header\">…</div>\n\t<div class=\"wizard-content\" id=\"content\">\n\t\t<div class=\"wizard-split\">\n\t\t\t<div class=\"segment\">…</div>\n\t\t\t<div class=\"segment\">…</div>\n\t\t</div>\n\t</div>\n\t<div class=\"dock\">…</div>\n</body>"
+			},
+			{
+				id: "welcome-page",
+				title: "Welcome face",
+				sel: "body.welcome-page > .panel · .face-list > .face · .actions · .timer > .timer-lamp",
+				desc: "The welcome face (port 4000): the dashboards to open, in a frame of a fixed height that scrolls when there are more than fit (<b>.face-list</b>, each <b>.face</b> a clickable box with its address under its name), the buttons under it (<b>.actions</b>), and in the bottom-left corner a small round lamp that empties as it counts down to opening the last dashboard (<b>.timer</b>, its share left <code>--remaining</code>, 1 to 0).",
+				demo: `<div class="welcome-page"><div class="face-list" style="height:12em"><div class="segment clickable face"><strong>Hallway</strong><span>Port 4001</span></div><div class="segment clickable face"><strong>Kitchen</strong><span>Port 4002</span></div></div></div>`,
+				code: "<body class=\"welcome-page\">\n\t<div class=\"panel\"><h1>Choose your dashboard</h1></div>\n\t<div class=\"face-list\">\n\t\t<div class=\"segment clickable face\"><strong>Hallway</strong><span>…</span></div>\n\t</div>\n\t<div class=\"actions\">…</div>\n\t<div class=\"timer\"><div class=\"timer-lamp\" style=\"--remaining: 1\"></div></div>\n</body>"
+			},
+			{
+				id: "centred-page",
+				title: "Centred page",
+				sel: "body.centred-page (+ .fallback-page, .inport-page) · .inport-page .controls",
+				desc: "One short thing in the middle of the screen, its title over it. <b>.fallback-page</b>: a face with no theme yet, its themes to pick from, a little apart. <b>.inport-page</b>: an Inport's page, the controls a phone uses (<b>.controls</b>) under a smaller, quieter title, since the controls are the point, and with nothing to select by accident; also its list of controls to pick from, when a face has more than one.",
+				demo: `<div class="inport-page" style="display:flex;flex-direction:column;align-items:center;gap:1em"><h1>Living room lights</h1><div class="controls"><button class="glass big">On</button><button class="glass big">Off</button></div></div>`,
+				code: "<body class=\"centred-page inport-page\">\n\t<h1>Living room lights</h1>\n\t<div class=\"controls\">\n\t\t<button class=\"glass big\">On</button>\n\t</div>\n</body>"
 			},
 			{
 				id: "notch",

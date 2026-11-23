@@ -255,7 +255,7 @@ test("a colour behind the pages: its own brightness, the veil and Match the back
 	assert.match(css, /--glass-tint: rgba\(255, 215, 0, 0\.1\);/, "Match the background is the colour");
 	assert.match(css, /--segment-edge: rgba/, "the glass over a colour is the glass over a picture");
 	assert.ok(backdrop.veilFor(gold, false) > 0.5, "a bright colour gets a strong veil in dark mode");
-	assert.match(backdrop.backdropHtml(gold), /<span class="omni-colour" style="background:#ffd700"><\/span>/);
+	assert.match(backdrop.backdropHtml(gold), /<span class="omni-colour" style="--colour:#ffd700"><\/span>/);
 });
 
 test("Auto dim off: the veil is what was set by hand, never overruled", () => {
@@ -413,7 +413,7 @@ test("pages: a colour as the background, and Auto dim and Dim saved", async () =
 	assert.equal(settings.backgroundColor, "#1e2a44");
 
 	const page = (await request(3000, "/")).body.toString();
-	assert.ok(page.includes('<span class="omni-colour" style="background:#1e2a44"></span>'), "drawn behind the page");
+	assert.ok(page.includes('<span class="omni-colour" style="--colour:#1e2a44"></span>'), "drawn behind the page");
 	assert.ok(page.includes('id="auto-dim" checked'), "Auto dim on to start with");
 	assert.match(page, /<input type="range" id="dim" min="0" max="100" step="1" value="50" disabled>/, "with Auto on, the slider only shows");
 	assert.ok(page.includes(">Colour brightness"));
@@ -446,7 +446,9 @@ test("pages: an MP4, its still frame, then in use on every port, signed in or no
 	assert.equal(settings.backgroundKind, "video");
 	assert.equal(settings.backgroundFile, `backdrop-${sent.body.id}.mp4`);
 
-	for (const port of [3000, 3999, 1303, 4000]) {
+	// Every port but the About face's (1303), which has a background of
+	// its own (about-face.css) and never draws this one
+	for (const port of [3000, 3999, 4000]) {
 		const page = (await request(port, "/")).body.toString();
 		assert.ok(page.includes(`<video src="/backdrop/${settings.backgroundFile}"`), `drawn on ${port}`);
 
@@ -516,7 +518,9 @@ test("pages: saving the glass, and it's in every port's stylesheet", async () =>
 	assert.equal(settings.glassBlur, 31);
 	assert.equal(settings.glassTint, "#b48cff");
 
-	for (const port of [3000, 3999, 1303, 4000]) {
+	// Not the About face's (1303): its look is its own, following Dark and
+	// Light only
+	for (const port of [3000, 3999, 4000]) {
 		const page = (await request(port, "/")).body.toString();
 		assert.ok(page.includes("--glass-blur: 31px;"), `blur on ${port}`);
 		assert.ok(page.includes("--glass-tint: rgba(180, 140, 255, 0.2);"), `tint on ${port}`);

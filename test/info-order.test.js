@@ -216,5 +216,5 @@ test("the browser code: drags with pointer events, a finger only by the grip, an
 	for (const piece of ['"pointerdown"', '"pointermove"', '"pointerup"', '"pointercancel"', 'event.pointerType !== "mouse"', "[data-priority-grip]", '"Done"', '"Cancel"', '"Escape"']) {
 		assert.ok(source.includes(piece), `has ${piece}`);
 	}
-	assert.ok(priorityUi.PRIORITY_CSS.includes("touch-action: none"), "the grip keeps a finger for dragging");
+	assert.ok(require("../core/ui-theme").PRIORITY_CSS.includes("touch-action: none"), "the grip keeps a finger for dragging");
 });

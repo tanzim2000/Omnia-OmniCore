@@ -49,7 +49,7 @@ async function runOnce() {
 
 	if (!status || !status.updateAvailable) {
 		console.log(
-			`  Core check: running ${status ? status.currentVersion : "?"} — current`
+			`  Core check: running ${status ? status.currentVersion : "?"}, the latest`
 		);
 		return;
 	}

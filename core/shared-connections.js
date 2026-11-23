@@ -107,7 +107,7 @@ function deliver(pool, member, event) {
 		.then(() => member.onEvent(event))
 		.catch((error) => {
 			console.log(
-				`  ${pool.moduleId}: a listener failed on an event — ${describe(error)}`
+				`  ${pool.moduleId}: a listener failed on an event: ${describe(error)}`
 			);
 		});
 }
@@ -134,7 +134,7 @@ function closeConnection(pool) {
 			connection.close();
 		} catch (error) {
 			console.log(
-				`  ${pool.moduleId}: closing a connection failed — ${describe(error)}`
+				`  ${pool.moduleId}: closing a connection failed: ${describe(error)}`
 			);
 		}
 	}
@@ -208,7 +208,7 @@ function openConnection(pool) {
 
 		if (error) {
 			console.log(
-				`  ${pool.moduleId}: connection to ${pool.key} dropped — ${describe(
+				`  ${pool.moduleId}: connection to ${pool.key} dropped: ${describe(
 					error
 				)}`
 			);

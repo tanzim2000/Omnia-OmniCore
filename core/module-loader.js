@@ -109,7 +109,7 @@ function loadModule(moduleId) {
 		const loaded = require(modulePath);
 		return typeof loaded === "function" ? loaded : null;
 	} catch (error) {
-		console.log(`  Module failed to load: ${moduleId} — ${error.message}`);
+		console.log(`  Module failed to load: ${moduleId} (${error.message})`);
 		return null;
 	}
 }

@@ -14,7 +14,7 @@
 
 const { pageStart } = require("./page-motion");
 const { ICON_LINK } = require("./icon");
-const { uiStyles } = require("./ui-theme");
+const { uiStyles, styleTag } = require("./ui-theme");
 const notifications = require("./notifications");
 const { CLIENT_SCRIPT } = require("./face-events");
 
@@ -44,39 +44,10 @@ function renderFallbackPage(themes, face) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Omnia</title>
 	${ICON_LINK}
-	<style>
-${uiStyles()}
-${notifications.overlayStyles(face && face.notificationMode)}
-
-		body {
-			/* min-height, not height: with more themes than fit, a fixed
-			   height plus centring cuts the top off where it can't be
-			   scrolled to */
-			min-height: 100vh;
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			justify-content: center;
-			gap: 2em;
-			padding: 1.5em;
-		}
-
-		h1 {
-			font-weight: 300;
-			font-size: 1.75em;
-			text-align: center;
-			margin: 0;
-		}
-
-		.buttons {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 1em;
-			justify-content: center;
-		}
-	</style>
+	${styleTag(uiStyles())}
+	${styleTag(notifications.overlayStyles(face && face.notificationMode))}
 </head>
-<body>
+<body class="centred-page fallback-page">
 ${pageStart()}
 	${body}
 	<script>

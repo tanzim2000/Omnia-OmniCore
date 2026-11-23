@@ -54,7 +54,7 @@ const { readSettings, writeSettings } = require("./settings-store");
 const { getLocation } = require("./location-service");
 const placeSearch = require("./place-search");
 const settingsHome = require("./settings-home");
-const { PLACE_SEARCH_SCRIPT, PLACE_SEARCH_CSS } = require("./place-search-ui");
+const { PLACE_SEARCH_SCRIPT } = require("./place-search-ui");
 const { ownLabel, suggestedLabel, labelsFor } = require("./instance-label");
 const faceStore = require("./face-store");
 const omnicoreVersion = require("./version");
@@ -99,15 +99,6 @@ const ADMIN_PORT = 3000;
 // A name for this particular start of OmniCore. See GET /version.
 const BOOT_ID = require("crypto").randomBytes(8).toString("hex");
 
-// Two pieces of CSS this face still includes that aren't its own: the
-// Info order lists' (priority-ui.js) and the place search matches'
-// (place-search-ui.js). They move into the central theme with their files.
-const styles = `
-	/* Info order lists, short and long: see priority-ui.js */
-	${priorityUi.PRIORITY_CSS}
-	/* Under place search matches: see place-search-ui.js */
-	${PLACE_SEARCH_CSS}
-`;
 
 function escapeHtml(text) {
 	return String(text).replace(/[&<>"]/g, function (character) {
@@ -121,8 +112,8 @@ function escapeHtml(text) {
 }
 
 // Every admin screen goes through here, so this is the one place the
-// shared Default UI gets attached: uiStyles(), with the Settings pages'
-// own elements (body.settings-page), and the two pieces still to move.
+// shared Default UI gets attached: uiStyles(), the Settings pages' own
+// elements (body.settings-page) among the rest.
 //
 // `back` is a URL for the floating button, or nothing at all for a
 // screen that is genuinely a root. /logout (the settings home's) gets a
@@ -303,7 +294,7 @@ function page(title, body, script, bodyClass, back) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(title)}</title>
 	${ICON_LINK}
-	${styleTag(uiStyles() + styles)}
+	${styleTag(uiStyles())}
 </head>
 <body class="settings-page${bodyClass ? " " + bodyClass : ""}">
 ${pageStart()}
@@ -3992,20 +3983,20 @@ function startAdminFace() {
 					<h3>This adds a source OmniCore hasn't reviewed</h3>
 					<p>
 						Everything in the built-in registry is reviewed before anyone
-						can install it — someone actually read the code before it was
+						can install it: someone actually read the code before it was
 						listed. A third-party source has no such review. Anything
 						listed there could be anything.
 					</p>
 					<p>
 						A module is a full, unrestricted Node program. It can read
-						every file this server can read — including your admin
-						credentials — and reach the network however it likes. None
+						every file this server can read, including your admin
+						credentials, and reach the network however it likes. None
 						of that is sandboxed, checked, or undone automatically once
 						something is installed from it.
 					</p>
 					<p>
 						<strong>If you don't personally, actually trust whoever runs
-						this source — not "it looked fine" — don't add it.</strong>
+						this source (not "it looked fine"), don't add it.</strong>
 					</p>
 					<div class="market-warning-actions">
 						<button type="button" class="btn-glossy btn-glossy-green" data-warning-cancel>Go back</button>

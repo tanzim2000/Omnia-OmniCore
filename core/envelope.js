@@ -235,7 +235,7 @@ function withFallbackText(block) {
 
 		// A block with an unreadable start is still worth showing by
 		// name; dropping it entirely would be worse than saying less.
-		text = start ? `${describeWhen(start, end)} — ${summary}` : summary;
+		text = start ? `${describeWhen(start, end)}: ${summary}` : summary;
 	} else if (block.type === "qr") {
 		// A theme that can't draw the code can still print what's in it.
 		// For a link — which is what a QR code nearly always holds — that

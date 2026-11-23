@@ -95,14 +95,14 @@ const PLACE_SEARCH_SCRIPT = `
 		var up = below < enough && above > below;
 
 		results.classList.toggle("place-up", up);
-		results.style.maxHeight = Math.max(4 * em, Math.min(most, up ? above : below)) + "px";
+		results.style.setProperty("--float-max", Math.max(4 * em, Math.min(most, up ? above : below)) + "px");
 
 		if (up) {
-			results.style.top = "";
-			results.style.bottom = results.parentElement.offsetHeight - row.offsetTop + gap + "px";
+			results.style.removeProperty("--float-top");
+			results.style.setProperty("--float-bottom", results.parentElement.offsetHeight - row.offsetTop + gap + "px");
 		} else {
-			results.style.bottom = "";
-			results.style.top = row.offsetTop + row.offsetHeight + gap + "px";
+			results.style.removeProperty("--float-bottom");
+			results.style.setProperty("--float-top", row.offsetTop + row.offsetHeight + gap + "px");
 		}
 	}
 
@@ -119,9 +119,9 @@ const PLACE_SEARCH_SCRIPT = `
 			placeFit(results);
 		} else {
 			results.classList.remove("place-float", "place-up");
-			results.style.top = "";
-			results.style.bottom = "";
-			results.style.maxHeight = "";
+			results.style.removeProperty("--float-top");
+			results.style.removeProperty("--float-bottom");
+			results.style.removeProperty("--float-max");
 			if (box) box.classList.remove("float-open");
 		}
 	}
@@ -203,51 +203,5 @@ const PLACE_SEARCH_SCRIPT = `
 	}
 `;
 
-// The floating list, and the two small lines under the matches
-const PLACE_SEARCH_CSS = `
-	.place-anchor { position: relative; }
 
-	/* While open: over the page, under its search row (top is set by the
-	   script). The box it's in is lifted above the boxes after it. Its own
-	   fill is mostly solid: it sits over other boxes' text, and a box's
-	   blur only reaches what's inside that box. */
-	.place-float {
-		position: absolute;
-		left: 0;
-		right: 0;
-		z-index: 30;
-		max-height: 19em;
-		overflow-y: auto;
-		overscroll-behavior: contain;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		padding: 6px;
-		border-radius: 0.75em;
-		border: 1px solid var(--segment-border);
-		background-color: color-mix(in srgb, var(--bg) 97%, transparent);
-		background-image: linear-gradient(var(--glass-tint), var(--glass-tint));
-		box-shadow: inset 0 1px 0 var(--segment-edge), 0 12px 36px rgba(0, 0, 0, 0.45);
-		backdrop-filter: blur(16px);
-		-webkit-backdrop-filter: blur(16px);
-		scrollbar-width: thin;
-		scrollbar-color: var(--scroll-thumb) transparent;
-	}
-
-	.place-float .result { margin: 0; flex-shrink: 0; }
-	.place-float .place-note, .place-float .place-credit { margin: 4px 6px; }
-	.place-empty { margin: 6px; }
-	.segment.float-open { position: relative; z-index: 20; }
-
-	.place-note, .place-credit {
-		margin: 8px 0 0;
-		font-size: 0.78em;
-		line-height: 1.5;
-		color: var(--fg-muted);
-	}
-
-	.place-credit a { color: inherit; }
-	.place-credit a:hover { color: var(--fg); }
-`;
-
-module.exports = { PLACE_SEARCH_SCRIPT, PLACE_SEARCH_CSS };
+module.exports = { PLACE_SEARCH_SCRIPT };

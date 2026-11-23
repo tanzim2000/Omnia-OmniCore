@@ -3,12 +3,86 @@
  * The About face's own stylesheet, served at /about.css.
  *
  * A real file rather than a template string inside about-face.js, so
- * this page's look can be edited without touching any JavaScript. It
- * layers on top of the shared Default UI (core/ui-theme.js) rather
- * than replacing it -- the glass buttons, segments and colour variables
- * all come from there, and everything below is only what's specific
- * to this one page.
+ * this page's look can be edited without touching any JavaScript.
+ *
+ * Face:1303 has a look of its own: this file is all of it. It never
+ * loads the central theme's stylesheet (core/ui-theme.js). Core adds
+ * only its own elements, each bringing its own look: the Back button,
+ * the page fade, the status drawer and the takeover. It follows Dark
+ * and Light (data-mode on <html>, from Core, or the device's own when
+ * none is picked) and nothing else from Settings.
  */
+
+/* Its colours, dark ------------------------------------------------ */
+
+:root {
+	--bg: #000000;
+	--fg: #fff;
+	--fg-muted: rgba(255, 255, 255, 0.6);
+	--glass-bg: rgba(255, 255, 255, 0.06);
+	--glass-bg-hover: rgba(255, 255, 255, 0.12);
+	--glass-border: rgba(255, 255, 255, 0.15);
+	--glass-sheen: rgba(255, 255, 255, 0.14);
+	--glass-sheen-strong: rgba(255, 255, 255, 0.28);
+	--glow-strong: rgba(255, 255, 255, 0.55);
+	--hover-subtle: rgba(255, 255, 255, 0.05);
+	--segment-bg: rgba(255, 255, 255, 0.04);
+	--segment-border: rgba(255, 255, 255, 0.1);
+	--segment-blur: blur(20px) saturate(1);
+	--danger-bg: rgba(70, 8, 8, 0.9);
+	--danger-border: rgba(255, 70, 70, 0.4);
+	--danger-text: #ffd6d6;
+	--ambient-a: rgba(255, 255, 255, 0.05);
+	--ambient-b: rgba(120, 160, 255, 0.05);
+	--radius: 0.75em;
+}
+
+/* ... and light: picked in this browser, or the device's own */
+
+:root[data-mode="light"] {
+	--bg: #eedec5;
+	--fg: #111;
+	--fg-muted: rgba(0, 0, 0, 0.55);
+	--glass-bg: rgba(255, 255, 255, 0.75);
+	--glass-bg-hover: rgba(255, 255, 255, 0.95);
+	--glass-border: rgba(0, 0, 0, 0.12);
+	--glass-sheen: rgba(255, 255, 255, 0.9);
+	--glass-sheen-strong: rgba(255, 255, 255, 1);
+	--glow-strong: rgba(50, 60, 100, 0.4);
+	--hover-subtle: rgba(0, 0, 0, 0.04);
+	--segment-bg: rgba(255, 255, 255, 0.7);
+	--segment-border: rgba(0, 0, 0, 0.08);
+	--danger-bg: rgba(255, 235, 233, 0.95);
+	--danger-border: rgba(192, 57, 43, 0.35);
+	--danger-text: #7a1c12;
+	--ambient-a: rgba(120, 140, 255, 0.06);
+	--ambient-b: rgba(255, 190, 120, 0.06);
+}
+
+@media (prefers-color-scheme: light) {
+	:root:not([data-mode]) {
+		--bg: #eedec5;
+		--fg: #111;
+		--fg-muted: rgba(0, 0, 0, 0.55);
+		--glass-bg: rgba(255, 255, 255, 0.75);
+		--glass-bg-hover: rgba(255, 255, 255, 0.95);
+		--glass-border: rgba(0, 0, 0, 0.12);
+		--glass-sheen: rgba(255, 255, 255, 0.9);
+		--glass-sheen-strong: rgba(255, 255, 255, 1);
+		--glow-strong: rgba(50, 60, 100, 0.4);
+		--hover-subtle: rgba(0, 0, 0, 0.04);
+		--segment-bg: rgba(255, 255, 255, 0.7);
+		--segment-border: rgba(0, 0, 0, 0.08);
+		--danger-bg: rgba(255, 235, 233, 0.95);
+		--danger-border: rgba(192, 57, 43, 0.35);
+		--danger-text: #7a1c12;
+		--ambient-a: rgba(120, 140, 255, 0.06);
+		--ambient-b: rgba(255, 190, 120, 0.06);
+	}
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 /* The wordmark's typeface, served by OmniCore itself rather than
  * fetched from Google's CDN at render time -- same rule the UI font
@@ -22,6 +96,18 @@
 }
 
 body {
+	/* Its own background: its base colour, with a soft wash of light
+	   behind the cards (and the stronger one below, ::before) */
+	background: var(--bg);
+	background-image:
+		radial-gradient(circle at 15% 20%, var(--ambient-a), transparent 42%),
+		radial-gradient(circle at 85% 75%, var(--ambient-b), transparent 46%);
+	background-attachment: fixed;
+	color: var(--fg);
+	font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	font-size: 16px;
+	margin: 0;
+	cursor: default;
 	min-height: 100vh;
 	display: flex;
 	flex-direction: column;
@@ -190,12 +276,68 @@ body > * { position: relative; z-index: 1; }
 	gap: 10px;
 }
 
-.actions .glass {
+/* Its buttons: clear glass with a sheen across the top, glowing on
+ * hover, pressed in a little on a click */
+.about-button {
+	appearance: none;
+	-webkit-appearance: none;
+	position: relative;
+	overflow: hidden;
 	display: block;
 	width: 100%;
 	text-align: center;
-	box-sizing: border-box;
 	text-decoration: none;
+	background: var(--glass-bg);
+	border: 1px solid var(--glass-border);
+	border-radius: var(--radius);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	box-shadow:
+		inset 0 1px 0 var(--glass-sheen),
+		inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+	color: var(--fg);
+	font-family: inherit;
+	font-size: 1em;
+	padding: 0.9em 1.9em;
+	cursor: pointer;
+	transition: background 0.2s ease, transform 0.1s ease,
+		box-shadow 0.2s ease;
+}
+
+.about-button:hover,
+.about-button:focus-visible {
+	background: var(--glass-bg-hover);
+	box-shadow:
+		inset 0 1px 0 var(--glass-sheen),
+		inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+		0 0 30px var(--glow-strong);
+}
+
+.about-button:active { transform: scale(0.97); }
+
+.about-button:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+	transform: none;
+	box-shadow:
+		inset 0 1px 0 var(--glass-sheen),
+		inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+	background: var(--glass-bg);
+}
+
+.about-button::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 55%;
+	background: linear-gradient(to bottom, var(--glass-sheen-strong), transparent);
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.about-button:active { transform: none; }
 }
 
 /* Credits ------------------------------------------------------------ */
@@ -231,7 +373,7 @@ body > * { position: relative; z-index: 1; }
 	text-align: center;
 	opacity: 0.85;
 }
-.legal a { color: inherit; }
+.legal a { color: inherit; transition: color 0.2s ease; }
 .legal a:hover { color: var(--fg); }
 
 /* Landscape ---------------------------------------------------------- */

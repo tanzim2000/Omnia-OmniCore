@@ -45,10 +45,10 @@ const {
 const widgetTypes = require("./widget-types");
 const priorityUi = require("./priority-ui");
 const { searchPlaces } = require("./place-search");
-const { PLACE_SEARCH_SCRIPT, PLACE_SEARCH_CSS } = require("./place-search-ui");
+const { PLACE_SEARCH_SCRIPT } = require("./place-search-ui");
 const { readSettings } = require("./settings-store");
 const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
-const { uiStyles, rememberUiMode, DIALOG_SCRIPT, CONTROLS_SCRIPT } = require("./ui-theme");
+const { uiStyles, styleTag, rememberUiMode, DIALOG_SCRIPT, CONTROLS_SCRIPT } = require("./ui-theme");
 const { ASK_FIRST_SCRIPT } = require("./ask-first");
 
 // Only what's specific to the wizard. Everything else — glass buttons,
@@ -62,272 +62,6 @@ const { ASK_FIRST_SCRIPT } = require("./ask-first");
 // duplicate was also actively causing bugs — a stale .glass copy in
 // admin-face.js, the same kind of leftover, silently overrode the real
 // one and forced every button to full width.
-const styles = `
-	/* The page is exactly the height of the window and never scrolls
-	   itself -- scrolling happens inside whichever region actually has
-	   too much content. Set here unconditionally rather than added by
-	   JavaScript once a step renders: a height that only appears after
-	   the first paint means everything sized against it collapses to
-	   nothing until then, which is exactly what happened when this was
-	   applied by a class from draw(). */
-	html, body { height: 100%; }
-
-	body {
-		margin: 0;
-		padding: 2em 1.5em 1.5em;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 1.25em;
-		overflow: hidden;
-		box-sizing: border-box;
-
-		/* A wizard is a screen to move through, not a document to read
-		   and copy from */
-		-webkit-user-select: none;
-		-moz-user-select: none;
-		-ms-user-select: none;
-		user-select: none;
-	}
-
-	.wizard-head { text-align: center; flex-shrink: 0; }
-	.wizard-head h1 { margin: 0; }
-
-	/* The step's content takes whatever height is left between the
-	   heading and the dock, and never more. Everything inside it that
-	   needs to scroll measures itself against this. */
-	/* Takes the space between the heading and the dock. Children are
-	   stretched to fill it, which is what gives the split steps' lists
-	   a real height to divide -- without it they have nothing to size
-	   against and collapse to a sliver.
-	   
-	   The two kinds of step want opposite things here, so they say so
-	   individually below rather than sharing one compromise: a split
-	   step is a workspace and should fill the screen, a single segment is
-	   a form and should be only as tall as it needs. */
-	#content {
-		flex: 1 1 auto;
-		min-height: 0;
-		width: 100%;
-		display: flex;
-		justify-content: center;
-		align-items: stretch;
-	}
-
-	/* A split step needs #content to claim all the leftover space, since
-	   that's where its real height comes from. A single segment opting out
-	   of the stretch above wasn't enough on its own -- #content itself
-	   was still claiming that space regardless, just leaving the dead
-	   gap below the segment instead of inside it. This makes #content
-	   itself stop claiming space it has nothing to fill it with,
-	   whenever what's actually inside it is a single segment. */
-	#content:has(> .wizard-single) {
-		flex: 0 1 auto;
-	}
-
-	/* One segment, for the steps that only have one thing to show. It
-	   scrolls inside itself rather than growing the page, the same as
-	   the split steps do -- a long theme form or review list was
-	   previously the one thing that could still push the whole page
-	   taller and slide underneath the dock. */
-	.wizard-single {
-		width: 100%;
-		max-width: clamp(28em, 50vw, 40em);
-		/* Opts out of #content's stretch: a form should be as tall as
-		   its fields and no taller. Stretching it left a short step
-		   standing full height with its content at the top and a large
-		   dead gap above the dock. */
-		align-self: flex-start;
-		max-height: 100%;
-		overflow-y: auto;
-		box-sizing: border-box;
-		scrollbar-width: thin;
-		scrollbar-color: var(--scroll-thumb) transparent;
-	}
-
-	.wizard-single::-webkit-scrollbar { width: 8px; }
-	.wizard-single::-webkit-scrollbar-track { background: transparent; }
-	.wizard-single::-webkit-scrollbar-thumb {
-		background: var(--scroll-thumb);
-		border-radius: 0.25em;
-	}
-
-	/* ---------------------------------------------------------------
-	   The two-segment steps.
-
-	   Unlike the settings bento, where segments size to their own content
-	   and the page scrolls past them, these fill the screen: a wizard
-	   step is one task to focus on now, not a page to scan. Each half
-	   takes an equal share of whatever space there is and stretches to
-	   fill it, so the lists inside them can do the same.
-
-	   Which way they divide follows the screen's own shape rather than
-	   a pixel threshold, for the same reason everywhere else does: a
-	   phone can report more CSS pixels than an older monitor, so any
-	   fixed number misjudges real devices in both directions.
-	   --------------------------------------------------------------- */
-	/* Stays stretched by #content, which is what gives the segments and
-	   the lists inside them a real height to divide. */
-	.wizard-split {
-		width: 100%;
-		max-width: clamp(40em, 85vw, 72em);
-		min-height: 0;
-		display: flex;
-		gap: 14px;
-
-		/* Portrait: divided horizontally — stacked, each full width */
-		flex-direction: column;
-	}
-
-	@media (orientation: landscape) {
-		/* Landscape: divided vertically — side by side, each full height */
-		.wizard-split { flex-direction: row; }
-	}
-
-	.wizard-split > .segment {
-		flex: 1 1 0;
-		min-height: 0;
-		display: flex;
-		flex-direction: column;
-	}
-
-	/* The boxes themselves are .segment, from ui-theme.js -- the same
-	   ones Settings uses. Only the wizard's quieter headings are its
-	   own. */
-	.segment h2 {
-		margin: 0 0 14px 0;
-		font-weight: 400;
-		font-size: 0.95em;
-		color: var(--fg-muted);
-	}
-
-	/* A segment heading with an action beside it. The heading keeps its own
-	   bottom margin so a segment without an action looks no different. */
-	.segment-head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1em;
-		flex-shrink: 0;
-	}
-
-	/* Sized to sit beside a heading rather than stand on its own -- close
-	   to the text it accompanies, not a full control competing with the
-	   list below it. */
-	.mini {
-		appearance: none;
-		-webkit-appearance: none;
-		flex-shrink: 0;
-		margin-bottom: 14px;
-		background: var(--glass-bg);
-		border: 1px solid var(--glass-border);
-		border-radius: 999em;
-		color: var(--fg);
-		font-family: inherit;
-		font-size: 0.8em;
-		padding: 0.3906em 0.9375em;
-		cursor: pointer;
-		transition: background 0.15s ease, box-shadow 0.15s ease;
-	}
-
-	.mini:hover,
-	.mini:focus-visible {
-		outline: none;
-		background: var(--glass-bg-hover);
-		box-shadow: 0 0 14px var(--glow-strong);
-	}
-
-	/* The settings form inside a split step scrolls on its own too,
-	   rather than growing its segment past the screen */
-	.segment-scroll {
-		flex: 1 1 0;
-		min-height: 0;
-		overflow-y: auto;
-		padding-right: 0.4em;
-		scrollbar-width: thin;
-		scrollbar-color: var(--scroll-thumb) transparent;
-	}
-
-	.segment-scroll::-webkit-scrollbar { width: 8px; }
-	.segment-scroll::-webkit-scrollbar-track { background: transparent; }
-	.segment-scroll::-webkit-scrollbar-thumb {
-		background: var(--scroll-thumb);
-		border-radius: 0.25em;
-	}
-
-	/* A module in the picker, and a module already added. Same shape on
-	   purpose — it's the same thing, on two sides of one decision. */
-	.flat,
-	.picked {
-		display: block;
-		width: 100%;
-		text-align: left;
-		background: var(--segment-bg);
-		border: 1px solid var(--segment-border);
-		border-radius: 0.5263em;
-		color: var(--fg);
-		font-size: 0.95em;
-		font-family: inherit;
-		padding: 0.7895em 1.0526em;
-		flex-shrink: 0;
-	}
-
-	.flat {
-		cursor: pointer;
-		transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-	}
-	.flat:hover {
-		/* The exact same treatment On this face gets on hover, just in
-		   green instead of red: a tinted fill, a coloured border, and a
-		   minimal glow -- not just the glow on its own, which read as a
-		   halo around an otherwise plain grey hover state. */
-		background: var(--success-bg);
-		border-color: var(--success-border);
-		box-shadow: 0 0 14px rgba(62, 214, 122, 0.45);
-	}
-
-	.flat small,
-	.picked small {
-		display: block;
-		color: var(--fg-muted);
-		font-size: 0.8em;
-		margin-top: 3px;
-	}
-
-	/* Removing is destructive, so it says so on hover rather than
-	   looking like every other clickable row */
-	.picked.removable {
-		cursor: pointer;
-		transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-	}
-	.picked.removable:hover {
-		background: var(--danger-bg);
-		border-color: var(--danger-border);
-		box-shadow: 0 0 14px rgba(255, 107, 107, 0.45);
-	}
-
-	/* The instance being configured right now */
-	.picked.current {
-		background: var(--glass-bg-hover);
-		border-color: var(--glass-border);
-	}
-
-	.review-row {
-		display: flex;
-		justify-content: space-between;
-		gap: 16px;
-		padding: 0.7237em 0;
-		border-bottom: 1px solid var(--segment-border);
-		font-size: 0.95em;
-	}
-
-	.review-row span { color: var(--fg-muted); }
-
-	/* Info order lists, short and long: see priority-ui.js */
-	${priorityUi.PRIORITY_CSS}
-	/* Under place search matches: see place-search-ui.js */
-	${PLACE_SEARCH_CSS}
-`;
 
 
 function page(title, body, script) {
@@ -338,9 +72,9 @@ function page(title, body, script) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(title)}</title>
 	${ICON_LINK}
-	<style>${uiStyles()}${styles}</style>
+	${styleTag(uiStyles())}
 </head>
-<body>
+<body class="wizard-page">
 ${pageStart()}
 	${body}
 	<script>${DIALOG_SCRIPT}${CONTROLS_SCRIPT}${ASK_FIRST_SCRIPT}${script || ""}</script>
@@ -537,7 +271,7 @@ function scriptJson(value) {
 function renderWizard(data) {
 	const body = `
 		<div class="wizard-head" id="header"></div>
-		<div id="content"></div>
+		<div class="wizard-content" id="content"></div>
 		<p class="status" id="status"></p>
 
 		<!-- Back is rendered but hidden on the first step rather than
@@ -872,7 +606,7 @@ function renderWizard(data) {
 						"</div>" +
 						(fields || '<div class="empty">Nothing to configure.</div>') +
 						(themeFields
-							? '<h2 style="margin-top:22px">In ' +
+							? '<h2 class="part">In ' +
 								escapeHtml(theme.name) + "</h2>" + themeFields
 							: "") +
 					"</div>" +
@@ -1005,13 +739,13 @@ function renderWizard(data) {
 								'" value="manual"' + (manual ? " checked" : "") + ">" +
 							"<span>Set coordinates here</span>" +
 						"</label>" +
-						'<div data-loc-fields="' + key + '" style="' +
-							(manual ? "" : "display:none") + ';margin-top:10px">' +
+						'<div class="location-manual" data-loc-fields="' + key + '"' +
+							(manual ? "" : " hidden") + ">" +
 							'<div class="field"><label>Search for a city</label>' +
 								'<div class="search-row">' +
 									'<input type="text" data-loc-query="' + key +
 										'" placeholder="Regina">' +
-									'<button class="glass" style="padding:0.75em 1.25em" ' +
+									'<button class="glass medium" ' +
 										'data-loc-search="' + key + '">Search</button>' +
 								"</div>" +
 								'<div data-loc-results="' + key + '"></div>' +
@@ -1116,8 +850,7 @@ function renderWizard(data) {
 					: control.value;
 
 				const allowed = field.dataset.whenIs.split("|");
-				field.style.display =
-					allowed.indexOf(current) === -1 ? "none" : "";
+				field.hidden = allowed.indexOf(current) === -1;
 			}
 		}
 
@@ -1168,7 +901,7 @@ function renderWizard(data) {
 					escapeHtml(theme ? theme.name : "none") + "</span></div>" +
 				'<div class="review-row"><strong>ID</strong><span>' +
 					NEXT_NUMBER + "</span></div>" +
-				'<div style="margin-top:22px"><h2>Modules</h2>' +
+				'<div class="part"><h2>Modules</h2>' +
 					(rows || '<div class="empty">No modules on this face.</div>') +
 				"</div>" +
 			"</div>";
@@ -1257,7 +990,7 @@ function renderWizard(data) {
 						'[data-loc-fields="' + this.dataset.loc + '"]'
 					);
 					if (fields) {
-						fields.style.display = this.value === "manual" ? "" : "none";
+						fields.hidden = this.value !== "manual";
 					}
 				});
 			}
@@ -1265,8 +998,7 @@ function renderWizard(data) {
 			// Hidden rather than disabled: the capsule is a fixed width,
 			// so a greyed-out segment would just be a dead gap. Removed
 			// from the layout, the other two spread to fill it.
-			document.getElementById("back").style.display =
-				step === 0 ? "none" : "";
+			document.getElementById("back").hidden = step === 0;
 			document.getElementById("next").textContent =
 				step === lastStep() ? "Finish" : "Next";
 		}

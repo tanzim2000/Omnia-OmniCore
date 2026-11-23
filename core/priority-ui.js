@@ -239,7 +239,7 @@ function priorityClient() {
 			below = neighbour(row, 1);
 		}
 
-		row.style.transform = "translateY(" + drag.offset + "px)";
+		row.style.setProperty("--drag-y", drag.offset + "px");
 	}
 
 	function autoScroll() {
@@ -311,7 +311,7 @@ function priorityClient() {
 
 		cancelAnimationFrame(drag.frame);
 		drag.row.classList.remove("dragging");
-		drag.row.style.transform = "";
+		drag.row.style.removeProperty("--drag-y");
 		drag.container.classList.remove("sorting");
 
 		if (drag.moved) {
@@ -441,131 +441,11 @@ const PRIORITY_SCRIPT = `
 	(${priorityClient.toString()})();
 `;
 
-// The look, shared by the widget page and the wizard
-const PRIORITY_CSS = `
-	/* A reorderable list. Looks like the .option rows, since it's the
-	   same kind of choice made a different way. */
-	[data-priority] { position: relative; }
-
-	.priority-row {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		padding: 0.5em 0.6em 0.5em 0.4em;
-		border: 1px solid var(--segment-border);
-		border-radius: 0.6579em;
-		margin-bottom: 8px;
-		font-size: 0.95em;
-		user-select: none;
-		-webkit-user-select: none;
-		cursor: grab;
-		position: relative;
-	}
-
-	.priority-row:last-child { margin-bottom: 0; }
-
-	/* The row being dragged sits above the others and follows the
-	   pointer. It's given the page's own colour so the rows it passes
-	   over don't show through it. */
-	.priority-row.dragging {
-		z-index: 2;
-		cursor: grabbing;
-		border-color: var(--glass-border);
-		background: var(--bg);
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-	}
-
-	.sorting, .sorting * { cursor: grabbing; }
-
-	.priority-grip {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 32px;
-		flex: none;
-		color: var(--fg-muted);
-		fill: currentColor;
-		opacity: 0.6;
-		/* A finger on the grip drags instead of scrolling the page */
-		touch-action: none;
-	}
-
-	.priority-row:hover .priority-grip { opacity: 1; }
-
-	.priority-rank {
-		color: var(--fg-muted);
-		font-size: 0.8em;
-		min-width: 16px;
-		text-align: right;
-	}
-
-	.priority-name { flex: 1; }
-
-	.priority-move {
-		appearance: none;
-		-webkit-appearance: none;
-		width: 32px;
-		height: 32px;
-		padding: 0;
-		margin: 0;
-		flex: none;
-		font-size: 0.85em;
-		line-height: 1;
-		cursor: pointer;
-		color: inherit;
-		border-radius: 0.5882em;
-		border: 1px solid var(--segment-border);
-		background: var(--glass-bg);
-	}
-
-	.priority-move:hover:not(:disabled) { background: var(--glass-bg-hover); }
-	.priority-move:disabled { opacity: 0.2; cursor: default; }
-
-	/* A long list's button: the order in short form, and "Change" */
-	.glass.priority-open {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1em;
-		width: 100%;
-		text-align: left;
-		padding: 0.75em 1em;
-	}
-
-	.priority-summary {
-		flex: 1;
-		min-width: 0;
-		line-height: 1.4;
-	}
-
-	.priority-open-hint {
-		flex: none;
-		color: var(--fg-muted);
-		font-size: 0.9em;
-	}
-
-	.priority-open-hint::after { content: " ›"; }
-
-	/* The pop-up: taller than a question, and its list scrolls while the
-	   heading and the buttons stay put */
-	.modal.priority-modal { max-width: 28em; max-height: 85vh; max-height: 85dvh; }
-
-	.priority-list {
-		flex: 1 1 auto;
-		min-height: 0;
-		overflow-y: auto;
-		overscroll-behavior: contain;
-		padding: 2px;
-		margin: 0 -2px;
-	}
-`;
 
 module.exports = {
 	INLINE_MAX,
 	prioritySummary,
 	priorityRowsHtml,
 	priorityFieldHtml,
-	PRIORITY_SCRIPT,
-	PRIORITY_CSS
+	PRIORITY_SCRIPT
 };

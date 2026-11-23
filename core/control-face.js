@@ -21,6 +21,7 @@ const express = require("express");
 const faceStore = require("./face-store");
 const {
 	uiStyles,
+	styleTag,
 	rememberUiMode,
 	modeSwitch,
 	MODE_SWITCH_SCRIPT,
@@ -53,139 +54,6 @@ function settingsButton() {
 // How long the single-face case waits before going there on its own.
 const AUTO_ADVANCE_SECONDS = 30;
 
-const styles = `
-	body {
-		min-height: 100vh;
-		padding: 3em 1.5em;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 1.75em;
-	}
-
-	.panel { width: 100%; max-width: 460px; }
-
-	h1 { font-weight: 300; font-size: 1.75em; margin: 0; }
-	.lede { color: var(--fg-muted); font-size: 0.875em; margin: 0.6em 0 0 0; }
-
-	.actions { display: flex; gap: 0.75em; justify-content: center; }
-
-	/* ---------------------------------------------------------------
-	   The face picker: a fixed-height framed region, not a box that
-	   grows to fit its content -- one face or twenty, the frame is
-	   the same size, with a visible border so its edge is obvious.
-	   Content sits centered within it; only becomes actually
-	   scrollable once it genuinely overflows.
-
-	   Centred with auto margins on the first and last face, NOT with
-	   justify-content: center. When the faces are taller than the box,
-	   justify-content: center pushes the overflow out of the top as well
-	   as the bottom, and the top part is above where a scroll bar can
-	   ever reach: the first face was cut off and couldn't be scrolled
-	   to (v1.19.5 and earlier). An auto margin shares out only the
-	   space that's actually left, so when there's none it's zero and
-	   the list starts at the top.
-
-	   Generously padded on the sides on purpose: a clickable segment's hover
-	   glow paints outside its own box, and this container clips
-	   anything crossing its edge the moment overflow-y is set at
-	   all -- not enough horizontal room here and the glow gets cut
-	   off exactly where it should be brightest.
-	   --------------------------------------------------------------- */
-	.face-list {
-		width: 100%;
-		max-width: 640px;
-		height: min(620px, 62vh);
-		border: 1px solid var(--segment-border);
-		border-radius: var(--radius);
-		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.75em;
-		padding: 2em 3em;
-		box-sizing: border-box;
-		scrollbar-width: thin;
-		scrollbar-color: var(--scroll-thumb) transparent;
-	}
-
-	.face-list > :first-child { margin-top: auto; }
-	.face-list > :last-child { margin-bottom: auto; }
-
-	.face-list::-webkit-scrollbar { width: 8px; }
-	.face-list::-webkit-scrollbar-track { background: transparent; }
-	.face-list::-webkit-scrollbar-thumb {
-		background: var(--scroll-thumb);
-		border-radius: 0.25em;
-	}
-
-	/* ---------------------------------------------------------------
-	   The auto-advance timer: a small round lamp under a domed glass
-	   lens, echoing the glossy buttons rather than introducing a new
-	   visual idiom. The amber wedge drains as the seconds run out, so
-	   the redirect is never a surprise.
-
-	   Fixed bottom-left, always. The floating back button deliberately
-	   only offers bottom-right and top-left, so the two can never
-	   collide.
-	   --------------------------------------------------------------- */
-	.timer {
-		position: fixed;
-		bottom: 1.5em;
-		left: 1.5em;
-		width: 3.2em;
-		height: 3.2em;
-		border-radius: 50%;
-		border: 1px solid var(--glass-border);
-		background: var(--segment-bg);
-		backdrop-filter: blur(12px);
-		overflow: hidden;
-		z-index: 50;
-	}
-
-	/* The lamp itself. A conic gradient is what makes the wedge: the
-	   filled portion is amber, the rest is nothing, and shrinking the
-	   angle drains it like a pie chart losing its slice. */
-	.timer-lamp {
-		position: absolute;
-		inset: 0.45em;
-		border-radius: 50%;
-		background: conic-gradient(
-			#ffb43a calc(var(--remaining) * 1turn),
-			rgba(255, 180, 58, 0.12) 0
-		);
-		box-shadow: 0 0 0.75em rgba(255, 180, 58, 0.35);
-		transition: background 1s linear;
-	}
-
-	/* The dome: a sheen across the upper half, same treatment the glass
-	   buttons get, so the lamp reads as sitting under a lens. */
-	.timer::after {
-		content: "";
-		position: absolute;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: 50%;
-		background: linear-gradient(
-			to bottom, var(--glass-sheen), transparent
-		);
-		pointer-events: none;
-	}
-
-	.face {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25em;
-		/* Spacing between faces comes from .face-list's own gap now,
-		   not a margin on each one -- otherwise the last one would
-		   carry unwanted space below it too */
-		width: 100%;
-	}
-
-	.face span { color: var(--fg-muted); font-size: 0.8em; }
-`;
 
 function page(title, body, script) {
 	return `<!DOCTYPE html>
@@ -195,9 +63,9 @@ function page(title, body, script) {
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>${escapeHtml(title)}</title>
 	${ICON_LINK}
-	<style>${uiStyles()}${styles}</style>
+	${styleTag(uiStyles())}
 </head>
-<body>
+<body class="welcome-page">
 ${pageStart()}
 	${body}
 	<script>${script || ""}</script>

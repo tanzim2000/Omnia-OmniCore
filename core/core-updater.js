@@ -980,7 +980,7 @@ async function swapContainer(options) {
 		self = await getSelfContainer(docker);
 	} catch (error) {
 		throw new Error(
-			`Can't reach the Docker socket to self-update — is ` +
+			`Can't reach the Docker socket to self-update. Is ` +
 				`/var/run/docker.sock mounted? (${error.message})`
 		);
 	}
