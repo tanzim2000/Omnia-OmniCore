@@ -141,9 +141,11 @@ module.exports = async function* reporter(source) {
 	const seconds = Math.round((Date.now() - started) / 1000);
 	const testWord = `${tests.toLocaleString("en-US")} tests in ${seconds}s.`;
 
+	const fileWord = `${names.length} ${names.length === 1 ? "file" : "files"}`;
+
 	if (failedFiles.length) {
-		yield `\n  ${red(bold(`${names.length} files: ${names.length - failedFiles.length} passed, ${failedFiles.length} failed`))} ${red(`(${failedFiles.map(shortName).join(", ")}).`)} ${quiet(testWord)}\n`;
+		yield `\n  ${red(bold(`${fileWord}: ${names.length - failedFiles.length} passed, ${failedFiles.length} failed`))} ${red(`(${failedFiles.map(shortName).join(", ")}).`)} ${quiet(testWord)}\n`;
 	} else {
-		yield `\n  ${green(bold(`${names.length} files: all passed.`))} ${quiet(testWord)}\n`;
+		yield `\n  ${green(bold(`${fileWord}: all passed.`))} ${quiet(testWord)}\n`;
 	}
 };

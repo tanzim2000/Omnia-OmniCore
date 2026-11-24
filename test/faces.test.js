@@ -122,6 +122,42 @@ test("dashboard face: serves its instance data over HTTP", async () => {
 	assert.ok(Array.isArray(envelope.content), "content is not an array");
 });
 
+// A module whose reading is whatever its reading.txt says, read fresh on
+// every call. The tag test uses it rather than the weather tile, whose
+// answer depends on two services over the internet (where am I, then
+// what's the weather there): a lookup that fails isn't kept, so one slow
+// answer between two requests changes what the tile says, and the tag
+// with it, through no fault of the tagging.
+function writeSteadyModule(id, reading) {
+	const fs = require("fs");
+	const path = require("path");
+	const dir = path.join(modulesDir, id);
+
+	fs.mkdirSync(dir, { recursive: true });
+	fs.writeFileSync(
+		path.join(dir, "module.json"),
+		JSON.stringify({ name: "Steady", description: "Shows what reading.txt says" })
+	);
+	fs.writeFileSync(
+		path.join(dir, "index.js"),
+		`const fs = require("fs");
+const path = require("path");
+
+module.exports = async function () {
+	return {
+		title: "Steady",
+		content: [{ type: "pair", label: "Reading", value: fs.readFileSync(path.join(__dirname, "reading.txt"), "utf-8") }],
+		updated: new Date().toISOString()
+	};
+};
+`
+	);
+	fs.writeFileSync(path.join(dir, "reading.txt"), reading);
+
+	// Changes what the tile shows on its next call
+	return (next) => fs.writeFileSync(path.join(dir, "reading.txt"), next);
+}
+
 // The change signal, and the promise that it costs old themes nothing.
 //
 // The second of these two is the one that would actually hurt if it
@@ -129,43 +165,62 @@ test("dashboard face: serves its instance data over HTTP", async () => {
 // If-None-Match and treats a non-OK response as a dead tile, so an
 // uninvited 304 would blank a tile whose data was perfectly fine.
 test("dashboard face: tags content so a theme can tell new data from the same data", async () => {
+	const setReading = writeSteadyModule("smoke-steady-module", "42");
+
 	const face = faceStore.readFaces()[0];
 	await waitForPort(face.id);
 
-	const instance = face.instances[0];
-	const url = `http://127.0.0.1:${face.id}/api/${instance.id}?richness=50`;
+	const instance = faceStore.addInstance(face.id, "smoke-steady-module", "", {}, {});
+	refresh(face.id);
 
-	const first = await fetch(url);
-	const tag = first.headers.get("etag");
+	try {
+		const url = `http://127.0.0.1:${face.id}/api/${instance.id}?richness=50`;
 
-	assert.ok(tag, "no ETag on the response");
+		const first = await fetch(url);
+		const tag = first.headers.get("etag");
 
-	// Same content, asked for again. The tag has to match even though
-	// `updated` is a fresh timestamp every call -- if it didn't, the
-	// whole thing would be useless for exactly the modules that poll
-	// fastest.
-	const second = await fetch(url);
+		assert.ok(tag, "no ETag on the response");
 
-	assert.equal(
-		second.headers.get("etag"),
-		tag,
-		"unchanged content produced a different tag"
-	);
+		// Same content, asked for again. The tag has to match even though
+		// `updated` is a fresh timestamp every call -- if it didn't, the
+		// whole thing would be useless for exactly the modules that poll
+		// fastest.
+		const second = await fetch(url);
 
-	// Asking the conditional question gets the short answer
-	const conditional = await fetch(url, {
-		headers: { "If-None-Match": tag }
-	});
+		assert.equal(
+			second.headers.get("etag"),
+			tag,
+			"unchanged content produced a different tag"
+		);
 
-	assert.equal(conditional.status, 304, "expected a 304 for a matching tag");
+		// Asking the conditional question gets the short answer
+		const conditional = await fetch(url, {
+			headers: { "If-None-Match": tag }
+		});
 
-	// A tag that doesn't match gets the real thing
-	const stale = await fetch(url, {
-		headers: { "If-None-Match": '"not-the-current-tag"' }
-	});
+		assert.equal(conditional.status, 304, "expected a 304 for a matching tag");
 
-	assert.equal(stale.status, 200, "a stale tag should get the full body");
-	assert.ok((await stale.json()).content, "no content in the full response");
+		// A tag that doesn't match gets the real thing
+		const stale = await fetch(url, {
+			headers: { "If-None-Match": '"not-the-current-tag"' }
+		});
+
+		assert.equal(stale.status, 200, "a stale tag should get the full body");
+		assert.ok((await stale.json()).content, "no content in the full response");
+
+		// New content, new tag: the same question now gets the full body
+		setReading("43");
+
+		const changed = await fetch(url, {
+			headers: { "If-None-Match": tag }
+		});
+
+		assert.equal(changed.status, 200, "new content should get the full body");
+		assert.notEqual(changed.headers.get("etag"), tag, "new content kept the old tag");
+	} finally {
+		faceStore.removeInstance(face.id, instance.id);
+		refresh(face.id);
+	}
 });
 
 test("dashboard face: a theme that knows nothing about tags is unaffected", async () => {
