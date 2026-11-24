@@ -1,4 +1,6 @@
 // test/ask-first.test.js
+// In short: Settings that ask before they change
+//
 // A select setting whose options can ask before they're taken (since
 // v1.19.8), such as a weather service that needs an API key: what a
 // settings file may say, and what reaches the page.

@@ -1,4 +1,6 @@
 // test/core-update.test.js
+// In short: OmniCore updating itself
+//
 // OmniCore updating itself: the "Update now" button and what's behind it.
 //
 // The real swap needs a real Docker and a real published image, which a

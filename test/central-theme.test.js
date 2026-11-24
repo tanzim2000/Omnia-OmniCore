@@ -1,4 +1,6 @@
 // test/central-theme.test.js
+// In short: Every page is built from the central theme
+//
 // Every page OmniCore draws is built from the central theme's elements
 // (core/ui-theme.js), and nothing else. No page keeps looks of its own.
 //

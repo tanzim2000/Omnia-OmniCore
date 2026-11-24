@@ -1,4 +1,6 @@
 // test/admin-pages.test.js
+// In short: A face's pages, and the way back from each
+//
 // Every page under a face, as segments in the Default UI's look, with a
 // working way back.
 //

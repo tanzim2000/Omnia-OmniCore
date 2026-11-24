@@ -1,4 +1,6 @@
 // test/network-page.test.js
+// In short: The Network page
+//
 // The Network page (since 2.0.0): the server's Wi-Fi on a normal day.
 //
 //   - The scripts, run for real by this machine's sh against a pretend

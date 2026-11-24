@@ -1,4 +1,6 @@
 // test/network-watcher.test.js
+// In short: Online, no internet or disconnected
+//
 // Network Management's second part (since 2.0.0): deciding what every face
 // shows about the network, and getting it there.
 //

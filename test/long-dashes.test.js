@@ -1,4 +1,6 @@
 // test/long-dashes.test.js
+// In short: No long dash in anything Core says
+//
 // No long dash (—) in anything Core says: its pages, its messages, its
 // errors and the lines it writes to the log. They read as a pause in the
 // wrong place to a lot of people, so words are joined with a colon, a

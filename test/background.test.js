@@ -1,4 +1,6 @@
 // test/background.test.js
+// In short: Modules that keep running in the background
+//
 // Background modules: the shared connection manager on its own, then the
 // whole lifecycle -- started, restarted, stopped -- driven the way a real
 // person drives it, through the admin face over real HTTP.

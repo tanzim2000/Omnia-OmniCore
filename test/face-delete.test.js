@@ -1,4 +1,6 @@
 // test/face-delete.test.js
+// In short: Deleting a face, and everything that goes with it
+//
 // A face's page has Open face and Delete face (since v1.19.8), and
 // deleting really deletes: the record, its widgets' saved data, its
 // running server, and every screen showing it is sent to the welcome face.

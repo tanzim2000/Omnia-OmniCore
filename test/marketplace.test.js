@@ -1,4 +1,6 @@
 // test/marketplace.test.js
+// In short: Installing everything from the real Registry
+//
 // Downloads and installs everything the real registry lists, then
 // confirms an installed module actually renders.
 //

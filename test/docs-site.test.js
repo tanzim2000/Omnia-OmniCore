@@ -1,4 +1,6 @@
 // test/docs-site.test.js
+// In short: The docs website describes every element
+//
 // The docs website, and the one promise that keeps its Default UI page
 // honest: every element in the stylesheet is described.
 //

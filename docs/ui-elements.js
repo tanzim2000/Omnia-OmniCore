@@ -134,10 +134,10 @@ const sections = [
 <tr><td><code>--segment-blur</code></td><td>Frosted glass, on since v2: <code>blur(var(--glass-blur)) saturate(var(--glass-saturate))</code>. Every segment blurs what's behind it.</td></tr>
 <tr><td><code>--glass-blur</code></td><td>How much, in px: 20 unless changed on Settings' Appearance tab (0 to 40).</td></tr>
 <tr><td><code>--glass-saturate</code></td><td>1, or 1.4 over a picture, so the colour showing through the glass isn't washed out.</td></tr>
-<tr><td><code>--glass-tint</code></td><td>A colour laid over every segment's fill, a little of it (at most 35%). <code>transparent</code> until one is picked; "Match the background" uses the picture's own main colour, or the background's colour.</td></tr>
+<tr><td><code>--glass-tint</code></td><td>A colour laid over every segment's fill: the tint (at most 35%) with the Dim's darkness added, as one colour. <code>transparent</code> with neither. The tint is a colour picked, or the background's own: Dominant (the colour covering most of it) or Vibrant (its most eye-catching).</td></tr>
 <tr><td><code>--segment-edge</code></td><td>The thin light line along a segment's top edge. Transparent with the plain background, there over a picture.</td></tr>
-<tr><td><code>--backdrop-brightness</code></td><td>The picture's brightness, 0.4 to 1.2 (the Brightness setting).</td></tr>
-<tr><td><code>--backdrop-dim</code></td><td>The veil over the picture or colour: black in dark mode, Beige Cream in light mode. With Auto dim on (the default), just strong enough for the text to read, worked out from the picture; with it off, what was set by hand on the Appearance tab, 0 to 100%.</td></tr>
+<tr><td><code>--backdrop-brightness</code></td><td>The picture's brightness, 0.5 to 1.5 (Picture brightness, -50% to +50%; 1 is Original).</td></tr>
+<tr><td><code>--on-picture-shadow</code></td><td>The shadow behind text drawn straight on a picture, with no glass under it (a page's title): dark under white text, light under black. <code>none</code> with the plain background.</td></tr>
 </table>`,
 				code: ":root {\n\t--font: system-ui, …;\n\t--font-size: 16px;\n\t--radius: 0.75em;\n\t--segment-blur: blur(var(--glass-blur)) saturate(var(--glass-saturate));\n\t--glass-blur: 20px;\n\t--glass-tint: transparent;\n}",
 				note: "A blurred box becomes the frame for anything inside it with position: fixed, so a pop-up (.modal-backdrop) has to sit outside every segment."
@@ -163,14 +163,13 @@ const sections = [
 			{
 				id: "backdrop",
 				title: "Picture or colour behind the page",
-				sel: ".omni-backdrop (.omni-colour, .omni-waiting) · .omni-backdrop-was (.going, .was-veil)",
-				desc: "Since v2, a picture, an animated GIF or WebP, a looping video, or one colour (.omni-colour) can be set behind OmniCore's own pages (Settings, Appearance tab). It's drawn as the first thing inside <code>&lt;body&gt;</code>, fixed to the screen behind everything, with a veil over it (<code>::after</code>, <code>--backdrop-dim</code>) so text stays readable. Nothing is drawn with the plain background. A page doesn't write this itself: <code>backdropHtml()</code> in <code>core/backdrop.js</code> does, and the page's port serves the file at <code>/backdrop/…</code>.",
+				sel: ".omni-backdrop (.omni-colour, .omni-waiting) · .omni-backdrop-was (.going)",
+				desc: "Since v2, a picture, an animated GIF or WebP, a looping video, or one colour (.omni-colour) can be set behind OmniCore's own pages (Settings, Appearance tab). It's drawn as the first thing inside <code>&lt;body&gt;</code>, fixed to the screen behind everything, as it is, at the Picture brightness picked. What keeps text readable is the glass over it: since Phase A of 2.0.0 the Dim darkens the glass, not the picture, and one Auto (<code>solveGlass()</code> in <code>core/backdrop.js</code>) keeps the text at a contrast of 4.5 or more. A page's title, on the picture with no glass under it, gets <code>--on-picture-shadow</code>, and a glass button outside any box gets the glass's tint and Dim. Nothing is drawn with the plain background. A page doesn't write this itself: <code>backdropHtml()</code> does, and the page's port serves the file at <code>/backdrop/…</code>.",
 				demo: `<div style="position:relative;height:140px;border-radius:var(--radius);overflow:hidden;background:linear-gradient(135deg,#3a6df0,#c46cd8 55%,#f2a65a)">
-<div style="position:absolute;inset:0;background:rgba(0,0,0,0.35)"></div>
-<div class="segment" style="position:absolute;left:1em;right:1em;top:1.5em;backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)">A segment over a picture</div>
+<div class="segment" style="position:absolute;left:1em;right:1em;top:1.5em;color:#fff;background-color:rgba(255,255,255,0.07);background-image:linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.35));backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)">A segment over a picture, its glass dimmed</div>
 </div>`,
 				code: '<body>\n${backdropHtml()}\n…',
-				note: "With reduced motion turned on in the device's settings, an animation shows its still frame and a video doesn't play. A video pauses while its tab is hidden. It fades in: a picture still loading waits as .omni-waiting and fades in once ready, and after a reload that changed the background (Change background's Use, or Dark and Light), a copy of the old one (.omni-backdrop-was, its veil a .was-veil) sits on top and fades away (.going) once the new one is ready. Call <code>omniKeepBackdrop()</code> just before such a reload. No fade with reduced motion."
+				note: "With reduced motion turned on in the device's settings, an animation shows its still frame and a video doesn't play. A video pauses while its tab is hidden. It fades in: a picture still loading waits as .omni-waiting and fades in once ready, and after a reload that changed the background (Change background's Use, or Dark and Light), a copy of the old one (.omni-backdrop-was) sits on top and fades away (.going) once the new one is ready. Call <code>omniKeepBackdrop()</code> just before such a reload. No fade with reduced motion."
 			},
 			{
 				id: "curtain",
@@ -530,11 +529,11 @@ const sections = [
 				id: "background-modal",
 				base: "modal",
 				title: "Background pop-up",
-				sel: ".modal.modal-wide > .bg-preview (.bg-preview-colour, .bg-preview-veil, .bg-preview-card) · .bg-tabs · .bg-pane",
-				desc: "Change background: a wider pop-up, a live preview with a piece of glass on it to judge the text by (<b>.bg-preview-card</b>), then Picture, Colour and Default (<b>.bg-tabs</b>, a pane each, <b>.bg-pane</b>). The preview's colour is <code>--colour</code> and the veil over a picture <code>--veil</code>, set by the pop-up's script as the choice changes.",
+				sel: ".modal.modal-wide > .bg-preview (.bg-preview-colour, .bg-preview-card) · .bg-tabs · .bg-pane",
+				desc: "Change background: a wider pop-up, a live preview with a piece of glass on it to judge the text by (<b>.bg-preview-card</b>), then Picture, Colour and Default (<b>.bg-tabs</b>, a pane each, <b>.bg-pane</b>). Set by the pop-up's script as the choice changes: the preview's colour (<code>--colour</code>) and the brightness a new picture starts at (<code>--preview-brightness</code>), and the glass as Auto would make it there: its fill, its tint with the Dim, its blur and its text colour (<code>--card-fill</code>, <code>--card-tint</code>, <code>--card-blur</code>, <code>--card-fg</code>).",
 				stage: 440,
-				demo: `<div class="modal-backdrop"><div class="modal modal-wide"><h2>Change background</h2><div class="bg-preview"><span class="bg-preview-colour" style="--colour:#24423b"></span><span class="bg-preview-veil"></span><span class="bg-preview-card">Text on the glass</span></div><div class="tabs bg-tabs"><button type="button" class="tab-btn">Picture</button><button type="button" class="tab-btn active">Colour</button><button type="button" class="tab-btn">Default</button></div></div></div>`,
-				code: "<div class=\"modal modal-wide\">\n\t<div class=\"bg-preview\">\n\t\t<span class=\"bg-preview-colour\"></span>\n\t\t<img alt=\"\" hidden>\n\t\t<span class=\"bg-preview-veil\"></span>\n\t\t<span class=\"bg-preview-card\">Text on the glass</span>\n\t</div>\n\t<div class=\"tabs bg-tabs\">…</div>\n\t<div class=\"bg-pane\" data-bg-pane=\"picture\">…</div>\n</div>"
+				demo: `<div class="modal-backdrop"><div class="modal modal-wide"><h2>Change background</h2><div class="bg-preview"><span class="bg-preview-colour" style="--colour:#24423b"></span><span class="bg-preview-card">Text on the glass</span></div><div class="tabs bg-tabs"><button type="button" class="tab-btn">Picture</button><button type="button" class="tab-btn active">Colour</button><button type="button" class="tab-btn">Default</button></div></div></div>`,
+				code: "<div class=\"modal modal-wide\">\n\t<div class=\"bg-preview\">\n\t\t<span class=\"bg-preview-colour\"></span>\n\t\t<img alt=\"\" hidden>\n\t\t<span class=\"bg-preview-card\">Text on the glass</span>\n\t</div>\n\t<div class=\"tabs bg-tabs\">…</div>\n\t<div class=\"bg-pane\" data-bg-pane=\"picture\">…</div>\n</div>"
 			},
 			{
 				id: "link-tile",
@@ -634,7 +633,7 @@ const sections = [
 				id: "glass-fields",
 				title: "Glass fields",
 				sel: ".glass-fields > .field (+ .wide-field)",
-				desc: "The Frosted glass box's settings: two to a row (Blur and Tint strength, then brightness and Dim), with a <b>.wide-field</b> taking a row of its own (the Tint colours). One to a row on a phone held upright.",
+				desc: "The Frosted glass box's settings: two to a row (Blur and Tint strength, then Picture brightness and Dim), with a <b>.wide-field</b> taking a row of its own (the Tint colours). One to a row on a phone held upright.",
 				demo: `<div class="glass-fields" style="max-width:30em"><div class="field"><label>Blur 20 px</label><input type="range" value="40"></div><div class="field"><label>Tint strength 12%</label><input type="range" value="30"></div></div>`,
 				code: "<div class=\"glass-fields\">\n\t<div class=\"field wide-field\">…</div>\n\t<div class=\"field\">…</div>\n\t<div class=\"field\">…</div>\n</div>"
 			}
@@ -690,8 +689,8 @@ const sections = [
 			{
 				id: "mode-previews",
 				title: "Mode previews",
-				sel: ".mode-previews (+ .narrow-previews) > .mode-preview (+ .active) > .mode-screen (+ .dark, .light, .note-dark, .note-light, .mode-screen-split) > .line (+ .head, .mid) · .mode-preview-label",
-				desc: "A choice made by looking: a few little screens rather than a switch, each showing what it is, the one picked with a stronger edge (<b>.active</b>). A screen is the page's colour (<b>.dark</b>, <b>.light</b>), or a notification's (<b>.note-dark</b>, <b>.note-light</b>), with lines of \"text\" on it: a heading line, then fainter ones. <b>.mode-screen-split</b> is half and half, for Device. <b>.narrow-previews</b> keeps them the size they are in a half-width box.",
+				sel: ".mode-previews (+ .narrow-previews) > .mode-preview (+ .active, .unavailable) > .mode-screen (+ .dark, .light, .note-dark, .note-light, .mode-screen-split, .on-picture) > .line (+ .head, .mid) · .mode-preview-label · .white-text · .black-text · .font-colour",
+				desc: "A choice made by looking: a few little screens rather than a switch, each showing what it is, the one picked with a stronger edge (<b>.active</b>). A screen is the page's colour (<b>.dark</b>, <b>.light</b>), or a notification's (<b>.note-dark</b>, <b>.note-light</b>), with lines of \"text\" on it: a heading line, then fainter ones. <b>.mode-screen-split</b> is half and half, for Device. <b>.narrow-previews</b> keeps them the size they are in a half-width box. Font colour (in <b>.font-colour</b>, on the Appearance tab) draws them with the background in them (<b>.on-picture</b>, <code>--screen-picture</code>: a picture's address or a colour) and the lines in white or black (<b>.white-text</b>, <b>.black-text</b>); <b>.unavailable</b> ones can't be picked.",
 				demo: `<div class="mode-previews narrow-previews"><div class="mode-preview active" role="button" tabindex="0"><div class="mode-screen dark"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Dark</div></div><div class="mode-preview" role="button" tabindex="0"><div class="mode-screen light"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Light</div></div><div class="mode-preview" role="button" tabindex="0"><div class="mode-screen mode-screen-split"><div class="dark"><span class="line head"></span></div><div class="light"><span class="line head"></span></div></div><div class="mode-preview-label">Device</div></div></div>`,
 				code: "<div class=\"mode-previews\">\n\t<div class=\"mode-preview active\" role=\"button\" tabindex=\"0\">\n\t\t<div class=\"mode-screen dark\"><span class=\"line head\"></span><span class=\"line\"></span></div>\n\t\t<div class=\"mode-preview-label\">Dark</div>\n\t</div>\n\t…\n</div>"
 			},
@@ -699,8 +698,8 @@ const sections = [
 				id: "tint-chips",
 				title: "Tint chips",
 				sel: ".tint-chips > .tint-chip (+ .active, .tint-custom) > .tint-swatch",
-				desc: "Pick-one chips: a word (None, Match the background) or a colour (<b>.tint-swatch</b>, its colour <code>--colour</code>), the one picked edged in the text colour (<b>.active</b>). <b>.tint-custom</b> is the browser's own colour box, made round, for any colour.",
-				demo: `<div class="tint-chips"><button type="button" class="tint-chip active"><span>None</span></button><button type="button" class="tint-chip"><span>Match the background</span></button><button type="button" class="tint-chip" aria-label="Blue"><span class="tint-swatch" style="--colour:#5b8def"></span></button><button type="button" class="tint-chip" aria-label="Rose"><span class="tint-swatch" style="--colour:#e46a8f"></span></button><label class="tint-chip tint-custom" title="Pick a colour"><input type="color" value="#37393e"></label></div>`,
+				desc: "Pick-one chips: a word (None, or Dominant and Vibrant with their colour) or a colour (<b>.tint-swatch</b>, its colour <code>--colour</code>), the one picked edged in the text colour (<b>.active</b>). <b>.tint-custom</b> is the browser's own colour box, made round, for any colour.",
+				demo: `<div class="tint-chips"><button type="button" class="tint-chip active"><span>None</span></button><button type="button" class="tint-chip"><span class="tint-swatch" style="--colour:#274654"></span><span>Dominant</span></button><button type="button" class="tint-chip"><span class="tint-swatch" style="--colour:#fe6e1f"></span><span>Vibrant</span></button><button type="button" class="tint-chip" aria-label="Blue"><span class="tint-swatch" style="--colour:#5b8def"></span></button><button type="button" class="tint-chip" aria-label="Rose"><span class="tint-swatch" style="--colour:#e46a8f"></span></button><label class="tint-chip tint-custom" title="Pick a colour"><input type="color" value="#37393e"></label></div>`,
 				code: "<div class=\"tint-chips\">\n\t<button type=\"button\" class=\"tint-chip active\"><span>None</span></button>\n\t<button type=\"button\" class=\"tint-chip\" aria-label=\"Blue\"><span class=\"tint-swatch\" style=\"--colour:#5b8def\"></span></button>\n\t<label class=\"tint-chip tint-custom\"><input type=\"color\"></label>\n</div>"
 			},
 			{
@@ -713,11 +712,11 @@ const sections = [
 			},
 			{
 				id: "auto-toggle",
-				title: "A label with Auto at its end",
-				sel: ".dim-head > .auto-dim · .dim-warning",
-				desc: "A field's label with a small Auto toggle at the other end of the line (Dim), and a note under the slider when what's picked by hand may make the text hard to read (<b>.dim-warning</b>, in the text colour).",
-				demo: `<div class="field" style="max-width:24em;margin:0"><div class="dim-head"><label>Dim 23%</label><label class="auto-dim"><input type="checkbox" role="switch" checked><span>Auto</span></label></div><input type="range" value="23"></div>`,
-				code: "<div class=\"dim-head\">\n\t<label for=\"dim\">Dim</label>\n\t<label class=\"auto-dim\"><input type=\"checkbox\" role=\"switch\"><span>Auto</span></label>\n</div>"
+				title: "Auto, and a slider it leaves alone",
+				sel: ".auto-switch · .slider-head > .badge.badge-button · .glass-warning",
+				desc: "The Frosted glass box's one Auto (<b>.auto-switch</b>, a switch with its word, in the box's head), and each slider's label with what's at the other end of its line (<b>.slider-head</b>): a Pinned badge when the slider was moved by hand, so Auto leaves it alone. The badge is a button (<b>.badge-button</b>): pressed, Auto may move that slider again. Under the sliders, a note when the text may be hard to read (<b>.glass-warning</b>, in the text colour).",
+				demo: `<div class="field" style="max-width:24em;margin:0"><div class="slider-head"><label>Dim 23%</label><button type="button" class="badge badge-button">Pinned</button></div><input type="range" value="23"></div><label class="auto-switch"><span>Auto</span><input type="checkbox" role="switch" checked></label>`,
+				code: "<label class=\"auto-switch\"><span>Auto</span><input type=\"checkbox\" role=\"switch\" id=\"glass-auto\"></label>\n\n<div class=\"slider-head\">\n\t<label for=\"dim\">Dim <span class=\"muted\">23%</span></label>\n\t<button type=\"button\" class=\"badge badge-button\">Pinned</button>\n</div>"
 			}
 		]
 	},
@@ -893,7 +892,7 @@ const sections = [
 				id: "badge",
 				title: "Badge",
 				sel: ".badge",
-				desc: "A small outlined label next to a word, such as “dev” after a development build's version. It says something about its neighbour; it isn't a button and doesn't react.",
+				desc: "A small outlined label next to a word, such as “dev” after a development build's version. It says something about its neighbour; it isn't a button and doesn't react. (One that does is <b>.badge-button</b>: see Auto, and a slider it leaves alone.)",
 				demo: '<span style="font-size:1.4em">1.19.4 <span class="badge">dev</span></span>',
 				code: '1.19.4 <span class="badge">dev</span>\n\nversionHtml()\t// writes this for you'
 			},

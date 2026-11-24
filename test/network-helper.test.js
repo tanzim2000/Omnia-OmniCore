@@ -1,4 +1,6 @@
 // test/network-helper.test.js
+// In short: Reading the server's network
+//
 // Network Management's first part (since 2.0.0): reading the host's
 // network through a short-lived helper container.
 //

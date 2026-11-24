@@ -1,4 +1,6 @@
 // test/data-source.test.js
+// In short: A widget saying where its data came from
+//
 // A widget can say where its data came from (since v1.19.8): a
 // `data-source` at the top level of what a module returns, next to
 // `title`, passed through to the theme as it was said.

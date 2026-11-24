@@ -1,4 +1,6 @@
 // test/resources.test.js
+// In short: Installed modules and themes, and their updates
+//
 // Installed modules and themes: how current they are, how an update reaches
 // code that's already running, and the Installed Resources page that shows
 // it all.

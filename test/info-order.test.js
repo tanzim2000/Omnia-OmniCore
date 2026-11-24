@@ -1,4 +1,6 @@
 // test/info-order.test.js
+// In short: Info order lists you drag into order
+//
 // Info order lists (a module's `priority` settings), as v2 draws them.
 //
 //   - Four items or fewer: the rows, with a grip to drag and arrows. On a

@@ -186,7 +186,7 @@ until the Marketplace puts something in them.
 | `location-service.js`      | One place that knows where OmniCore is. Resolves `location` settings before a module sees them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `place-search.js`          | Looking places up by name, for every "Search for a city" box: seven services, a Primary then a Secondary, answers kept a day, keys never sent back to a page.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `place-search-ui.js`       | The browser half: draws the matches, the note when the Secondary was asked, and the credit line, on all three pages that search.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `backdrop.js`              | The picture behind OmniCore's own pages and the frosted glass over it: checks a file by its first bytes, keeps it in `data/backdrop/`, serves it on every port, works out the veil that keeps text readable.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `backdrop.js`              | The picture behind OmniCore's own pages and the frosted glass over it: checks a file by its first bytes, keeps it in `data/backdrop/`, serves it on every port, works out the glass that keeps text readable (one Auto for Blur, Tint strength and Dim, pins, the font colour as the last resort: `solveGlass`).                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `page-motion.js`           | Page fades: the curtain every page starts with, which links and `omniGo()` fade out, which arrivals fade in (never a reload), and the `omnicore:revealed` signal for a theme's entrance.                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `settings-home.js`         | The settings home's frame: the notch and its four tabs, the sideways strip they lie on (snapping, the Left and Right keys, the tab in view, the sideways grid), the picture panning along, the remembered tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `time-service.js`          | One place that knows what time OmniCore thinks it is. Read-only; reachable by a module through `omni.time()` and by a theme directly at `GET /time`.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -1514,24 +1514,25 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   the only admin POSTs that aren't JSON; `application/octet-stream` can't be
   sent from another port without asking first either.
 - **A colour** is `POST /background/colour` (`useColour`):
-  `backgroundKind: "colour"`, the colour in `backgroundColor`, and its own
-  luminance as both its darkest and brightest parts, so the veil and Match
-  the background treat it like a picture. Default is
-  `POST /background/plain`. Either deletes a picture that was in use.
-- **Worked out once, in the browser, when a file is picked:** its main
-  colour (for Match the background), how dark its darker parts and how bright
-  its brighter parts are (10th and 90th percentile of luminance), and the
-  still frame. Not live, so nothing changes colour while a video plays.
+  `backgroundKind: "colour"`, the colour in `backgroundColor` and
+  `backgroundVibrant`, and its own luminance as its darkest, brightest and
+  overall brightness, so Auto and the tint treat it like a picture. Default
+  is `POST /background/plain`. Either deletes a picture that was in use.
+- **Worked out once, in the browser, when a file is picked:** its dominant
+  colour (the four most common, averaged) and its vibrant one (of the
+  colours covering at least half a percent of it, the most saturated and
+  bright), how dark its darker parts and how bright its brighter parts are
+  (10th and 90th percentile of luminance), how bright it is overall, and
+  the still frame. Not live, so nothing changes colour while a video plays.
+  A picture picked by an earlier v2 build, without the vibrant colour and
+  overall brightness, gets them the first time the Appearance tab opens
+  (`POST /background/about`).
 - **Drawn** by `backdropHtml()` as the first thing in `<body>`: a layer
   fixed to the screen, behind everything (the picture, or a
-  `.omni-colour`), with a veil over it, black in dark mode and Beige Cream
-  in light. With Auto dim on (`backgroundAutoDim`, the default) the veil
-  (`autoDim`) is just strong enough for the page's text to have 4.5 to 1
-  against the picture's brightest parts (dark mode) or darkest parts
-  (light mode), between 0.15 and 0.85. With it off, the veil is
-  `backgroundDim`, 0 to 100%, as set by hand (`veilFor`); the page says
-  when the text may be hard to read but never changes it. A Brightness
-  setting dims the picture itself.
+  `.omni-colour`), as it is, at the Picture brightness picked
+  (`pictureBrightness`, -50 to +50, 0 being Original). A bright new picture
+  starts darker (`startingBrightness`). Since Phase A there's no veil over
+  the picture.
 - **Reduced motion** shows the still frame and never starts the video. A
   hidden tab pauses the video.
 - **It fades in** (`BACKDROP_SCRIPT`, on every page with `backdropHtml()`,
@@ -1540,8 +1541,8 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   the browser already has is simply there. Changing the background or
   switching Dark and Light reloads the page, so just before the reload
   `omniKeepBackdrop()` keeps a copy of what's behind the page in
-  `sessionStorage` (the picture or colour, its size and place, its
-  brightness and its veil, as they look then). The next page puts the copy
+  `sessionStorage` (the picture or colour, its size and place, and its
+  brightness, as they look then). The next page puts the copy
   on top of its own background (`.omni-backdrop-was`) and fades it away
   once its own is ready, at most 4 seconds later. A copy more than 10
   seconds old is ignored. No fade with reduced motion.
@@ -1549,12 +1550,40 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   UI, before any sign-in (the sign-in page shows it too). Only the current
   picture and its still are served; a new one is a new name, so it can be
   cached for good.
-- **The glass:** every `.segment` blurs what's behind it (`--glass-blur`,
-  0 to 40 px, 20 by default) and can carry a tint: a colour laid over its
-  fill at up to 35%, picked from a few presets or a colour picker, or
-  Match the background. Over a picture the glass gets a fuller fill, a thin
-  light edge and a little more colour (`--glass-saturate`). With the plain
-  background and no tint, it looks as it always did.
+- **The glass:** every `.segment` (and a pop-up, the dock, the floating
+  Back button, a glass button outside any box) blurs what's behind it
+  (`--glass-blur`, 0 to 40 px, 20 by default) and can carry a tint: a
+  colour laid over its fill at up to 35%, picked from a few presets or a
+  colour picker, or the background's Dominant or Vibrant colour. **Dim**
+  (0 to 100%) is darkness added to the tint; the two are one colour,
+  `--glass-tint` (`tintWithDim`). Over a picture the glass gets a fuller
+  fill (a whisper of white under white text, half white under black), a
+  thin light edge and a little more colour (`--glass-saturate`). With the
+  plain background and no tint, it looks as it always did.
+- **Keeping the text readable** (`solveGlass`, sent as it is to the
+  Appearance tab with `GLASS_MODEL`, so the page shows exactly what will be
+  saved): the text has to reach a contrast of 4.5 against the worst part of
+  the picture through the glass, its brightest tenth under white text, its
+  darkest under black. Blur draws both towards the picture's overall
+  brightness (up to halfway at 40 px), so it helps with bright spots and
+  busy detail and does nothing on an even one. Each layer is laid over the
+  one below on each colour value, as the browser does. **One Auto**
+  (`glassAuto`) moves Dim (from nothing), then Blur, then Tint strength
+  (from their defaults, never below), each up to its limit before the next
+  and only as far as needed; a slider that can't help counts as at its
+  limit. A slider moved by hand is **pinned** (`glassPinned`) and keeps its
+  value (`glassBlur`, `glassTintStrength`, `glassDim`); Auto off uses all
+  three as set. **Font colour** (`fontColour`: auto, white or black) is the
+  last resort: when it's Auto and the Appearance Mode's own colour (white in
+  dark, black in light) can't be made readable, Auto tries the other one,
+  its sliders starting again from where they start. White or Black keeps
+  it, and the page warns instead.
+- **The everyday colours follow the font colour** over a picture or a
+  colour (`glassFor(...).set` in `uiStyles`): white text has the dark
+  palette, black text the light one (Beige Cream), whatever the mode. With
+  the Default background, the mode's own palette, Blur and Tint strength
+  as set by hand, and no Dim. A page's title on the picture, with no glass
+  under it, gets `--on-picture-shadow`.
 
 ### The settings home and page fades
 

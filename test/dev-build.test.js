@@ -1,4 +1,6 @@
 // test/dev-build.test.js
+// In short: How a development build shows its version
+//
 // What a development build and a face's number look like (v1.19.4).
 //
 // A dev build (npm start from a clone) isn't a release, so it shows the

@@ -83,25 +83,40 @@ const DEFAULTS = {
 	backgroundType: "",
 	backgroundFile: "",
 	backgroundStill: "",
-	// Worked out from the picture once, when it was picked: its main
-	// colour (for Match the picture), and how dark and how bright its
-	// darker and brighter parts are (for the veil that keeps text readable)
+	// Worked out from the picture once, when it was picked: its dominant
+	// colour and its most vibrant one (for the tint), and how dark its
+	// darker parts, how bright its brighter parts and how bright it is
+	// overall (for Auto, which keeps the text readable)
 	backgroundColor: "",
+	backgroundVibrant: "",
 	backgroundLow: 0,
 	backgroundHigh: 0,
-	// The picture's brightness, 40-120 (%)
-	backgroundBrightness: 100,
-	// The veil that keeps text readable: worked out from the picture (Auto
-	// dim, true), or set by hand, 0-100 (%), when Auto dim is off
-	backgroundAutoDim: true,
-	backgroundDim: 50,
+	backgroundMean: 0,
+	// Picture brightness: -50 (50% darker) to +50 (50% brighter), 0 being
+	// the picture as it is (Original)
+	pictureBrightness: 0,
 
-	// The frosted glass of every segment: its blur (0-40 px), and a tint:
-	// "none", "match" (the picture's own colour) or a colour like
-	// "#7aa2ff", at a strength of 0-35 (%)
+	// The frosted glass of every segment: its blur (0-40 px), a tint
+	// ("none", "dominant" or "vibrant" (the background's own colours), or a
+	// colour like "#7aa2ff") at a strength of 0-35 (%), and a Dim (0-100%),
+	// darkness added to the tint.
+	//
+	// One Auto looks after Blur, Tint strength and Dim (glassAuto). A slider
+	// moved by hand is pinned (glassPinned: "blur", "tintStrength", "dim")
+	// and keeps the value here; Auto works the others out. With Auto off,
+	// all three are these values. See backdrop.js.
+	glassAuto: true,
+	glassPinned: [],
 	glassBlur: 20,
 	glassTint: "none",
 	glassTintStrength: 12,
+	glassDim: 0,
+
+	// The text over a picture or a colour: "white" or "black", or "auto"
+	// (the Appearance Mode's own, switched by Auto only when nothing else
+	// makes it readable). White text has the dark everyday colours, black
+	// the light ones.
+	fontColour: "auto",
 
 	// --- Notifications ----------------------------------------------
 	// Live here rather than in a face or a theme because the overlay is

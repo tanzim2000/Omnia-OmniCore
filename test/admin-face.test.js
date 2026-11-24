@@ -1,4 +1,6 @@
 // test/admin-face.test.js
+// In short: Every Settings page opens without an error
+//
 // Every admin screen, hit over real HTTP against a real running server.
 //
 // The point of walking every route rather than a representative few:

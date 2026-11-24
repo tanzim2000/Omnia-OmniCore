@@ -1,4 +1,6 @@
 // test/corner-buttons.test.js
+// In short: The round buttons in the top corner
+//
 // The round buttons in the top-right corner, since v1.19.7.
 //
 //   - The Light / Dark / Device switch, on the sign-in page and the

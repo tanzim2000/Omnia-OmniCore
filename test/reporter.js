@@ -2,17 +2,21 @@
 // How `npm test` prints what happened: one line per test file, and the
 // failures in full, rather than every single test scrolling past.
 //
-//   ✔ network-page      18 passed
-//   ✖ settings-home     30 passed, 1 failed
+//   ✔ network-page           17 passed     The Network page
+//   ✖ settings-home          19 passed, 1 failed Settings' home page, its tabs and the page fades
 //       ✖ the notch has a tab for each pane
 //         Expected values to be strictly equal: 3 !== 4
 //         test/settings-home.test.js:42
 //
-//   42 files: 41 passed, 1 failed (settings-home). 1,203 tests in 48s.
+//   43 files: 42 passed, 1 failed (settings-home). 527 tests in 44s.
 //
 // Every file runs, even after one fails, so the last line always says
 // how all of them went. A failing file also shows the last lines it
 // printed, which is usually where the reason is.
+//
+// The words at the end of each line are the file's own "In short:" line,
+// the second line of every test file. A file's name is short for whoever
+// wrote it; this says what it checks for everyone else.
 //
 // Node's test runner hands a reporter every event as it happens (a test
 // passed, a test failed, a file printed something); this one gathers them
@@ -21,6 +25,7 @@
 
 "use strict";
 
+const fs = require("fs");
 const path = require("path");
 
 // Colours only on a terminal, and never when NO_COLOR is set
@@ -35,6 +40,18 @@ const bold = (text) => paint(1, text);
 function shortName(file) {
 	if (!file) return "(no file)";
 	return path.basename(file).replace(/\.test\.js$/, "");
+}
+
+// What a test file checks, in a few words: its "// In short:" line, near
+// the top. Empty when it has none, so a file without one still prints.
+function inShort(file) {
+	try {
+		const top = fs.readFileSync(file, "utf-8").split("\n").slice(0, 10);
+		const line = top.find((candidate) => candidate.startsWith("// In short:"));
+		return line ? line.slice("// In short:".length).trim() : "";
+	} catch {
+		return "";
+	}
 }
 
 // The words that say why a test failed: the assertion's own message,
@@ -68,12 +85,14 @@ module.exports = async function* reporter(source) {
 		if (file.failed) counts.push(`${file.failed} failed`);
 		if (file.skipped) counts.push(`${file.skipped} skipped`);
 		const label = shortName(name).padEnd(22);
+		const said = counts.join(", ").padEnd(13);
+		const about = inShort(name);
 
 		if (!file.failed) {
-			return `  ${green("✔")} ${label} ${quiet(counts.join(", "))}\n`;
+			return `  ${green("✔")} ${label} ${quiet(said)} ${about}\n`;
 		}
 
-		let text = `  ${red("✖")} ${bold(label)} ${counts.join(", ")}\n`;
+		let text = `  ${red("✖")} ${bold(label)} ${said} ${about}\n`;
 		for (const failure of file.failures) {
 			text += `      ${red("✖ " + failure.name)}\n`;
 			for (const line of failure.reason) text += `        ${line}\n`;

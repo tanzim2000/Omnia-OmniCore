@@ -1,4 +1,6 @@
 // test/faces.test.js
+// In short: Making a face, showing it, and a module that breaks
+//
 // The faces themselves: creating one through the wizard, rendering it,
 // the welcome face's three cases, and what happens when a module
 // throws.

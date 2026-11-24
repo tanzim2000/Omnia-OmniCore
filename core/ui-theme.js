@@ -516,6 +516,22 @@ function settingsPagesCss() {
 	   kept to the size they are in a half-width box */
 	.narrow-previews { max-width: 24em; }
 
+	/* Font colour's cards (Settings, Appearance, Text Size & Typography):
+	   Appearance Mode's cards with the background in them
+	   (--screen-picture: a picture's address or a colour) and the lines in
+	   white or black. Auto is split, like Device. Without a picture or a
+	   colour behind the pages they can't be picked (.unavailable). */
+	.font-colour { margin-top: 1em; }
+	.font-colour .inset-label { margin-bottom: 0.5em; }
+	.mode-screen.on-picture { background: var(--screen-picture, var(--bg)) center / cover; }
+	.mode-screen-split.on-picture > div { background: none; }
+	.mode-screen.on-picture .white-text > .line,
+	.mode-screen.on-picture.white-text > .line { background: rgba(255, 255, 255, 0.95); }
+	.mode-screen.on-picture .black-text > .line,
+	.mode-screen.on-picture.black-text > .line { background: #111; }
+	.mode-screen.on-picture .line { box-shadow: 0 0 3px rgba(127, 127, 127, 0.6); }
+	.mode-preview.unavailable { opacity: 0.4; cursor: default; pointer-events: none; }
+
 
 	/* An inset strip inside a segment: the detected location, the current
 	   font. Reads as "this is a value, not a control". */
@@ -1162,21 +1178,26 @@ function settingsPagesCss() {
 		justify-content: center;
 		flex: none;
 	}
-	.bg-preview-colour, .bg-preview-veil, .bg-preview img { position: absolute; inset: 0; width: 100%; height: 100%; }
-	/* What's behind (--colour) and the veil over a picture (--veil), from
-	   the pop-up's script as the choice changes */
+	.bg-preview-colour, .bg-preview img { position: absolute; inset: 0; width: 100%; height: 100%; }
+	/* What's behind (--colour), at the brightness it would start at
+	   (--preview-brightness), from the pop-up's script as the choice
+	   changes */
 	.bg-preview-colour { background: var(--colour, transparent); }
-	.bg-preview-veil { background: var(--veil, transparent); }
+	.bg-preview-colour, .bg-preview img { filter: brightness(var(--preview-brightness, 1)); }
 	.bg-preview img { object-fit: cover; }
+	/* A piece of glass on it, as Auto would make it over that background:
+	   its fill, its tint with the Dim (--card-fill, --card-tint), its blur
+	   and its text colour, from the same script */
 	.bg-preview-card {
 		position: relative;
 		padding: 0.6em 1em;
 		border-radius: 0.6em;
 		border: 1px solid var(--segment-border);
-		background: var(--segment-bg);
-		backdrop-filter: blur(12px);
-		-webkit-backdrop-filter: blur(12px);
-		color: var(--fg);
+		background-color: var(--card-fill, var(--segment-bg));
+		background-image: linear-gradient(var(--card-tint, transparent), var(--card-tint, transparent));
+		backdrop-filter: blur(var(--card-blur, 12px));
+		-webkit-backdrop-filter: blur(var(--card-blur, 12px));
+		color: var(--card-fg, var(--fg));
 		font-size: 0.9em;
 	}
 
@@ -1228,10 +1249,14 @@ function settingsPagesCss() {
 	}
 	.swatch:hover, .swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--glow-strong); }
 
-	/* Dim: its label, with the Auto toggle at the other end of the line */
-	.dim-head { display: flex; align-items: center; justify-content: space-between; gap: 1em; }
-	.auto-dim { display: inline-flex; align-items: center; gap: 0.5em; font-size: 0.85em; color: var(--fg-muted); cursor: pointer; }
-	.dim-warning { color: var(--fg); }
+	/* A glass slider's label, with what's at the other end of its line (a
+	   Pinned badge, Auto leaving it alone). The box's one Auto, a switch
+	   with its word, in the box's head. A warning when the text may be
+	   hard to read, in the text's own colour. */
+	.slider-head { display: flex; align-items: center; justify-content: space-between; gap: 1em; min-height: 1.6em; }
+	.slider-head .badge { margin-left: 0; }
+	.auto-switch { display: inline-flex; align-items: center; gap: 0.5em; font-size: 0.85em; color: var(--fg-muted); cursor: pointer; }
+	.glass-warning { color: var(--fg); }
 	.corner-mark {
 		position: absolute;
 		width: 2em;
@@ -2870,6 +2895,9 @@ const FLOATING_CSS = `
 		border-radius: 50%;
 		border: 1px solid var(--glass-border);
 		background: var(--segment-bg);
+		/* The glass's tint and Dim, as on every box (backdrop.js); none on
+		   a page without them, such as the About face */
+		background-image: linear-gradient(var(--glass-tint, transparent), var(--glass-tint, transparent));
 		color: var(--fg);
 		font-family: inherit;
 		font-size: 1em;
@@ -2942,30 +2970,65 @@ function uiStyles(options) {
 	const forced = options && options.forceMode;
 	const mode = forced === "light" || forced === "dark" ? forced : currentUiMode();
 
-	// The palette, then the glass and the picture's veil for the same
-	// mode (backdrop.js), which can override a palette value or two
+	// The palette, then the glass for the same mode (backdrop.js), which
+	// can override a palette value or two.
+	//
+	// Which palette: the mode's own, unless there's a picture or a colour
+	// behind the pages. Then it's the font colour's (backdrop.glassFor):
+	// white text has the dark set, black text the light one, whichever
+	// mode this is. Auto may have switched the font colour to keep the
+	// text readable, and grey text, input boxes and the glass's own fill
+	// have to go with it.
+	//
 	// The curtain a page fades in from and out to (page-motion.js): the
 	// page's own base colour, black or white, rather than its grey
 	const curtain = (light) => `--curtain: ${light ? DEFAULT_LIGHT : DEFAULT_DARK};`;
+	const forMode = (light) => {
+		const set = backdrop.glassFor(settings, light).set;
+		return {
+			variables: `${paletteVariables(PALETTES[set])}${backdrop.glassVariables(settings, light)}${curtain(light)}`,
+			rules: modeRules(set === "light")
+		};
+	};
 
+	const dark = forMode(false);
+	const light = forMode(true);
 	const colours = mode
 		? `
-	:root {${paletteVariables(PALETTES[mode])}${backdrop.glassVariables(settings, mode === "light")}${curtain(mode === "light")}}
-	${modeRules(mode === "light")}`
+	:root {${(mode === "light" ? light : dark).variables}}
+	${(mode === "light" ? light : dark).rules}`
 		: `
-	:root {${paletteVariables(PALETTES.dark)}${backdrop.glassVariables(settings, false)}${curtain(false)}}
-	${modeRules(false)}
+	:root {${dark.variables}}
+	${dark.rules}
 
 	@media (prefers-color-scheme: light) {
-		:root {${paletteVariables(PALETTES.light)}${backdrop.glassVariables(settings, true)}${curtain(true)}}
-		${modeRules(true)}
+		:root {${light.variables}}
+		${light.rules}
 	}`;
 
 	// With a picture behind the page, the faint blobs below have nothing
-	// left to do: the picture is what the glass blurs
+	// left to do: the picture is what the glass blurs.
+	//
+	// Since Phase A the picture is shown as it is, and the glass is what
+	// keeps text readable (its Dim). The few things drawn straight on the
+	// picture, with no box under them, need help of their own:
+	//   - a page's title, and the line under it (the welcome face's, the
+	//     setup wizard's): a soft shadow the other way round from their
+	//     colour (--on-picture-shadow, from backdrop.js), and that line in
+	//     the text's full colour rather than its quieter grey
+	//   - a glass button that isn't in a box (Create a new face, on the
+	//     welcome face): the glass's tint and Dim, like a box has, hovered
+	//     or not
 	const overPicture = backdrop.hasBackdrop(settings)
 		? `
-	body { background-image: none; }`
+	body { background-image: none; }
+	:is(h1, h1 + .lede):not(.segment *, .modal *) { text-shadow: var(--on-picture-shadow); }
+	h1 + .lede:not(.segment *, .modal *) { color: var(--fg); }
+	.glass:not(.segment *, .modal *),
+	.glass:not(.segment *, .modal *):hover,
+	.glass:not(.segment *, .modal *):focus-visible {
+		background-image: linear-gradient(var(--glass-tint), var(--glass-tint));
+	}`
 		: "";
 
 	return `
@@ -3027,8 +3090,10 @@ function uiStyles(options) {
 	   Settings: drawn by backdropHtml() in backdrop.js as the first
 	   thing in <body>. A layer fixed to the screen rather than
 	   background-attachment: fixed, which iPhones don't honour.
-	   Behind everything (z-index -1), never in the way of a click, and
-	   covered by a veil (::after) just strong enough for text to read.
+	   Behind everything (z-index -1) and never in the way of a click.
+	   Shown as it is, at the Picture brightness picked: what keeps text
+	   readable is the glass over it (backdrop.js), not a veil over the
+	   picture (which there was until Phase A of 2.0.0).
 	   --------------------------------------------------------------- */
 	.omni-backdrop {
 		position: fixed;
@@ -3061,13 +3126,6 @@ function uiStyles(options) {
 		filter: brightness(var(--backdrop-brightness));
 	}
 
-	.omni-backdrop::after {
-		content: "";
-		position: absolute;
-		inset: 0;
-		background: var(--backdrop-dim);
-	}
-
 	/* The background fading in (BACKDROP_SCRIPT in backdrop.js). A
 	   picture or video still loading is hidden, showing the Default
 	   colour, and fades in once it's ready. */
@@ -3081,7 +3139,7 @@ function uiStyles(options) {
 	   away once the new one is ready */
 	/* What was behind the last page, fading into this one's: how it
 	   looked comes from the script as variables (--was-bg, --was-width,
-	   --was-transform, --was-filter, --was-veil) */
+	   --was-transform, --was-filter) */
 	.omni-backdrop-was {
 		position: fixed;
 		top: 0;
@@ -3105,7 +3163,6 @@ function uiStyles(options) {
 	}
 	.omni-backdrop-was img { filter: var(--was-filter, none); }
 	.omni-backdrop-was .omni-colour { filter: var(--was-filter, brightness(var(--backdrop-brightness))); }
-	.omni-backdrop-was .was-veil { position: absolute; inset: 0; background: var(--was-veil, transparent); }
 
 	@media (prefers-reduced-motion: reduce) {
 		.omni-backdrop picture,
@@ -3623,6 +3680,22 @@ ${FLOATING_CSS}
 		vertical-align: middle;
 	}
 
+	/* A badge you can press (Pinned, which lets Auto move a slider
+	   again): the same label, as a button */
+	.badge.badge-button {
+		appearance: none;
+		-webkit-appearance: none;
+		font-family: inherit;
+		cursor: pointer;
+		transition: background-color 0.2s ease, color 0.2s ease;
+	}
+	.badge.badge-button:hover,
+	.badge.badge-button:focus-visible {
+		outline: none;
+		background: var(--glass-bg-hover);
+		color: var(--fg);
+	}
+
 	.mode-switch,
 	.corner-button {
 		width: 2.75em;
@@ -4074,6 +4147,8 @@ ${FLOATING_CSS}
 		display: flex;
 		align-items: stretch;
 		background: var(--glass-bg);
+		/* The glass's tint and Dim, as on every box (backdrop.js) */
+		background-image: linear-gradient(var(--glass-tint, transparent), var(--glass-tint, transparent));
 		border: 1px solid var(--glass-border);
 		border-radius: 999em;
 		box-shadow:
@@ -5374,6 +5449,7 @@ module.exports = {
 	fontStack,
 	fontFace,
 	PALETTES,
+	paletteVariables,
 	DEFAULT_DARK,
 	DEFAULT_LIGHT,
 	SYSTEM_FONT,

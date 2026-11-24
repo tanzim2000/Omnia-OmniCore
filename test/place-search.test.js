@@ -1,4 +1,6 @@
 // test/place-search.test.js
+// In short: Searching for a place
+//
 // Place search (v2): eight services, a Primary and a Secondary, and what
 // the pages are told.
 //

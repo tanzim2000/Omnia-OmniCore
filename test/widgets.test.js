@@ -1,4 +1,6 @@
 // test/widgets.test.js
+// In short: A module offering more than one widget shape
+//
 // Widget types: one module offering more than one shape for its data (a
 // month grid and an agenda list, say), picked per instance.
 //

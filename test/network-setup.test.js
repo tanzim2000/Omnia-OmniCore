@@ -1,4 +1,6 @@
 // test/network-setup.test.js
+// In short: Joining a Wi-Fi network by hand
+//
 // Manual Setup (since 2.0.0): joining a Wi-Fi network from the takeover.
 //
 //   - What's typed is checked, in words for the screen

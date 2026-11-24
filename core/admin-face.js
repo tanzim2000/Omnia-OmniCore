@@ -77,7 +77,9 @@ const {
 	DIALOG_SCRIPT,
 	CONTROLS_SCRIPT,
 	DEFAULT_DARK,
-	DEFAULT_LIGHT
+	DEFAULT_LIGHT,
+	PALETTES,
+	paletteVariables
 } = require("./ui-theme");
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const { askAttribute, ASK_FIRST_SCRIPT } = require("./ask-first");
@@ -776,10 +778,28 @@ function backgroundPanel(settings) {
 	const file = backdropStore.hasPicture(settings);
 	const colour = backdropStore.hasColour(settings);
 	const backdrop = file || colour;
-	const tint = settings.glassTint || "none";
+	// "match", from an earlier v2 build, is Dominant
+	const tint = settings.glassTint === "match" ? "dominant" : settings.glassTint || "none";
 	const uiMode = currentUiMode();
-	const autoDimOn = settings.backgroundAutoDim !== false;
-	const manualDim = Number.isFinite(Number(settings.backgroundDim)) ? Number(settings.backgroundDim) : 50;
+
+	// The glass as it's drawn now, for this browser's mode (or dark, when
+	// it follows the device and the page works the rest out itself)
+	const glass = backdropStore.glassFor(settings, uiMode === "light");
+	const auto = settings.glassAuto !== false;
+	const pinned = Array.isArray(settings.glassPinned) ? settings.glassPinned : [];
+	const brightness = Number(settings.pictureBrightness) || 0;
+	const fontColour = ["white", "black"].includes(settings.fontColour) ? settings.fontColour : "auto";
+
+	// What a slider's value says: Auto's own, or pinned (moved by hand,
+	// so Auto leaves it alone), with Auto on
+	const byAuto = (name) => backdrop && auto && !pinned.includes(name);
+	const pinBadge = (name) =>
+		`<button type="button" class="badge badge-button" data-unpin="${name}"` +
+		`${backdrop && auto && pinned.includes(name) ? "" : " hidden"} title="Moved by hand, so Auto leaves it alone. Press to let Auto move it again.">Pinned</button>`;
+
+	// Picture brightness in words: Original, or how much darker or brighter
+	const brightnessWords = (value) =>
+		value === 0 ? "Original" : `${Math.abs(value)}% ${value < 0 ? "darker" : "brighter"}`;
 
 	const kindName = {
 		picture: "A picture",
@@ -798,16 +818,18 @@ function backgroundPanel(settings) {
 		  `<span class="preview-kind">${escapeHtml(settings.backgroundColor)}</span>`
 		: `<span class="preview-colour preview-default"></span><span class="preview-kind">Default</span>`;
 
-	// A colour chip for the tint. "none" and "match" are words, the
-	// rest colours. Match the background only with a picture or a
+	// A colour chip for the tint. None, Dominant and Vibrant are words,
+	// the rest colours. Dominant and Vibrant only with a picture or a
 	// colour behind the pages, showing that colour.
 	const chip = (value, label, colour, disabled) =>
 		`<button type="button" class="tint-chip${tint === value ? " active" : ""}" data-tint="${escapeHtml(value)}"` +
 		`${disabled ? " disabled" : ""} title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}"` +
 		` aria-pressed="${tint === value ? "true" : "false"}">` +
 		(colour ? `<span class="tint-swatch" style="--colour:${escapeHtml(colour)}"></span>` : "") +
-		(value === "none" || value === "match" ? `<span>${escapeHtml(label)}</span>` : "") +
+		(["none", "dominant", "vibrant"].includes(value) ? `<span>${escapeHtml(label)}</span>` : "") +
 		"</button>";
+	const dominant = backdrop ? settings.backgroundColor || "" : "";
+	const vibrant = backdrop ? settings.backgroundVibrant || settings.backgroundColor || "" : "";
 
 	const custom = /^#[0-9a-f]{6}$/i.test(tint) && !backdropStore.TINT_PRESETS.includes(tint.toLowerCase());
 
@@ -876,7 +898,6 @@ function backgroundPanel(settings) {
 					<div class="bg-preview" id="bg-preview" aria-hidden="true">
 						<span class="bg-preview-colour" id="bg-preview-colour"></span>
 						<img id="bg-preview-image" alt="" hidden>
-						<span class="bg-preview-veil" id="bg-preview-veil"></span>
 						<span class="bg-preview-card">Text on the glass</span>
 					</div>
 
@@ -945,22 +966,34 @@ function backgroundPanel(settings) {
 
 	const glassBox = `
 				<div class="segment c4 row1" id="glass">
-					<h2>Frosted glass</h2>
+					<div class="box-head">
+						<h2>Frosted glass</h2>
+						${
+							backdrop
+								? `<label class="auto-switch" title="Keeps the text readable: moves Dim, then Blur, then Tint strength, as far as needed">
+							<span>Auto</span>
+							<input type="checkbox" role="switch" id="glass-auto"${auto ? " checked" : ""}>
+						</label>`
+								: ""
+						}
+					</div>
 					<p class="lede">Every box on these pages, over the background.</p>
 
 					<div class="glass-fields">
 						<div class="field wide-field">
 							<label>Tint ${infoTip(
-								file
-									? "Match the background takes the picture's main colour, worked out once when it was picked."
-									: colour
-									? "Match the background takes the background's colour."
-									: "Match the background needs a picture or a colour behind the pages.",
-								"About Match the background"
+								backdrop
+									? "Dominant is the colour that covers most of the " +
+											(file ? "picture" : "background") +
+											", Vibrant its most eye-catching one" +
+											(file ? ", both worked out once when it was picked." : ". A colour is both.")
+									: "Dominant and Vibrant need a picture or a colour behind the pages.",
+								"About the tint"
 							)}</label>
 							<div class="tint-chips" id="tints">
 								${chip("none", "None", "", false)}
-								${chip("match", "Match the background", backdrop && settings.backgroundColor ? settings.backgroundColor : "", !backdrop)}
+								${chip("dominant", "Dominant", dominant, !backdrop)}
+								${chip("vibrant", "Vibrant", vibrant, !backdrop)}
 								${backdropStore.TINT_PRESETS.map((colour) => chip(colour, colour, colour, false)).join("")}
 								<label class="tint-chip tint-custom${custom ? " active" : ""}" title="Pick a colour">
 									<input type="color" id="custom" value="${escapeHtml(custom ? tint : "#7aa2ff")}" aria-label="Pick a colour">
@@ -969,70 +1002,140 @@ function backgroundPanel(settings) {
 						</div>
 
 						<div class="field">
-							<label for="blur">Blur <span class="muted" id="blur-value">${Number(settings.glassBlur)} px</span></label>
-							<input type="range" id="blur" min="0" max="${backdropStore.BLUR_MOST}" step="1"
-								value="${Number(settings.glassBlur)}">
+							<div class="slider-head">
+								<label for="blur">Blur <span class="muted" id="blur-value">${glass.blur} px${byAuto("blur") ? ", Auto" : ""}</span></label>
+								${pinBadge("blur")}
+							</div>
+							<input type="range" id="blur" min="0" max="${backdropStore.BLUR_MOST}" step="1" value="${glass.blur}">
 						</div>
 
 						<div class="field">
-							<label for="strength">Tint strength <span class="muted" id="strength-value">${Number(settings.glassTintStrength)}%</span></label>
-							<input type="range" id="strength" min="0" max="${backdropStore.TINT_STRENGTH_MOST}" step="1"
-								value="${Number(settings.glassTintStrength)}">
+							<div class="slider-head">
+								<label for="strength">Tint strength <span class="muted" id="strength-value">${glass.tintStrength}%${byAuto("tintStrength") ? ", Auto" : ""}</span></label>
+								${pinBadge("tintStrength")}
+							</div>
+							<input type="range" id="strength" min="0" max="${backdropStore.TINT_STRENGTH_MOST}" step="1" value="${glass.tintStrength}">
 						</div>
 
 						${
 							backdrop
 								? `<div class="field">
-							<label for="brightness">${file ? "Picture" : "Colour"} brightness <span class="muted" id="brightness-value">${Number(settings.backgroundBrightness)}%</span></label>
+							<div class="slider-head">
+								<label for="brightness">${file ? "Picture" : "Colour"} brightness <span class="muted" id="brightness-value">${brightnessWords(brightness)}</span></label>
+							</div>
 							<input type="range" id="brightness" min="${backdropStore.BRIGHTNESS_LEAST}" max="${backdropStore.BRIGHTNESS_MOST}" step="1"
-								value="${Number(settings.backgroundBrightness)}">
+								value="${brightness}" aria-valuetext="${brightnessWords(brightness)}">
 						</div>
 
-						<div class="field dim-field">
-							<div class="dim-head">
-								<label for="dim">Dim <span class="muted" id="dim-text">${manualDim}%</span></label>
-								<label class="auto-dim">
-									<span>Auto</span>
-									<input type="checkbox" role="switch" id="auto-dim"${autoDimOn ? " checked" : ""}>
-								</label>
+						<div class="field">
+							<div class="slider-head">
+								<label for="dim">Dim <span class="muted" id="dim-value">${glass.dim}%${byAuto("dim") ? ", Auto" : ""}</span></label>
+								${pinBadge("dim")}
 							</div>
-							<input type="range" id="dim" min="0" max="100" step="1" value="${manualDim}"${autoDimOn ? " disabled" : ""}>
-							<p class="help dim-warning" id="dim-warning" hidden></p>
+							<input type="range" id="dim" min="0" max="${backdropStore.DIM_MOST}" step="1" value="${glass.dim}">
 						</div>`
 								: ""
 						}
 					</div>
+					<p class="help glass-warning" id="glass-warning"${glass.readable ? " hidden" : ""}></p>
 					<p class="status" id="glass-status" aria-live="polite"></p>
 				</div>
 `;
 
-	const script = `
-		// How the veil is worked out, the same function the server uses
-		// (backdrop.js), so what's previewed is what's saved
-		${backdropStore.autoDim.toString()}
+	// Font colour, in the Text Size & Typography box: three cards drawn like
+	// Appearance Mode's. White and Black pin it; Auto lets Auto switch it
+	// when nothing else makes the text readable. Only over a picture or a
+	// colour: the Default background has its mode's own colours.
+	const fontCard = (value, name, screen) => {
+		const on = fontColour === value;
+		// Auto, when it's the one picked, says which it's chosen
+		const label = value === "auto" && backdrop && on ? `${name} (${glass.font === "black" ? "Black" : "White"})` : name;
+		return `
+						<div class="mode-preview${on ? " active" : ""}${backdrop ? "" : " unavailable"}" data-font="${value}"
+							role="button" tabindex="${backdrop ? "0" : "-1"}" aria-pressed="${on}"${backdrop ? "" : ' aria-disabled="true"'}>
+							${screen}
+							<div class="mode-preview-label" id="font-label-${value}">${label}</div>
+						</div>`;
+	};
+	const behind = file
+		? ` style="--screen-picture:url('/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}')"`
+		: colour
+		? ` style="--screen-picture:${escapeHtml(settings.backgroundColor)}"`
+		: "";
+	const lines = '<span class="line head"></span><span class="line"></span>';
+	const fontColourField = `
+				<div class="font-colour">
+					<div class="inset-label">FONT COLOUR</div>
+					<div class="mode-previews narrow-previews" id="font-colours">
+						${fontCard("white", "White", `<div class="mode-screen on-picture white-text"${behind}>${lines}</div>`)}
+						${fontCard("black", "Black", `<div class="mode-screen on-picture black-text"${behind}>${lines}</div>`)}
+						${fontCard(
+							"auto",
+							"Auto",
+							`<div class="mode-screen mode-screen-split on-picture"${behind}><div class="white-text"><span class="line head"></span></div><div class="black-text"><span class="line head"></span></div></div>`
+						)}
+					</div>
+					${backdrop ? "" : '<p class="help">With a picture or a colour behind the pages. The Default background has its Appearance Mode\'s own colours.</p>'}
+				</div>`;
 
-		// What's behind the pages now: its darker and brighter parts and
-		// its colour, or null for the Default
+	const script = `
+		// How Auto works out the glass, the same functions the server uses
+		// (backdrop.js), so what's previewed is what's saved
+		const MODEL = ${JSON.stringify(backdropStore.GLASS_MODEL)};
+		${backdropStore.solveGlass.toString()}
+		${backdropStore.tintWithDim.toString()}
+		${backdropStore.startingBrightness.toString()}
+		${backdropStore.onPictureShadow.toString()}
+
+		// What's behind the pages now: how dark, bright and bright overall
+		// it is, and its dominant and vibrant colours. Null for the Default.
 		const PICTURE = ${JSON.stringify(
 			backdrop
-				? { low: settings.backgroundLow, high: settings.backgroundHigh, color: settings.backgroundColor || "" }
+				? {
+						low: settings.backgroundLow,
+						high: settings.backgroundHigh,
+						mean: settings.backgroundMean,
+						color: settings.backgroundColor || "",
+						vibrant: settings.backgroundVibrant || ""
+				  }
 				: null
 		).replace(/</g, "\\u003c")};
 		const MAX_BYTES = ${backdropStore.MAX_BYTES};
 
+		// The everyday colours for white text and for black text, so a
+		// change of font colour shows at once. Only with something behind
+		// the pages: with the Default, the mode's own colours never change
+		// here.
+		const SETS = ${JSON.stringify(
+			backdrop ? { dark: paletteVariables(PALETTES.dark), light: paletteVariables(PALETTES.light) } : null
+		).replace(/</g, "\\u003c")};
+
 		let tint = ${JSON.stringify(tint)};
+		let auto = ${JSON.stringify(auto)};
+		let pinned = ${JSON.stringify(pinned)};
+		let fontColour = ${JSON.stringify(fontColour)};
+
+		// The values set by hand: what a pinned slider, or every slider
+		// with Auto off, uses. Kept apart from what the sliders show, since
+		// a free slider shows Auto's value.
+		const hand = ${JSON.stringify({
+			blur: Number.isFinite(Number(settings.glassBlur)) ? Number(settings.glassBlur) : backdropStore.BLUR_DEFAULT,
+			tintStrength: Number.isFinite(Number(settings.glassTintStrength))
+				? Number(settings.glassTintStrength)
+				: backdropStore.TINT_STRENGTH_DEFAULT,
+			dim: Number.isFinite(Number(settings.glassDim)) ? Number(settings.glassDim) : 0
+		})};
 
 		const root = document.documentElement;
-		const blur = document.getElementById("blur");
-		const strength = document.getElementById("strength");
+		const sliders = {
+			blur: document.getElementById("blur"),
+			tintStrength: document.getElementById("strength"),
+			dim: document.getElementById("dim")
+		};
 		const brightness = document.getElementById("brightness");
 		const custom = document.getElementById("custom");
-		const autoDimBox = document.getElementById("auto-dim");
-		const dimRange = document.getElementById("dim");
-
-		// The dim set by hand: kept apart from what the slider shows, since
-		// with Auto on the slider shows the worked-out one
-		let manualDim = dimRange ? Number(dimRange.value) : 50;
+		const autoBox = document.getElementById("glass-auto");
+		const warning = document.getElementById("glass-warning");
 
 		// Light or dark: this browser's own choice, or the device's when
 		// it hasn't made one
@@ -1044,52 +1147,115 @@ function backgroundPanel(settings) {
 			};
 		}
 
-		function rgba(hex, alpha) {
-			const value = parseInt(hex.slice(1), 16);
-			return "rgba(" + ((value >> 16) & 255) + ", " + ((value >> 8) & 255) + ", " + (value & 255) + ", " + alpha + ")";
+		// The tint's colour, from the choice
+		function tintOf(choice, picture) {
+			if (choice === "none") return "";
+			if (choice === "dominant") return (picture && picture.color) || "";
+			if (choice === "vibrant") return (picture && (picture.vibrant || picture.color)) || "";
+			return choice;
+		}
+
+		// The glass as Auto (or the hand) sets it over a background, or
+		// over the Default, where there's nothing to read against: Blur and
+		// Tint strength as set by hand, no Dim
+		function solved(picture, bright) {
+			if (!picture) {
+				return {
+					blur: hand.blur,
+					tintStrength: hand.tintStrength,
+					dim: 0,
+					font: light() ? "black" : "white",
+					readable: true
+				};
+			}
+			return solveGlass({
+				low: picture.low,
+				high: picture.high,
+				mean: picture.mean,
+				brightness: bright,
+				tint: tintOf(tint, picture),
+				auto: auto,
+				pinned: pinned,
+				blur: hand.blur,
+				tintStrength: hand.tintStrength,
+				dim: hand.dim,
+				font: fontColour,
+				start: light() ? "black" : "white"
+			}, MODEL);
+		}
+
+		function brightnessWords(value) {
+			return value === 0 ? "Original" : Math.abs(value) + "% " + (value < 0 ? "darker" : "brighter");
+		}
+
+		// The everyday colours that go with the font colour, laid over the
+		// page's own until it's next drawn by the server
+		let shownSet = null;
+		function showSet(set) {
+			if (set === shownSet) return;
+			shownSet = set;
+			let tag = document.getElementById("live-set");
+			if (!tag) {
+				tag = document.createElement("style");
+				tag.id = "live-set";
+				document.head.appendChild(tag);
+			}
+			tag.textContent = ":root {" + SETS[set] + "}";
 		}
 
 		// Everything moved shows at once on this page, before saving
 		function preview() {
-			document.getElementById("blur-value").textContent = blur.value + " px";
-			document.getElementById("strength-value").textContent = strength.value + "%";
-			root.style.setProperty("--glass-blur", blur.value + "px");
+			const bright = brightness ? Number(brightness.value) : 0;
+			const glass = solved(PICTURE, bright);
+			const names = { blur: " px", tintStrength: "%", dim: "%" };
 
-			const colour = tint === "match" ? (PICTURE && PICTURE.color) : (tint === "none" ? "" : tint);
-			root.style.setProperty(
-				"--glass-tint",
-				colour && Number(strength.value) ? rgba(colour, Number(strength.value) / 100) : "transparent"
-			);
-
-			if (brightness && PICTURE) {
-				document.getElementById("brightness-value").textContent = brightness.value + "%";
-				root.style.setProperty("--backdrop-brightness", Number(brightness.value) / 100);
-
-				// The veil: worked out (Auto dim), or as set by hand
-				const needed = autoDim(PICTURE.low, PICTURE.high, brightness.value, light());
-				const auto = autoDimBox.checked;
-				const dim = auto ? needed : manualDim / 100;
-				root.style.setProperty(
-					"--backdrop-dim",
-					light() ? "rgba(238, 222, 197, " + dim + ")" : "rgba(0, 0, 0, " + dim + ")"
-				);
-
-				// With Auto on, the slider shows what's worked out and can't
-				// be moved; off, it's the one that counts
-				dimRange.disabled = auto;
-				dimRange.value = auto ? Math.round(needed * 100) : manualDim;
-				if (window.omniFillRanges) window.omniFillRanges();
-				document.getElementById("dim-text").textContent = Math.round(dim * 100) + "%" + (auto ? ", worked out" : "");
-
-				// Set by hand, it's never overruled; it only says when the
-				// text may be hard to read
-				const warning = document.getElementById("dim-warning");
-				const low = !auto && dim + 0.005 < needed;
-				warning.hidden = !low;
-				warning.textContent = low
-					? "Text may be hard to read over this at " + manualDim + "%. Auto would use " + Math.round(needed * 100) + "%."
-					: "";
+			for (const name in sliders) {
+				const slider = sliders[name];
+				if (!slider) continue;
+				const free = PICTURE && auto && pinned.indexOf(name) === -1;
+				slider.value = glass[name];
+				document.getElementById(name === "tintStrength" ? "strength-value" : name + "-value").textContent =
+					glass[name] + names[name] + (free ? ", Auto" : "");
+				const badge = document.querySelector('[data-unpin="' + name + '"]');
+				if (badge) badge.hidden = !(PICTURE && auto && pinned.indexOf(name) !== -1);
 			}
+			if (window.omniFillRanges) window.omniFillRanges();
+
+			root.style.setProperty("--glass-blur", glass.blur + "px");
+			root.style.setProperty("--glass-tint", tintWithDim(tintOf(tint, PICTURE), glass.tintStrength, glass.dim));
+
+			if (brightness) {
+				document.getElementById("brightness-value").textContent = brightnessWords(bright);
+				brightness.setAttribute("aria-valuetext", brightnessWords(bright));
+				root.style.setProperty("--backdrop-brightness", (100 + bright) / 100);
+			}
+
+			// Over a picture: the everyday colours and the glass's fill go
+			// with the font colour
+			if (PICTURE) {
+				const black = glass.font === "black";
+				showSet(black ? "light" : "dark");
+				root.style.setProperty("--segment-bg", "rgba(255, 255, 255, " + MODEL.fill[glass.font] + ")");
+				root.style.setProperty("--segment-edge", black ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.16)");
+				root.style.setProperty("--on-picture-shadow", onPictureShadow(black));
+				const autoLabel = document.getElementById("font-label-auto");
+				if (autoLabel) autoLabel.textContent = fontColour === "auto" ? "Auto (" + (black ? "Black" : "White") + ")" : "Auto";
+			}
+
+			// Said when the text may be hard to read: never overruled, only
+			// said
+			warning.hidden = glass.readable;
+			warning.textContent = glass.readable
+				? ""
+				: fontColour !== "auto"
+				? "Text in " + fontColour + " may be hard to read over this. Auto would switch it."
+				: !auto
+				? "Text may be hard to read over this. Auto would keep it readable."
+				: pinned.length
+				? "Text may be hard to read with " + pinned.map(function (name) {
+						return { dim: "Dim", blur: "Blur", tintStrength: "Tint strength" }[name];
+				  }).join(" and ") + " pinned. Press Pinned to let Auto move it."
+				: "Text may be hard to read over this, even with the glass as dark as Auto takes it.";
 
 			for (const chip of document.querySelectorAll("[data-tint]")) {
 				const on = chip.dataset.tint === tint;
@@ -1100,24 +1266,55 @@ function backgroundPanel(settings) {
 				"active",
 				/^#/.test(tint) && !document.querySelector('[data-tint="' + tint + '"]')
 			);
+
+			for (const card of document.querySelectorAll("[data-font]")) {
+				const on = card.dataset.font === fontColour;
+				card.classList.toggle("active", on);
+				card.setAttribute("aria-pressed", on ? "true" : "false");
+			}
+
+			return glass;
 		}
 
-		for (const input of [blur, strength, brightness]) {
-			if (input) input.addEventListener("input", preview);
-		}
-		if (dimRange) {
-			dimRange.addEventListener("input", function () {
-				manualDim = Number(dimRange.value);
+		// A slider moved by hand: its value is the hand's, and with Auto on
+		// it's pinned, so Auto leaves it alone from now on
+		for (const name in sliders) {
+			const slider = sliders[name];
+			if (!slider) continue;
+			slider.addEventListener("input", function () {
+				hand[name] = Number(slider.value);
+				if (PICTURE && auto && pinned.indexOf(name) === -1) pinned.push(name);
 				preview();
+			});
+			slider.addEventListener("change", save);
+		}
+		if (brightness) {
+			brightness.addEventListener("input", preview);
+			brightness.addEventListener("change", save);
+		}
+
+		// Pinned: pressed, Auto may move that one again
+		for (const badge of document.querySelectorAll("[data-unpin]")) {
+			badge.addEventListener("click", function () {
+				pinned = pinned.filter(function (name) { return name !== badge.dataset.unpin; });
+				preview();
+				save();
 			});
 		}
 
-		// Auto off starts from what was worked out, so nothing jumps
-		if (autoDimBox) {
-			autoDimBox.addEventListener("change", function () {
-				if (!autoDimBox.checked && PICTURE) {
-					manualDim = Math.round(autoDim(PICTURE.low, PICTURE.high, brightness.value, light()) * 100);
+		// Auto off keeps what's shown, so nothing jumps; Auto back on frees
+		// all three
+		if (autoBox) {
+			autoBox.addEventListener("change", function () {
+				if (!autoBox.checked) {
+					const now = preview();
+					hand.blur = now.blur;
+					hand.tintStrength = now.tintStrength;
+					hand.dim = now.dim;
+				} else {
+					pinned = [];
 				}
+				auto = autoBox.checked;
 				preview();
 				save();
 			});
@@ -1129,23 +1326,40 @@ function backgroundPanel(settings) {
 			tint = chip.dataset.tint;
 			// Picking a colour with the strength at nothing would show
 			// nothing; give it a little
-			if (tint !== "none" && Number(strength.value) === 0) strength.value = 12;
+			if (tint !== "none" && Number(sliders.tintStrength.value) === 0) hand.tintStrength = MODEL.tintStrengthDefault;
 			preview();
 			save();
 		});
 
 		custom.addEventListener("input", function () {
 			tint = custom.value.toLowerCase();
-			if (Number(strength.value) === 0) strength.value = 12;
+			if (Number(sliders.tintStrength.value) === 0) hand.tintStrength = MODEL.tintStrengthDefault;
 			preview();
 		});
 		custom.addEventListener("change", save);
 
+		// Font colour: White, Black or Auto
+		for (const card of document.querySelectorAll("[data-font]")) {
+			const pick = function () {
+				if (!PICTURE) return;
+				fontColour = card.dataset.font;
+				preview();
+				save();
+			};
+			card.addEventListener("click", pick);
+			card.addEventListener("keydown", function (event) {
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					pick();
+				}
+			});
+		}
+
 		preview();
 
-		// Saved as it changes: a slider when it's let go, a tint when
-		// it's picked. A moment's wait, so dragging a slider across
-		// sends one save, not twenty.
+		// Saved as it changes: a slider when it's let go, a tint or a font
+		// colour when it's picked. A moment's wait, so dragging a slider
+		// across sends one save, not twenty.
 		let saving = null;
 		function save() {
 			clearTimeout(saving);
@@ -1157,12 +1371,14 @@ function backgroundPanel(settings) {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
-							blur: Number(blur.value),
+							blur: hand.blur,
+							tintStrength: hand.tintStrength,
+							dim: hand.dim,
+							auto: auto,
+							pinned: pinned,
 							tint: tint,
-							tintStrength: Number(strength.value),
 							brightness: brightness ? Number(brightness.value) : undefined,
-							autoDim: autoDimBox ? autoDimBox.checked : undefined,
-							dim: dimRange ? manualDim : undefined
+							fontColour: fontColour
 						})
 					});
 					if (!response.ok) throw new Error();
@@ -1174,22 +1390,17 @@ function backgroundPanel(settings) {
 			}, 300);
 		}
 
-		for (const input of [blur, strength, brightness, dimRange]) {
-			if (input) input.addEventListener("change", save);
-		}
-
 		// --- Changing the background: the dialog --------------------------
 		//
 		// Picture, Colour or Default, with a live preview of what it'll look
-		// like (the veil included, as Auto dim or the Dim set by hand would
-		// make it). Nothing changes until Use.
+		// like (a piece of glass on it, as Auto, or the sliders set by hand,
+		// would make it there). Nothing changes until Use.
 
 		const upload = document.getElementById("upload-status");
 		const modal = document.getElementById("background-modal");
 		const useButton = document.getElementById("bg-use");
 		const previewColour = document.getElementById("bg-preview-colour");
 		const previewImage = document.getElementById("bg-preview-image");
-		const previewVeil = document.getElementById("bg-preview-veil");
 		const DEFAULT_COLOURS = { dark: "${DEFAULT_DARK}", light: "${DEFAULT_LIGHT}" };
 
 		function say(text, bad) {
@@ -1221,39 +1432,42 @@ function backgroundPanel(settings) {
 
 		// The dialog's preview: what's chosen, under the veil it would get
 		function showChoice() {
-			let low = 0;
-			let high = 0;
-			let veiled = true;
+			// What's chosen, as Auto sees a background: null for the Default
+			let picture = null;
+			let bright = 0;
 			previewImage.hidden = true;
 
 			if (chosen.tab === "picture") {
 				if (chosen.fileAddress) {
 					previewImage.src = chosen.fileAddress;
 					previewImage.hidden = false;
-					low = chosen.about.low;
-					high = chosen.about.high;
+					picture = chosen.about;
+					// A new picture starts at its own brightness
+					bright = startingBrightness(chosen.about.mean);
 				} else if (PICTURE && ${JSON.stringify(Boolean(file))}) {
 					previewImage.src = ${JSON.stringify(file ? `/backdrop/${settings.backgroundStill || settings.backgroundFile}` : "")};
 					previewImage.hidden = false;
-					low = PICTURE.low;
-					high = PICTURE.high;
-				} else {
-					veiled = false;
+					picture = PICTURE;
+					bright = brightness ? Number(brightness.value) : 0;
 				}
 				previewColour.style.setProperty("--colour", light() ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark);
 			} else if (chosen.tab === "colour") {
 				const rgb = rgbOf(chosen.colour);
-				low = high = luminance(rgb[0], rgb[1], rgb[2]);
+				const shade = luminance(rgb[0], rgb[1], rgb[2]);
+				picture = { low: shade, high: shade, mean: shade, color: chosen.colour, vibrant: chosen.colour };
 				previewColour.style.setProperty("--colour", chosen.colour);
 			} else {
 				previewColour.style.setProperty("--colour", light() ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark);
-				veiled = false;
 			}
 
-			const bright = brightness ? Number(brightness.value) : 100;
-			const auto = autoDimBox ? autoDimBox.checked : true;
-			const dim = !veiled ? 0 : auto ? autoDim(low, high, bright, light()) : manualDim / 100;
-			previewVeil.style.setProperty("--veil", light() ? "rgba(238, 222, 197, " + dim + ")" : "rgba(0, 0, 0, " + dim + ")");
+			// The piece of glass on it, as Auto would make it there
+			const glass = solved(picture, bright);
+			const stage = document.getElementById("bg-preview");
+			stage.style.setProperty("--preview-brightness", (100 + bright) / 100);
+			stage.style.setProperty("--card-fill", "rgba(255, 255, 255, " + (picture ? MODEL.fill[glass.font] : 0.06) + ")");
+			stage.style.setProperty("--card-tint", tintWithDim(tintOf(tint, picture), glass.tintStrength, glass.dim));
+			stage.style.setProperty("--card-blur", glass.blur + "px");
+			stage.style.setProperty("--card-fg", glass.font === "black" ? "#111" : "#fff");
 
 			// Use: there has to be something to use
 			useButton.disabled = chosen.tab === "picture" && !chosen.file;
@@ -1445,9 +1659,10 @@ function backgroundPanel(settings) {
 		}
 
 		// Draw the picture, or a frame a second into the video, then
-		// work out its main colour, how dark its darker parts and how
-		// bright its brighter parts are, and a still frame. Done here,
-		// once, from the file on this device, before anything is sent.
+		// work out its dominant and vibrant colours, how dark its darker
+		// parts, how bright its brighter parts and how bright it is
+		// overall, and a still frame. Done here, once, from the file on
+		// this device, before anything is sent.
 		async function study(file) {
 			const address = URL.createObjectURL(file);
 			let source;
@@ -1496,37 +1711,70 @@ function backgroundPanel(settings) {
 				context.drawImage(source, 0, 0, 48, 48);
 				const pixels = context.getImageData(0, 0, 48, 48).data;
 
-				const shades = [];
-				const buckets = {};
-				for (let i = 0; i < pixels.length; i += 4) {
-					const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-					shades.push(luminance(r, g, b));
-					const key = (r >> 5) + "," + (g >> 5) + "," + (b >> 5);
-					const bucket = buckets[key] || (buckets[key] = { n: 0, r: 0, g: 0, b: 0 });
-					bucket.n++; bucket.r += r; bucket.g += g; bucket.b += b;
-				}
-				shades.sort(function (a, b) { return a - b; });
-
-				// Its main colours: the four most common, averaged by how
-				// common each is
-				const main = Object.values(buckets).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
-				const total = main.reduce(function (sum, bucket) { return sum + bucket.n; }, 0);
-				const average = ["r", "g", "b"].map(function (part) {
-					return Math.round(main.reduce(function (sum, bucket) { return sum + bucket[part]; }, 0) / total);
-				});
-				const color = "#" + average.map(function (value) {
-					return value.toString(16).padStart(2, "0");
-				}).join("");
-
-				return {
-					still: still,
-					color: color,
-					low: shades[Math.floor(shades.length * 0.1)],
-					high: shades[Math.floor(shades.length * 0.9)]
-				};
+				return Object.assign({ still: still }, colours(pixels));
 			} finally {
 				URL.revokeObjectURL(address);
 			}
+		}
+
+		// What a picture's pixels say about it (a small copy's, red, green,
+		// blue and alpha in a row):
+		//
+		//   color     dominant: its four most common colours, averaged
+		//             by how common each is
+		//   vibrant   its most saturated, eye-catching colour: of the
+		//             colours covering at least half a percent of it, the
+		//             one most saturated and bright at once. Dominant
+		//             when nothing in it has any real colour.
+		//   low, high how dark the darkest tenth, how bright the
+		//             brightest tenth
+		//   mean      how bright it is overall
+		function colours(pixels) {
+			const shades = [];
+			const buckets = {};
+			for (let i = 0; i < pixels.length; i += 4) {
+				const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+				shades.push(luminance(r, g, b));
+				const key = (r >> 5) + "," + (g >> 5) + "," + (b >> 5);
+				const bucket = buckets[key] || (buckets[key] = { n: 0, r: 0, g: 0, b: 0 });
+				bucket.n++; bucket.r += r; bucket.g += g; bucket.b += b;
+			}
+			const mean = shades.reduce(function (sum, shade) { return sum + shade; }, 0) / shades.length;
+			shades.sort(function (a, b) { return a - b; });
+
+			function hexOfBucket(bucket) {
+				return hexOf(bucket.r / bucket.n, bucket.g / bucket.n, bucket.b / bucket.n);
+			}
+
+			const all = Object.values(buckets);
+			const main = all.slice().sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
+			const total = main.reduce(function (sum, bucket) { return sum + bucket.n; }, 0);
+			const color = hexOf(
+				main.reduce(function (sum, bucket) { return sum + bucket.r; }, 0) / total,
+				main.reduce(function (sum, bucket) { return sum + bucket.g; }, 0) / total,
+				main.reduce(function (sum, bucket) { return sum + bucket.b; }, 0) / total
+			);
+
+			let vibrant = color;
+			let best = 0.15;
+			const enough = shades.length * 0.005;
+			for (const bucket of all) {
+				if (bucket.n < enough) continue;
+				const hsv = hsvFromRgb(bucket.r / bucket.n, bucket.g / bucket.n, bucket.b / bucket.n);
+				const score = hsv.s * hsv.v;
+				if (score > best) {
+					best = score;
+					vibrant = hexOfBucket(bucket);
+				}
+			}
+
+			return {
+				color: color,
+				vibrant: vibrant,
+				low: shades[Math.floor(shades.length * 0.1)],
+				high: shades[Math.floor(shades.length * 0.9)],
+				mean: Math.round(mean * 10000) / 10000
+			};
 		}
 
 		async function send(address, body) {
@@ -1587,7 +1835,14 @@ function backgroundPanel(settings) {
 					const response = await fetch("/background/use", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ id: received.id, color: chosen.about.color, low: chosen.about.low, high: chosen.about.high })
+						body: JSON.stringify({
+							id: received.id,
+							color: chosen.about.color,
+							vibrant: chosen.about.vibrant,
+							low: chosen.about.low,
+							high: chosen.about.high,
+							mean: chosen.about.mean
+						})
 					});
 					const answer = await response.json().catch(function () { return {}; });
 					if (!response.ok) throw new Error(answer.error || "Couldn't use it.");
@@ -1612,9 +1867,42 @@ function backgroundPanel(settings) {
 		});
 
 		showChoice();
+
+		// A picture picked before its vibrant colour and overall brightness
+		// were worked out (an earlier v2 build): worked out now, once, from
+		// the picture OmniCore serves, and kept
+		(async function () {
+			if (!PICTURE || PICTURE.vibrant || !${JSON.stringify(Boolean(file))}) return;
+			try {
+				const blob = await (await fetch(${JSON.stringify(file ? `/backdrop/${settings.backgroundStill || settings.backgroundFile}` : "")})).blob();
+				const image = new Image();
+				image.src = URL.createObjectURL(blob);
+				await image.decode();
+				const small = document.createElement("canvas");
+				small.width = 48;
+				small.height = 48;
+				const context = small.getContext("2d", { willReadFrequently: true });
+				context.drawImage(image, 0, 0, 48, 48);
+				URL.revokeObjectURL(image.src);
+				const about = colours(context.getImageData(0, 0, 48, 48).data);
+				const response = await fetch("/background/about", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ vibrant: about.vibrant, mean: about.mean })
+				});
+				if (!response.ok) return;
+				PICTURE.vibrant = about.vibrant;
+				PICTURE.mean = about.mean;
+				const swatch = document.querySelector('[data-tint="vibrant"] .tint-swatch');
+				if (swatch) swatch.style.setProperty("--colour", about.vibrant);
+				preview();
+			} catch (error) {
+				// Not this time: Vibrant is the dominant colour until it works
+			}
+		})();
 	`;
 
-	return { backgroundBox, glassBox, backgroundModal, script };
+	return { backgroundBox, glassBox, backgroundModal, fontColourField, script };
 }
 
 // The server's address on the home network, the one other devices use to
@@ -2806,6 +3094,7 @@ function startAdminFace() {
 						Change
 					</button>
 				</div>
+				${glassParts.fontColourField}
 			</div>`;
 
 		// --- Resources ------------------------------------------------------
@@ -3047,7 +3336,9 @@ function startAdminFace() {
 
 			// Light, Dark or Device is this browser's own, so it's kept
 			// in a cookie here rather than saved on the server
-			for (const preview of document.querySelectorAll(".mode-preview")) {
+			// (Only the Appearance Mode cards: the Font colour cards look
+			// the same and have their own script)
+			for (const preview of document.querySelectorAll(".mode-preview[data-mode]")) {
 				const choose = function () {
 					setUiMode(preview.dataset.mode);
 				};
@@ -3410,8 +3701,8 @@ function startAdminFace() {
 	//   1. POST /background/upload   the file itself; kept aside, not used
 	//   2. POST /background/still    a still frame the page drew from it
 	//   3. POST /background/use      put it in place, with what the page
-	//                                worked out (its colour, how dark and
-	//                                bright it is)
+	//                                worked out (its dominant and vibrant
+	//                                colours, how dark and bright it is)
 	// Background and glass were a page of their own until the settings
 	// home had tabs; that address now opens the Appearance tab
 	app.get("/background", (req, res) => {
@@ -3472,6 +3763,23 @@ function startAdminFace() {
 
 	app.post("/background/glass", (req, res) => {
 		writeSettings(backdropStore.cleanGlass(req.body));
+		res.json({ ok: true });
+	});
+
+	// A picture picked by an earlier v2 build, before its vibrant colour
+	// and overall brightness were worked out: the Appearance tab works
+	// them out once and sends them here. Nothing else changes.
+	app.post("/background/about", (req, res) => {
+		if (!backdropStore.hasPicture(readSettings())) {
+			res.status(400).json({ error: "There's no picture behind the pages." });
+			return;
+		}
+		const result = backdropStore.aboutPicture(req.body);
+		if (result.error) {
+			res.status(400).json(result);
+			return;
+		}
+		writeSettings(result.changes);
 		res.json({ ok: true });
 	});
 

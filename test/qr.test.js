@@ -1,4 +1,6 @@
 // test/qr.test.js
+// In short: QR codes
+//
 // The QR engine and the `qr` block type.
 //
 // No servers and no network here, unlike the rest of the suite -- this is

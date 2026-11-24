@@ -1,4 +1,6 @@
 // test/notifications.test.js
+// In short: Notifications and how they're drawn
+//
 // What a notification can carry: the Markdown subset its description is
 // rendered from, and the links (up to two) shown beside it as QR codes.
 // And how the overlay draws it (v1.19.7): frosted boxes, one QR box per

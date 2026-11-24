@@ -1,4 +1,6 @@
 // test/module-fetch.test.js
+// In short: How modules fetch from the internet
+//
 // omni.fetch, the network helper every module uses: headers (since
 // v1.19.8), the User-Agent it sends by default, the cache key, and the
 // status a failed call reports.

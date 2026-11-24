@@ -162,7 +162,39 @@ long dash for no value is allowed), and `npm test` prints one line per file
 Decided (Nov 2026), built in this order, one zip each, after the central
 theme. Each built from central elements from the start.
 
-### A. Matching the background
+### A. Matching the background: done
+
+Built as below (`solveGlass` in `core/backdrop.js`; the Appearance tab is
+sent its source, so what it shows is what's saved). What it settled that
+the plan didn't say:
+
+- **The everyday colours follow the font colour** over a picture or a
+  colour: white text has the dark set, black text the light set,
+  whichever Appearance Mode this is. Phase B's rule, early, only where
+  there's something behind the pages. With the Default background
+  there's no Auto, Picture brightness or Dim, the font colour cards
+  can't be picked, and Blur and Tint strength are as set by hand.
+- **Light mode starts from black text**, dark mode from white. Black
+  text over a dark picture stays black while the half-white glass is
+  enough to read it on.
+- **Text with no glass under it** (a page's title, and the line under the
+  welcome face's and the wizard's) gets a soft shadow, dark under white
+  text and light under black. A glass button outside any box (Create a
+  new face) and the floating Back button get the tint and Dim like a box.
+- **A slider moved by hand is pinned at once, and says so** ("Pinned",
+  which can be pressed to let Auto have it back).
+- **How Auto sees a picture:** the worst part under the text (its
+  brightest tenth under white, its darkest under black), drawn towards
+  the picture's overall brightness by Blur, up to halfway at 40 px. Each
+  layer laid over the one below on each colour value, as the browser
+  does. Auto takes Dim up to 85%.
+- **Nothing released needs converting:** pictures behind the pages are
+  new in 2.0.0. A picture picked by an earlier v2 build gets its vibrant
+  colour and overall brightness the first time the Appearance tab opens,
+  and "Match the background" reads as Dominant. Its old brightness and
+  hand-set Dim aren't carried over: Original and Auto.
+
+The plan, as decided:
 
 - **The tint's choices:** None, **Dominant** (today's "Match the
   background": the colour that covers most of the picture) and **Vibrant**
@@ -170,9 +202,10 @@ theme. Each built from central elements from the start.
   are worked out once, when the picture is picked, so nothing changes
   colour while a video plays. A colour background gives the same colour
   for both.
-- **Picture brightness:** a plain control, **10 to 90%, 50% being the
-  picture as it is**. Never automatic. Core may start a bright picture
-  lower when it's picked; the slider then shows that value.
+- **Picture brightness:** a plain slider from **50% darker (-50%) to 50%
+  brighter (+50%)**, with **Original (0%)**, the picture as it is, the
+  default. Never automatic. Core may start a bright picture darker when
+  it's picked; the slider then shows that value.
 - **Dim** darkens the **glass** (darkness added to the tint), not the
   picture. It no longer has anything to do with Picture brightness.
 - **One Auto for Blur, Tint strength and Dim**, keeping the page's text
@@ -209,7 +242,9 @@ theme. Each built from central elements from the start.
 - **Font colour:** white or black, Auto's **last resort** (only when nothing
   else can make the text readable), and it can be pinned. When it switches
   to black, darkening works against it, so Auto lowers whatever free
-  sliders it raised.
+  sliders it raised. It has a picker of its own in the Text Size &
+  Typography box, drawn like Appearance Mode: **White**, **Black** and
+  **Auto** (split, like Device). Picking White or Black pins it.
 
 ### B. Appearance profiles
 
@@ -386,9 +421,10 @@ needs from you" paragraph, and the right `minOmniCore` in the Registry.
 - **Update now through a real restart.** The About tab's Update now is the
   Updates page's own code, moved; it has only been run against tests and a
   fake Docker. The first real release after v2 will show it working.
-- **The veil on bright pictures.** It aims at the brightest tenth of the
-  picture, so a mostly bright picture may be dimmed more than it needs.
-  Tune it after real use, with real pictures.
+- **Auto on real pictures.** It aims at the brightest tenth of the picture
+  under white text (the darkest under black), so a mostly bright picture
+  may get darker glass than it needs, and how far Blur helps is a model.
+  Tune it after real use, with real photos and videos, in both modes.
 - **OmniCore's own icon.** `core/favicon.svg` is a stand-in (a charcoal
   tile with a ring). Make the real one (Quiver or Stitch), a square SVG
   that still reads at 16 x 16 on a dark tab and a light one, and replace

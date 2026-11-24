@@ -2,10 +2,11 @@
 // The picture behind OmniCore's own pages, and the frosted glass over it
 // (since v2).
 //
-// OmniCore's pages (Settings, the setup wizard, the welcome face, About,
-// an Inport's page, a face with no theme) have the Default background:
-// black in dark mode, Beige Cream in light (see ui-theme.js).
-// A person can put something else behind them instead:
+// OmniCore's pages (Settings, the setup wizard, the welcome face, an
+// Inport's page, a face with no theme) have the Default background: black
+// in dark mode, Beige Cream in light (see ui-theme.js). The About face
+// keeps a look of its own (about-face.css). A person can put something
+// else behind them instead:
 //
 //   a picture         JPEG, PNG or WebP
 //   an animated one   GIF, animated WebP or animated PNG
@@ -29,29 +30,41 @@
 // Before uploading, the settings page draws the picture (or one frame of a
 // video) onto a small canvas, and from that works out:
 //
-//   color   its main colour, for "Match the picture" (the glass tint)
-//   low     how dark its darker parts are, 0-1
-//   high    how bright its brighter parts are, 0-1
-//   still   a still frame as a JPEG: shown instead of an animation or a
-//           video to anyone whose device asks for reduced motion, and
-//           while a video loads
+//   color     its dominant colour: the one that covers most of it
+//   vibrant   its most vibrant colour: the most saturated, eye-catching
+//             one (a small orange sun on a grey-blue sky, say)
+//   low       how dark its darker parts are, 0-1
+//   high      how bright its brighter parts are, 0-1
+//   mean      how bright it is overall, 0-1
+//   still     a still frame as a JPEG: shown instead of an animation or a
+//             video to anyone whose device asks for reduced motion, and
+//             while a video loads
 //
 // Worked out once, not while the page is showing, so the interface doesn't
 // change colour as a video plays. The browser does it because it already
 // has to decode the picture to show it; the server would need an image
-// library for the same thing.
+// library for the same thing. A colour is its own dominant and vibrant
+// colour, and its own darker, brighter and overall brightness.
 //
-// READABLE TEXT OVER ANY PICTURE
+// READABLE TEXT OVER ANY PICTURE (since Phase A of 2.0.0)
 //
-// A veil (black in dark mode, Beige Cream in light mode) sits between the
-// picture and the glass. With Auto dim on (the default), how strong it is
-// comes from `low` and `high` and the Brightness setting (autoDim below):
-// just strong enough that the page's text reads against the brightest
-// (dark mode) or darkest (light mode) parts of the picture. A colour is
-// treated as a picture whose darkest and brightest parts are that colour.
-// With Auto dim off, the veil is whatever was set by hand, 0-100%, and
-// OmniCore doesn't overrule it (the page only says when text may be hard
-// to read).
+// The picture is shown as it is, at the Picture brightness picked (-50%
+// to +50%, Original being 0). What keeps the text readable is the glass:
+//
+//   Blur            how blurred the picture is through the glass
+//   Tint strength   how much of the tint colour is laid over it
+//   Dim             how much darkness is added to the tint
+//   Font colour     white or black text (and with it the everyday
+//                   colours: white text has the dark set, black the light)
+//
+// One Auto looks after Blur, Tint strength and Dim (solveGlass below): it
+// keeps the text at a contrast of at least 4.5 against what's behind the
+// glass. Moving one of the three by hand PINS it, and Auto leaves a pinned
+// one alone. Auto moves Dim first, then Blur, then Tint strength, each up
+// to its limit before the next, and only as far as needed. The font colour
+// is the last resort: when nothing else makes the text readable, Auto
+// switches it (unless it's pinned to White or Black, when the page warns
+// instead).
 
 const crypto = require("crypto");
 const fs = require("fs");
@@ -71,14 +84,43 @@ const PENDING_MS = 60 * 60 * 1000;
 // behind it. 4.5 is the usual line for body text.
 const TARGET_CONTRAST = 4.5;
 
-// The glass: how blurred and how tinted it can be
+// The glass: how blurred, how tinted and how dimmed it can be, and where
+// Blur and Tint strength start (Auto never takes them below these)
 const BLUR_MOST = 40;
 const TINT_STRENGTH_MOST = 35;
-const BRIGHTNESS_LEAST = 40;
-const BRIGHTNESS_MOST = 120;
+const DIM_MOST = 100;
+const BLUR_DEFAULT = 20;
+const TINT_STRENGTH_DEFAULT = 12;
 
-// Colours offered for the tint, besides Match the picture and a picker
+// Picture brightness: -50 (50% darker) to +50 (50% brighter), 0 being the
+// picture as it is (Original)
+const BRIGHTNESS_LEAST = -50;
+const BRIGHTNESS_MOST = 50;
+
+// Colours offered for the tint, besides Dominant, Vibrant and a picker
 const TINT_PRESETS = ["#7aa2ff", "#b48cff", "#ff7aa8", "#ff9d6e", "#ffd36e", "#5fd3a0"];
+
+// The three sliders Auto looks after, in the order it moves them
+const AUTO_ORDER = ["dim", "blur", "tintStrength"];
+
+// Everything solveGlass needs to know besides the settings: one object, so
+// the settings page can be sent it as it is and work out exactly what the
+// server will.
+//
+//   fill   how much white is in the glass over a picture, by font colour:
+//          a whisper of it under white text (the dark set), half of it
+//          under black text (the light set). The same values as
+//          glassVariables below.
+//   dimMost   how far Auto takes Dim: never quite black glass
+const GLASS_MODEL = {
+	target: TARGET_CONTRAST,
+	blurMost: BLUR_MOST,
+	tintStrengthMost: TINT_STRENGTH_MOST,
+	dimMost: 85,
+	blurDefault: BLUR_DEFAULT,
+	tintStrengthDefault: TINT_STRENGTH_DEFAULT,
+	fill: { white: 0.07, black: 0.5 }
+};
 
 function folder() {
 	return path.join(paths.dataDir(), "backdrop");
@@ -252,8 +294,27 @@ const unit = (value) => {
 
 const hexColour = (value) => (typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null);
 
+// Where Picture brightness starts for a new picture: Original, unless the
+// picture is bright, then darker by about as much as brings its overall
+// brightness down to the middle, in steps of 5 (never more than -50).
+// Only a start: the slider is the person's from then on.
+//
+// A plain function, so the settings page can be sent its source and show
+// a new picture in its preview at the brightness it will start at.
+function startingBrightness(mean) {
+	var bright = Math.min(1, Number(mean));
+	if (!(bright > 0.5)) return 0;
+
+	// The browser's brightness() multiplies each colour value, and a
+	// colour value is roughly brightness to the power 1/2.2. -50 is as
+	// dark as Picture brightness goes.
+	var factor = Math.pow(0.5 / bright, 1 / 2.2);
+	return Math.max(-50, Math.round(((factor - 1) * 100) / 5) * 5);
+}
+
 // Put a pending upload in place. Returns { changes } for the settings, or
-// { error }. `about` is what the page worked out: { color, low, high }.
+// { error }. `about` is what the page worked out: { color, vibrant, low,
+// high, mean }.
 function use(id, about) {
 	if (typeof id !== "string" || !/^[0-9a-f]{12}$/.test(id)) {
 		return { error: "That upload isn't waiting any more. Pick the file again." };
@@ -282,6 +343,10 @@ function use(id, about) {
 	fs.renameSync(path.join(folder(), pending.main), path.join(folder(), main));
 	if (still) fs.renameSync(path.join(folder(), pending.still), path.join(folder(), still));
 
+	const low = unit(details.low) === null ? 0.2 : unit(details.low);
+	const high = unit(details.high) === null ? 0.8 : unit(details.high);
+	const mean = unit(details.mean) === null ? (low + high) / 2 : unit(details.mean);
+
 	return {
 		changes: {
 			backgroundKind: found.kind,
@@ -289,10 +354,26 @@ function use(id, about) {
 			backgroundFile: main,
 			backgroundStill: still,
 			backgroundColor: hexColour(details.color) || "",
-			backgroundLow: unit(details.low) === null ? 0.2 : unit(details.low),
-			backgroundHigh: unit(details.high) === null ? 0.8 : unit(details.high)
+			backgroundVibrant: hexColour(details.vibrant) || hexColour(details.color) || "",
+			backgroundLow: low,
+			backgroundHigh: high,
+			backgroundMean: mean,
+			pictureBrightness: startingBrightness(mean)
 		}
 	};
+}
+
+// What the page worked out about the picture already in use, for one
+// picked before vibrant and mean were worked out (an earlier v2 build).
+// Only those two; nothing else about the picture changes. Returns
+// { changes } or { error }.
+function aboutPicture(about) {
+	const details = about && typeof about === "object" ? about : {};
+	const vibrant = hexColour(details.vibrant);
+	const mean = unit(details.mean);
+
+	if (!vibrant || mean === null) return { error: "That isn't what the picture looks like." };
+	return { changes: { backgroundVibrant: vibrant, backgroundMean: mean } };
 }
 
 // How bright a colour is, 0-1 (its relative luminance, the measure used
@@ -307,9 +388,9 @@ function luminance(hex) {
 }
 
 // A colour behind the pages instead of a picture. Returns { changes } for
-// the settings, or { error }. Its darkest and brightest parts are the
-// colour itself, so the veil and Match the picture work as they do for a
-// picture.
+// the settings, or { error }. Its darkest, brightest and overall brightness
+// are the colour's own, and it is its own dominant and vibrant colour, so
+// the glass and the tint work as they do for a picture.
 function useColour(colour) {
 	const hex = hexColour(colour);
 	if (!hex) return { error: "That isn't a colour OmniCore can use. A colour looks like #37393e." };
@@ -322,8 +403,11 @@ function useColour(colour) {
 			backgroundFile: "",
 			backgroundStill: "",
 			backgroundColor: hex,
+			backgroundVibrant: hex,
 			backgroundLow: bright,
-			backgroundHigh: bright
+			backgroundHigh: bright,
+			backgroundMean: bright,
+			pictureBrightness: 0
 		}
 	};
 }
@@ -336,8 +420,11 @@ const PLAIN = {
 	backgroundFile: "",
 	backgroundStill: "",
 	backgroundColor: "",
+	backgroundVibrant: "",
 	backgroundLow: 0,
-	backgroundHigh: 0
+	backgroundHigh: 0,
+	backgroundMean: 0,
+	pictureBrightness: 0
 };
 
 // Every picture this module wrote, except the ones named in `keep`
@@ -365,6 +452,14 @@ function removeOthers(keep) {
 // What may be saved about the glass and the picture's brightness, from what
 // a page sent. Out-of-range numbers are brought into range; anything
 // unreadable is left as it was.
+//
+//   blur, tintStrength, dim   the values set by hand: what a pinned slider,
+//                             or every slider with Auto off, uses
+//   auto                      the one Auto, on or off
+//   pinned                    which of the three Auto leaves alone
+//   brightness                Picture brightness, -50 to +50
+//   tint                      "none", "dominant", "vibrant" or a colour
+//   fontColour                "auto", "white" or "black"
 function cleanGlass(body) {
 	const sent = body && typeof body === "object" ? body : {};
 	const changes = {};
@@ -382,64 +477,186 @@ function cleanGlass(body) {
 	const strength = number(sent.tintStrength, 0, TINT_STRENGTH_MOST);
 	if (strength !== null) changes.glassTintStrength = strength;
 
+	const dim = number(sent.dim, 0, DIM_MOST);
+	if (dim !== null) changes.glassDim = dim;
+
 	const brightness = number(sent.brightness, BRIGHTNESS_LEAST, BRIGHTNESS_MOST);
-	if (brightness !== null) changes.backgroundBrightness = brightness;
+	if (brightness !== null) changes.pictureBrightness = brightness;
 
-	// Auto dim on or off, and the dim set by hand for when it's off
-	if (sent.autoDim === true || sent.autoDim === false) changes.backgroundAutoDim = sent.autoDim;
-	const dim = number(sent.dim, 0, 100);
-	if (dim !== null) changes.backgroundDim = dim;
+	if (sent.auto === true || sent.auto === false) changes.glassAuto = sent.auto;
 
-	if (sent.tint === "none" || sent.tint === "match") changes.glassTint = sent.tint;
+	// Only the three names, each once, in Auto's own order
+	if (Array.isArray(sent.pinned)) changes.glassPinned = AUTO_ORDER.filter((name) => sent.pinned.includes(name));
+
+	if (["none", "dominant", "vibrant"].includes(sent.tint)) changes.glassTint = sent.tint;
+	else if (sent.tint === "match") changes.glassTint = "dominant";
 	else if (hexColour(sent.tint)) changes.glassTint = hexColour(sent.tint);
+
+	if (["auto", "white", "black"].includes(sent.fontColour)) changes.fontColour = sent.fontColour;
 
 	return changes;
 }
 
-// The tint's colour: the picked one, the picture's own for "match", or
-// none. "match" without a picture is none.
+// The tint's colour: the picked one, the background's dominant or vibrant
+// one, or none. Dominant and Vibrant need a picture or a colour behind the
+// pages, and are none without. ("match", from an earlier v2 build, is
+// Dominant.)
 function tintColour(settings) {
-	if (settings.glassTint === "match") {
-		return settings.backgroundKind !== "plain" ? hexColour(settings.backgroundColor) : null;
+	const choice = settings.glassTint === "match" ? "dominant" : settings.glassTint;
+
+	if (choice === "dominant" || choice === "vibrant") {
+		if (!hasBackdrop(settings)) return null;
+		const dominant = hexColour(settings.backgroundColor);
+		return choice === "vibrant" ? hexColour(settings.backgroundVibrant) || dominant : dominant;
 	}
-	return hexColour(settings.glassTint);
+	return hexColour(choice);
 }
 
-// How strong the veil over the picture needs to be (0-1) for the page's
-// text to read. A plain function, so the settings page can be sent its
-// source and preview exactly what will be saved.
+// HOW AUTO WORKS IT OUT
 //
-//   low, high    how dark the darker parts and how bright the brighter
-//                parts of the picture are (0-1, relative luminance)
-//   brightness   the Brightness setting, 40-120 (%)
-//   light        light mode (dark text on a light veil) or dark mode
-//                (white text on a black veil)
+// A plain function with everything it needs passed in, so the settings page
+// can be sent its source (with GLASS_MODEL) and show exactly what will be
+// saved, as each slider moves.
 //
-// Dark mode: white text against the brightest parts, darkened by the veil.
-// Light mode: near-black text against the darkest parts, lightened by a
-// veil the colour of the light page (Beige Cream, #eedec5). Never less than 0.15, so a
-// picture never fights the glass, and never more than 0.85, so it's still
-// a picture.
-function autoDim(low, high, brightness, light) {
-	var target = 4.5;
-	var factor = (Number(brightness) || 100) / 100;
-	var veil;
+//   input.low, high, mean   how dark the darker parts, how bright the
+//                           brighter parts, and how bright the picture is
+//                           overall (0-1, relative luminance)
+//   input.brightness        Picture brightness, -50 to +50
+//   input.tint              the tint's colour ("#rrggbb"), or ""
+//   input.auto              the one Auto, on or off
+//   input.pinned            the sliders moved by hand: "dim", "blur",
+//                           "tintStrength"
+//   input.blur, tintStrength, dim   the values set by hand
+//   input.font              "auto", "white" or "black"
+//   input.start             the font colour to try first when it's Auto:
+//                           the one the Appearance Mode has (white in
+//                           dark, black in light)
+//   model                   GLASS_MODEL
+//
+// Returns { blur, tintStrength, dim, font, contrast, readable }.
+//
+// THE PICTURE BEHIND THE GLASS, AS AUTO SEES IT
+//
+// The text has to stand out from the worst part of the picture: the
+// brightest part under white text, the darkest under black. Blur draws
+// both towards the picture's overall brightness, up to halfway at the
+// most, which is why it helps with bright spots and busy detail and does
+// nothing on an evenly bright picture. Then, as the browser does it, on
+// each colour value: Picture brightness, the glass's own white, the tint,
+// and the Dim's black, each laid over what's below it.
+function solveGlass(input, model) {
+	var low = Number(input.low) || 0;
+	var high = Number(input.high) || 0;
+	var mean = Number(input.mean);
+	if (!(mean > 0) || mean < low || mean > high) mean = (low + high) / 2;
+	var factor = 1 + (Number(input.brightness) || 0) / 100;
+	var pinned = Array.isArray(input.pinned) ? input.pinned : [];
+	var tint = /^#[0-9a-f]{6}$/i.test(input.tint || "") ? parseInt(input.tint.slice(1), 16) : null;
+	var tintRgb = tint === null ? null : [((tint >> 16) & 255) / 255, ((tint >> 8) & 255) / 255, (tint & 255) / 255];
 
-	if (!light) {
-		// White's luminance is 1: (1 + 0.05) / (L + 0.05) >= target
-		var most = 1.05 / target - 0.05;
-		var bright = Math.min(1, (Number(high) || 0) * factor);
-		veil = bright <= most ? 0 : 1 - most / bright;
-	} else {
-		// The text, #111, has a luminance of about 0.0056
-		var least = target * (0.0056 + 0.05) - 0.05;
-		var dark = Math.min(1, (Number(low) || 0) * factor);
-		var page = 0.745; // Beige Cream, #eedec5
-		veil = dark >= least ? 0 : (least - dark) / (page - dark);
+	// Brightness (luminance) to a colour value and back
+	function encode(light) {
+		return light <= 0.0031308 ? light * 12.92 : 1.055 * Math.pow(light, 1 / 2.4) - 0.055;
+	}
+	function decode(value) {
+		return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
 	}
 
-	// Rounded up, so rounding never takes it below what the text needs
-	return Math.ceil(Math.min(0.85, Math.max(0.15, veil)) * 100 - 1e-9) / 100;
+	// How well text in that colour reads with the glass set like that
+	function contrast(font, values) {
+		var spread = (0.5 * values.blur) / model.blurMost;
+		var light = font === "white" ? high - (high - mean) * spread : low + (mean - low) * spread;
+		var grey = Math.min(1, encode(Math.max(0, light)) * factor);
+		var colour = [grey, grey, grey];
+		var fill = model.fill[font];
+		var strength = tintRgb ? values.tintStrength / 100 : 0;
+		var dim = values.dim / 100;
+		for (var i = 0; i < 3; i++) {
+			colour[i] = colour[i] * (1 - fill) + fill;
+			if (strength) colour[i] = colour[i] * (1 - strength) + tintRgb[i] * strength;
+			colour[i] = colour[i] * (1 - dim);
+		}
+		var glass = 0.2126 * decode(colour[0]) + 0.7152 * decode(colour[1]) + 0.0722 * decode(colour[2]);
+		// White's luminance is 1; the black text, #111, about 0.0056
+		return font === "white" ? 1.05 / (glass + 0.05) : (glass + 0.05) / 0.0556;
+	}
+
+	function free(name) {
+		return input.auto !== false && pinned.indexOf(name) === -1;
+	}
+
+	function given(name, fallback, most) {
+		var value = Number(input[name]);
+		return Number.isFinite(value) ? Math.min(most, Math.max(0, Math.round(value))) : fallback;
+	}
+
+	// The sliders for one font colour: Dim, then Blur, then Tint strength,
+	// each from where it starts (Dim from nothing, the other two from
+	// their defaults) up to its limit before the next, and only as far
+	// as needed. One that can't help (Dim under black text, Blur on an
+	// even picture, a tint lighter than the picture under white text)
+	// counts as at its limit and is left where it started.
+	function solveFor(font) {
+		var values = {
+			dim: free("dim") ? 0 : given("dim", 0, 100),
+			blur: free("blur") ? model.blurDefault : given("blur", model.blurDefault, model.blurMost),
+			tintStrength: free("tintStrength")
+				? model.tintStrengthDefault
+				: given("tintStrength", model.tintStrengthDefault, model.tintStrengthMost)
+		};
+		var order = ["dim", "blur", "tintStrength"];
+
+		for (var i = 0; i < order.length; i++) {
+			var name = order[i];
+			if (!free(name)) continue;
+
+			var now = contrast(font, values);
+			if (now >= model.target) break;
+
+			var most = model[name + "Most"];
+			var top = { dim: values.dim, blur: values.blur, tintStrength: values.tintStrength };
+			top[name] = most;
+			var best = contrast(font, top);
+			if (best <= now + 0.01) continue;
+
+			if (best < model.target) {
+				values[name] = most;
+				continue;
+			}
+
+			// The least that's enough
+			var least = values[name];
+			var enough = most;
+			while (enough - least > 1) {
+				var middle = Math.floor((least + enough) / 2);
+				var trial = { dim: values.dim, blur: values.blur, tintStrength: values.tintStrength };
+				trial[name] = middle;
+				if (contrast(font, trial) >= model.target) enough = middle;
+				else least = middle;
+			}
+			values[name] = enough;
+			break;
+		}
+
+		values.font = font;
+		values.contrast = contrast(font, values);
+		return values;
+	}
+
+	var first = input.font === "white" || input.font === "black" ? input.font : input.start === "black" ? "black" : "white";
+	var result = solveFor(first);
+
+	// The last resort: the other font colour, when it's free to change and
+	// this one can't be made readable. Its sliders start again from where
+	// they start, so whatever Auto raised for the first one comes down.
+	if (result.contrast < model.target && input.font !== "white" && input.font !== "black") {
+		var other = solveFor(first === "white" ? "black" : "white");
+		if (other.contrast >= model.target || other.contrast > result.contrast) result = other;
+	}
+
+	result.readable = result.contrast >= model.target;
+	result.contrast = Math.round(result.contrast * 100) / 100;
+	return result;
 }
 
 // --- What a page gets --------------------------------------------------------------
@@ -455,20 +672,58 @@ function hasColour(settings) {
 }
 
 // Anything behind the pages but their own Default colour: the glass is a
-// little more there, and the veil keeps text readable
+// little more there, and Auto keeps the text readable over it
 function hasBackdrop(settings) {
 	return hasPicture(settings) || hasColour(settings);
 }
 
-// How strong the veil is, 0-1: worked out (Auto dim, the default), or as
-// set by hand
-function veilFor(settings, light) {
-	if (!hasBackdrop(settings)) return 0;
-	if (settings.backgroundAutoDim === false) {
-		const dim = Number(settings.backgroundDim);
-		return Number.isFinite(dim) ? Math.min(100, Math.max(0, Math.round(dim))) / 100 : 0.5;
+// The glass for one Appearance Mode (light or dark), as it will be drawn:
+//
+//   { blur, tintStrength, dim, font, contrast, readable, set }
+//
+// `set` is which everyday colours go with it: "dark" (white text) or
+// "light" (black text). With the Default background behind the pages
+// there's nothing for Auto to read against: the mode's own colours, Blur
+// and Tint strength as set by hand, no Dim.
+function glassFor(settings, light) {
+	const pinned = Array.isArray(settings.glassPinned) ? settings.glassPinned : [];
+	const auto = settings.glassAuto !== false;
+
+	if (!hasBackdrop(settings)) {
+		const kept = (name, fallback, most) => {
+			const value = Number(settings[name]);
+			return Number.isFinite(value) ? Math.min(most, Math.max(0, Math.round(value))) : fallback;
+		};
+		return {
+			blur: kept("glassBlur", BLUR_DEFAULT, BLUR_MOST),
+			tintStrength: kept("glassTintStrength", TINT_STRENGTH_DEFAULT, TINT_STRENGTH_MOST),
+			dim: 0,
+			font: light ? "black" : "white",
+			contrast: null,
+			readable: true,
+			set: light ? "light" : "dark"
+		};
 	}
-	return autoDim(settings.backgroundLow, settings.backgroundHigh, settings.backgroundBrightness, light);
+
+	const result = solveGlass(
+		{
+			low: settings.backgroundLow,
+			high: settings.backgroundHigh,
+			mean: settings.backgroundMean,
+			brightness: settings.pictureBrightness,
+			tint: tintColour(settings) || "",
+			auto,
+			pinned,
+			blur: settings.glassBlur,
+			tintStrength: settings.glassTintStrength,
+			dim: settings.glassDim,
+			font: settings.fontColour,
+			start: light ? "black" : "white"
+		},
+		GLASS_MODEL
+	);
+	result.set = result.font === "black" ? "light" : "dark";
+	return result;
 }
 
 function rgba(hex, alpha) {
@@ -476,32 +731,65 @@ function rgba(hex, alpha) {
 	return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
 
-// CSS variables for the glass and the picture, for one mode (light or
-// dark). Part of uiStyles in ui-theme.js, next to the palette.
+// The tint and the Dim as ONE colour laid over the glass: the tint at its
+// strength, then black at the Dim's over that. Every piece of glass already
+// has a tint layer (--glass-tint), so Dim darkening the glass needs nothing
+// new on any of them.
+//
+// A plain function, so the settings page can be sent its source too.
+function tintWithDim(tint, strength, dim) {
+	var a = tint ? strength / 100 : 0;
+	var d = dim / 100;
+	var alpha = d + a * (1 - d);
+	if (alpha <= 0) return "transparent";
+
+	var value = tint ? parseInt(tint.slice(1), 16) : 0;
+	function part(shift) {
+		return Math.round((((value >> shift) & 255) * a * (1 - d)) / alpha);
+	}
+	return "rgba(" + part(16) + ", " + part(8) + ", " + part(0) + ", " + Math.round(alpha * 1000) / 1000 + ")";
+}
+
+// The shadow behind text drawn straight on the picture: a tight dark edge
+// and a wide soft glow under white text, the same in white under black
+// text. Strong enough for a thin title over the brightest sky.
+//
+// A plain function, so the settings page can be sent its source too.
+function onPictureShadow(black) {
+	var c = black ? "255, 255, 255" : "0, 0, 0";
+	return "0 0 2px rgba(" + c + ", 0.9), 0 1px 4px rgba(" + c + ", 0.8), 0 0 16px rgba(" + c + ", 0.7), 0 0 40px rgba(" + c + ", 0.5)";
+}
+
+// CSS variables for the glass and the picture, for one Appearance Mode
+// (light or dark). Part of uiStyles in ui-theme.js, after the palette
+// (which glassFor's `set` picked).
 function glassVariables(settings, light) {
+	const glass = glassFor(settings, light);
 	const picture = hasBackdrop(settings);
 	const tint = tintColour(settings);
-	const strength = Math.min(TINT_STRENGTH_MOST, Math.max(0, Number(settings.glassTintStrength) || 0));
-	const blur = Math.min(BLUR_MOST, Math.max(0, Number.isFinite(Number(settings.glassBlur)) ? Number(settings.glassBlur) : 20));
-	const dim = veilFor(settings, light);
+	const black = glass.set === "light";
+	const brightness = Math.min(BRIGHTNESS_MOST, Math.max(BRIGHTNESS_LEAST, Number(settings.pictureBrightness) || 0));
 
 	return `
-		--glass-blur: ${blur}px;
-		--glass-tint: ${tint && strength ? rgba(tint, strength / 100) : "transparent"};
-		--backdrop-brightness: ${(Number(settings.backgroundBrightness) || 100) / 100};
-		--backdrop-dim: ${light ? `rgba(238, 222, 197, ${dim})` : `rgba(0, 0, 0, ${dim})`};
+		--glass-blur: ${glass.blur}px;
+		--glass-tint: ${tintWithDim(tint, glass.tintStrength, glass.dim)};
+		--backdrop-brightness: ${(100 + brightness) / 100};
 		${
 			picture
 				? `
-		/* Over a picture the glass is a little more there: a fuller fill,
-		   a thin light edge along the top, and a little more colour in
-		   what shows through */
-		--segment-bg: ${light ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 255, 255, 0.07)"};
-		--segment-edge: ${light ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.16)"};
-		--glass-saturate: 1.4;`
+		/* Over a picture the glass is a little more there: a fuller fill
+		   (more under black text), a thin light edge along the top, and a
+		   little more colour in what shows through */
+		--segment-bg: ${black ? `rgba(255, 255, 255, ${GLASS_MODEL.fill.black})` : `rgba(255, 255, 255, ${GLASS_MODEL.fill.white})`};
+		--segment-edge: ${black ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.16)"};
+		--glass-saturate: 1.4;
+		/* Text drawn straight on the picture, with no glass under it (a
+		   page's title): a soft shadow the other way round from the text */
+		--on-picture-shadow: ${onPictureShadow(black)};`
 				: `
 		--segment-edge: transparent;
-		--glass-saturate: 1;`
+		--glass-saturate: 1;
+		--on-picture-shadow: none;`
 		}
 	`;
 }
@@ -520,7 +808,7 @@ function glassVariables(settings, light) {
 //      background vanished before the new one was drawn. Now, just before
 //      the reload, the page keeps a copy of what's behind it
 //      (omniKeepBackdrop, in sessionStorage: what's on the screen, with
-//      its brightness and veil as they look right now). The next page puts
+//      its brightness as it looks right now). The next page puts
 //      that copy on top of its own background, and once its own is ready,
 //      fades the copy away: the old background turns into the new one.
 //
@@ -555,7 +843,6 @@ const BACKDROP_SCRIPT = `
 					else if (video && video.poster) kept.html = '<img src="' + video.poster + '" alt="">';
 					else if (colour) kept.html = '<span class="omni-colour" style="--colour:' + colour.style.getPropertyValue("--colour") + '"></span>';
 					kept.filter = filter === "none" ? "" : filter;
-					kept.veil = getComputedStyle(now, "::after").backgroundColor;
 				}
 				sessionStorage.setItem(KEY, JSON.stringify(kept));
 			} catch (error) {}
@@ -599,12 +886,6 @@ const BACKDROP_SCRIPT = `
 			if (was.transform) old.style.setProperty("--was-transform", was.transform);
 			if (was.filter) old.style.setProperty("--was-filter", was.filter);
 			old.innerHTML = was.html || "";
-			if (was.veil) {
-				var veil = document.createElement("span");
-				veil.className = "was-veil";
-				old.style.setProperty("--was-veil", was.veil);
-				old.appendChild(veil);
-			}
 			// On top of this page's own background, under everything else
 			if (layer) layer.insertAdjacentElement("afterend", old);
 			else document.body.insertBefore(old, document.body.firstChild);
@@ -644,7 +925,7 @@ const BACKDROP_SCRIPT = `
 function backdropHtml(given) {
 	const settings = given || require("./settings-store").readSettings();
 
-	// A colour: one layer of it, dimmed and veiled like a picture
+	// A colour: one layer of it, at the brightness picked, like a picture
 	if (hasColour(settings)) {
 		return `
 <div class="omni-backdrop" aria-hidden="true"><span class="omni-colour" style="--colour:${hexColour(settings.backgroundColor)}"></span></div>${BACKDROP_SCRIPT}`;
@@ -717,24 +998,33 @@ module.exports = {
 	MAX_STILL_BYTES,
 	BLUR_MOST,
 	TINT_STRENGTH_MOST,
+	DIM_MOST,
+	BLUR_DEFAULT,
+	TINT_STRENGTH_DEFAULT,
 	BRIGHTNESS_LEAST,
 	BRIGHTNESS_MOST,
 	TINT_PRESETS,
 	TARGET_CONTRAST,
+	AUTO_ORDER,
+	GLASS_MODEL,
 	PLAIN,
 	luminance,
 	useColour,
 	hasColour,
 	hasBackdrop,
-	veilFor,
 	sniff,
 	receive,
 	receiveStill,
 	use,
+	aboutPicture,
+	startingBrightness,
 	removeOthers,
 	cleanGlass,
 	tintColour,
-	autoDim,
+	solveGlass,
+	glassFor,
+	tintWithDim,
+	onPictureShadow,
 	hasPicture,
 	glassVariables,
 	backdropHtml,

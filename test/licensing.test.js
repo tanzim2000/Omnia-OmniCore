@@ -1,4 +1,6 @@
 // test/licensing.test.js
+// In short: The licence says the same thing everywhere
+//
 // The licence, said the same way everywhere (v2). Before v2 the LICENSE
 // file said AGPL-3.0, package.json said ISC and the README said MIT; these
 // tests keep them from drifting apart again, and check the files that go

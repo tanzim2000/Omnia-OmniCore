@@ -1,4 +1,6 @@
 // test/network-passwords.test.js
+// In short: Saved Wi-Fi passwords, kept encrypted
+//
 // Saved Wi-Fi passwords (since 2.0.0), kept encrypted for the Guest Wi-Fi
 // widget and the Network page.
 //

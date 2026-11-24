@@ -1,4 +1,6 @@
 // test/fonts.test.js
+// In short: Picking a font from Google
+//
 // Choosing a font from Google (v1.19.3).
 //
 // Google sends a font as one file per alphabet. The first one listed is

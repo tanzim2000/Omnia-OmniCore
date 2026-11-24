@@ -1,4 +1,6 @@
 // test/compatibility.test.js
+// In short: Which modules and themes this OmniCore accepts
+//
 // Which modules and themes an OmniCore will install: a registry entry's
 // `minOmniCore` against the running version (v2). Until v2 it meant "the
 // same major version", so on OmniCore 2.0.0 every module made for 1.x

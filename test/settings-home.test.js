@@ -1,4 +1,6 @@
 // test/settings-home.test.js
+// In short: Settings' home page, its tabs and the page fades
+//
 // The settings home with its notch and four tabs, and the page fades
 // (v2).
 //

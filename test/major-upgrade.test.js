@@ -1,4 +1,6 @@
 // test/major-upgrade.test.js
+// In short: Upgrading to a new major version
+//
 // Upgrading to a new major version (since 1.20.0): finding it, the box and
 // its pop-up on the settings home, the backup, the helper container's
 // script (putting the data back, keeping docker-compose.yml in step), and

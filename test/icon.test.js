@@ -1,4 +1,6 @@
 // test/icon.test.js
+// In short: The browser tab's icon
+//
 // The browser tab's icon (v2). No page named one, so every browser asked
 // for /favicon.ico and got a 404. Now every page names core/favicon.svg,
 // and every server answers for it, and for /favicon.ico too (a face's own

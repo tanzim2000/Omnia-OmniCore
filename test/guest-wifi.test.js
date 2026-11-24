@@ -1,4 +1,6 @@
 // test/guest-wifi.test.js
+// In short: The Guest Wi-Fi widget
+//
 // The Guest Wi-Fi widget (since 2.0.0), the first widget built into
 // OmniCore rather than installed from a Registry.
 //

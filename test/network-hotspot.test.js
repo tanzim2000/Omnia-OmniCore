@@ -1,4 +1,6 @@
 // test/network-hotspot.test.js
+// In short: The setup hotspot and OmniSync
+//
 // The setup hotspot and OmniSync (since 2.0.0).
 //
 //   - The QR code: only OmniSync's key reads it; the hotspot's name and

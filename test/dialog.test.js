@@ -1,4 +1,6 @@
 // test/dialog.test.js
+// In short: The pop-up questions on OmniCore's pages
+//
 // The question pop-ups every Default UI page carries since v1.19.8
 // (DIALOG_SCRIPT in core/ui-theme.js): confirmDialog, which the admin face
 // has used since before they were shared, and askDialog, which asks for

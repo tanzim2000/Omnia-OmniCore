@@ -1,4 +1,6 @@
 // test/face-pages.test.js
+// In short: A face's page, the faces list and the About pill
+//
 // The v1.19.5 page changes: a face's page, the faces list, the Updates
 // page's layout, and the About page's pill.
 //

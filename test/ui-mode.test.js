@@ -1,4 +1,6 @@
 // test/ui-mode.test.js
+// In short: Light and dark
+//
 // Light and dark, since v1.19.2.
 //
 // Two separate choices live here:

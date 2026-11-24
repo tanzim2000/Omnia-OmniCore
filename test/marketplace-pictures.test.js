@@ -1,4 +1,6 @@
 // test/marketplace-pictures.test.js
+// In short: Banners and icons in the Marketplace
+//
 // Pictures in the Marketplace (since 2.0.0): a registry's `banner` and each
 // entry's `icon`.
 //

@@ -1,4 +1,6 @@
 // test/segments.test.js
+// In short: The box every page is made of
+//
 // One box, one name, in one place.
 //
 // Before v1.19.2 the same box was written three times under two names:

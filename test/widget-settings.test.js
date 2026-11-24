@@ -1,4 +1,6 @@
 // test/widget-settings.test.js
+// In short: A widget's page and its name
+//
 // A widget's page, as v1.19.9 draws it.
 //
 //   - Labels that follow the widget's settings: a module can suggest one

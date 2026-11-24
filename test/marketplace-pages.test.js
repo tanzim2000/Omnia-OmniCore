@@ -1,4 +1,6 @@
 // test/marketplace-pages.test.js
+// In short: What the Marketplace pages show
+//
 // The Marketplace pages, drawn in the Default UI (v1.19.2).
 //
 // marketplace.test.js covers the registry itself -- fetching it, and

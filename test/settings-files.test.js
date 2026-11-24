@@ -1,4 +1,6 @@
 // test/settings-files.test.js
+// In short: A bad entry in a settings file breaks only itself
+//
 // A module's or a theme's settings files are somebody else's JSON. One
 // bad entry in them -- a stray null, a number, a field with no key -- must
 // cost that entry and nothing else: the settings pages still open, the

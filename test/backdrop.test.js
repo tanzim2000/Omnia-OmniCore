@@ -1,4 +1,6 @@
 // test/backdrop.test.js
+// In short: The picture and glass behind OmniCore's pages
+//
 // Background and glass (v2): a picture behind OmniCore's own pages, and the
 // frosted glass over it.
 //
@@ -8,7 +10,13 @@
 //     before it is deleted; Back to plain deletes it too.
 //   - Only the current picture and its still are ever served, on every
 //     port, signed in or not.
-//   - The veil over the picture: strong enough for the text to read.
+//   - Auto (since Phase A): the glass, not a veil over the picture, keeps
+//     the text readable. Dim, then Blur, then Tint strength, each only as
+//     far as needed; a slider moved by hand is pinned and left alone; the
+//     font colour is the last resort. Every row of the BACKLOG's table.
+//   - The tint: None, Dominant, Vibrant or a colour.
+//   - Picture brightness: -50 to +50, Original being 0; a bright new
+//     picture starts darker.
 //   - The glass setting: what may be saved.
 //   - Every page that draws the Default UI draws the picture, and nothing
 //     at all with the plain background.
@@ -103,15 +111,18 @@ test("a picked file is kept aside, then put in place with what the page worked o
 
 	assert.deepEqual(backdrop.receiveStill(received.id, FILES.jpeg), { ok: true });
 
-	const used = backdrop.use(received.id, { color: "#6A8C6F", low: 0.12, high: 1.7 });
+	const used = backdrop.use(received.id, { color: "#6A8C6F", vibrant: "#FF6E1F", low: 0.12, high: 1.7, mean: 0.3 });
 	assert.deepEqual(used.changes, {
 		backgroundKind: "picture",
 		backgroundType: "image/jpeg",
 		backgroundFile: `backdrop-${received.id}.jpg`,
 		backgroundStill: `backdrop-${received.id}-still.jpg`,
 		backgroundColor: "#6a8c6f",
+		backgroundVibrant: "#ff6e1f",
 		backgroundLow: 0.12,
-		backgroundHigh: 1
+		backgroundHigh: 1,
+		backgroundMean: 0.3,
+		pictureBrightness: 0
 	});
 	assert.deepEqual(filesNow(), [`backdrop-${received.id}-still.jpg`, `backdrop-${received.id}.jpg`]);
 });
@@ -167,47 +178,232 @@ test("removing the others keeps only what's named, and never touches anything el
 	assert.deepEqual(filesNow(), ["backdrop-bbbbbbbbbbbb-still.jpg", "backdrop-bbbbbbbbbbbb.mp4", "notes.txt"]);
 });
 
-// --- The veil and the glass ---------------------------------------------------------
+// --- Auto, the tint and the glass ----------------------------------------------------
 
-test("the veil: just enough for the text to read, never all or nothing", () => {
-	// A bright sky behind white text needs a strong veil
-	assert.ok(backdrop.autoDim(0.1, 0.9, 100, false) >= 0.75);
-	// The same picture dimmed by Brightness needs less
-	assert.ok(backdrop.autoDim(0.1, 0.9, 60, false) < backdrop.autoDim(0.1, 0.9, 100, false));
-	// A night sky needs the least there is
-	assert.equal(backdrop.autoDim(0.01, 0.05, 100, false), 0.15);
-	// Light mode looks at the dark parts instead
-	assert.equal(backdrop.autoDim(0.6, 0.95, 100, true), 0.15);
-	assert.ok(backdrop.autoDim(0.01, 0.3, 100, true) > 0.15);
-	// Never more than 0.85, even for a white picture made brighter
-	assert.ok(backdrop.autoDim(0, 1, 120, false) <= 0.85);
-	assert.equal(backdrop.autoDim(0, 5, 120, false), backdrop.autoDim(0, 1, 100, false), "brightness can't go past white");
+const M = backdrop.GLASS_MODEL;
 
-	// What the veil promises: white text against the brightest parts, at
-	// least 4.5 to 1, whenever it isn't at its cap
-	for (const high of [0.3, 0.5, 0.7]) {
-		const veil = backdrop.autoDim(0, high, 100, false);
-		const behind = high * (1 - veil);
-		assert.ok(1.05 / (behind + 0.05) >= 4.5, `high ${high}: ${veil}`);
+// The test pictures, as the settings page would describe them
+const BRIGHT = { low: 0.68, high: 0.88, mean: 0.78 }; // a pale winter sky
+const NIGHT = { low: 0.003, high: 0.009, mean: 0.006 }; // a night city
+const EVEN = { low: 0.6, high: 0.6, mean: 0.6 }; // one light grey colour
+const BUSY = { low: 0.1, high: 0.75, mean: 0.38 }; // confetti
+
+// Auto over a picture, with these settings on top of the defaults: Auto
+// on, nothing pinned, no tint, Original brightness, white text first
+function solve(picture, given) {
+	return backdrop.solveGlass(
+		{ ...picture, brightness: 0, tint: "", auto: true, pinned: [], blur: 20, tintStrength: 12, dim: 0, font: "auto", start: "white", ...given },
+		M
+	);
+}
+
+// How Auto's contrast is reached, checked by hand: the glass laid over the
+// worst part of the picture, as the browser does it, on each colour value
+function contrastOf(picture, values, font, brightness, tint) {
+	const encode = (l) => (l <= 0.0031308 ? l * 12.92 : 1.055 * Math.pow(l, 1 / 2.4) - 0.055);
+	const decode = (v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+	const mean = picture.mean;
+	const spread = (0.5 * values.blur) / M.blurMost;
+	const part = font === "white" ? picture.high - (picture.high - mean) * spread : picture.low + (mean - picture.low) * spread;
+	let rgb = [0, 1, 2].map(() => Math.min(1, encode(part) * (1 + (brightness || 0) / 100)));
+	rgb = rgb.map((v) => v * (1 - M.fill[font]) + M.fill[font]);
+	if (tint) {
+		const t = [1, 3, 5].map((at) => parseInt(tint.slice(at, at + 2), 16) / 255);
+		rgb = rgb.map((v, i) => v * (1 - values.tintStrength / 100) + t[i] * (values.tintStrength / 100));
 	}
+	rgb = rgb.map((v) => v * (1 - values.dim / 100));
+	const glass = 0.2126 * decode(rgb[0]) + 0.7152 * decode(rgb[1]) + 0.0722 * decode(rgb[2]);
+	return font === "white" ? 1.05 / (glass + 0.05) : (glass + 0.05) / 0.0556;
+}
+
+test("Auto: Dim first, and only as far as the text needs", () => {
+	// A bright sky behind white text: Dim goes up, Blur and Tint stay
+	const sky = solve(BRIGHT);
+	assert.equal(sky.font, "white");
+	assert.ok(sky.dim > 30 && sky.dim < M.dimMost, `dim ${sky.dim}`);
+	assert.equal(sky.blur, M.blurDefault, "Blur stays where it starts");
+	assert.equal(sky.tintStrength, M.tintStrengthDefault, "so does Tint strength");
+	assert.ok(sky.readable && sky.contrast >= 4.5);
+
+	// Only as far as needed: one less and the text wouldn't read
+	assert.ok(contrastOf(BRIGHT, sky, "white") >= 4.5);
+	assert.ok(contrastOf(BRIGHT, { ...sky, dim: sky.dim - 1 }, "white") < 4.5, "the least Dim that's enough");
+
+	// And back down when the picture is darker
+	assert.equal(solve(NIGHT).dim, 0, "a night sky needs no Dim");
+	assert.ok(solve({ low: 0.4, high: 0.6, mean: 0.5 }).dim < sky.dim);
+
+	// Picture brightness counts: the same sky made darker needs less
+	assert.ok(solve(BRIGHT, { brightness: -30 }).dim < sky.dim);
+	assert.ok(solve(BRIGHT, { brightness: 30 }).dim >= sky.dim);
 });
 
-test("the glass setting: in range, a tint is none, match or a colour", () => {
-	assert.deepEqual(backdrop.cleanGlass({ blur: 99, tint: "match", tintStrength: -5, brightness: 10 }), {
+test("Auto: the BACKLOG's table, row by row", () => {
+	// A sky so bright that Dim alone, capped low, can't do it: what moves
+	// next shows. A lower cap on Dim stands in for "Dim has reached its
+	// limit".
+	const capped = { ...M, dimMost: 20 };
+	const run = (pinned, given) =>
+		backdrop.solveGlass(
+			{ ...BUSY, brightness: 0, tint: "#202020", auto: true, pinned, blur: 20, tintStrength: 12, dim: 0, font: "white", start: "white", ...given },
+			capped
+		);
+
+	// Nothing pinned: Dim (to its limit), then Blur, then Tint
+	const none = run([]);
+	assert.equal(none.dim, 20, "Dim first, to its limit");
+	assert.ok(none.blur > 20, "then Blur");
+
+	// Dim pinned: Blur, then Tint; Dim as set
+	const dim = run(["dim"], { dim: 5 });
+	assert.equal(dim.dim, 5);
+	assert.ok(dim.blur > 20);
+
+	// Blur pinned: Dim, then Tint; Blur as set
+	const blur = run(["blur"], { blur: 3 });
+	assert.equal(blur.blur, 3);
+	assert.equal(blur.dim, 20);
+	assert.ok(blur.tintStrength > 12, "Tint once Dim is at its limit");
+
+	// Tint pinned: Dim, then Blur; Tint as set
+	const tint = run(["tintStrength"], { tintStrength: 4 });
+	assert.equal(tint.tintStrength, 4);
+	assert.equal(tint.dim, 20);
+	assert.ok(tint.blur > 20);
+
+	// Dim and Blur pinned: Tint
+	const dimBlur = run(["dim", "blur"], { dim: 0, blur: 0 });
+	assert.deepEqual([dimBlur.dim, dimBlur.blur], [0, 0]);
+	assert.ok(dimBlur.tintStrength > 12);
+
+	// Dim and Tint pinned: Blur
+	const dimTint = run(["dim", "tintStrength"], { dim: 0, tintStrength: 0 });
+	assert.deepEqual([dimTint.dim, dimTint.tintStrength], [0, 0]);
+	assert.ok(dimTint.blur > 20);
+
+	// Blur and Tint pinned: Dim
+	const blurTint = run(["blur", "tintStrength"], { blur: 0, tintStrength: 0 });
+	assert.deepEqual([blurTint.blur, blurTint.tintStrength], [0, 0]);
+	assert.ok(blurTint.dim > 0);
+
+	// All three pinned: nothing moves
+	const all = run(["dim", "blur", "tintStrength"], { dim: 1, blur: 2, tintStrength: 3 });
+	assert.deepEqual([all.dim, all.blur, all.tintStrength], [1, 2, 3]);
+
+	// Auto off is the same: everything as set by hand
+	const off = run([], { auto: false, dim: 1, blur: 2, tintStrength: 3 });
+	assert.deepEqual([off.dim, off.blur, off.tintStrength], [1, 2, 3]);
+});
+
+test("Auto: a slider that can't help is passed over", () => {
+	// Blur on an evenly bright colour does nothing: with Dim pinned low,
+	// Auto goes past Blur to the tint
+	const even = solve(EVEN, { pinned: ["dim"], dim: 0, tint: "#202020", font: "white" });
+	assert.equal(even.blur, M.blurDefault, "an even background: Blur counts as at its limit");
+	assert.ok(even.tintStrength > M.tintStrengthDefault, "a dark tint helps white text");
+
+	// A light tint doesn't help white text on a bright picture
+	const light = solve(BRIGHT, { pinned: ["dim", "blur"], dim: 0, blur: 20, tint: "#ffffff", font: "white" });
+	assert.equal(light.tintStrength, M.tintStrengthDefault, "a light tint is at its limit already");
+	assert.equal(light.readable, false);
+});
+
+test("Auto: the font colour is the last resort", () => {
+	// With everything pinned low, white text can't read over the bright
+	// sky: Auto switches to black
+	const pinnedLow = { pinned: ["dim", "blur", "tintStrength"], dim: 0, blur: 0, tintStrength: 0 };
+	const sky = solve(BRIGHT, pinnedLow);
+	assert.equal(sky.font, "black");
+	assert.ok(sky.readable);
+
+	// But never when white can be made to read: Dim first
+	assert.equal(solve(BRIGHT).font, "white");
+
+	// Black text darkening works against: whatever Auto raised for white
+	// comes back down
+	const switched = solve(BRIGHT, { pinned: ["blur", "tintStrength"], blur: 0, tintStrength: 0, start: "white" });
+	if (switched.font === "black") assert.equal(switched.dim, 0);
+
+	// Pinned to White or Black, it stays, and says it may be hard to read
+	const white = solve(BRIGHT, { ...pinnedLow, font: "white" });
+	assert.equal(white.font, "white");
+	assert.equal(white.readable, false);
+	const black = solve(NIGHT, { pinned: ["dim", "blur", "tintStrength"], dim: 90, blur: 0, tintStrength: 0, font: "black" });
+	assert.equal(black.font, "black");
+	assert.equal(black.readable, false);
+
+	// Light mode starts from black text; a night picture keeps it while
+	// the glass's light fill is enough
+	assert.equal(solve(BRIGHT, { start: "black" }).font, "black");
+	assert.equal(solve(BRIGHT, { start: "black" }).dim, 0, "no Dim under black text");
+});
+
+test("the tint: none, the background's dominant or vibrant colour, or one picked", () => {
+	const picture = {
+		backgroundKind: "picture",
+		backgroundFile: "backdrop-aaaaaaaaaaaa.jpg",
+		backgroundColor: "#336699",
+		backgroundVibrant: "#ff6e1f"
+	};
+	assert.equal(backdrop.tintColour({ ...picture, glassTint: "none" }), null);
+	assert.equal(backdrop.tintColour({ ...picture, glassTint: "dominant" }), "#336699");
+	assert.equal(backdrop.tintColour({ ...picture, glassTint: "vibrant" }), "#ff6e1f");
+	assert.equal(backdrop.tintColour({ ...picture, glassTint: "match" }), "#336699", "an earlier v2's Match is Dominant");
+	assert.equal(backdrop.tintColour({ ...picture, glassTint: "vibrant", backgroundVibrant: "" }), "#336699", "no vibrant yet: the dominant one");
+	assert.equal(backdrop.tintColour({ ...picture, glassTint: "#7aa2ff" }), "#7aa2ff");
+
+	// Dominant and Vibrant need something behind the pages
+	assert.equal(backdrop.tintColour({ glassTint: "dominant", backgroundKind: "plain", backgroundColor: "#336699" }), null);
+	assert.equal(backdrop.tintColour({ glassTint: "vibrant", backgroundKind: "plain", backgroundVibrant: "#ff6e1f" }), null);
+});
+
+test("Picture brightness: Original, and where a bright new picture starts", () => {
+	assert.equal(backdrop.startingBrightness(0.3), 0, "not bright: Original");
+	assert.equal(backdrop.startingBrightness(0.5), 0);
+	const bright = backdrop.startingBrightness(0.78);
+	assert.ok(bright < 0 && bright % 5 === 0, `${bright}`);
+	assert.equal(backdrop.startingBrightness(1), -25);
+	assert.ok(backdrop.startingBrightness(5) >= -50, "never past -50");
+	assert.equal(backdrop.startingBrightness("x"), 0);
+
+	// In the stylesheet: 0 is the picture as it is
+	const at = (value) => backdrop.glassVariables({ backgroundKind: "picture", backgroundFile: "backdrop-aaaaaaaaaaaa.jpg", pictureBrightness: value }, false);
+	assert.match(at(0), /--backdrop-brightness: 1;/);
+	assert.match(at(-50), /--backdrop-brightness: 0\.5;/);
+	assert.match(at(20), /--backdrop-brightness: 1\.2;/);
+	assert.match(at(400), /--backdrop-brightness: 1\.5;/, "brought into range");
+});
+
+test("the glass setting: in range, and only what it may be", () => {
+	assert.deepEqual(backdrop.cleanGlass({ blur: 99, tint: "match", tintStrength: -5, brightness: -80, dim: 140 }), {
 		glassBlur: 40,
-		glassTint: "match",
+		glassTint: "dominant",
 		glassTintStrength: 0,
-		backgroundBrightness: 40
+		glassDim: 100,
+		pictureBrightness: -50
 	});
 	assert.deepEqual(backdrop.cleanGlass({ tint: "#7AA2FF", blur: "12.6" }), { glassTint: "#7aa2ff", glassBlur: 13 });
-	assert.deepEqual(backdrop.cleanGlass({ tint: "url(x)", blur: "lots", tintStrength: null }), {});
+	assert.deepEqual(backdrop.cleanGlass({ tint: "vibrant", fontColour: "black", auto: false }), {
+		glassTint: "vibrant",
+		fontColour: "black",
+		glassAuto: false
+	});
+	// Pinned: only the three names, each once, in Auto's order
+	assert.deepEqual(backdrop.cleanGlass({ pinned: ["tintStrength", "x", "dim", "dim"] }), { glassPinned: ["dim", "tintStrength"] });
+	assert.deepEqual(backdrop.cleanGlass({ pinned: [] }), { glassPinned: [] }, "Auto back on frees all three");
+	assert.deepEqual(
+		backdrop.cleanGlass({ tint: "url(x)", blur: "lots", tintStrength: null, fontColour: "red", auto: "yes", pinned: "dim" }),
+		{},
+		"nothing unreadable, and nothing sent is nothing changed"
+	);
 });
 
 test("the glass in the stylesheet: plain, a tint, a picture", () => {
-	const plain = backdrop.glassVariables({ glassBlur: 20, glassTint: "none", glassTintStrength: 12 }, false);
-	assert.match(plain, /--glass-blur: 20px;/);
+	const plain = backdrop.glassVariables({ glassBlur: 26, glassTint: "none", glassTintStrength: 12 }, false);
+	assert.match(plain, /--glass-blur: 26px;/, "with the Default, the sliders as set by hand");
 	assert.match(plain, /--glass-tint: transparent;/);
 	assert.match(plain, /--segment-edge: transparent;/, "no edge without a picture");
+	assert.match(plain, /--on-picture-shadow: none;/);
 	assert.ok(!plain.includes("--segment-bg"), "the palette's own fill without a picture");
 
 	const tinted = backdrop.glassVariables({ glassBlur: 8, glassTint: "#ff0000", glassTintStrength: 20 }, false);
@@ -217,26 +413,49 @@ test("the glass in the stylesheet: plain, a tint, a picture", () => {
 		backgroundKind: "picture",
 		backgroundFile: "backdrop-aaaaaaaaaaaa.jpg",
 		backgroundColor: "#336699",
-		backgroundLow: 0.1,
-		backgroundHigh: 0.9,
-		backgroundBrightness: 100,
-		glassBlur: 20,
-		glassTint: "match",
+		backgroundLow: BRIGHT.low,
+		backgroundHigh: BRIGHT.high,
+		backgroundMean: BRIGHT.mean,
+		pictureBrightness: 0,
+		glassAuto: true,
+		glassPinned: [],
+		glassTint: "dominant",
 		glassTintStrength: 10
 	};
+	const glass = backdrop.glassFor(picture, false);
+	assert.equal(glass.font, "white");
+	assert.equal(glass.set, "dark");
 	const over = backdrop.glassVariables(picture, false);
-	assert.match(over, /--glass-tint: rgba\(51, 102, 153, 0\.1\);/, "matches the picture");
-	assert.match(over, /--backdrop-dim: rgba\(0, 0, 0, 0\.8\);/);
-	assert.match(over, /--segment-bg: rgba\(255, 255, 255, 0\.07\);/);
-	// Light mode's veil is Beige Cream, the light page's own colour, a
-	// little darker than the light grey before it, so a touch more of it
-	assert.match(backdrop.glassVariables(picture, true), /--backdrop-dim: rgba\(238, 222, 197, 0\.16\);/);
+	// The Dim is darkness added to the tint: one colour over the glass
+	assert.match(over, new RegExp(`--glass-tint: ${backdrop.tintWithDim("#336699", glass.tintStrength, glass.dim).replace(/[()]/g, "\\$&")};`));
+	assert.ok(glass.dim > 0, "the bright sky is dimmed");
+	assert.match(over, /--segment-bg: rgba\(255, 255, 255, 0\.07\);/, "white text: a whisper of white in the glass");
+	assert.match(over, /--on-picture-shadow: 0 0 2px rgba\(0, 0, 0/, "a title on the picture: a dark shadow");
 
-	// Match the picture with no picture is no tint
-	assert.equal(backdrop.tintColour({ glassTint: "match", backgroundKind: "plain", backgroundColor: "#336699" }), null);
+	// Light mode starts from black text: the light set, half white glass
+	const light = backdrop.glassFor(picture, true);
+	assert.equal(light.font, "black");
+	assert.equal(light.set, "light");
+	assert.match(backdrop.glassVariables(picture, true), /--segment-bg: rgba\(255, 255, 255, 0\.5\);/);
+
+	// Pinned to white in light mode: white text, the dark set
+	assert.equal(backdrop.glassFor({ ...picture, fontColour: "white" }, true).set, "dark");
+
+	// No veil over the picture any more
+	assert.ok(!over.includes("--backdrop-dim"));
 });
 
-test("a colour behind the pages: its own brightness, the veil and Match the background", () => {
+test("the tint and the Dim as one colour over the glass", () => {
+	assert.equal(backdrop.tintWithDim(null, 12, 0), "transparent");
+	assert.equal(backdrop.tintWithDim("#ff0000", 0, 0), "transparent");
+	assert.equal(backdrop.tintWithDim("#ff0000", 20, 0), "rgba(255, 0, 0, 0.2)");
+	assert.equal(backdrop.tintWithDim(null, 12, 50), "rgba(0, 0, 0, 0.5)", "Dim alone is black");
+	// Black at 50% over red at 20%: 60% in all, the red a sixth of it
+	// (over white, both ways give 128, 102, 102)
+	assert.equal(backdrop.tintWithDim("#ff0000", 20, 50), "rgba(43, 0, 0, 0.6)");
+});
+
+test("a colour behind the pages: its own brightness, dominant and vibrant", () => {
 	assert.equal(backdrop.luminance("#ffffff"), 1);
 	assert.equal(backdrop.luminance("#000000"), 0);
 	assert.ok(Math.abs(backdrop.luminance("#eedec5") - 0.745) < 0.001);
@@ -244,36 +463,30 @@ test("a colour behind the pages: its own brightness, the veil and Match the back
 	const { changes } = backdrop.useColour("#FFD700");
 	assert.equal(changes.backgroundKind, "colour");
 	assert.equal(changes.backgroundColor, "#ffd700");
+	assert.equal(changes.backgroundVibrant, "#ffd700", "a colour is its own vibrant colour");
 	assert.equal(changes.backgroundFile, "", "no file with a colour");
 	assert.equal(changes.backgroundLow, changes.backgroundHigh, "darkest and brightest are the colour itself");
+	assert.equal(changes.backgroundMean, changes.backgroundHigh);
+	assert.equal(changes.pictureBrightness, 0, "Original");
 	assert.ok(backdrop.useColour("gold").error, "only #rrggbb");
 	assert.ok(backdrop.useColour('#ffd700"><script>').error);
 
-	const gold = { ...changes, backgroundBrightness: 100, glassBlur: 20, glassTint: "match", glassTintStrength: 10 };
+	const gold = { ...changes, glassAuto: true, glassPinned: [], glassTint: "vibrant", glassTintStrength: 10 };
 	assert.ok(backdrop.hasColour(gold) && backdrop.hasBackdrop(gold) && !backdrop.hasPicture(gold));
+	const glass = backdrop.glassFor(gold, false);
+	assert.ok(glass.dim > 30, "a bright colour gets a darker glass under white text");
 	const css = backdrop.glassVariables(gold, false);
-	assert.match(css, /--glass-tint: rgba\(255, 215, 0, 0\.1\);/, "Match the background is the colour");
 	assert.match(css, /--segment-edge: rgba/, "the glass over a colour is the glass over a picture");
-	assert.ok(backdrop.veilFor(gold, false) > 0.5, "a bright colour gets a strong veil in dark mode");
 	assert.match(backdrop.backdropHtml(gold), /<span class="omni-colour" style="--colour:#ffd700"><\/span>/);
 });
 
-test("Auto dim off: the veil is what was set by hand, never overruled", () => {
-	const picture = {
-		backgroundKind: "picture",
-		backgroundFile: "backdrop-aaaaaaaaaaaa.jpg",
-		backgroundLow: 0.1,
-		backgroundHigh: 0.9,
-		backgroundBrightness: 100
-	};
-	assert.equal(backdrop.veilFor({ ...picture, backgroundAutoDim: false, backgroundDim: 0 }, false), 0, "even when text needs more");
-	assert.equal(backdrop.veilFor({ ...picture, backgroundAutoDim: false, backgroundDim: 100 }, false), 1);
-	assert.equal(backdrop.veilFor({ ...picture, backgroundAutoDim: false, backgroundDim: 30 }, true), 0.3);
-	assert.equal(backdrop.veilFor({ ...picture, backgroundAutoDim: true, backgroundDim: 0 }, false), 0.8, "Auto dim on works it out");
-	assert.equal(backdrop.veilFor({ backgroundKind: "plain", backgroundAutoDim: false, backgroundDim: 90 }, false), 0, "nothing to veil");
-
-	assert.deepEqual(backdrop.cleanGlass({ autoDim: false, dim: 140 }), { backgroundAutoDim: false, backgroundDim: 100 });
-	assert.deepEqual(backdrop.cleanGlass({ autoDim: "yes", dim: "" }), {}, "only true or false; nothing sent is nothing changed");
+test("a picture from an earlier v2 build gets its vibrant colour and overall brightness", () => {
+	assert.deepEqual(backdrop.aboutPicture({ vibrant: "#FE6E1F", mean: 0.0662, color: "#000000" }), {
+		changes: { backgroundVibrant: "#fe6e1f", backgroundMean: 0.0662 }
+	});
+	assert.ok(backdrop.aboutPicture({ vibrant: "orange", mean: 0.5 }).error);
+	assert.ok(backdrop.aboutPicture({ vibrant: "#fe6e1f" }).error);
+	assert.ok(backdrop.aboutPicture(null).error);
 });
 
 test("the picture's markup: none when plain, a still for reduced motion, a video that starts itself", () => {
@@ -348,6 +561,7 @@ test("pages: a fresh install has the plain background and the default glass", as
 	for (const port of [3000, 3999, 1303, 4000]) {
 		const page = (await request(port, "/")).body.toString();
 		assert.ok(!page.includes('class="omni-backdrop"'), `nothing drawn on ${port}`);
+		assert.ok(!page.includes("--on-picture-shadow); }"), `no shadows on ${port} without a picture`);
 	}
 });
 
@@ -372,10 +586,21 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.match(page, /<span class="info-tip"[^>]*aria-label="What can be used as a background">/);
 	assert.match(page, /<span class="info-bubble" role="tooltip">A picture \(JPEG, PNG, WebP\)/);
 	assert.ok(page.includes('accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"'));
-	assert.ok(page.includes('data-tint="match"') && page.includes(" disabled"), "Match the picture needs a picture");
+	assert.match(page, /data-tint="dominant" disabled/, "Dominant needs a picture or a colour");
+	assert.match(page, /data-tint="vibrant" disabled/, "so does Vibrant");
+	assert.ok(!page.includes('data-tint="match"'), "Match the background is Dominant now");
 	assert.ok(page.includes("never sent anywhere"));
-	assert.ok(page.includes(backdrop.autoDim.toString()), "the preview uses the same veil as the server");
+	assert.ok(page.includes(backdrop.solveGlass.toString()), "the preview works the glass out the way the server does");
+	assert.ok(page.includes(backdrop.tintWithDim.toString()));
 	assert.ok(page.includes('id="glass-status"'), "saved as it changes, and says so");
+
+	// With the Default background: no Auto, no brightness, no Dim, and
+	// the font colour cards can't be picked
+	assert.ok(!page.includes('id="glass-auto"'), "nothing for Auto to read against");
+	assert.ok(!page.includes('id="brightness"') && !page.includes('id="dim"'));
+	assert.match(page, /<div class="font-colour">[\s\S]*FONT COLOUR/);
+	assert.match(page, /class="mode-preview active unavailable" data-font="auto"/, "Auto, and not pickable");
+	assert.ok(page.includes("The Default background has its Appearance Mode's own colours."));
 
 	// Frosted glass stays short: the Tint colours on a row of their own,
 	// first, and the sliders two or three to a row where there's room
@@ -402,7 +627,7 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	}
 });
 
-test("pages: a colour as the background, and Auto dim and Dim saved", async () => {
+test("pages: a colour as the background, Auto and its pins, and the font colour", async () => {
 	const bad = await postJson("/background/colour", { color: "red" });
 	assert.equal(bad.status, 400);
 
@@ -414,22 +639,56 @@ test("pages: a colour as the background, and Auto dim and Dim saved", async () =
 
 	const page = (await request(3000, "/")).body.toString();
 	assert.ok(page.includes('<span class="omni-colour" style="--colour:#1e2a44"></span>'), "drawn behind the page");
-	assert.ok(page.includes('id="auto-dim" checked'), "Auto dim on to start with");
-	assert.match(page, /<input type="range" id="dim" min="0" max="100" step="1" value="50" disabled>/, "with Auto on, the slider only shows");
-	assert.ok(page.includes(">Colour brightness"));
-	assert.ok(!page.match(/data-tint="match"[^>]* disabled/), "Match the background works with a colour");
+	assert.ok(page.includes('id="glass-auto" checked'), "Auto on to start with");
+	assert.match(page, /<label for="dim">Dim <span class="muted" id="dim-value">0%, Auto<\/span>/, "a dark navy needs no Dim");
+	assert.match(page, /<input type="range" id="dim" min="0" max="100" step="1" value="0">/);
+	assert.match(page, /data-unpin="dim" hidden/, "nothing pinned");
+	assert.match(page, /<label for="brightness">Colour brightness <span class="muted" id="brightness-value">Original<\/span>/);
+	assert.ok(!page.match(/data-tint="(dominant|vibrant)"[^>]* disabled/), "Dominant and Vibrant work with a colour");
+	assert.match(page, /data-font="auto"\s+role="button" tabindex="0" aria-pressed="true"/, "the font colour cards can be picked");
+	assert.match(page, /--screen-picture:#1e2a44/, "with the colour in them");
+	assert.ok(page.includes('"dark":"'), "the everyday colours for white and black text, for the live preview");
 
-	assert.equal((await postJson("/background/glass", { autoDim: false, dim: 35 })).status, 200);
-	assert.equal(readSettings().backgroundAutoDim, false);
-	assert.equal(readSettings().backgroundDim, 35);
-	const manual = (await request(3000, "/")).body.toString();
-	assert.ok(manual.includes('id="auto-dim">'), "off");
-	assert.match(manual, /<input type="range" id="dim" min="0" max="100" step="1" value="35">/, "off: the slider counts");
-	assert.match(manual, /--backdrop-dim: rgba\(0, 0, 0, 0\.35\)/);
+	// Over a picture or a colour: a title on it gets a shadow, and a glass
+	// button outside any box gets the tint and Dim, hovered or not
+	assert.ok(page.includes(":is(h1, h1 + .lede):not(.segment *, .modal *) { text-shadow: var(--on-picture-shadow); }"));
+	assert.match(page, /\.glass:not\(\.segment \*, \.modal \*\):hover,[\s\S]*?background-image: linear-gradient\(var\(--glass-tint\), var\(--glass-tint\)\)/);
+	for (const source of [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])) {
+		assert.doesNotThrow(() => new vm.Script(source), "its scripts parse with a background too");
+	}
 
-	// Back to the Default for the tests after this one
+	// Dim moved by hand: pinned, and kept as set
+	assert.equal((await postJson("/background/glass", { dim: 35, pinned: ["dim"] })).status, 200);
+	assert.equal(readSettings().glassDim, 35);
+	assert.deepEqual(readSettings().glassPinned, ["dim"]);
+	const pinned = (await request(3000, "/")).body.toString();
+	assert.match(pinned, /<label for="dim">Dim <span class="muted" id="dim-value">35%<\/span>/, "no longer Auto's");
+	assert.match(pinned, /data-unpin="dim" title=/, "says it's pinned");
+	assert.match(pinned, /--glass-tint: rgba\(0, 0, 0, 0\.35\)/, "darkness on the glass");
+
+	// Auto off: every slider as set by hand
+	assert.equal((await postJson("/background/glass", { auto: false, dim: 10 })).status, 200);
+	const off = (await request(3000, "/")).body.toString();
+	assert.ok(off.includes('id="glass-auto">'), "off");
+	assert.match(off, /--glass-tint: rgba\(0, 0, 0, 0\.1\)/);
+
+	// Black text: the light set over the colour, whichever mode
+	assert.equal((await postJson("/background/glass", { fontColour: "black" })).status, 200);
+	const black = (await request(3000, "/")).body.toString();
+	assert.match(black, /--fg: #111;/);
+	assert.match(black, /class="mode-preview active" data-font="black"/);
+	assert.match(black, /id="glass-warning" hidden/, "black reads on the half-white glass over navy");
+
+	// Black text on dark glass: the page says it may be hard to read
+	assert.equal((await postJson("/background/glass", { dim: 70 })).status, 200);
+	const dark = (await request(3000, "/")).body.toString();
+	assert.match(dark, /id="glass-warning"><\/p>/, "shown, its words filled in by the page");
+
+	// Back to the Default for the tests after this one, and Auto back on
+	// (which frees all three)
 	assert.equal((await postJson("/background/plain", {})).status, 200);
-	await postJson("/background/glass", { autoDim: true, dim: 50 });
+	await postJson("/background/glass", { auto: true, pinned: [], dim: 0, fontColour: "auto" });
+	assert.deepEqual(readSettings().glassPinned, []);
 });
 
 test("pages: an MP4, its still frame, then in use on every port, signed in or not", async () => {
@@ -439,12 +698,15 @@ test("pages: an MP4, its still frame, then in use on every port, signed in or no
 
 	assert.equal((await upload("/background/still?id=" + sent.body.id, FILES.jpeg)).status, 200);
 
-	const used = await postJson("/background/use", { id: sent.body.id, color: "#224466", low: 0.05, high: 0.4 });
+	const used = await postJson("/background/use", { id: sent.body.id, color: "#224466", vibrant: "#ff8800", low: 0.05, high: 0.4, mean: 0.2 });
 	assert.equal(used.status, 200);
 
 	const settings = readSettings();
 	assert.equal(settings.backgroundKind, "video");
 	assert.equal(settings.backgroundFile, `backdrop-${sent.body.id}.mp4`);
+	assert.equal(settings.backgroundVibrant, "#ff8800");
+	assert.equal(settings.backgroundMean, 0.2);
+	assert.equal(settings.pictureBrightness, 0, "not bright: Original");
 
 	// Every port but the About face's (1303), which has a background of
 	// its own (about-face.css) and never draws this one
@@ -473,7 +735,13 @@ test("pages: a new picture replaces the old one's files; Back to plain deletes t
 	const before = readSettings().backgroundFile;
 	const sent = await upload("/background/upload", FILES.jpeg);
 	await upload("/background/still?id=" + sent.body.id, FILES.jpeg);
-	await postJson("/background/use", { id: sent.body.id, color: "#ffffff", low: 0.5, high: 0.9 });
+	await postJson("/background/use", { id: sent.body.id, color: "#ffffff", low: 0.5, high: 0.9, mean: 0.8 });
+	assert.ok(readSettings().pictureBrightness < 0, "a bright picture starts darker");
+
+	// One picked by an earlier v2 build: the page works out what's missing
+	assert.equal((await postJson("/background/about", { vibrant: "#3366ff", mean: 0.7 })).status, 200);
+	assert.equal(readSettings().backgroundVibrant, "#3366ff");
+	assert.equal((await postJson("/background/about", { vibrant: "blue" })).status, 400);
 
 	assert.ok(!filesNow().includes(before), "the video is gone");
 	assert.deepEqual(filesNow(), [`backdrop-${sent.body.id}-still.jpg`, `backdrop-${sent.body.id}.jpg`]);
@@ -481,6 +749,9 @@ test("pages: a new picture replaces the old one's files; Back to plain deletes t
 	assert.equal((await postJson("/background/plain", {})).status, 200);
 	assert.equal(readSettings().backgroundKind, "plain");
 	assert.deepEqual(filesNow(), []);
+
+	// With nothing behind the pages, there's nothing to work out
+	assert.equal((await postJson("/background/about", { vibrant: "#3366ff", mean: 0.7 })).status, 400);
 });
 
 test("pages: a refused file says why, as JSON", async () => {
@@ -526,7 +797,9 @@ test("pages: saving the glass, and it's in every port's stylesheet", async () =>
 		assert.ok(page.includes("--glass-tint: rgba(180, 140, 255, 0.2);"), `tint on ${port}`);
 	}
 
-	writeSettings({ glassBlur: 20, glassTint: "none", glassTintStrength: 12, backgroundBrightness: 100 });
+	assert.equal(settings.pictureBrightness, 50, "brought into range");
+
+	writeSettings({ glassBlur: 20, glassTint: "none", glassTintStrength: 12, pictureBrightness: 0 });
 });
 
 test("pages: the wizard serves the chosen font too (it never did before v2)", async () => {
