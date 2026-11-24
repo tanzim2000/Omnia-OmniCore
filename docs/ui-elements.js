@@ -134,7 +134,7 @@ const sections = [
 <tr><td><code>--segment-blur</code></td><td>Frosted glass, on since v2: <code>blur(var(--glass-blur)) saturate(var(--glass-saturate))</code>. Every segment blurs what's behind it.</td></tr>
 <tr><td><code>--glass-blur</code></td><td>How much, in px: 20 unless changed on Settings' Appearance tab (0 to 40).</td></tr>
 <tr><td><code>--glass-saturate</code></td><td>1, or 1.4 over a picture, so the colour showing through the glass isn't washed out.</td></tr>
-<tr><td><code>--glass-tint</code></td><td>A colour laid over every segment's fill: the tint (at most 35%) with the Dim's darkness added, as one colour. <code>transparent</code> with neither. The tint is a colour picked, or the background's own: Dominant (the colour covering most of it) or Vibrant (its most eye-catching).</td></tr>
+<tr><td><code>--glass-tint</code></td><td>A colour laid over every segment's fill: the tint (0 to 100%) with the Dim's darkness added, as one colour. <code>transparent</code> with neither. The tint is a colour picked, or the background's own: Dominant (the colour covering most of it) or Vibrant (its most eye-catching).</td></tr>
 <tr><td><code>--segment-edge</code></td><td>The thin light line along a segment's top edge. Transparent with the plain background, there over a picture.</td></tr>
 <tr><td><code>--backdrop-brightness</code></td><td>The picture's brightness, 0.5 to 1.5 (Picture brightness, -50% to +50%; 1 is Original).</td></tr>
 <tr><td><code>--on-picture-shadow</code></td><td>The shadow behind text drawn straight on a picture, with no glass under it (a page's title): dark under white text, light under black. <code>none</code> with the plain background.</td></tr>
@@ -647,9 +647,9 @@ const sections = [
 			{
 				id: "tabs",
 				title: "Tabs",
-				sel: ".tabs > .tab-btn (+ .active)",
-				desc: "A pill of named options, one of them chosen. Use it when the options are named things (Dark / Light / Device, Modules / Themes, the corner names), not a plain on and off. Often each option shows different settings underneath.",
-				demo: '<div class="tabs" data-demo-tabs><button class="tab-btn active">Dark</button><button class="tab-btn">Light</button><button class="tab-btn">Device</button></div>',
+				sel: ".tabs > .tab-btn (+ .active, .font-sample, .white-text, .black-text)",
+				desc: "A pill of named options, one of them chosen. Use it when the options are named things (Dark / Light / Device, Modules / Themes, the corner names), not a plain on and off. Often each option shows different settings underneath. A disabled one is faded. An option can be a sample instead of a word (<b>.font-sample</b>): Font colour (on the Appearance tab) is \"Aa\" in white (<b>.white-text</b>), Auto, and \"Aa\" in black (<b>.black-text</b>), each sample larger and edged the other way round so it reads on any glass.",
+				demo: '<div class="tabs" data-demo-tabs><button class="tab-btn active">Dark</button><button class="tab-btn">Light</button><button class="tab-btn">Device</button></div> <div class="tabs" data-demo-tabs><button class="tab-btn font-sample white-text">Aa</button><button class="tab-btn active">Auto</button><button class="tab-btn font-sample black-text">Aa</button></div>',
 				code: '<div class="tabs">\n\t<button class="tab-btn active">Dark</button>\n\t<button class="tab-btn">Light</button>\n</div>',
 				note: "Clicking works here. On a real page, the page's own script moves .active."
 			},
@@ -689,8 +689,8 @@ const sections = [
 			{
 				id: "mode-previews",
 				title: "Mode previews",
-				sel: ".mode-previews (+ .narrow-previews) > .mode-preview (+ .active, .unavailable) > .mode-screen (+ .dark, .light, .note-dark, .note-light, .mode-screen-split, .on-picture) > .line (+ .head, .mid) · .mode-preview-label · .white-text · .black-text · .font-colour",
-				desc: "A choice made by looking: a few little screens rather than a switch, each showing what it is, the one picked with a stronger edge (<b>.active</b>). A screen is the page's colour (<b>.dark</b>, <b>.light</b>), or a notification's (<b>.note-dark</b>, <b>.note-light</b>), with lines of \"text\" on it: a heading line, then fainter ones. <b>.mode-screen-split</b> is half and half, for Device. <b>.narrow-previews</b> keeps them the size they are in a half-width box. Font colour (in <b>.font-colour</b>, on the Appearance tab) draws them with the background in them (<b>.on-picture</b>, <code>--screen-picture</code>: a picture's address or a colour) and the lines in white or black (<b>.white-text</b>, <b>.black-text</b>); <b>.unavailable</b> ones can't be picked.",
+				sel: ".mode-previews (+ .narrow-previews) > .mode-preview (+ .active) > .mode-screen (+ .dark, .light, .note-dark, .note-light, .mode-screen-split) > .line (+ .head, .mid) · .mode-preview-label",
+				desc: "A choice made by looking: a few little screens rather than a switch, each showing what it is, the one picked with a stronger edge (<b>.active</b>). A screen is the page's colour (<b>.dark</b>, <b>.light</b>), or a notification's (<b>.note-dark</b>, <b>.note-light</b>), with lines of \"text\" on it: a heading line, then fainter ones. <b>.mode-screen-split</b> is half and half, for Device. <b>.narrow-previews</b> keeps them the size they are in a half-width box.",
 				demo: `<div class="mode-previews narrow-previews"><div class="mode-preview active" role="button" tabindex="0"><div class="mode-screen dark"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Dark</div></div><div class="mode-preview" role="button" tabindex="0"><div class="mode-screen light"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Light</div></div><div class="mode-preview" role="button" tabindex="0"><div class="mode-screen mode-screen-split"><div class="dark"><span class="line head"></span></div><div class="light"><span class="line head"></span></div></div><div class="mode-preview-label">Device</div></div></div>`,
 				code: "<div class=\"mode-previews\">\n\t<div class=\"mode-preview active\" role=\"button\" tabindex=\"0\">\n\t\t<div class=\"mode-screen dark\"><span class=\"line head\"></span><span class=\"line\"></span></div>\n\t\t<div class=\"mode-preview-label\">Dark</div>\n\t</div>\n\t…\n</div>"
 			},
@@ -745,10 +745,10 @@ const sections = [
 			{
 				id: "type-head",
 				title: "Heading with a control",
-				sel: ".type-head > .type-head-text",
-				desc: "A box's heading and its note on the left and a control on the right (Text Size's stepper), the font or whatever follows underneath. On a narrow screen the control drops under the note rather than squeezing it.",
-				demo: `<div class="type-head" style="max-width:30em"><div class="type-head-text"><h2 style="margin:0">Text Size</h2><p class="hint">Applies immediately.</p></div><div class="stepper"><button class="glass" aria-label="Smaller">&minus;</button><input type="number" value="16"><span class="unit">px</span><button class="glass" aria-label="Bigger">+</button></div></div>`,
-				code: "<div class=\"type-head\">\n\t<div class=\"type-head-text\"><h2>Text Size</h2><p class=\"hint\">…</p></div>\n\t<div class=\"stepper\">…</div>\n</div>"
+				sel: ".type-head > .type-head-text · .type-row",
+				desc: "A box's heading and its note on the left and a control on the right (Typography's size stepper), and underneath a row of what follows (<b>.type-row</b>: Font colour's buttons, then the font strip taking the rest). On a narrow screen the control drops under the note rather than squeezing it, and the strip under the buttons.",
+				demo: `<div class="type-head" style="max-width:30em"><div class="type-head-text"><h2 style="margin:0">Typography</h2><p class="hint">Dashboards are unaffected.</p></div><div class="stepper"><button class="glass" aria-label="Smaller">&minus;</button><input type="number" value="16"><span class="unit">px</span><button class="glass" aria-label="Bigger">+</button></div></div>`,
+				code: "<div class=\"type-head\">\n\t<div class=\"type-head-text\"><h2>Typography</h2><p class=\"hint\">…</p></div>\n\t<div class=\"stepper\">…</div>\n</div>\n<div class=\"type-row\">\n\t<div class=\"tabs\">…</div>\n\t<div class=\"inset\">…</div>\n</div>"
 			},
 			{
 				id: "location-manual",
@@ -1060,7 +1060,7 @@ const sections = [
 				base: "tab-grid",
 				title: "Lending room",
 				sel: ".lends-room · .borrows-room",
-				desc: "Two boxes side by side in a tab grid, where the first has empty room at its end: it gets narrower (<b>.lends-room</b>) and the one after it starts that much further left (<b>.borrows-room</b>), so the gap between them stays the same. A share of the box, never more than 5em. The Appearance tab's mode box gives the Text Size box room for its note on one line. Only where the boxes sit side by side.",
+				desc: "Two boxes side by side in a tab grid, where the first has empty room at its end: it gets narrower (<b>.lends-room</b>) and the one after it starts that much further left (<b>.borrows-room</b>), so the gap between them stays the same. A share of the box, never more than 5em. The Appearance tab's mode box gives the Typography box room for its note on one line and Font colour beside the font. Only where the boxes sit side by side.",
 				demo: `<div class="home-bento" style="max-width:40em"><div class="segment c3 lends-room"><h2>Lends</h2></div><div class="segment c3 borrows-room"><h2>Borrows</h2></div></div>`,
 				code: '<div class="segment c3 row2 lends-room">…</div>\n<div class="segment c3 row2 borrows-room">…</div>'
 			}

@@ -1042,41 +1042,27 @@ function backgroundPanel(settings) {
 				</div>
 `;
 
-	// Font colour, in the Text Size & Typography box: three cards drawn like
-	// Appearance Mode's. White and Black pin it; Auto lets Auto switch it
-	// when nothing else makes the text readable. Only over a picture or a
-	// colour: the Default background has its mode's own colours.
-	const fontCard = (value, name, screen) => {
+	// Font colour, in the Typography box: three buttons side by side, "Aa"
+	// in white, Auto, and "Aa" in black. White and Black pin it; Auto lets
+	// Auto switch it when nothing else makes the text readable. Only over a
+	// picture or a colour: the Default background has its mode's own
+	// colours.
+	const fontButton = (value, inner, kind, title) => {
 		const on = fontColour === value;
-		// Auto, when it's the one picked, says which it's chosen
-		const label = value === "auto" && backdrop && on ? `${name} (${glass.font === "black" ? "Black" : "White"})` : name;
-		return `
-						<div class="mode-preview${on ? " active" : ""}${backdrop ? "" : " unavailable"}" data-font="${value}"
-							role="button" tabindex="${backdrop ? "0" : "-1"}" aria-pressed="${on}"${backdrop ? "" : ' aria-disabled="true"'}>
-							${screen}
-							<div class="mode-preview-label" id="font-label-${value}">${label}</div>
-						</div>`;
+		return (
+			`<button type="button" class="tab-btn${kind}${on ? " active" : ""}" data-font="${value}" aria-pressed="${on}"` +
+			` title="${title}"${backdrop ? "" : " disabled"}>${inner}</button>`
+		);
 	};
-	const behind = file
-		? ` style="--screen-picture:url('/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}')"`
-		: colour
-		? ` style="--screen-picture:${escapeHtml(settings.backgroundColor)}"`
-		: "";
-	const lines = '<span class="line head"></span><span class="line"></span>';
+	const autoTitle = (font) => `Auto: ${font === "black" ? "black" : "white"} text now, switched only when nothing else makes it readable`;
 	const fontColourField = `
-				<div class="font-colour">
-					<div class="inset-label">FONT COLOUR</div>
-					<div class="mode-previews narrow-previews" id="font-colours">
-						${fontCard("white", "White", `<div class="mode-screen on-picture white-text"${behind}>${lines}</div>`)}
-						${fontCard("black", "Black", `<div class="mode-screen on-picture black-text"${behind}>${lines}</div>`)}
-						${fontCard(
-							"auto",
-							"Auto",
-							`<div class="mode-screen mode-screen-split on-picture"${behind}><div class="white-text"><span class="line head"></span></div><div class="black-text"><span class="line head"></span></div></div>`
-						)}
-					</div>
-					${backdrop ? "" : '<p class="help">With a picture or a colour behind the pages. The Default background has its Appearance Mode\'s own colours.</p>'}
-				</div>`;
+					<div class="tabs font-colours" role="group" aria-label="Font colour"${
+						backdrop ? "" : ' title="Font colour is for a picture or a colour behind the pages. The Default background has its Appearance Mode\'s own colours."'
+					}>
+						${fontButton("white", "Aa", " font-sample white-text", "White text")}
+						${fontButton("auto", "Auto", "", autoTitle(glass.font))}
+						${fontButton("black", "Aa", " font-sample black-text", "Black text")}
+					</div>`;
 
 	const script = `
 		// How Auto works out the glass, the same functions the server uses
@@ -1238,8 +1224,10 @@ function backgroundPanel(settings) {
 				root.style.setProperty("--segment-bg", "rgba(255, 255, 255, " + MODEL.fill[glass.font] + ")");
 				root.style.setProperty("--segment-edge", black ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.16)");
 				root.style.setProperty("--on-picture-shadow", onPictureShadow(black));
-				const autoLabel = document.getElementById("font-label-auto");
-				if (autoLabel) autoLabel.textContent = fontColour === "auto" ? "Auto (" + (black ? "Black" : "White") + ")" : "Auto";
+				const autoButton = document.querySelector('[data-font="auto"]');
+				if (autoButton) {
+					autoButton.title = "Auto: " + (black ? "black" : "white") + " text now, switched only when nothing else makes it readable";
+				}
 			}
 
 			// Said when the text may be hard to read: never overruled, only
@@ -1267,10 +1255,10 @@ function backgroundPanel(settings) {
 				/^#/.test(tint) && !document.querySelector('[data-tint="' + tint + '"]')
 			);
 
-			for (const card of document.querySelectorAll("[data-font]")) {
-				const on = card.dataset.font === fontColour;
-				card.classList.toggle("active", on);
-				card.setAttribute("aria-pressed", on ? "true" : "false");
+			for (const button of document.querySelectorAll("[data-font]")) {
+				const on = button.dataset.font === fontColour;
+				button.classList.toggle("active", on);
+				button.setAttribute("aria-pressed", on ? "true" : "false");
 			}
 
 			return glass;
@@ -1339,19 +1327,12 @@ function backgroundPanel(settings) {
 		custom.addEventListener("change", save);
 
 		// Font colour: White, Black or Auto
-		for (const card of document.querySelectorAll("[data-font]")) {
-			const pick = function () {
+		for (const button of document.querySelectorAll("[data-font]")) {
+			button.addEventListener("click", function () {
 				if (!PICTURE) return;
-				fontColour = card.dataset.font;
+				fontColour = button.dataset.font;
 				preview();
 				save();
-			};
-			card.addEventListener("click", pick);
-			card.addEventListener("keydown", function (event) {
-				if (event.key === "Enter" || event.key === " ") {
-					event.preventDefault();
-					pick();
-				}
 			});
 		}
 
@@ -3066,10 +3047,8 @@ function startAdminFace() {
 			<div class="segment c3 row2 borrows-room">
 				<div class="type-head">
 					<div class="type-head-text">
-						<h2>Text Size &amp; Typography</h2>
-						<p class="hint">
-							Applies immediately. Dashboards are unaffected.
-						</p>
+						<h2>Typography</h2>
+						<p class="hint">Dashboards are unaffected.</p>
 					</div>
 					<div class="stepper">
 						<button type="button" class="glass" id="size-down"
@@ -3081,20 +3060,22 @@ function startAdminFace() {
 							aria-label="Larger">&#43;</button>
 					</div>
 				</div>
-				<div class="inset">
-					<div class="inset-text">
-						<div class="inset-label">FONT</div>
-						<div class="inset-value">${
-							installedFont
-								? escapeHtml(installedFont.family)
-								: "System font"
-						}</div>
+				<div class="type-row">
+					${glassParts.fontColourField}
+					<div class="inset">
+						<div class="inset-text">
+							<div class="inset-label">FONT</div>
+							<div class="inset-value">${
+								installedFont
+									? escapeHtml(installedFont.family)
+									: "System font"
+							}</div>
+						</div>
+						<button class="glass" id="change-font">
+							Change
+						</button>
 					</div>
-					<button class="glass" id="change-font">
-						Change
-					</button>
 				</div>
-				${glassParts.fontColourField}
 			</div>`;
 
 		// --- Resources ------------------------------------------------------

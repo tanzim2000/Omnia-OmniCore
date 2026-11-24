@@ -98,7 +98,7 @@ const DEFAULTS = {
 
 	// The frosted glass of every segment: its blur (0-40 px), a tint
 	// ("none", "dominant" or "vibrant" (the background's own colours), or a
-	// colour like "#7aa2ff") at a strength of 0-35 (%), and a Dim (0-100%),
+	// colour like "#7aa2ff") at a strength of 0-100 (%), and a Dim (0-100%),
 	// darkness added to the tint.
 	//
 	// One Auto looks after Blur, Tint strength and Dim (glassAuto). A slider

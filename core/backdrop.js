@@ -87,7 +87,7 @@ const TARGET_CONTRAST = 4.5;
 // The glass: how blurred, how tinted and how dimmed it can be, and where
 // Blur and Tint strength start (Auto never takes them below these)
 const BLUR_MOST = 40;
-const TINT_STRENGTH_MOST = 35;
+const TINT_STRENGTH_MOST = 100;
 const DIM_MOST = 100;
 const BLUR_DEFAULT = 20;
 const TINT_STRENGTH_DEFAULT = 12;
@@ -111,7 +111,9 @@ const AUTO_ORDER = ["dim", "blur", "tintStrength"];
 //          a whisper of it under white text (the dark set), half of it
 //          under black text (the light set). The same values as
 //          glassVariables below.
-//   dimMost   how far Auto takes Dim: never quite black glass
+//   dimMost   how far Auto takes Dim: never quite black glass (by hand it
+//             goes to 100%). Blur and Tint strength go as far as their
+//             sliders do.
 const GLASS_MODEL = {
 	target: TARGET_CONTRAST,
 	blurMost: BLUR_MOST,

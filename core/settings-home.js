@@ -4,7 +4,7 @@
 //   General      Location Service, Place search, Saved keys, a box to try
 //                a search
 //   Appearance   Frosted glass, Background (with the Back button's
-//                corner), Appearance Mode, Text Size and Typography
+//                corner), Appearance Mode, Typography
 //   Resources    Network, Manage Faces, Installed Resources, the
 //                Marketplace
 //   About        OmniCore itself, and its updates

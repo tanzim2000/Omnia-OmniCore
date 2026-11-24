@@ -516,22 +516,6 @@ function settingsPagesCss() {
 	   kept to the size they are in a half-width box */
 	.narrow-previews { max-width: 24em; }
 
-	/* Font colour's cards (Settings, Appearance, Text Size & Typography):
-	   Appearance Mode's cards with the background in them
-	   (--screen-picture: a picture's address or a colour) and the lines in
-	   white or black. Auto is split, like Device. Without a picture or a
-	   colour behind the pages they can't be picked (.unavailable). */
-	.font-colour { margin-top: 1em; }
-	.font-colour .inset-label { margin-bottom: 0.5em; }
-	.mode-screen.on-picture { background: var(--screen-picture, var(--bg)) center / cover; }
-	.mode-screen-split.on-picture > div { background: none; }
-	.mode-screen.on-picture .white-text > .line,
-	.mode-screen.on-picture.white-text > .line { background: rgba(255, 255, 255, 0.95); }
-	.mode-screen.on-picture .black-text > .line,
-	.mode-screen.on-picture.black-text > .line { background: #111; }
-	.mode-screen.on-picture .line { box-shadow: 0 0 3px rgba(127, 127, 127, 0.6); }
-	.mode-preview.unavailable { opacity: 0.4; cursor: default; pointer-events: none; }
-
 
 	/* An inset strip inside a segment: the detected location, the current
 	   font. Reads as "this is a value, not a control". */
@@ -559,10 +543,12 @@ function settingsPagesCss() {
 	/* A small button at the end of the strip (Refresh, Change) */
 	.inset > .glass { flex-shrink: 0; padding: 0.641em 1.1218em; font-size: 0.78em; }
 
-	/* Text Size & Typography: the heading and its note on the left, the
-	   size stepper on the right, then the font underneath. On a narrow
-	   screen the stepper drops under the note rather than squeezing it
-	   (flex-wrap, and the text keeps at least 12em). */
+	/* Typography: the heading and its note on the left, the size stepper
+	   on the right; under them, Font colour's three buttons and the font
+	   strip taking the rest of the row (.type-row). On a narrow screen the
+	   stepper drops under the note rather than squeezing it (flex-wrap,
+	   and the text keeps at least 12em), and the font strip under the
+	   buttons. */
 	.type-head {
 		display: flex;
 		flex-wrap: wrap;
@@ -574,6 +560,9 @@ function settingsPagesCss() {
 	.type-head-text { flex: 1 1 12em; min-width: 0; }
 	.type-head-text .hint { margin: 0; }
 	.type-head .stepper { flex-shrink: 0; }
+	.type-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px 14px; }
+	.type-row > .tabs { flex: none; }
+	.type-row > .inset { flex: 1 1 14em; min-width: 0; }
 
 	.inset-label { font-size: 0.7em; color: var(--fg-muted); }
 	.inset-value { font-size: 0.85em; margin-top: 2px; }
@@ -2653,9 +2642,10 @@ const SETTINGS_HOME_CSS = `
 	/* Lending room: a box with empty room at its end (.lends-room) gives
 	   a little of it to the box after it (.borrows-room), which starts
 	   that far to the left, so the gap between them stays the same. On
-	   the Appearance tab, the mode box gives the Text Size box room for
-	   its note on one line. The amount is a share of the box, never more
-	   than 5em, so a smaller screen doesn't squeeze what's in it. Only
+	   the Appearance tab, the mode box gives the Typography box room for
+	   its note on one line, and for Font colour beside the font. The
+	   amount is a share of the box, never more than 5em, so a smaller
+	   screen doesn't squeeze what's in it. Only
 	   where the boxes sit side by side; on a phone they stack and keep
 	   their full width. */
 	@media (min-width: 42.01em) {
@@ -3756,6 +3746,20 @@ ${FLOATING_CSS}
 		outline: none;
 		box-shadow: 0 0 0 2px var(--glow-strong);
 	}
+
+	.tab-btn:disabled { opacity: 0.4; cursor: default; }
+
+	/* A tab that shows a sample instead of a word: "Aa" in white or in
+	   black (Font colour, on the Appearance tab), larger, each with a thin
+	   edge the other way round so it reads on any glass, picked or not */
+	.tab-btn.font-sample {
+		font-size: 1.35em;
+		line-height: 1;
+		padding: 0.3em 0.55em;
+		paint-order: stroke fill;
+	}
+	.tab-btn.font-sample.white-text { color: #fff; -webkit-text-stroke: 0.07em rgba(0, 0, 0, 0.6); }
+	.tab-btn.font-sample.black-text { color: #111; font-weight: 700; -webkit-text-stroke: 0.07em rgba(255, 255, 255, 0.6); }
 
 	/* A number stepper: down button, the value, up button. Used
 	   wherever a small bounded number is set (text size, and anything

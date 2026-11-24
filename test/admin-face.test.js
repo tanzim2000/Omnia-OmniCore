@@ -55,7 +55,7 @@ test("admin face: settings home renders every section", async () => {
 		"Appearance Mode",
 		"Saved keys",
 		"Frosted glass",
-		"Text Size",
+		"<h2>Typography</h2>",
 		"Manage Faces",
 		"Marketplace",
 		"Installed Resources",

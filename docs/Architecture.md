@@ -1553,7 +1553,7 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
 - **The glass:** every `.segment` (and a pop-up, the dock, the floating
   Back button, a glass button outside any box) blurs what's behind it
   (`--glass-blur`, 0 to 40 px, 20 by default) and can carry a tint: a
-  colour laid over its fill at up to 35%, picked from a few presets or a
+  colour laid over its fill at up to 100%, picked from a few presets or a
   colour picker, or the background's Dominant or Vibrant colour. **Dim**
   (0 to 100%) is darkness added to the tint; the two are one colour,
   `--glass-tint` (`tintWithDim`). Over a picture the glass gets a fuller
@@ -1591,7 +1591,7 @@ Since v2 the settings home (`GET /` on the admin face) is four tabs on one
 page, switched by a small script (`settings-home.js`): **General**
 (Location Service, Place search, Saved keys, a box to try a search),
 **Appearance** (Frosted glass, Background with a Back button: Top left |
-Bottom right switch, Appearance Mode, Text Size), **Resources** (Network,
+Bottom right switch, Appearance Mode, Typography), **Resources** (Network,
 Manage Faces, Installed Resources, the Marketplace: Manage Faces wide on
 top, Network and Installed Resources under it, the Marketplace tall on the
 right; on a phone in that order, Network first) and **About** (the version and the address, the

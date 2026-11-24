@@ -187,7 +187,9 @@ the plan didn't say:
   brightest tenth under white, its darkest under black), drawn towards
   the picture's overall brightness by Blur, up to halfway at 40 px. Each
   layer laid over the one below on each colour value, as the browser
-  does. Auto takes Dim up to 85%.
+  does. Auto takes Dim up to 85%, Blur and Tint strength as far as their
+  sliders go. Tint strength goes to 100%, a solid colour (35% in the first
+  build).
 - **Nothing released needs converting:** pictures behind the pages are
   new in 2.0.0. A picture picked by an earlier v2 build gets its vibrant
   colour and overall brightness the first time the Appearance tab opens,
@@ -242,9 +244,10 @@ The plan, as decided:
 - **Font colour:** white or black, Auto's **last resort** (only when nothing
   else can make the text readable), and it can be pinned. When it switches
   to black, darkening works against it, so Auto lowers whatever free
-  sliders it raised. It has a picker of its own in the Text Size &
-  Typography box, drawn like Appearance Mode: **White**, **Black** and
-  **Auto** (split, like Device). Picking White or Black pins it.
+  sliders it raised. It has a picker of its own in the Typography box
+  (Text Size & Typography until then), beside the font: **"Aa" in white**,
+  **Auto** and **"Aa" in black**, three buttons side by side. Picking White
+  or Black pins it.
 
 ### B. Appearance profiles
 

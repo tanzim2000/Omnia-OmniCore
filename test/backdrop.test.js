@@ -598,9 +598,10 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	// the font colour cards can't be picked
 	assert.ok(!page.includes('id="glass-auto"'), "nothing for Auto to read against");
 	assert.ok(!page.includes('id="brightness"') && !page.includes('id="dim"'));
-	assert.match(page, /<div class="font-colour">[\s\S]*FONT COLOUR/);
-	assert.match(page, /class="mode-preview active unavailable" data-font="auto"/, "Auto, and not pickable");
-	assert.ok(page.includes("The Default background has its Appearance Mode's own colours."));
+	assert.match(page, /<div class="tabs font-colours" role="group" aria-label="Font colour" title="[^"]*The Default background has its Appearance Mode's own colours\."/);
+	assert.match(page, /<button type="button" class="tab-btn active" data-font="auto" aria-pressed="true" title="[^"]*" disabled>Auto<\/button>/, "Auto, and not pickable");
+	assert.match(page, /class="tab-btn font-sample white-text" data-font="white"[^>]*>Aa<\/button>/);
+	assert.match(page, /class="tab-btn font-sample black-text" data-font="black"[^>]*>Aa<\/button>/);
 
 	// Frosted glass stays short: the Tint colours on a row of their own,
 	// first, and the sliders two or three to a row where there's room
@@ -645,8 +646,7 @@ test("pages: a colour as the background, Auto and its pins, and the font colour"
 	assert.match(page, /data-unpin="dim" hidden/, "nothing pinned");
 	assert.match(page, /<label for="brightness">Colour brightness <span class="muted" id="brightness-value">Original<\/span>/);
 	assert.ok(!page.match(/data-tint="(dominant|vibrant)"[^>]* disabled/), "Dominant and Vibrant work with a colour");
-	assert.match(page, /data-font="auto"\s+role="button" tabindex="0" aria-pressed="true"/, "the font colour cards can be picked");
-	assert.match(page, /--screen-picture:#1e2a44/, "with the colour in them");
+	assert.match(page, /data-font="auto" aria-pressed="true" title="Auto: white text now[^"]*">Auto<\/button>/, "the font colour can be picked, and Auto says which it chose");
 	assert.ok(page.includes('"dark":"'), "the everyday colours for white and black text, for the live preview");
 
 	// Over a picture or a colour: a title on it gets a shadow, and a glass
@@ -676,7 +676,7 @@ test("pages: a colour as the background, Auto and its pins, and the font colour"
 	assert.equal((await postJson("/background/glass", { fontColour: "black" })).status, 200);
 	const black = (await request(3000, "/")).body.toString();
 	assert.match(black, /--fg: #111;/);
-	assert.match(black, /class="mode-preview active" data-font="black"/);
+	assert.match(black, /class="tab-btn font-sample black-text active" data-font="black" aria-pressed="true"/);
 	assert.match(black, /id="glass-warning" hidden/, "black reads on the half-white glass over navy");
 
 	// Black text on dark glass: the page says it may be hard to read

@@ -278,7 +278,7 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	};
 	for (const [id, boxes] of [
 		["general", ["Location Service", "Place search", "Saved keys", "Try a city search"]],
-		["appearance", ["Frosted glass", "Background", "Appearance Mode", "Text Size"]],
+		["appearance", ["Frosted glass", "Background", "Appearance Mode", "<h2>Typography</h2>"]],
 		["resources", ["Network", "Manage Faces", "Marketplace", "Installed Resources"]],
 		["about", ["OmniCore 2.0.", "Address", "Updates", "Release notes"]]
 	]) {
@@ -297,15 +297,16 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	// the search box, the Marketplace beside the other two
 	assert.match(pane("appearance"), /class="segment c4 row1" id="glass"/);
 	assert.match(pane("appearance"), /class="segment c2 row1" id="background"/);
-	// Appearance Mode and Text Size & Typography share the second row; the
-	// mode box lends the Text Size box its empty room (see the CSS test
-	// below), and the Text Size box has the note on the left, the stepper
-	// on the right and the font underneath
+	// Appearance Mode and Typography share the second row; the mode box
+	// lends the Typography box its empty room (see the CSS test below),
+	// and the Typography box has the note on the left, the stepper on the
+	// right, and Font colour and the font underneath, in a row
 	assert.match(pane("appearance"), /class="segment c3 row2 lends-room"/);
 	assert.match(pane("appearance"), /class="segment c3 row2 borrows-room"/);
 	const typeHead = pane("appearance").slice(pane("appearance").indexOf('class="type-head"'));
 	assert.ok(typeHead.indexOf("type-head-text") < typeHead.indexOf('class="stepper"'), "the note, then the stepper");
-	assert.ok(typeHead.indexOf('class="stepper"') < typeHead.indexOf('class="inset"'), "the font under both");
+	assert.ok(typeHead.indexOf('class="stepper"') < typeHead.indexOf('class="type-row"'), "the row under both");
+	assert.ok(typeHead.indexOf('class="tabs font-colours"') < typeHead.indexOf('class="inset"'), "Font colour, then the font");
 	assert.ok(
 		typeHead.slice(typeHead.indexOf("type-head-text"), typeHead.indexOf('class="stepper"')).includes("Dashboards are unaffected."),
 		"the note sits in the left part, beside the stepper"
