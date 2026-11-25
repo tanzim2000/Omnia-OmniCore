@@ -3684,6 +3684,14 @@ function uiStyles(options) {
 	.buttons.to-end { justify-content: flex-end; align-items: center; margin-top: auto; padding-top: 0.8em; }
 	.buttons.to-end > .status { margin: 0 auto 0 0; }
 
+	/* A row of buttons there only at times (the Appearance tab's Save and
+	   Cancel, while something isn't saved) that keeps its room while it's
+	   hidden: unseen and can't be pressed, but the box around it never
+	   changes height, so the rows of a tab never reshape as it comes and
+	   goes. Written with [hidden] and !important to win over the rule that
+	   takes anything hidden out of the page. */
+	.buttons.keeps-room[hidden] { display: flex !important; visibility: hidden; }
+
 	/* A tab's saving box (Appearance), with no heading: what's saved, a
 	   warning when there's one, and Cancel and Save at its bottom right
 	   only while something isn't saved. Its height never changes with

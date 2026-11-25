@@ -1034,6 +1034,9 @@ function backgroundPanel(settings) {
 	// with Save; Cancel, or leaving the page, puts it back. Save and Cancel
 	// are there only while something isn't saved. When the text may be
 	// hard to read, it's said here too, so no box changes height for it.
+	// Save and Cancel keep their room while they're hidden (.keeps-room),
+	// so this box doesn't change height either, and the tab's rows never
+	// reshape as they come and go.
 	// (The background and the font have pop-ups of their own, and are
 	// kept from there.)
 	const actionsBox = `
@@ -1047,7 +1050,7 @@ function backgroundPanel(settings) {
 				</div>
 				<p class="hint" id="appearance-state">Everything on this tab is saved${settings.profile ? ", in this profile" : ""}.</p>
 				<p class="help glass-warning" id="glass-warning"${glass.readable ? " hidden" : ""}></p>
-				<div class="buttons to-end" id="appearance-buttons" hidden>
+				<div class="buttons to-end keeps-room" id="appearance-buttons" hidden>
 					<span class="status" id="glass-status" aria-live="polite"></span>
 					<button type="button" class="btn-glossy btn-glossy-neutral" id="glass-cancel">Cancel</button>
 					<button type="button" class="btn-glossy btn-glossy-green" id="glass-save">Save</button>

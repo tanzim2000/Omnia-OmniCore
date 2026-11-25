@@ -1597,8 +1597,10 @@ font colour picks which: there is no Light or Dark mode since 2.0.0.
   **Cancel** puts the page back as it was saved; leaving the page keeps
   nothing. Save and Cancel are in the tab's saving box (`.tab-actions`,
   no heading) only while something differs
-  from what's saved; the warning that text may be hard to read is said
-  there too, so the Frosted glass box never changes height.
+  from what's saved, keeping their room while they're hidden
+  (`.buttons.keeps-room`), so the saving box never changes height and
+  the tab's rows never reshape; the warning that text may be hard to
+  read is said there too, so the Frosted glass box never changes height.
 - **A page's title on the background** (`onPictureText`, sent as it is
   to the Appearance tab too): white or black by the background's overall
   brightness at its brightness slider, never the font colour

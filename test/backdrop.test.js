@@ -675,7 +675,9 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.ok(!actions.includes("<h2"), "no heading");
 	assert.match(actions, /<p class="hint" id="appearance-state">Everything on this tab is saved\.<\/p>/);
 	assert.match(actions, /<p class="help glass-warning" id="glass-warning"/);
-	assert.match(actions, /<div class="buttons to-end" id="appearance-buttons" hidden>\s*<span class="status" id="glass-status" aria-live="polite"><\/span>\s*<button type="button" class="btn-glossy btn-glossy-neutral" id="glass-cancel">Cancel<\/button>\s*<button type="button" class="btn-glossy btn-glossy-green" id="glass-save">Save<\/button>/);
+	// Hidden, but keeping their room, so the box never changes height
+	assert.match(uiTheme.uiStyles(), /\.buttons\.keeps-room\[hidden\] \{ display: flex !important; visibility: hidden; \}/);
+	assert.match(actions, /<div class="buttons to-end keeps-room" id="appearance-buttons" hidden>\s*<span class="status" id="glass-status" aria-live="polite"><\/span>\s*<button type="button" class="btn-glossy btn-glossy-neutral" id="glass-cancel">Cancel<\/button>\s*<button type="button" class="btn-glossy btn-glossy-green" id="glass-save">Save<\/button>/);
 	const glassBox = page.slice(page.indexOf('id="glass"'), page.indexOf('id="background"'));
 	assert.ok(!glassBox.includes("glass-warning") && !glassBox.includes("glass-save"), "nothing in Frosted glass comes and goes");
 	assert.ok(!page.includes('data-mode="device"'), "Appearance Mode is gone");
