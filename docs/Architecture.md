@@ -1600,14 +1600,15 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
 - **A page's title on the background** (`onPictureText`, sent as it is
   to the Appearance tab too): white or black by the background's overall
   brightness at its brightness slider, never the font colour
-  (`--on-picture-fg`), with the shadow the other way round.
+  (`--on-picture-fg`), flat with no shadow. Page titles outside a box
+  are Metro style in `uiStyles`: large, thin, lower case, set close.
 - **Glass stays glass** over a picture or a colour (`overPicturePalette`
   in `uiStyles`): every fill, edge, sheen, input box and track is the dark
   palette's, whatever the mode and the font colour; only the text's own
   colours (the text, its grey, a red or green word, a green button's
   word) are the font colour's set. With the Default background, the
   mode's own palette, Blur and Tint strength as set by hand, and no Dim. A page's title on the picture, with no glass
-  under it, gets `--on-picture-shadow`.
+  under it, gets `--on-picture-fg`.
 
 ### The settings home and page fades
 

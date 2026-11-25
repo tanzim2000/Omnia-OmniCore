@@ -1092,7 +1092,6 @@ function backgroundPanel(settings) {
 		${backdropStore.fontToKeep.toString()}
 		${backdropStore.tintWithDim.toString()}
 		${backdropStore.startingBrightness.toString()}
-		${backdropStore.onPictureShadow.toString()}
 		${backdropStore.onPictureText.toString()}
 
 		// What's behind the pages now: how dark, bright and bright overall
@@ -1252,7 +1251,6 @@ function backgroundPanel(settings) {
 				// by the background at its brightness, never the font colour
 				const onIt = onPictureText({ mean: PICTURE.mean, brightness: bright, colour: PICTURE.colour });
 				root.style.setProperty("--on-picture-fg", onIt === "black" ? "#111" : "#fff");
-				root.style.setProperty("--on-picture-shadow", onPictureShadow(onIt === "black"));
 				document.getElementById("font-colour-name").textContent = black ? "Black" : "White";
 			}
 

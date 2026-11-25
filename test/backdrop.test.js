@@ -426,7 +426,7 @@ test("the glass in the stylesheet: plain, a tint, a picture", () => {
 	assert.match(plain, /--glass-blur: 26px;/, "with the Default, the sliders as set by hand");
 	assert.match(plain, /--glass-tint: transparent;/);
 	assert.match(plain, /--segment-edge: transparent;/, "no edge without a picture");
-	assert.match(plain, /--on-picture-shadow: none;/);
+	assert.ok(!plain.includes("--on-picture"), "nothing for a title on a picture without one");
 	assert.ok(!plain.includes("--segment-bg"), "the palette's own fill without a picture");
 
 	const tinted = backdrop.glassVariables({ glassBlur: 8, glassTint: "#ff0000", glassTintStrength: 20 }, false);
@@ -456,11 +456,10 @@ test("the glass in the stylesheet: plain, a tint, a picture", () => {
 	// A title on the picture itself: black over this pale sky, with a
 	// light shadow, whatever the font colour (that's for the glass)
 	assert.match(over, /--on-picture-fg: #111;/, "a title on a pale sky: black");
-	assert.match(over, /--on-picture-shadow: 0 0 2px rgba\(255, 255, 255/);
+	assert.ok(!over.includes("--on-picture-shadow"), "flat: no shadow or glow");
 	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }, false), /--on-picture-fg: #111;/);
 	const night = { ...picture, backgroundLow: NIGHT.low, backgroundHigh: NIGHT.high, backgroundMean: NIGHT.mean };
 	assert.match(backdrop.glassVariables({ ...night, fontColour: "black" }, false), /--on-picture-fg: #fff;/, "white on a night city, though the font colour is black");
-	assert.match(backdrop.glassVariables(night, false), /--on-picture-shadow: 0 0 2px rgba\(0, 0, 0/, "with a dark shadow");
 
 	// The font colour as picked, whichever the mode; black text: the light
 	// set for the text, and the same glass as under white
@@ -630,7 +629,7 @@ test("pages: a fresh install has the plain background and the default glass", as
 	for (const port of [3000, 3999, 1303, 4000]) {
 		const page = (await request(port, "/")).body.toString();
 		assert.ok(!page.includes('class="omni-backdrop"'), `nothing drawn on ${port}`);
-		assert.ok(!page.includes("--on-picture-shadow); }"), `no shadows on ${port} without a picture`);
+		assert.ok(!page.includes("var(--on-picture-fg)"), `nothing for a title on a picture on ${port} without one`);
 	}
 });
 
@@ -761,7 +760,8 @@ test("pages: a colour as the background, Auto and its pins, and the font colour"
 
 	// Over a picture or a colour: a title on it gets a shadow, and a glass
 	// button outside any box gets the tint and Dim, hovered or not
-	assert.ok(page.includes(":is(h1, h1 + .lede):not(.segment *, .modal *) { color: var(--on-picture-fg); text-shadow: var(--on-picture-shadow); }"));
+	assert.ok(page.includes(":is(h1, h1 + .lede):not(.segment *, .modal *) { color: var(--on-picture-fg); }"));
+	assert.ok(!page.includes("text-shadow: var(--on-picture"), "no shadow or glow on a title");
 	assert.match(page, /--on-picture-fg: #fff;/, "a dark navy: a white title");
 	assert.ok(page.includes(backdrop.onPictureText.toString()), "the page works the title out the way the server does");
 	assert.match(page, /\.glass:not\(\.segment \*, \.modal \*\):hover,[\s\S]*?background-image: linear-gradient\(var\(--glass-tint\), var\(--glass-tint\)\)/);

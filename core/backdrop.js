@@ -798,16 +798,6 @@ function tintWithDim(tint, strength, dim) {
 	return "rgba(" + part(16) + ", " + part(8) + ", " + part(0) + ", " + Math.round(alpha * 1000) / 1000 + ")";
 }
 
-// The shadow behind text drawn straight on the picture: a tight dark edge
-// and a wide soft glow under white text, the same in white under black
-// text. Strong enough for a thin title over the brightest sky.
-//
-// A plain function, so the settings page can be sent its source too.
-function onPictureShadow(black) {
-	var c = black ? "255, 255, 255" : "0, 0, 0";
-	return "0 0 2px rgba(" + c + ", 0.9), 0 1px 4px rgba(" + c + ", 0.8), 0 0 16px rgba(" + c + ", 0.7), 0 0 40px rgba(" + c + ", 0.5)";
-}
-
 // Text drawn straight on the background, with no glass under it (a
 // page's title): white or black by the background itself, at its
 // brightness, never by the font colour. The font colour is for text on
@@ -860,13 +850,11 @@ function glassVariables(settings, light) {
 		--glass-saturate: 1.4;
 		/* Text drawn straight on the picture, with no glass under it (a
 		   page's title): white or black by the picture itself, whatever
-		   the font colour, with a soft shadow the other way round */
-		--on-picture-fg: ${onIt === "black" ? "#111" : "#fff"};
-		--on-picture-shadow: ${onPictureShadow(onIt === "black")};`
+		   the font colour. Flat, with no shadow or glow. */
+		--on-picture-fg: ${onIt === "black" ? "#111" : "#fff"};`
 				: `
 		--segment-edge: transparent;
-		--glass-saturate: 1;
-		--on-picture-shadow: none;`
+		--glass-saturate: 1;`
 		}
 	`;
 }
@@ -1104,7 +1092,6 @@ module.exports = {
 	recheckFont,
 	glassFor,
 	tintWithDim,
-	onPictureShadow,
 	onPictureText,
 	hasPicture,
 	glassVariables,

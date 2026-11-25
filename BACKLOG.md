@@ -184,8 +184,10 @@ the plan didn't say:
   person can switch back until the next change. Picked from two "Aa",
   each on a piece of the background through the real glass.
 - **Text with no glass under it** (a page's title, and the line under the
-  welcome face's and the wizard's) gets a soft shadow, dark under white
-  text and light under black. A glass button outside any box (Create a
+  welcome face's and the wizard's) is white or black by the background
+  itself, never the font colour; flat, no shadow (after the third build:
+  the glow looked bad). Page titles are Metro style: large, thin, lower
+  case, set close. A glass button outside any box (Create a
   new face) and the floating Back button get the tint and Dim like a box.
 - **A slider moved by hand is pinned at once, and says so** ("Pinned",
   which can be pressed to let Auto have it back).

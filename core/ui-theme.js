@@ -3102,15 +3102,15 @@ function uiStyles(options) {
 	//   - a page's title, and the line under it (the welcome face's, the
 	//     setup wizard's): white or black by the background itself, never
 	//     the font colour, which is for text on the glass
-	//     (--on-picture-fg), with a soft shadow the other way round
-	//     (--on-picture-shadow), both from backdrop.js
+	//     (--on-picture-fg, from backdrop.js). Flat, like the rest of
+	//     the title: no shadow, no glow.
 	//   - a glass button that isn't in a box (Create a new face, on the
 	//     welcome face): the glass's tint and Dim, like a box has, hovered
 	//     or not
 	const overPicture = backdrop.hasBackdrop(settings)
 		? `
 	body { background-image: none; }
-	:is(h1, h1 + .lede):not(.segment *, .modal *) { color: var(--on-picture-fg); text-shadow: var(--on-picture-shadow); }
+	:is(h1, h1 + .lede):not(.segment *, .modal *) { color: var(--on-picture-fg); }
 	.glass:not(.segment *, .modal *),
 	.glass:not(.segment *, .modal *):hover,
 	.glass:not(.segment *, .modal *):focus-visible {
@@ -3896,6 +3896,17 @@ ${FLOATING_CSS}
 	   both faces read one copy.
 	   --------------------------------------------------------------- */
 	h1 { font-weight: 300; font-size: 1.75em; margin: 0; }
+	/* A page's own title, on the page rather than in a box ("settings",
+	   a face's name, "welcome!"): the Metro way, as Windows Phone wrote
+	   "history" at the top of a screen. Large, thin, lower case and set
+	   close, flat with no shadow. A title in a box, a pop-up, the Wi-Fi
+	   takeover or an Inport's page keeps its own. */
+	h1:not(.segment *, .modal *, .omni-net-takeover *, .inport-page *) {
+		font-size: 2.6em;
+		letter-spacing: -0.03em;
+		line-height: 1.05;
+		text-transform: lowercase;
+	}
 	.lede { color: var(--fg-muted); font-size: 0.875em; margin: 0.6em 0 0 0; }
 
 	label {
