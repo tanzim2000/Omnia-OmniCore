@@ -453,7 +453,14 @@ test("the glass in the stylesheet: plain, a tint, a picture", () => {
 	assert.match(over, new RegExp(`--glass-tint: ${backdrop.tintWithDim("#336699", glass.tintStrength, glass.dim).replace(/[()]/g, "\\$&")};`));
 	assert.ok(glass.dim > 0, "the bright sky is dimmed");
 	assert.match(over, /--segment-bg: rgba\(255, 255, 255, 0\.07\);/, "white text: a whisper of white in the glass");
-	assert.match(over, /--on-picture-shadow: 0 0 2px rgba\(0, 0, 0/, "a title on the picture: a dark shadow");
+	// A title on the picture itself: black over this pale sky, with a
+	// light shadow, whatever the font colour (that's for the glass)
+	assert.match(over, /--on-picture-fg: #111;/, "a title on a pale sky: black");
+	assert.match(over, /--on-picture-shadow: 0 0 2px rgba\(255, 255, 255/);
+	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }, false), /--on-picture-fg: #111;/);
+	const night = { ...picture, backgroundLow: NIGHT.low, backgroundHigh: NIGHT.high, backgroundMean: NIGHT.mean };
+	assert.match(backdrop.glassVariables({ ...night, fontColour: "black" }, false), /--on-picture-fg: #fff;/, "white on a night city, though the font colour is black");
+	assert.match(backdrop.glassVariables(night, false), /--on-picture-shadow: 0 0 2px rgba\(0, 0, 0/, "with a dark shadow");
 
 	// The font colour as picked, whichever the mode; black text: the light
 	// set for the text, and the same glass as under white
@@ -466,6 +473,23 @@ test("the glass in the stylesheet: plain, a tint, a picture", () => {
 
 	// No veil over the picture any more
 	assert.ok(!over.includes("--backdrop-dim"));
+});
+
+test("a title on the background: white or black by the background, at its brightness", () => {
+	assert.equal(backdrop.onPictureText({ mean: 0 }), "white", "black: white");
+	assert.equal(backdrop.onPictureText({ mean: 1 }), "black", "white: black");
+	assert.equal(backdrop.onPictureText({ mean: NIGHT.mean }), "white");
+	assert.equal(backdrop.onPictureText({ mean: BRIGHT.mean }), "black");
+	// A dark-ish picture made darker stays white; a mid one made brighter
+	// turns black
+	assert.equal(backdrop.onPictureText({ mean: 0.15, brightness: -30 }), "white");
+	assert.equal(backdrop.onPictureText({ mean: 0.15, brightness: 50 }), "black");
+	// Black as a colour, brighter by white laid over it: grey enough at
+	// +50 for black to read better; a picture's black stays black
+	assert.equal(backdrop.onPictureText({ mean: 0, brightness: 50, colour: true }), "black");
+	assert.equal(backdrop.onPictureText({ mean: 0, brightness: 20, colour: true }), "white");
+	assert.equal(backdrop.onPictureText({ mean: 0, brightness: 50 }), "white");
+	assert.equal(backdrop.onPictureText({ mean: "x" }), "white", "nothing known: as if dark");
 });
 
 test("the tint and the Dim as one colour over the glass", () => {
@@ -637,11 +661,24 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.ok(page.includes("never sent anywhere"));
 	assert.ok(page.includes(backdrop.solveGlass.toString()), "the preview works the glass out the way the server does");
 	assert.ok(page.includes(backdrop.tintWithDim.toString()));
-	// The glass is kept with Save, or put back with Cancel: neither does
-	// anything until something changes, and nothing says "Saved."
-	assert.match(page, /<div class="buttons to-end">\s*<span class="status" id="glass-status" aria-live="polite"><\/span>\s*<button type="button" class="btn-glossy btn-glossy-neutral" id="glass-cancel" disabled>Cancel<\/button>\s*<button type="button" class="btn-glossy btn-glossy-green" id="glass-save" disabled>Save<\/button>/);
-	const glassScript = page.slice(page.indexOf('document.getElementById("glass-save")'), page.indexOf("// --- Changing the background"));
+	// The whole tab is kept with Save, or put back with Cancel, in a box
+	// of its own with no heading where Appearance Mode was. Save and
+	// Cancel are there only while something isn't saved; the warning is
+	// said there too, so no box changes height for it. Nothing says
+	// "Saved."
+	const actions = page.slice(page.indexOf('id="appearance-actions"'), page.indexOf('class="type-head"'));
+	assert.match(page, /<div class="segment c3 row2 lends-room tab-actions" id="appearance-actions">/);
+	assert.ok(!actions.includes("<h2"), "no heading");
+	assert.match(actions, /<p class="hint" id="appearance-state">Everything on this tab is saved\.<\/p>/);
+	assert.match(actions, /<p class="help glass-warning" id="glass-warning"/);
+	assert.match(actions, /<div class="buttons to-end" id="appearance-buttons" hidden>\s*<span class="status" id="glass-status" aria-live="polite"><\/span>\s*<button type="button" class="btn-glossy btn-glossy-neutral" id="glass-cancel">Cancel<\/button>\s*<button type="button" class="btn-glossy btn-glossy-green" id="glass-save">Save<\/button>/);
+	const glassBox = page.slice(page.indexOf('id="glass"'), page.indexOf('id="background"'));
+	assert.ok(!glassBox.includes("glass-warning") && !glassBox.includes("glass-save"), "nothing in Frosted glass comes and goes");
+	assert.ok(!page.includes('data-mode="device"'), "Appearance Mode is gone");
+	const glassScript = page.slice(page.indexOf("// --- Saving the Appearance tab"), page.indexOf("// --- Changing the background"));
 	assert.ok(glassScript.includes('"Couldn\'t save."') && !glassScript.includes('"Saved."'), "only a save that fails says anything");
+	assert.ok(glassScript.includes('sendPart("/appearance"'), "Text size and the Back button are saved with the rest");
+	assert.ok(!page.includes("saveAppearance("), "never saved straight away any more");
 
 	// With the Default background: no Auto, no brightness, no Dim, and
 	// the font colour's strip says what it needs, with nothing to pick
@@ -681,7 +718,7 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	const appearance = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).find((source) => source.includes("glass-save"));
 	const declared = (text) => [...text.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => m[1]);
 	const glassOwn = declared(glassScript);
-	assert.ok(glassOwn.includes("sendGlass") && glassOwn.includes("snapshot"));
+	assert.ok(glassOwn.includes("sendPart") && glassOwn.includes("snapshot"));
 	for (const name of glassOwn) {
 		assert.equal(declared(appearance).filter((other) => other === name).length, 1, `${name} once`);
 	}
@@ -724,7 +761,9 @@ test("pages: a colour as the background, Auto and its pins, and the font colour"
 
 	// Over a picture or a colour: a title on it gets a shadow, and a glass
 	// button outside any box gets the tint and Dim, hovered or not
-	assert.ok(page.includes(":is(h1, h1 + .lede):not(.segment *, .modal *) { text-shadow: var(--on-picture-shadow); }"));
+	assert.ok(page.includes(":is(h1, h1 + .lede):not(.segment *, .modal *) { color: var(--on-picture-fg); text-shadow: var(--on-picture-shadow); }"));
+	assert.match(page, /--on-picture-fg: #fff;/, "a dark navy: a white title");
+	assert.ok(page.includes(backdrop.onPictureText.toString()), "the page works the title out the way the server does");
 	assert.match(page, /\.glass:not\(\.segment \*, \.modal \*\):hover,[\s\S]*?background-image: linear-gradient\(var\(--glass-tint\), var\(--glass-tint\)\)/);
 	for (const source of [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])) {
 		assert.doesNotThrow(() => new vm.Script(source), "its scripts parse with a background too");

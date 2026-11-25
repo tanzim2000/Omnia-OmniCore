@@ -1035,13 +1035,27 @@ function backgroundPanel(settings) {
 								: ""
 						}
 					</div>
-					<p class="help glass-warning" id="glass-warning"${glass.readable ? " hidden" : ""}></p>
-					<div class="buttons to-end">
-						<span class="status" id="glass-status" aria-live="polite"></span>
-						<button type="button" class="btn-glossy btn-glossy-neutral" id="glass-cancel" disabled>Cancel</button>
-						<button type="button" class="btn-glossy btn-glossy-green" id="glass-save" disabled>Save</button>
-					</div>
 				</div>
+`;
+
+	// Saving the Appearance tab: a box of its own, with no heading, where
+	// Appearance Mode was. Everything set on the tab (the glass, Font
+	// colour, Text size, the Back button) shows at once and is kept only
+	// with Save; Cancel, or leaving the page, puts it back. Save and Cancel
+	// are there only while something isn't saved. When the text may be
+	// hard to read, it's said here too, so no box changes height for it.
+	// (The background and the font have pop-ups of their own, and are
+	// kept from there.)
+	const actionsBox = `
+			<div class="segment c3 row2 lends-room tab-actions" id="appearance-actions">
+				<p class="hint" id="appearance-state">Everything on this tab is saved.</p>
+				<p class="help glass-warning" id="glass-warning"${glass.readable ? " hidden" : ""}></p>
+				<div class="buttons to-end" id="appearance-buttons" hidden>
+					<span class="status" id="glass-status" aria-live="polite"></span>
+					<button type="button" class="btn-glossy btn-glossy-neutral" id="glass-cancel">Cancel</button>
+					<button type="button" class="btn-glossy btn-glossy-green" id="glass-save">Save</button>
+				</div>
+			</div>
 `;
 
 	// Font colour, in the Typography box: a strip like the font's beside
@@ -1079,6 +1093,7 @@ function backgroundPanel(settings) {
 		${backdropStore.tintWithDim.toString()}
 		${backdropStore.startingBrightness.toString()}
 		${backdropStore.onPictureShadow.toString()}
+		${backdropStore.onPictureText.toString()}
 
 		// What's behind the pages now: how dark, bright and bright overall
 		// it is, and its dominant and vibrant colours. Null for the Default.
@@ -1233,7 +1248,11 @@ function backgroundPanel(settings) {
 				showFont(black);
 				root.style.setProperty("--segment-bg", "rgba(255, 255, 255, " + MODEL.fill + ")");
 				root.style.setProperty("--segment-edge", "rgba(255, 255, 255, 0.16)");
-				root.style.setProperty("--on-picture-shadow", onPictureShadow(black));
+				// A page's title, on the background itself: white or black
+				// by the background at its brightness, never the font colour
+				const onIt = onPictureText({ mean: PICTURE.mean, brightness: bright, colour: PICTURE.colour });
+				root.style.setProperty("--on-picture-fg", onIt === "black" ? "#111" : "#fff");
+				root.style.setProperty("--on-picture-shadow", onPictureShadow(onIt === "black"));
 				document.getElementById("font-colour-name").textContent = black ? "Black" : "White";
 			}
 
@@ -1352,13 +1371,23 @@ function backgroundPanel(settings) {
 
 		preview();
 
-		// The glass: nothing is kept until Save. Every change shows at once
-		// on this page; Cancel puts it back as it was saved, and leaving the
-		// page without saving keeps nothing. Font colour is a pick, like
-		// Appearance Mode beside it: kept as soon as it's picked.
+		// --- Saving the Appearance tab -------------------------------
+		//
+		// Nothing is kept until Save. Everything set on this tab (the glass,
+		// Font colour, Text size, the Back button) shows at once; Cancel
+		// puts it back as it was saved, and leaving the page keeps nothing.
+		// Save and Cancel are there only while something isn't saved.
 		const saveButton = document.getElementById("glass-save");
 		const cancelButton = document.getElementById("glass-cancel");
 		const glassStatus = document.getElementById("glass-status");
+		const saveRow = document.getElementById("appearance-buttons");
+		const saveState = document.getElementById("appearance-state");
+		const size = document.getElementById("size");
+		const backButton = document.querySelector("body > .floating");
+		const cornerMark = document.querySelector(".corner-mark");
+
+		// The Back button's corner as shown now
+		let corner = document.querySelector("#corner-tabs .tab-btn.active").dataset.value;
 
 		function snapshot() {
 			return JSON.stringify({
@@ -1366,84 +1395,133 @@ function backgroundPanel(settings) {
 				auto: auto,
 				pinned: pinned.slice().sort(),
 				tint: tint,
-				brightness: brightness ? Number(brightness.value) : 0
+				brightness: brightness ? Number(brightness.value) : 0,
+				fontColour: fontColour,
+				size: Number(size.value),
+				corner: corner
 			});
 		}
-		let savedGlass = snapshot();
-		let savedFont = fontColour;
+		let saved = snapshot();
 
 		// Whether the last thing done was picking the font colour: then
-		// Save leaves it as picked. Otherwise the server checks it against
-		// the glass, the same way this page did.
+		// Save keeps it as picked. Otherwise, with the glass changed, the
+		// server checks it against the glass, the same way this page did.
+		let glassTouched = false;
 		let fontLast = false;
 
+		// What changed: true for the glass (or the background's
+		// brightness), false for the font colour, null for anything else
+		// (Text size, the Back button)
 		function changed(glass) {
-			if (!glass) {
-				fontLast = true;
-				saveFont();
-				return;
-			}
-			fontLast = false;
-			const dirty = snapshot() !== savedGlass;
-			saveButton.disabled = !dirty;
-			cancelButton.disabled = !dirty;
+			if (glass === true) glassTouched = true;
+			fontLast = glass === false;
+			showSaved();
+		}
+
+		// Save and Cancel only while something differs from what's saved
+		function showSaved() {
+			const dirty = snapshot() !== saved;
+			saveRow.hidden = !dirty;
+			saveButton.disabled = false;
+			cancelButton.disabled = false;
 			glassStatus.textContent = "";
+			saveState.textContent = dirty
+				? "Not saved yet. Cancel, or leaving this page, puts it back."
+				: "Everything on this tab is saved.";
 		}
 
-		// Sends what's on the page; says so only when it couldn't
-		async function sendGlass(body) {
-			try {
-				const response = await fetch("/background/glass", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(body)
-				});
-				if (!response.ok) throw new Error();
-				glassStatus.textContent = "";
-				return await response.json();
-			} catch (error) {
-				glassStatus.className = "status bad";
-				glassStatus.textContent = "Couldn't save.";
-				return null;
+		// Text size: shown at once on this page
+		function showSize(value) {
+			size.value = Math.min(24, Math.max(12, Math.round(Number(value) || 16)));
+			root.style.setProperty("--font-size", size.value + "px");
+		}
+		size.addEventListener("change", function () {
+			showSize(size.value);
+			changed(null);
+		});
+		document.getElementById("size-down").addEventListener("click", function () {
+			showSize(Number(size.value) - 1);
+			changed(null);
+		});
+		document.getElementById("size-up").addEventListener("click", function () {
+			showSize(Number(size.value) + 1);
+			changed(null);
+		});
+
+		// The Back button: moved at once, here and in the preview
+		function showCorner(value) {
+			corner = value;
+			for (const tab of document.querySelectorAll("#corner-tabs .tab-btn")) {
+				const on = tab.dataset.value === value;
+				tab.classList.toggle("active", on);
+				tab.setAttribute("aria-pressed", on ? "true" : "false");
+			}
+			if (backButton) {
+				backButton.classList.toggle("top-left", value === "top-left");
+				backButton.classList.toggle("bottom-right", value !== "top-left");
+			}
+			if (cornerMark) {
+				cornerMark.classList.toggle("corner-mark-top-left", value === "top-left");
+				cornerMark.classList.toggle("corner-mark-bottom-right", value !== "top-left");
 			}
 		}
+		for (const tab of document.querySelectorAll("#corner-tabs .tab-btn")) {
+			tab.addEventListener("click", function () {
+				showCorner(tab.dataset.value);
+				changed(null);
+			});
+		}
 
-		async function saveFont() {
-			const picked = fontColour;
-			if (await sendGlass({ fontColour: picked })) savedFont = picked;
+		// Sends one part of the tab; says so only when it couldn't
+		async function sendPart(address, body) {
+			const response = await fetch(address, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body)
+			});
+			if (!response.ok) throw new Error();
+			return response.json();
 		}
 
 		saveButton.addEventListener("click", async function () {
 			saveButton.disabled = true;
 			cancelButton.disabled = true;
-			const kept = await sendGlass({
-				blur: hand.blur,
-				tintStrength: hand.tintStrength,
-				dim: hand.dim,
-				auto: auto,
-				pinned: pinned,
-				tint: tint,
-				brightness: brightness ? Number(brightness.value) : undefined,
-				fontColour: fontColour,
-				recheck: !fontLast
-			});
-			if (!kept) {
+			const was = JSON.parse(saved);
+			try {
+				const kept = await sendPart("/background/glass", {
+					blur: hand.blur,
+					tintStrength: hand.tintStrength,
+					dim: hand.dim,
+					auto: auto,
+					pinned: pinned,
+					tint: tint,
+					brightness: brightness ? Number(brightness.value) : undefined,
+					fontColour: fontColour,
+					recheck: glassTouched && !fontLast
+				});
+				if (was.size !== Number(size.value) || was.corner !== corner) {
+					await sendPart("/appearance", { uiFontSize: Number(size.value), backButtonCorner: corner });
+				}
+				// What the server kept (the same, as it works it out the
+				// same way)
+				if (kept.fontColour && kept.fontColour !== fontColour) {
+					fontColour = kept.fontColour;
+					preview();
+				}
+				saved = snapshot();
+				glassTouched = false;
+				fontLast = false;
+				showSaved();
+			} catch (error) {
+				glassStatus.className = "status bad";
+				glassStatus.textContent = "Couldn't save.";
 				saveButton.disabled = false;
 				cancelButton.disabled = false;
-				return;
 			}
-			// What the server kept (the same, as it works it out the same
-			// way)
-			if (kept.fontColour && kept.fontColour !== fontColour) {
-				fontColour = kept.fontColour;
-				preview();
-			}
-			savedGlass = snapshot();
-			savedFont = fontColour;
 		});
 
 		cancelButton.addEventListener("click", function () {
-			const was = JSON.parse(savedGlass);
+			const was = JSON.parse(saved);
 			hand.blur = was.hand.blur;
 			hand.tintStrength = was.hand.tintStrength;
 			hand.dim = was.hand.dim;
@@ -1453,12 +1531,13 @@ function backgroundPanel(settings) {
 			tint = was.tint;
 			if (/^#/.test(tint)) custom.value = tint;
 			if (brightness) brightness.value = was.brightness;
-			fontColour = savedFont;
+			fontColour = was.fontColour;
+			showSize(was.size);
+			showCorner(was.corner);
+			glassTouched = false;
 			fontLast = false;
 			preview();
-			saveButton.disabled = true;
-			cancelButton.disabled = true;
-			glassStatus.textContent = "";
+			showSaved();
 		});
 
 		// --- Changing the background: the dialog --------------------------
@@ -1974,7 +2053,7 @@ function backgroundPanel(settings) {
 		})();
 	`;
 
-	return { backgroundBox, glassBox, backgroundModal, fontColourField, script };
+	return { backgroundBox, glassBox, actionsBox, backgroundModal, fontColourField, script };
 }
 
 // The server's address on the home network, the one other devices use to
@@ -2593,7 +2672,7 @@ function placeSearchPanel(settings) {
 	const anySaved = services.some((service) => service.keySaved);
 
 	const placeBox = `
-		<div class="segment c2 r2" id="place-search">
+		<div class="segment c2 r3" id="place-search">
 			<h2>Place search</h2>
 			<p class="lede">
 				Where a search for a city looks: in the Location Service, on a
@@ -3000,11 +3079,6 @@ function startAdminFace() {
 			: "No location available. Detection may have failed.";
 
 		const manualLocation = settings.locationMode === "manual";
-		// This browser's own choice: "light", "dark", or null when it
-		// follows the device
-		const uiMode = currentUiMode();
-		const modeLabel = (mode, name) =>
-			name + (uiMode === mode ? " (Active)" : "");
 
 		// --- General --------------------------------------------------------
 
@@ -3093,47 +3167,6 @@ function startAdminFace() {
 
 		const glassParts = backgroundPanel(settings);
 
-		const modeBox = `
-			<div class="segment c3 row2 lends-room">
-				<div class="box-head">
-					<h2>Appearance Mode</h2>
-					${infoTip(
-						"Saved in this browser only, so each screen can have its own. Device follows this device's own setting.",
-						"About Appearance Mode"
-					)}
-				</div>
-				<div class="mode-previews narrow-previews">
-					<div class="mode-preview ${uiMode === "dark" ? "active" : ""}"
-						data-mode="dark" role="button" tabindex="0">
-						<div class="mode-screen dark">
-							<span class="line head"></span>
-							<span class="line"></span>
-						</div>
-						<div class="mode-preview-label">${modeLabel("dark", "Dark")}</div>
-					</div>
-					<div class="mode-preview ${uiMode === "light" ? "active" : ""}"
-						data-mode="light" role="button" tabindex="0">
-						<div class="mode-screen light">
-							<span class="line head"></span>
-							<span class="line"></span>
-						</div>
-						<div class="mode-preview-label">${modeLabel("light", "Light")}</div>
-					</div>
-					<div class="mode-preview ${uiMode ? "" : "active"}"
-						data-mode="device" role="button" tabindex="0">
-						<div class="mode-screen mode-screen-split">
-							<div class="dark">
-								<span class="line head"></span>
-							</div>
-							<div class="light">
-								<span class="line head"></span>
-							</div>
-						</div>
-						<div class="mode-preview-label">${modeLabel(null, "Device")}</div>
-					</div>
-				</div>
-			</div>`;
-
 		const textBox = `
 			<div class="segment c3 row2 borrows-room">
 				<div class="type-head">
@@ -3204,8 +3237,16 @@ function startAdminFace() {
 
 		const body = settingsHome.homeHtml(
 			{
-				general: locationBox + places.placeBox + places.keysBox + places.tryBox,
-				appearance: glassParts.glassBox + glassParts.backgroundBox + modeBox + textBox,
+				general:
+					locationBox +
+					places.placeBox +
+					places.keysBox +
+					places.tryBox +
+					// Room kept for what's coming to this tab: an empty box
+					// under Saved keys and Try a city search, so the tab ends
+					// level like the others
+					`<div class="segment c4 row3" id="general-more" aria-hidden="true"></div>`,
+				appearance: glassParts.glassBox + glassParts.backgroundBox + glassParts.actionsBox + textBox,
 				resources: resourcesPane,
 				about: updates.aboutBox + updates.updatesBox + updates.notesBox
 			},
@@ -3391,64 +3432,6 @@ function startAdminFace() {
 					status.className = "status bad";
 					this.disabled = false;
 				}
-			});
-
-			// --- Appearance -------------------------------------------
-			async function saveAppearance(patch) {
-				const response = await fetch("/appearance", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify(patch)
-				});
-
-				if (response.ok) {
-					location.reload();
-				}
-			}
-
-			// Light, Dark or Device is this browser's own, so it's kept
-			// in a cookie here rather than saved on the server
-			// (Only the Appearance Mode cards: the Font colour cards look
-			// the same and have their own script)
-			for (const preview of document.querySelectorAll(".mode-preview[data-mode]")) {
-				const choose = function () {
-					setUiMode(preview.dataset.mode);
-				};
-
-				preview.addEventListener("click", choose);
-				preview.addEventListener("keydown", function (event) {
-					if (event.key === "Enter" || event.key === " ") {
-						event.preventDefault();
-						choose();
-					}
-				});
-			}
-
-			for (const corner of document.querySelectorAll("#corner-tabs .tab-btn:not(.active)")) {
-				corner.addEventListener("click", function () {
-					saveAppearance({ backButtonCorner: corner.dataset.value });
-				});
-			}
-
-			const size = document.getElementById("size");
-
-			size.addEventListener("change", function () {
-				const clamped = Math.min(24, Math.max(12, Number(size.value) || 16));
-				size.value = clamped;
-				saveAppearance({ uiFontSize: clamped });
-			});
-
-			function stepSize(delta) {
-				const next = Math.min(24, Math.max(12, Number(size.value) + delta));
-				size.value = next;
-				saveAppearance({ uiFontSize: next });
-			}
-
-			document.getElementById("size-down").addEventListener("click", function () {
-				stepSize(-1);
-			});
-			document.getElementById("size-up").addEventListener("click", function () {
-				stepSize(1);
 			});
 
 			// --- Fonts -------------------------------------------------

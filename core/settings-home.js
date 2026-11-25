@@ -425,11 +425,20 @@ const HOME_SCRIPT = `
 	// half gets all it wants, and the other row the rest; if both want
 	// more than half, they get half each. So one tall box can't squeeze
 	// the other row down to nothing. (Resources has its own even rows.)
+	//
+	// A tab with a third row (General): the first two get what they want
+	// and the third the rest, as long as that leaves it at least 4em.
+	// When it doesn't, the third row's boxes step aside (hidden: they're
+	// only room kept for later), a box three rows tall is two
+	// (--tall-rows), and the first two share the height as above.
 	function rows(bento) {
 		var first = bento.querySelectorAll(":scope > .row1");
 		var second = bento.querySelectorAll(":scope > .row2");
+		var third = bento.querySelectorAll(":scope > .row3");
 		if (!wide.matches || !first.length || !second.length || bento.querySelector(".home-tile")) {
 			if (bento.style.getPropertyValue("--rows")) bento.style.removeProperty("--rows");
+			bento.style.removeProperty("--tall-rows");
+			third.forEach(function (box) { box.hidden = false; });
 			return;
 		}
 
@@ -442,14 +451,26 @@ const HOME_SCRIPT = `
 		bento.classList.remove("measuring");
 
 		var gap = parseFloat(getComputedStyle(bento).rowGap) || 0;
-		var room = bento.clientHeight - gap;
-		var half = room / 2;
-		var top;
-		if (want1 + want2 <= room || want1 <= half) top = want1;
-		else if (want2 <= half) top = room - want2;
-		else top = half;
+		var value;
+		if (third.length) {
+			var least = 4 * (parseFloat(getComputedStyle(bento).fontSize) || 16);
+			var fits = bento.clientHeight - 2 * gap - want1 - want2 >= least;
+			third.forEach(function (box) { box.hidden = !fits; });
+			if (fits) bento.style.removeProperty("--tall-rows");
+			else bento.style.setProperty("--tall-rows", "2");
+			if (fits) value = Math.floor(want1) + "px " + Math.floor(want2) + "px minmax(0, 1fr)";
+		}
 
-		var value = Math.max(0, Math.floor(top)) + "px minmax(0, 1fr)";
+		if (!value) {
+			var room = bento.clientHeight - gap;
+			var half = room / 2;
+			var top;
+			if (want1 + want2 <= room || want1 <= half) top = want1;
+			else if (want2 <= half) top = room - want2;
+			else top = half;
+			value = Math.max(0, Math.floor(top)) + "px minmax(0, 1fr)";
+		}
+
 		if (bento.style.getPropertyValue("--rows") !== value) bento.style.setProperty("--rows", value);
 	}
 

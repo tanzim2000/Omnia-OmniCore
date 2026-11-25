@@ -277,8 +277,8 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 		return text.slice(start, next === -1 ? text.indexOf('id="font-modal"') : next);
 	};
 	for (const [id, boxes] of [
-		["general", ["Location Service", "Place search", "Saved keys", "Try a city search"]],
-		["appearance", ["Frosted glass", "Background", "Appearance Mode", "<h2>Typography</h2>"]],
+		["general", ["Location Service", "Place search", "Saved keys", "Try a city search", 'id="general-more"']],
+		["appearance", ["Frosted glass", "Background", 'id="appearance-actions"', "<h2>Typography</h2>"]],
 		["resources", ["Network", "Manage Faces", "Marketplace", "Installed Resources"]],
 		["about", ["OmniCore 2.0.", "Address", "Updates", "Release notes"]]
 	]) {
@@ -297,11 +297,11 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	// the search box, the Marketplace beside the other two
 	assert.match(pane("appearance"), /class="segment c4 row1" id="glass"/);
 	assert.match(pane("appearance"), /class="segment c2 row1" id="background"/);
-	// Appearance Mode and Typography share the second row; the mode box
+	// The saving box and Typography share the second row; the saving box
 	// lends the Typography box its empty room (see the CSS test below),
 	// and the Typography box has the note on the left, the stepper on the
 	// right, and Font colour and the font underneath, in a row
-	assert.match(pane("appearance"), /class="segment c3 row2 lends-room"/);
+	assert.match(pane("appearance"), /class="segment c3 row2 lends-room tab-actions"/);
 	assert.match(pane("appearance"), /class="segment c3 row2 borrows-room"/);
 	const typeHead = pane("appearance").slice(pane("appearance").indexOf('class="type-head"'));
 	assert.ok(typeHead.indexOf("type-head-text") < typeHead.indexOf('class="stepper"'), "the note, then the stepper");
@@ -316,7 +316,14 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	}
 	assert.match(theme.SETTINGS_HOME_CSS, /\.home-bento > \.lends-room \{ width: calc\(100% - min\(15%, 5em\)\); \}/);
 	assert.match(theme.SETTINGS_HOME_CSS, /\.home-bento > \.borrows-room \{ margin-left: calc\(-1 \* min\(15%, 5em\)\); \}/);
-	assert.match(pane("general"), /class="segment c2 r2" id="place-search"/);
+	// General: Place search three rows tall, and an empty box kept for
+	// what's coming under Saved keys and the search box, so the tab ends
+	// level like the others
+	assert.match(pane("general"), /class="segment c2 r3" id="place-search"/);
+	assert.match(pane("general"), /<div class="segment c4 row3" id="general-more" aria-hidden="true"><\/div>/);
+	assert.match(theme.SETTINGS_HOME_CSS, /\.home-bento:has\(> \.row3\) \{ grid-template-rows: var\(--rows, minmax\(0, auto\) minmax\(0, auto\) minmax\(0, 1fr\)\); \}/);
+	// Every tab ends level: the second row's boxes reach the bottom
+	assert.match(theme.SETTINGS_HOME_CSS, /\.home-bento \.row2 \{ grid-row: 2; align-self: stretch; \}/);
 	assert.match(pane("general"), /class="segment c2 row2" id="saved-keys"/);
 	assert.match(pane("general"), /class="segment c2 row2" id="place-try"/);
 	assert.match(pane("resources"), /class="segment clickable home-tile c2 r2" href="\/marketplace"/);

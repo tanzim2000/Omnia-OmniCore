@@ -189,10 +189,17 @@ the plan didn't say:
   new face) and the floating Back button get the tint and Dim like a box.
 - **A slider moved by hand is pinned at once, and says so** ("Pinned",
   which can be pressed to let Auto have it back).
-- **Save and Cancel** (after the second build): the Frosted glass box
-  shows every change at once and keeps nothing until Save. Cancel, or
-  leaving the page, puts it back. No "Saved." line. Font colour is kept
-  as soon as it's picked, like Appearance Mode.
+- **Save and Cancel for the whole Appearance tab** (after the third
+  build): the glass, Font colour, Text size and the Back button show at
+  once and are kept only with Save; Cancel, or leaving the page, puts
+  them back. In an untitled box where Appearance Mode was, there only
+  while something isn't saved, with the warning, so no box changes
+  height. No "Saved." line.
+- **A page's title on the background** is white or black by the
+  background itself, never the font colour (after the third build).
+- **Tabs end level** (after the third build): the second row's boxes
+  reach the bottom; General gets an empty box on a third row for what's
+  coming.
 - **Over a colour** (after the second build): no Dominant or Vibrant (they
   would only tint the glass with the colour behind it), and Colour
   brightness mixes white in to brighten, so black can get lighter.
@@ -265,7 +272,9 @@ The plan, as decided:
 ### B. Appearance profiles
 
 - **Light and Dark mode go away for good.** User-made profiles replace
-  them, and the Appearance Mode box with them.
+  them. (The Appearance Mode box is already gone: its place is the
+  Appearance tab's saving box. A browser's earlier pick still counts
+  until profiles arrive.)
 - **A profile is one `.ocap` file** (OmniCore Appearance Profile): its
   settings and its wallpaper inside. It **can't be made without a wallpaper
   or a colour**.

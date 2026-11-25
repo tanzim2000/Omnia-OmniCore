@@ -268,7 +268,7 @@ const sections = [
 				id: "button-row",
 				title: "Buttons in a row",
 				sel: ".buttons (.to-end)",
-				desc: "A few buttons side by side, each as wide as its words, wrapping onto a second line when there isn't room (Join and Cancel under a password). With .to-end the row sits at the end of its box with its buttons on the right and a .status line on their left (the Frosted glass box's Cancel and Save, two coloured buttons). A pop-up's last row is the same element with .dialog-buttons, which makes every button equally wide: see the pop-up question below.",
+				desc: "A few buttons side by side, each as wide as its words, wrapping onto a second line when there isn't room (Join and Cancel under a password). With .to-end the row sits at the end of its box with its buttons on the right and a .status line on their left (the Appearance tab's Cancel and Save, two coloured buttons). A pop-up's last row is the same element with .dialog-buttons, which makes every button equally wide: see the pop-up question below.",
 				demo: '<div class="buttons"><button class="glass">Join</button><button class="glass">Cancel</button></div>',
 				code: '<div class="buttons">\n\t<button class="glass">Join</button>\n\t<button class="glass">Cancel</button>\n</div>'
 			},
@@ -714,7 +714,7 @@ const sections = [
 				id: "auto-toggle",
 				title: "Auto, and a slider it leaves alone",
 				sel: ".auto-switch · .slider-head > .badge.badge-button · .glass-warning",
-				desc: "The Frosted glass box's one Auto (<b>.auto-switch</b>, a switch with its word, in the box's head), and each slider's label with what's at the other end of its line (<b>.slider-head</b>): a Pinned badge when the slider was moved by hand, so Auto leaves it alone. The badge is a button (<b>.badge-button</b>): pressed, Auto may move that slider again. Under the sliders, a note when the text may be hard to read (<b>.glass-warning</b>, in the text colour).",
+				desc: "The Frosted glass box's one Auto (<b>.auto-switch</b>, a switch with its word, in the box's head), and each slider's label with what's at the other end of its line (<b>.slider-head</b>): a Pinned badge when the slider was moved by hand, so Auto leaves it alone. The badge is a button (<b>.badge-button</b>): pressed, Auto may move that slider again. A note when the text may be hard to read (<b>.glass-warning</b>, in the text colour), in the Appearance tab's saving box.",
 				demo: `<div class="field" style="max-width:24em;margin:0"><div class="slider-head"><label>Dim 23%</label><button type="button" class="badge badge-button">Pinned</button></div><input type="range" value="23"></div><label class="auto-switch"><span>Auto</span><input type="checkbox" role="switch" checked></label>`,
 				code: "<label class=\"auto-switch\"><span>Auto</span><input type=\"checkbox\" role=\"switch\" id=\"glass-auto\"></label>\n\n<div class=\"slider-head\">\n\t<label for=\"dim\">Dim <span class=\"muted\">23%</span></label>\n\t<button type=\"button\" class=\"badge badge-button\">Pinned</button>\n</div>"
 			}
@@ -749,6 +749,14 @@ const sections = [
 				desc: "A box's heading and its note on the left and a control on the right (Typography's size stepper), and underneath a row of what follows (<b>.type-row</b>: two strips side by side, Font colour's and the font's). On a narrow screen the control drops under the note rather than squeezing it, and the strip under the buttons.",
 				demo: `<div class="type-head" style="max-width:30em"><div class="type-head-text"><h2 style="margin:0">Typography</h2><p class="hint">Dashboards are unaffected.</p></div><div class="stepper"><button class="glass" aria-label="Smaller">&minus;</button><input type="number" value="16"><span class="unit">px</span><button class="glass" aria-label="Bigger">+</button></div></div>`,
 				code: "<div class=\"type-head\">\n\t<div class=\"type-head-text\"><h2>Typography</h2><p class=\"hint\">…</p></div>\n\t<div class=\"stepper\">…</div>\n</div>\n<div class=\"type-row\">\n\t<div class=\"inset\">…COLOUR…</div>\n\t<div class=\"inset\">…FONT…</div>\n</div>"
+			},
+			{
+				id: "tab-actions",
+				title: "Saving a tab",
+				sel: ".tab-actions",
+				desc: "A tab's saving box (the Appearance tab's), with no heading: a line saying whether everything on the tab is saved, a warning when there's one, and Cancel and Save (a <b>.buttons.to-end</b> row) at its bottom right, there only while something isn't saved. Everything on the tab shows at once; nothing is kept until Save, and Cancel, or leaving the page, puts it back. Its height never changes with what it says.",
+				demo: '<div class="segment tab-actions" style="max-width:26em;min-height:9em"><p class="hint">Not saved yet. Cancel, or leaving this page, puts it back.</p><div class="buttons to-end"><button type="button" class="btn-glossy btn-glossy-neutral">Cancel</button><button type="button" class="btn-glossy btn-glossy-green">Save</button></div></div>',
+				code: '<div class="segment c3 row2 tab-actions">\n\t<p class="hint" id="appearance-state">Everything on this tab is saved.</p>\n\t<p class="help glass-warning" hidden></p>\n\t<div class="buttons to-end" hidden>\n\t\t<span class="status"></span>\n\t\t<button class="btn-glossy btn-glossy-neutral">Cancel</button>\n\t\t<button class="btn-glossy btn-glossy-green">Save</button>\n\t</div>\n</div>'
 			},
 			{
 				id: "font-swatches",
@@ -1058,8 +1066,8 @@ const sections = [
 			{
 				id: "tab-grid",
 				title: "Tab grid",
-				sel: ".home-bento (+ .measuring) > .segment (.c2, .c3, .c4, .c6, .r2, .row1, .row2, .box-scroll, .float-open) · .home-bento .backdrop-preview",
-				desc: "A tab's boxes, on six columns: <b>.c2</b>, <b>.c3</b> and <b>.c4</b> span that many, <b>.c6</b> the whole width, <b>.r2</b> two rows. On a tab, the grid goes sideways: two rows that fit the screen's height (<b>.row1</b>, <b>.row2</b> say which a box is on), and columns that go on to the right, so more boxes make the tab wider, not taller. The script shares the height out fairly between the rows (<code>--rows</code>), and a box with more in it than its place holds scrolls inside itself (<b>.box-scroll</b>), unless a search list is open in it (<b>.float-open</b>). A background preview in it is a strip. On a phone held upright it's one column.",
+				sel: ".home-bento (+ .measuring) > .segment (.c2, .c3, .c4, .c6, .r2, .r3, .row1, .row2, .row3, .box-scroll, .float-open) · .home-bento .backdrop-preview",
+				desc: "A tab's boxes, on six columns: <b>.c2</b>, <b>.c3</b> and <b>.c4</b> span that many, <b>.c6</b> the whole width, <b>.r2</b> two rows. On a tab, the grid goes sideways: two rows that fit the screen's height (<b>.row1</b>, <b>.row2</b> say which a box is on, and every box on the second reaches the bottom, so a tab ends level), and columns that go on to the right, so more boxes make the tab wider, not taller. The script shares the height out fairly between the rows (<code>--rows</code>), and a box with more in it than its place holds scrolls inside itself (<b>.box-scroll</b>), unless a search list is open in it (<b>.float-open</b>). A tab can have a third row (<b>.row3</b>, General's): the first two as tall as their boxes need, the third the rest, with <b>.r3</b> for a box three rows tall; on a screen too short for it, its empty boxes (kept for what's coming) step aside, and they're never drawn on a phone. A background preview in it is a strip. On a phone held upright it's one column.",
 				demo: `<div class="home-bento" style="max-width:40em"><div class="segment c4"><h2>c4</h2></div><div class="segment c2"><h2>c2</h2></div><div class="segment c2"><h2>c2</h2></div><div class="segment c2"><h2>c2</h2></div><div class="segment c2"><h2>c2</h2></div></div>`,
 				code: '<div class="home-bento">\n\t<div class="segment c4 row1">…</div>\n\t<div class="segment c2 r2">…</div>\n\t<div class="segment c2 row2">…</div>\n</div>'
 			},

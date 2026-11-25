@@ -808,6 +808,26 @@ function onPictureShadow(black) {
 	return "0 0 2px rgba(" + c + ", 0.9), 0 1px 4px rgba(" + c + ", 0.8), 0 0 16px rgba(" + c + ", 0.7), 0 0 40px rgba(" + c + ", 0.5)";
 }
 
+// Text drawn straight on the background, with no glass under it (a
+// page's title): white or black by the background itself, at its
+// brightness, never by the font colour. The font colour is for text on
+// the glass; black over a black picture, with only a glow to show it,
+// can't be read. `input` is { mean, brightness, colour }: the background's
+// overall brightness (luminance, 0 to 1), the brightness slider (-50 to
+// +50), and whether it's a colour (brighter by white laid over it) rather
+// than a picture (brighter by multiplying).
+//
+// A plain function, so the settings page can be sent its source too.
+function onPictureText(input) {
+	var light = Math.max(0, Math.min(1, Number(input.mean) || 0));
+	var factor = 1 + (Number(input.brightness) || 0) / 100;
+	var value = light <= 0.0031308 ? light * 12.92 : 1.055 * Math.pow(light, 1 / 2.4) - 0.055;
+	value = input.colour && factor > 1 ? value + (1 - value) * (factor - 1) : Math.min(1, value * factor);
+	light = value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
+	// Whichever reads better: white against it, or black (#111) against it
+	return 1.05 / (light + 0.05) >= (light + 0.05) / 0.0556 ? "white" : "black";
+}
+
 // CSS variables for the glass and the picture, for one Appearance Mode
 // (light or dark). Part of uiStyles in ui-theme.js, after the palette
 // (which glassFor's `set` picked).
@@ -815,7 +835,9 @@ function glassVariables(settings, light) {
 	const glass = glassFor(settings, light);
 	const picture = hasBackdrop(settings);
 	const tint = tintColour(settings);
-	const black = glass.set === "light";
+	const onIt = picture
+		? onPictureText({ mean: settings.backgroundMean, brightness: settings.pictureBrightness, colour: hasColour(settings) })
+		: null;
 	const brightness = Math.min(BRIGHTNESS_MOST, Math.max(BRIGHTNESS_LEAST, Number(settings.pictureBrightness) || 0));
 
 	return `
@@ -837,8 +859,10 @@ function glassVariables(settings, light) {
 		--segment-edge: rgba(255, 255, 255, 0.16);
 		--glass-saturate: 1.4;
 		/* Text drawn straight on the picture, with no glass under it (a
-		   page's title): a soft shadow the other way round from the text */
-		--on-picture-shadow: ${onPictureShadow(black)};`
+		   page's title): white or black by the picture itself, whatever
+		   the font colour, with a soft shadow the other way round */
+		--on-picture-fg: ${onIt === "black" ? "#111" : "#fff"};
+		--on-picture-shadow: ${onPictureShadow(onIt === "black")};`
 				: `
 		--segment-edge: transparent;
 		--glass-saturate: 1;
@@ -1081,6 +1105,7 @@ module.exports = {
 	glassFor,
 	tintWithDim,
 	onPictureShadow,
+	onPictureText,
 	hasPicture,
 	glassVariables,
 	backdropHtml,

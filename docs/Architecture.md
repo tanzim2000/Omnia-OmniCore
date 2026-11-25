@@ -1587,13 +1587,20 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   better (its sliders starting again from where they start), it's
   switched and saved. Picking the font colour sends no `recheck`, so it's
   never undone straight away. The page does the same as it goes.
-- **Saving the glass:** the Appearance tab shows every change at once but
-  sends nothing until **Save** (`POST /background/glass` with every value
-  and `recheck`, unless the last thing done was picking the font colour).
+- **Saving the Appearance tab:** the glass, Font colour, Text size and
+  the Back button's corner show at once on the page and are sent only on
+  **Save** (`POST /background/glass` with every value and `recheck`,
+  unless the last thing done was picking the font colour; then
+  `POST /appearance` for Text size and the corner, if they changed).
   **Cancel** puts the page back as it was saved; leaving the page keeps
-  nothing. Save and Cancel are greyed out until something differs from
-  what's saved. A font colour pick is sent as soon as it's made
-  (`fontColour` alone, no `recheck`).
+  nothing. Save and Cancel are in the tab's saving box (`.tab-actions`,
+  no heading, where Appearance Mode was) only while something differs
+  from what's saved; the warning that text may be hard to read is said
+  there too, so the Frosted glass box never changes height.
+- **A page's title on the background** (`onPictureText`, sent as it is
+  to the Appearance tab too): white or black by the background's overall
+  brightness at its brightness slider, never the font colour
+  (`--on-picture-fg`), with the shadow the other way round.
 - **Glass stays glass** over a picture or a colour (`overPicturePalette`
   in `uiStyles`): every fill, edge, sheen, input box and track is the dark
   palette's, whatever the mode and the font colour; only the text's own
@@ -1606,9 +1613,11 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
 
 Since v2 the settings home (`GET /` on the admin face) is four tabs on one
 page, switched by a small script (`settings-home.js`): **General**
-(Location Service, Place search, Saved keys, a box to try a search),
+(Location Service, Place search, Saved keys, a box to try a search, and
+an empty box on a third row kept for what's coming; every tab's second
+row reaches the bottom, so tabs end level),
 **Appearance** (Frosted glass, Background with a Back button: Top left |
-Bottom right switch, Appearance Mode, Typography), **Resources** (Network,
+Bottom right switch, the tab's saving box, Typography), **Resources** (Network,
 Manage Faces, Installed Resources, the Marketplace: Manage Faces wide on
 top, Network and Installed Resources under it, the Marketplace tall on the
 right; on a phone in that order, Network first) and **About** (the version and the address, the

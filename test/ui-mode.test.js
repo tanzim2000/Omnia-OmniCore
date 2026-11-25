@@ -147,19 +147,17 @@ test("ui mode: the page follows this browser's cookie", async () => {
 	assert.ok(junk.html.includes("prefers-color-scheme: light"), "junk counts as no choice");
 });
 
-test("settings: the Appearance tile has Dark, Light and Device, marked for this browser", async () => {
+test("settings: no Appearance Mode box any more; a browser's pick still counts", async () => {
+	// Its place on the Appearance tab is the tab's saving box. Light and
+	// Dark go for good with appearance profiles; until then a browser's
+	// earlier pick still decides
 	const device = await get("/");
-	assert.ok(device.html.includes('data-mode="device"'));
-	assert.ok(device.html.includes("Device (Active)"), "no cookie: Device");
-	assert.ok(!device.html.includes("Dark (Active)"));
-	assert.ok(device.html.includes("Saved in this browser only"));
+	assert.ok(!device.html.includes('data-mode="device"'));
+	assert.ok(!device.html.includes("Device (Active)"));
+	assert.ok(!device.html.includes("setUiMode(preview.dataset.mode)"));
 
 	const light = await get("/", "omnicore_ui_mode=light");
-	assert.ok(light.html.includes("Light (Active)"));
-	assert.ok(!light.html.includes("Device (Active)"));
-
-	// Picking one sets the cookie in the page; nothing is posted
-	assert.ok(light.html.includes("setUiMode(preview.dataset.mode)"));
+	assert.ok(light.html.includes(LIGHT_BG));
 });
 
 test("face: notifications are dark until changed, and only light or dark is kept", async () => {

@@ -431,7 +431,7 @@ test("pages: Place search on Settings' General tab, with keys never on it", asyn
 	const { status, text } = await get(3000, "/");
 	assert.equal(status, 200);
 	const general = text.slice(text.indexOf('data-pane="general"'), text.indexOf('data-pane="appearance"'));
-	assert.ok(general.includes('<div class="segment c2 r2" id="place-search">'), "on the General tab");
+	assert.ok(general.includes('<div class="segment c2 r3" id="place-search">'), "on the General tab");
 	assert.ok(!text.includes("my-geonames-user"), "the saved key isn't on the page");
 	assert.match(general, /<option value="geonames" selected>GeoNames \(needs a username\)<\/option>/);
 	assert.ok(!general.includes('value="google"'), "Google isn't offered");

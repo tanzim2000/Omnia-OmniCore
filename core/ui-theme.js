@@ -605,10 +605,13 @@ function settingsPagesCss() {
 	}
 	.font-swatch::before,
 	.font-swatch::after { content: ""; position: absolute; inset: 0; }
+	/* The piece of background is clipped to the button itself: a blurred
+	   layer can otherwise be drawn a little past a rounded corner by some
+	   browsers, a dark line along the top */
 	.font-swatch::before {
 		background: var(--swatch-picture, var(--bg)) center / cover;
 		filter: brightness(var(--backdrop-brightness, 1)) blur(2px);
-		transform: scale(1.1);
+		clip-path: inset(0);
 	}
 	/* Over a colour: brighter by white laid over it, as the colour behind
 	   the page is (.omni-colour) */
@@ -1337,7 +1340,10 @@ function settingsPagesCss() {
 		font-size: 0.85em;
 		color: var(--fg);
 		border: 1px solid var(--glass-border);
-		background: var(--segment-bg);
+		/* The same glass as the real button: its fill, tint and Dim, so
+		   its arrow reads as it does there */
+		background-color: var(--segment-bg);
+		background-image: linear-gradient(var(--glass-tint, transparent), var(--glass-tint, transparent));
 		backdrop-filter: blur(8px);
 		-webkit-backdrop-filter: blur(8px);
 		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
@@ -2718,6 +2724,7 @@ const SETTINGS_HOME_CSS = `
 	.home-bento .c4 { grid-column: span 4; }
 	.home-bento .c6 { grid-column: 1 / -1; }
 	.home-bento .r2 { grid-row: span 2; align-self: stretch; }
+	.home-bento .r3 { grid-row: span 3; align-self: stretch; }
 
 	/* Lending room: a box with empty room at its end (.lends-room) gives
 	   a little of it to the box after it (.borrows-room), which starts
@@ -2773,8 +2780,16 @@ const SETTINGS_HOME_CSS = `
 		   (sideways, it fills each column top to bottom first). The boxes
 		   of the first row end level with each other. */
 		html.home-tabs .home-bento .row1 { grid-row: 1; align-self: stretch; }
-		html.home-tabs .home-bento .row2 { grid-row: 2; }
+		html.home-tabs .home-bento .row2 { grid-row: 2; align-self: stretch; }
 		html.home-tabs .home-bento .r2 { grid-row: 1 / span 2; }
+
+		/* A tab with a third row (General): the first two as tall as their
+		   boxes need, the third the rest, so every tab ends level (the
+		   script works it out, through --rows; this is how it starts). A
+		   box three rows tall (r3) fills all three. */
+		html.home-tabs .home-bento:has(> .row3) { grid-template-rows: var(--rows, minmax(0, auto) minmax(0, auto) minmax(0, 1fr)); }
+		html.home-tabs .home-bento .row3 { grid-row: 3; align-self: stretch; }
+		html.home-tabs .home-bento .r3 { grid-row: 1 / span var(--tall-rows, 3); }
 
 		/* Resources: four big tiles that fill the screen, two rows of the
 		   same height. Each has its own place, whatever order the page
@@ -2804,7 +2819,7 @@ const SETTINGS_HOME_CSS = `
 
 		/* For a moment, while the script measures the height each box
 		   wants: every box at its natural height */
-		html.home-tabs .home-bento.measuring { grid-template-rows: auto auto !important; }
+		html.home-tabs .home-bento.measuring { grid-template-rows: auto auto auto !important; }
 		html.home-tabs .home-bento.measuring > .segment { max-height: none; align-self: start; }
 	}
 
@@ -2895,7 +2910,9 @@ const SETTINGS_HOME_CSS = `
 		html:not(.home-tabs) .home-pane { padding: 0 1em 2em; }
 		.home-bento { grid-template-columns: minmax(0, 1fr); }
 		.home-bento .c2, .home-bento .c3, .home-bento .c4 { grid-column: 1 / -1; }
-		.home-bento .r2 { grid-row: auto; }
+		.home-bento .r2, .home-bento .r3 { grid-row: auto; }
+		/* An empty box kept for later (General's) isn't drawn on a phone */
+		.home-bento > .segment:empty { display: none; }
 		.home-tile { min-height: 7.5em; }
 	}
 
@@ -3083,17 +3100,17 @@ function uiStyles(options) {
 	// keeps text readable (its Dim). The few things drawn straight on the
 	// picture, with no box under them, need help of their own:
 	//   - a page's title, and the line under it (the welcome face's, the
-	//     setup wizard's): a soft shadow the other way round from their
-	//     colour (--on-picture-shadow, from backdrop.js), and that line in
-	//     the text's full colour rather than its quieter grey
+	//     setup wizard's): white or black by the background itself, never
+	//     the font colour, which is for text on the glass
+	//     (--on-picture-fg), with a soft shadow the other way round
+	//     (--on-picture-shadow), both from backdrop.js
 	//   - a glass button that isn't in a box (Create a new face, on the
 	//     welcome face): the glass's tint and Dim, like a box has, hovered
 	//     or not
 	const overPicture = backdrop.hasBackdrop(settings)
 		? `
 	body { background-image: none; }
-	:is(h1, h1 + .lede):not(.segment *, .modal *) { text-shadow: var(--on-picture-shadow); }
-	h1 + .lede:not(.segment *, .modal *) { color: var(--fg); }
+	:is(h1, h1 + .lede):not(.segment *, .modal *) { color: var(--on-picture-fg); text-shadow: var(--on-picture-shadow); }
 	.glass:not(.segment *, .modal *),
 	.glass:not(.segment *, .modal *):hover,
 	.glass:not(.segment *, .modal *):focus-visible {
@@ -3699,9 +3716,17 @@ function uiStyles(options) {
 	.buttons { display: flex; flex-wrap: wrap; gap: 0.6em; }
 	/* .to-end: the row at the end of its box, its buttons on the right,
 	   with a line said beside them (Couldn't save.) on their left. The
-	   Frosted glass box's Save and Cancel. */
+	   Appearance tab's Cancel and Save. */
 	.buttons.to-end { justify-content: flex-end; align-items: center; margin-top: auto; padding-top: 0.8em; }
 	.buttons.to-end > .status { margin: 0 auto 0 0; }
+
+	/* A tab's saving box (Appearance), with no heading: what's saved, a
+	   warning when there's one, and Cancel and Save at its bottom right
+	   only while something isn't saved. Its height never changes with
+	   what it says. */
+	.tab-actions { display: flex; flex-direction: column; gap: 0.6em; }
+	.tab-actions > p { margin: 0; font-size: 0.9em; line-height: 1.45; }
+	.tab-actions > .hint { color: var(--fg); }
 
 	/* A QR code on its own, in a pop-up or a frame: Core's drawing
 	   (qr.js), kept square, never bigger than a phone needs, and never
@@ -4512,10 +4537,12 @@ ${FLOATING_CSS}
 		max-width: min(20em, 80vw);
 		padding: 0.7em 0.9em;
 		border-radius: 0.6em;
-		border: 1px solid var(--segment-border);
-		background-color: color-mix(in srgb, var(--bg) 90%, transparent);
+		/* Always black with white words, whatever the mode, the font
+		   colour or what's behind it */
+		border: 1px solid rgba(255, 255, 255, 0.14);
+		background-color: rgba(0, 0, 0, 0.9);
 		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-		color: var(--fg);
+		color: #fff;
 		font-size: 0.8rem;
 		font-weight: 400;
 		line-height: 1.5;
