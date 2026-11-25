@@ -715,7 +715,12 @@ test("pages: a colour as the background, Auto and its pins, and the font colour"
 	assert.match(page, /class="font-swatch black-text" data-font="black" aria-pressed="false"/);
 	assert.ok(!page.includes('data-font="auto"'), "White or Black, no Auto");
 	assert.ok(page.includes(backdrop.fontToKeep.toString()), "the page checks the font colour the way the server does");
-	assert.ok(page.includes('"dark":"'), "the everyday colours for white and black text, for the live preview");
+	// The text colours for white and for black text, for a pick shown
+	// before it's saved: in the stylesheet, the page only switches a class
+	assert.match(page, /:root\.font-white \{ --fg: #[0-9a-f]+; --fg-muted: [^}]*--success-button-text: [^}]*\}/i);
+	assert.match(page, /:root\.font-black \{ --fg: #111;/);
+	assert.ok(page.includes('root.classList.toggle("font-black", black)'));
+	assert.ok(!page.includes('createElement("style")'), "no style of its own made by the page");
 
 	// Over a picture or a colour: a title on it gets a shadow, and a glass
 	// button outside any box gets the tint and Dim, hovered or not

@@ -77,9 +77,7 @@ const {
 	DIALOG_SCRIPT,
 	CONTROLS_SCRIPT,
 	DEFAULT_DARK,
-	DEFAULT_LIGHT,
-	paletteVariables,
-	overPicturePalette
+	DEFAULT_LIGHT
 } = require("./ui-theme");
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const { askAttribute, ASK_FIRST_SCRIPT } = require("./ask-first");
@@ -1098,14 +1096,6 @@ function backgroundPanel(settings) {
 		).replace(/</g, "\\u003c")};
 		const MAX_BYTES = ${backdropStore.MAX_BYTES};
 
-		// The everyday colours for white text and for black text, so a
-		// change of font colour shows at once. Only with something behind
-		// the pages: with the Default, the mode's own colours never change
-		// here.
-		const SETS = ${JSON.stringify(
-			backdrop ? { dark: paletteVariables(overPicturePalette("dark")), light: paletteVariables(overPicturePalette("light")) } : null
-		).replace(/</g, "\\u003c")};
-
 		let tint = ${JSON.stringify(tint)};
 		let auto = ${JSON.stringify(auto)};
 		let pinned = ${JSON.stringify(pinned)};
@@ -1199,19 +1189,12 @@ function backgroundPanel(settings) {
 			return value === 0 ? "Original" : Math.abs(value) + "% " + (value < 0 ? "darker" : "brighter");
 		}
 
-		// The everyday colours that go with the font colour, laid over the
-		// page's own until it's next drawn by the server
-		let shownSet = null;
-		function showSet(set) {
-			if (set === shownSet) return;
-			shownSet = set;
-			let tag = document.getElementById("live-set");
-			if (!tag) {
-				tag = document.createElement("style");
-				tag.id = "live-set";
-				document.head.appendChild(tag);
-			}
-			tag.textContent = ":root {" + SETS[set] + "}";
+		// The text colours that go with the font colour, before it's saved:
+		// both sets are in the central stylesheet (.font-white and
+		// .font-black on the page), so the page only says which
+		function showFont(black) {
+			root.classList.toggle("font-white", !black);
+			root.classList.toggle("font-black", black);
 		}
 
 		// Everything moved shows at once on this page, before saving
@@ -1247,7 +1230,7 @@ function backgroundPanel(settings) {
 			// glass stays as it is
 			if (PICTURE) {
 				const black = glass.font === "black";
-				showSet(black ? "light" : "dark");
+				showFont(black);
 				root.style.setProperty("--segment-bg", "rgba(255, 255, 255, " + MODEL.fill + ")");
 				root.style.setProperty("--segment-edge", "rgba(255, 255, 255, 0.16)");
 				root.style.setProperty("--on-picture-shadow", onPictureShadow(black));

@@ -363,6 +363,12 @@ function overPicturePalette(set) {
 	return palette;
 }
 
+// Just the text's own colours for white text ("dark") or black text
+// ("light"), as CSS variables: fgMuted is --fg-muted, and so on
+function textColourVariables(set) {
+	return TEXT_COLOURS.map((key) => `--${key.replace(/[A-Z]/g, (letter) => "-" + letter.toLowerCase())}: ${PALETTES[set][key]};`).join(" ");
+}
+
 // The few rules that differ between light and dark beyond their colours.
 // `light` picks which set.
 function modeRules(light) {
@@ -3146,6 +3152,14 @@ function uiStyles(options) {
 		cursor: text;
 	}
 	${overPicture}
+
+	/* A font colour picked on the Appearance tab shows at once, before
+	   it's saved: the page puts .font-white or .font-black on <html>,
+	   and the text's own colours follow. Everything made of glass stays
+	   as it is. (Only ever put there with a picture or a colour behind
+	   the pages.) */
+	:root.font-white { ${textColourVariables("dark")} }
+	:root.font-black { ${textColourVariables("light")} }
 
 	${CURTAIN_CSS}
 

@@ -17,7 +17,9 @@
 //
 // In any file under core/ except ui-theme.js:
 //
-//   style blocks   a <style> written into a page
+//   style blocks   a <style> written into a page, or made by a page
+//                  script (createElement("style"), a stylesheet built
+//                  with insertRule or adoptedStyleSheets)
 //   CSS rules      ".selector { property: value; }" anywhere in the file
 //   style=""       a style attribute on an element (one that only sets CSS
 //                  variables, style="--hue: 210", is fine: see below)
@@ -86,7 +88,10 @@ function looksIn(file, text) {
 		return counts;
 	}
 
-	counts.styleBlocks = (text.match(/<style[\s>]/g) || []).length;
+	counts.styleBlocks =
+		(text.match(/<style[\s>]/g) || []).length +
+		(text.match(/createElement\(\s*["']style["']\s*\)/g) || []).length +
+		(text.match(/\.insertRule\(|adoptedStyleSheets|new CSSStyleSheet\(/g) || []).length;
 
 	// ".selector { property: value; }": a selector without ( ) = ; or a
 	// backtick (so no function call or assignment), then a body with a
@@ -186,9 +191,11 @@ test("the checker spots each kind of look, and leaves plain code alone", () => {
 		"`;",
 		'box.style.color = "red";',
 		"box.style.cssText = \"x\";",
-		'box.style.setProperty("color", "red");'
+		'box.style.setProperty("color", "red");',
+		'const tag = document.createElement("style");',
+		"sheet.insertRule(rule);"
 	].join("\n");
-	assert.deepEqual(looksIn("core/x.js", page), { styleBlocks: 1, cssRules: 3, styleAttributes: 2, scriptLooks: 3 });
+	assert.deepEqual(looksIn("core/x.js", page), { styleBlocks: 3, cssRules: 3, styleAttributes: 2, scriptLooks: 3 });
 
 	const plain = [
 		"function go(a) {",
@@ -197,6 +204,8 @@ test("the checker spots each kind of look, and leaves plain code alone", () => {
 		"	return { ok: true, name: 'x' };",
 		"}",
 		'box.style.setProperty("--fill", "40%");',
+		'document.documentElement.classList.toggle("font-black", true);',
+		'const row = document.createElement("div");',
 		'const tile = `<span class="tile" style="--hue:${hue}">`;',
 		"const name = '<strong style=\"--font:' + font + '\">';",
 		"if (box.style.display === \"none\") {}",
