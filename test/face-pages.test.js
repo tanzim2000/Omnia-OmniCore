@@ -321,7 +321,8 @@ test("welcome: the face list never cuts off its first face when it's full", asyn
 	for (let i = 0; i < 8; i++) faceStore.createFace("", "", null, []);
 
 	const { html } = await get(WELCOME, "/");
-	const list = ruleFor(html, ".face-list");
+	// The list's own rule, not .segment.face-list's padding
+	const list = ruleFor(html, "\t.face-list");
 
 	// Centring a scrolling column with justify-content: center pushes
 	// the overflow out of the top too, where scrolling can't reach it.
@@ -332,6 +333,23 @@ test("welcome: the face list never cuts off its first face when it's full", asyn
 	assert.doesNotMatch(list, /justify-content:\s*center/);
 	assert.match(html, /\.face-list > :first-child \{ margin-top: auto; \}/);
 	assert.match(html, /\.face-list > :last-child \{ margin-bottom: auto; \}/);
+});
+
+test("welcome: the title in a header box, the faces in a pane, Create under them (2.0.0)", async () => {
+	const { html } = await get(WELCOME, "/");
+
+	// The title and the line under it in a box of glass, so they read
+	// against the glass over any background, like a widget's page
+	assert.match(html, /<div class="segment">\s*<h1>Welcome!<\/h1>\s*<p class="lede">Choose your dashboard\.<\/p>\s*<\/div>/);
+	assert.ok(html.includes('<div class="segment face-list">'), "the faces in a pane of glass");
+	assert.ok(!html.includes('class="panel"'), "the old narrow panel is gone");
+	assert.ok(html.indexOf("face-list") < html.indexOf("Create a new face"), "Create under the pane");
+
+	// The header box and the pane are the same width, and the list has
+	// no frame of its own any more: the pane is its edge
+	assert.match(html, /body:where\(\.welcome-page\) > \.segment \{ width: 100%; max-width: 640px; \}/);
+	assert.doesNotMatch(ruleFor(html, "\t.face-list"), /border:/);
+	assert.match(html, /\.segment\.face-list \{ padding: 2em 3em; \}/);
 });
 
 test("pick-a-theme screen: grows with its themes instead of cutting them off", async () => {

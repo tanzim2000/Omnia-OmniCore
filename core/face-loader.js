@@ -21,7 +21,6 @@ const { ownLabel, suggestedLabel } = require("./instance-label");
 const { readSystemTime } = require("./time-service");
 const themeLoader = require("./theme-loader");
 const faceStore = require("./face-store");
-const { rememberUiMode, uiModeFromRequest } = require("./ui-theme");
 const { curtainHtml } = require("./page-motion");
 const renderFallbackPage = require("./fallback-page");
 const {
@@ -142,9 +141,6 @@ function startFace(face) {
 		require("./network-status").attach(app, "dashboard");
 
 		app.use(express.json());
-
-		// Light or dark for whichever browser is asking. See ui-theme.js.
-		app.use(rememberUiMode);
 
 		// The picture behind OmniCore's own pages, when one is set. See
 		// backdrop.js.
@@ -475,13 +471,12 @@ function startFace(face) {
 				// theme is never seen before its curtain. A theme that does
 				// its own entrance says "coreFade": false in its theme.json:
 				// then there's no fade in, only the signal that it may start.
-				// Its colour follows this browser's Appearance Mode (the
-				// cookie reaches every port), or the device.
-				const mode = uiModeFromRequest(req);
+				// Its colour follows the font colour (ui-theme.js
+				// curtainColour): Beige Cream with black text on the Default
+				// background, black otherwise.
 				const curtain = curtainHtml({
 					fadeIn: themeLoader.readManifest(face.theme).coreFade,
-					styles: true,
-					light: mode === "light" ? true : mode === "dark" ? false : null
+					styles: true
 				});
 				const opening = html.match(/<body[^>]*>/i);
 				html = opening

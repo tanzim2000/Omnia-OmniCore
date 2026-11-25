@@ -85,8 +85,8 @@ function defaultStylesheets() {
 	try {
 		return {
 			theme,
-			darkCss: theme.uiStyles({ forceMode: "dark" }),
-			lightCss: theme.uiStyles({ forceMode: "light" })
+			darkCss: theme.uiStyles({ forceSet: "dark" }),
+			lightCss: theme.uiStyles({ forceSet: "light" })
 		};
 	} finally {
 		// Put things back as they were. Assigning undefined would store the

@@ -488,9 +488,10 @@ const FRAME_SCRIPT = `
 	})();
 `;
 
-// Dark / Light / Device as icons. The sun and the moon are the same
-// drawings as the sign-in page's light/dark switch (modeSwitch() in
-// core/ui-theme.js); the screen is drawn here in the same style. Each
+// Dark / Light / Device as icons, for the docs site's own switch (the
+// site shows the central theme with white text or with black text). The
+// sun and the moon are the same drawings OmniCore's own Light / Dark /
+// Device switch had, before 2.0.0's Appearance profiles. Each
 // button's name is still there for screen readers (.sr-only), and shows
 // as a tooltip when pointed at.
 const MODE_ICONS = {

@@ -162,7 +162,7 @@ until the Marketplace puts something in them.
 | `built-in.js`              | Widgets that ship inside OmniCore (`core/built-in/`), offered beside installed modules but never listed as installed. Their folder always wins over a module folder of the same name, and only they may have a `settings.js`. See §5e. |
 | `network-passwords.js`     | Saved Wi-Fi passwords, each sealed with AES-256-GCM, for the Guest Wi-Fi widget and the Network page. What a Wi-Fi QR code holds. See Network Management in §8. |
 | `fallback-page.js`         | The built-in "pick a theme" screen shown when a face has no usable theme. Not part of any theme. Carries the same live connection as a theme page, so it swaps itself for a theme picked in Settings and is counted as a screen.                                                                                                                                                                                                                                                                                                                                                                                 |
-| `control-face.js`          | Port 4000. Face registry API, and the face setup wizard.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `control-face.js`          | Port 4000. Face registry API, and the welcome face: its title in a box of glass, the faces in a pane under it, the Settings button in the corner.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `admin-face.js`            | Port 3000. All settings UI, built from the Default UI's segments. Renders every settings form from declared schemas. The settings home's four tabs (with `settings-home.js`), including the updates and Update now on the About tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `admin-auth.js`            | Admin account and sessions. scrypt hashing, constant-time comparison, in-memory sessions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `module-loader.js`         | Finds modules, loads their function. **The module contract is documented here.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -197,7 +197,7 @@ until the Marketplace puts something in them.
 | `system-info.js`           | Reads the real facts the About face reports: host OS, container runtime, resource counts. Every one fails soft rather than showing a blank.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `wizard-face.js`           | Port 3999. The setup wizard, on its own port since v1.12.0.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `face-links.js`            | The cross-port link helper. A face on one port cannot assume the host name another is reached on, so links are resolved in the browser. Also the port numbers other faces link to (welcome, wizard, admin).                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces: colours, buttons (glass, and the coloured `.btn-glossy` ones), the `.toolbar` row, the password box with Show / Hide, the round light/dark switch, the `.badge` label, the `.dock` capsule (with `.danger` for a red section), and `.segment`, the one box every page is built from (frosted glass, on since v2: `--segment-blur`, with the picture behind it from `backdrop.js`), and pop-ups (`.modal`, the same glass). Every checkbox is drawn as a toggle and every slider the same way (`CONTROLS_SCRIPT` keeps a slider's filled part up to date). Hovers fade rather than snap: a clickable box carries its glow at rest, transparent, and every control fades its colours. Light or dark is per browser, from the `omnicore_ui_mode` cookie (only `light` or `dark` is accepted); with none, the stylesheet carries both and the device picks. Never a dashboard theme. **Every page OmniCore draws is built only from these elements**, with no looks of its own (`test/central-theme.test.js` fails on any, a style a page script makes included: a page switches classes and sets CSS variables, nothing more); each page's own layout is a body class (`.settings-page`, `.wizard-page`, `.welcome-page`, `.centred-page`). The one exception is Face:1303, the About face, which never loads this stylesheet and has its own look (`about-face.css`), with only Core's Back button (`backButtonStyles()`), page fade, drawer and takeover on it. |
+| `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces: colours, buttons (glass, and the coloured `.btn-glossy` ones), the `.toolbar` row, the password box with Show / Hide, the round corner button, the `.badge` label, the `.dock` capsule (with `.danger` for a red section), and `.segment`, the one box every page is built from (frosted glass, on since v2: `--segment-blur`, with the picture behind it from `backdrop.js`), and pop-ups (`.modal`, the same glass). Every checkbox is drawn as a toggle and every slider the same way (`CONTROLS_SCRIPT` keeps a slider's filled part up to date). Hovers fade rather than snap: a clickable box carries its glow at rest, transparent, and every control fades its colours. Its colours are the font colour's set, for the whole install (white text, the dark set; black text, the light set): there is no Light or Dark mode since 2.0.0. Never a dashboard theme. **Every page OmniCore draws is built only from these elements**, with no looks of its own (`test/central-theme.test.js` fails on any, a style a page script makes included: a page switches classes and sets CSS variables, nothing more); each page's own layout is a body class (`.settings-page`, `.wizard-page`, `.welcome-page`, `.centred-page`). The one exception is Face:1303, the About face, which never loads this stylesheet and has its own look (`about-face.css`), with only Core's Back button (`backButtonStyles()`), page fade, drawer and takeover on it. |
 | `font-service.js`          | The UI font setting. Searches Google Fonts, downloads the chosen one once, then serves it locally so it works with no internet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `install-store.js`         | What is installed, at which pinned commit, and when that commit was made (`data/installed.json`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `update-store.js`          | The record of update checks (`data/update-checks.json`): when last checked, what was offered.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -1493,9 +1493,10 @@ OmniCore's own pages (Settings, Appearance tab): the admin face, the setup
 wizard, the welcome face, an Inport's page and a face with no theme.
 A face with a theme keeps its theme's background, and the About face
 (Face:1303) its own (`about-face.css`). With none picked, the
-Default: the pages' own colour, black (`#000000`) in dark mode
-and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
-`ui-theme.js`; the page fade uses the same two).
+Default: the pages' own colour, black (`#000000`) with white text
+and Beige Cream (`#eedec5`) with black text (`DEFAULT_DARK` and
+`DEFAULT_LIGHT` in `ui-theme.js`; the page fade uses the same two). The
+font colour picks which: there is no Light or Dark mode since 2.0.0.
 
 - **Changing it:** the Background box's preview is a button that opens
   Change background, a pop-up with a live preview and three choices,
@@ -1541,8 +1542,8 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
 - **It fades in** (`BACKDROP_SCRIPT`, on every page with `backdropHtml()`,
   the Default included). A picture or video still loading is hidden
   (`.omni-waiting`, the Default colour shows) and fades in once ready; one
-  the browser already has is simply there. Changing the background or
-  switching Dark and Light reloads the page, so just before the reload
+  the browser already has is simply there. Changing the background
+  reloads the page, so just before the reload
   `omniKeepBackdrop()` keeps a copy of what's behind the page in
   `sessionStorage` (the picture or colour, its size and place, and its
   brightness, as they look then). The next page puts the copy
@@ -1594,7 +1595,7 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   `POST /appearance` for Text size and the corner, if they changed).
   **Cancel** puts the page back as it was saved; leaving the page keeps
   nothing. Save and Cancel are in the tab's saving box (`.tab-actions`,
-  no heading, where Appearance Mode was) only while something differs
+  no heading) only while something differs
   from what's saved; the warning that text may be hard to read is said
   there too, so the Frosted glass box never changes height.
 - **A page's title on the background** (`onPictureText`, sent as it is
@@ -1604,11 +1605,26 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   are Metro style in `uiStyles`: large, thin, lower case, set close.
 - **Glass stays glass** over a picture or a colour (`overPicturePalette`
   in `uiStyles`): every fill, edge, sheen, input box and track is the dark
-  palette's, whatever the mode and the font colour; only the text's own
-  colours (the text, its grey, a red or green word, a green button's
-  word) are the font colour's set. With the Default background, the
-  mode's own palette, Blur and Tint strength as set by hand, and no Dim. A page's title on the picture, with no glass
-  under it, gets `--on-picture-fg`.
+  palette's, whatever the font colour; only the text's own colours (the
+  text, its grey, a red or green word, a green button's word) are the
+  font colour's set. The green button itself is solid there (`SOLID_GREEN`,
+  white words), so it reads over a warm picture. With the Default
+  background, the font colour's whole palette (white text, the dark set
+  on black; black text, the light set on Beige Cream), Blur and Tint
+  strength as set by hand, and no Dim. A page's title on the picture,
+  with no glass under it, gets `--on-picture-fg`.
+- **No Light or Dark mode** (since 2.0.0, ahead of appearance profiles):
+  the font colour is what picks the everyday colours (`colourSet()` in
+  `ui-theme.js`, from `glassFor(settings).set`), for the whole install.
+  The `omnicore_ui_mode` cookie an older build set is never read, and
+  nothing asks the device (`prefers-color-scheme`). On the Default
+  background both palettes wait in the stylesheet under `:root.font-white`
+  and `:root.font-black`, with their hover rules (`setRules`), so picking
+  the font colour on the Appearance tab shows the whole page in it at
+  once by a class. The About face follows `colourSet()` with its own
+  colours (`data-mode`), and the page fade's colour is
+  `curtainColour()`. `uiStyles({ forceSet })` still forces one set, for
+  the docs site and Manual Setup.
 
 ### The settings home and page fades
 
@@ -1631,8 +1647,8 @@ tab's position and width, frame by frame while a name opens or closes), so it
 holds the picked tab's name too; a tab under the pointer gets a fainter glass. Names open on hover,
 focus or a long press only. On a phone held upright (under 42em) the notch is a capsule at the bottom instead:
 the same nav and the same glass, restyled in one media query (colours from
-`--bg`, `--fg` and the glass border through `color-mix`, so it follows light and
-dark mode and any background). When the tab changes the script measures the
+`--bg`, `--fg` and the glass border through `color-mix`, so it follows the font
+colour and any background). When the tab changes the script measures the
 capsule's end shape with the name open and the others shut (`measure`, with
 transitions off), then opens the name and moves the glass there with the same
 timing (`openName`), so the slide and the expanding happen together; the

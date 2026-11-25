@@ -557,7 +557,8 @@ yourself.
 
 Since v2, OmniCore also adds a curtain right after your `<body>`: when a
 face is opened (from a link, by its address, or for the first time), it
-fades in from black, or from white in light mode. Not on a reload, which
+fades in from black, or from Beige Cream when OmniCore's own pages have
+black text on their Default background. Not on a reload, which
 is also how the script above refreshes a face, so a wall display never
 flashes.
 

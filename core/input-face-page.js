@@ -5,8 +5,8 @@
 // shared Default UI in core/ui-theme.js.
 //
 // Input faces will gain the ability to swap themes later, at which
-// point the `forceMode` seam in ui-theme.js is what a theme would use
-// to override the global light/dark setting. Not today.
+// point the `forceSet` seam in ui-theme.js is what a theme would use
+// to pick white or black text for itself. Not today.
 //
 // No floating back button here: an input face is one flat page with
 // controls on it, no sub-navigation at all, so there is genuinely

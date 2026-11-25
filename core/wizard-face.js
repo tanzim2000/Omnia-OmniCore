@@ -48,7 +48,7 @@ const { searchPlaces } = require("./place-search");
 const { PLACE_SEARCH_SCRIPT } = require("./place-search-ui");
 const { readSettings } = require("./settings-store");
 const { portLinkScript, escapeHtml, WIZARD_PORT } = require("./face-links");
-const { uiStyles, styleTag, rememberUiMode, DIALOG_SCRIPT, CONTROLS_SCRIPT } = require("./ui-theme");
+const { uiStyles, styleTag, DIALOG_SCRIPT, CONTROLS_SCRIPT } = require("./ui-theme");
 const { ASK_FIRST_SCRIPT } = require("./ask-first");
 
 // Only what's specific to the wizard. Everything else — glass buttons,
@@ -92,9 +92,6 @@ function startWizardFace() {
 	require("./network-status").attach(app, "other");
 
 	app.use(express.json());
-
-	// Light or dark for whichever browser is asking. See ui-theme.js.
-	app.use(rememberUiMode);
 
 	// The picture behind OmniCore's own pages, when one is set. See
 	// backdrop.js.

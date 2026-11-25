@@ -48,7 +48,7 @@
 // The test checks every colour has one, and no explanation is left over
 // for a colour that's been removed.
 const paletteNotes = {
-	bg: "Page background: the Default, black (#000000) in dark mode and Beige Cream (#eedec5) in light.",
+	bg: "Page background: the Default, black (#000000) with white text and Beige Cream (#eedec5) with black text.",
 	fg: "Main text colour.",
 	fgMuted: "Quieter text: labels, hints, secondary info.",
 	glassBg: "Fill of glass buttons, inputs and the dock.",
@@ -96,16 +96,6 @@ const paletteGroups = [
 	["Success and the green button", ["success", "successHover", "successText", "successBg", "successBorder", "successButton", "successButtonHover", "successButtonBorder", "successButtonText", "successButtonShadow"]],
 	["Disabled", ["disabled", "disabledText"]]
 ];
-
-// The sun and moon drawn inside the light/dark switch, shared by its
-// sample below (and by the docs site's own switch, in layout.js)
-const SUN_AND_MOON =
-	'<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>' +
-	'<svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>';
-
-// The monitor: the switch's third icon, for Device
-const MONITOR =
-	'<svg class="icon-device" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"></rect><path d="M8 20h8M12 16v4"></path></svg>';
 
 // A password box with its Show button, as passwordField() writes it.
 // Shared by two samples below.
@@ -158,7 +148,7 @@ const sections = [
 				sel: "html.see-through",
 				desc: "A page shown in a frame over the takeover (Manual Setup): no background of its own, so the takeover's glass shows through, and a little room at its edges so a glow or a focus ring isn't cut off. Its colour scheme is dark, the same as the frame's, because a browser paints a frame solid when the two differ.",
 				demo: `<div style="padding:1em;border-radius:0.75em;background:linear-gradient(135deg,#3a6073,#16222a)"><p class="muted" style="margin:0;color:#fff">What's behind the frame shows through it.</p></div>`,
-				code: '<html class="see-through">\n\t<head>${styleTag(uiStyles({ forceMode: "dark" }))}</head>\n\t<body>…</body>\n</html>'
+				code: '<html class="see-through">\n\t<head>${styleTag(uiStyles({ forceSet: "dark" }))}</head>\n\t<body>…</body>\n</html>'
 			},
 			{
 				id: "backdrop",
@@ -169,13 +159,13 @@ const sections = [
 <div class="segment" style="position:absolute;left:1em;right:1em;top:1.5em;color:#fff;background-color:rgba(255,255,255,0.07);background-image:linear-gradient(rgba(0,0,0,0.35),rgba(0,0,0,0.35));backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4)">A segment over a picture, its glass dimmed</div>
 </div>`,
 				code: '<body>\n${backdropHtml()}\n…',
-				note: "With reduced motion turned on in the device's settings, an animation shows its still frame and a video doesn't play. A video pauses while its tab is hidden. It fades in: a picture still loading waits as .omni-waiting and fades in once ready, and after a reload that changed the background (Change background's Use, or Dark and Light), a copy of the old one (.omni-backdrop-was) sits on top and fades away (.going) once the new one is ready. Call <code>omniKeepBackdrop()</code> just before such a reload. No fade with reduced motion."
+				note: "With reduced motion turned on in the device's settings, an animation shows its still frame and a video doesn't play. A video pauses while its tab is hidden. It fades in: a picture still loading waits as .omni-waiting and fades in once ready, and after a reload that changed the background (Change background's Use), a copy of the old one (.omni-backdrop-was) sits on top and fades away (.going) once the new one is ready. Call <code>omniKeepBackdrop()</code> just before such a reload. No fade with reduced motion."
 			},
 			{
 				id: "curtain",
 				title: "Page fade (the curtain)",
 				sel: ".omni-curtain · html.omni-arriving · html.omni-leaving",
-				desc: "Since v2, going from one page to another fades the page out to its base colour (<code>--curtain</code>: black in dark mode, white in light mode) and the next one in from it. Every page starts its <code>&lt;body&gt;</code> with the curtain (<code>pageStart()</code> in <code>core/page-motion.js</code>). <b>html.omni-arriving</b> lifts it, only when a page is arrived at by a link, an address or first opening it, never on a reload or going back. <b>html.omni-leaving</b> drops it, on a click on an ordinary link or <code>omniGo(address)</code> from a page's script. Links opened in a new tab, downloads and <code>#</code> links on the same page don't fade.",
+				desc: "Since v2, going from one page to another fades the page out to its base colour (<code>--curtain</code>: black, or Beige Cream with black text on the Default background) and the next one in from it. Every page starts its <code>&lt;body&gt;</code> with the curtain (<code>pageStart()</code> in <code>core/page-motion.js</code>). <b>html.omni-arriving</b> lifts it, only when a page is arrived at by a link, an address or first opening it, never on a reload or going back. <b>html.omni-leaving</b> drops it, on a click on an ordinary link or <code>omniGo(address)</code> from a page's script. Links opened in a new tab, downloads and <code>#</code> links on the same page don't fade.",
 				demo: `<p class="muted" style="margin:0">Open any other page of the docs site's Default UI from OmniCore itself to see it; the docs site doesn't fade.</p>`,
 				code: '<body>\n${pageStart()}\n…\n<script>omniGo("/faces");</script>',
 				note: "With reduced motion turned on in the device's settings, pages change without a fade. A face's theme can wait for the curtain with the <code>omnicore:revealed</code> event; see Building theme.md."
@@ -284,10 +274,10 @@ const sections = [
 				id: "glossy",
 				title: "Coloured buttons",
 				sel: ".btn-glossy .btn-glossy-green / .btn-glossy-neutral",
-				desc: "For the few moments that should stand out: green for the safe or finished choice (“Installed”, “Go back”), grey for the second choice. Smaller and squarer than a glass button. Both are glass since v2: the green is a see-through green tint with green words, the grey is plain glass. Always pair .btn-glossy with one colour class. The green has its own colours (--success-button-*), so it can be calmer than the green of good status text.",
+				desc: "For the few moments that should stand out: green for the safe or finished choice (“Installed”, “Go back”), grey for the second choice. Smaller and squarer than a glass button. Both are glass since v2: the green is a see-through green tint with green words, the grey is plain glass. Over a picture or a colour the green is solid green with white words instead (since 2.0.0), so it reads the same over a warm picture as over any other. Always pair .btn-glossy with one colour class. The green has its own colours (--success-button-*), so it can be calmer than the green of good status text.",
 				demo: '<button class="btn-glossy btn-glossy-green">Installed</button> <button class="btn-glossy btn-glossy-neutral">Cancel</button> <button class="btn-glossy btn-glossy-green" disabled>Disabled</button>',
 				code: '<button class="btn-glossy btn-glossy-green">Installed</button>\n<button class="btn-glossy btn-glossy-neutral">Cancel</button>',
-				note: "In dark mode they're glossy, with a bevel. In light mode they're flat: white label, no shadow."
+				note: "With white text they're glossy, with a bevel. With black text on the Default background they're flat: white label, no shadow."
 			},
 			{
 				id: "dock",
@@ -318,26 +308,15 @@ const sections = [
 				note: "Here it's kept inside its box. On a real page it's pinned to the window's corner."
 			},
 			{
-				id: "mode-switch",
+				id: "corner-button",
 				base: "floating",
-				title: "Light / Dark / Device switch",
-				sel: ".floating.top-right.mode-switch (.icon-sun, .icon-moon, .icon-device), .corner-button",
-				desc: "A smaller round floating button, top-right, on the sign-in and setup page and on the welcome face: everywhere else the choice is in Settings → Appearance. It shows the choice in force (a sun for Light, a moon for Dark, a monitor for Device) and each tap moves to the next: Light, Dark, Device, Light again. Device forgets the browser's choice, so the system decides. All three icons are in the markup; data-mode-current, written by the server, picks the one that shows. .corner-button gives any other round button in that corner the same size.",
-				stage: 110,
-				demo: `<div class="floating top-left mode-switch" data-mode-current="light" style="cursor:default">${SUN_AND_MOON}${MONITOR}</div><div class="floating top-right mode-switch" data-mode-current="device" style="cursor:default">${SUN_AND_MOON}${MONITOR}</div><span class="muted stage-caption">Light and Device</span>`,
-				code: "modeSwitch()\t// writes the button with all three icons\n// MODE_SWITCH_SCRIPT makes a tap move to the next choice",
-				note: "On a real page it sits in the top-right corner of the window."
-			},
-			{
-				id: "corner-second",
-				base: "floating",
-				title: "Second corner button",
-				sel: ".floating.top-right-second",
-				desc: "A round button just to the left of the switch, the same size (.corner-button). The welcome face's Settings button, a gear, sits here and opens the admin face.",
+				title: "Corner button",
+				sel: ".floating.top-right.corner-button",
+				desc: "A smaller round floating button in the top-right corner: the welcome face's Settings button, a gear, which opens the admin face. (Until 2.0.0 the Light / Dark / Device switch sat there, on the welcome face and the sign-in page. The font colour picks the everyday colours now.)",
 				stage: 110,
 				demo: '<div class="floating top-left corner-button" style="cursor:default" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1l2.1-2.1M17 7l2.1-2.1"></path></svg></div>',
-				code: '<button class="floating top-right-second corner-button"\n\taria-label="Settings">…</button>',
-				note: "Here it's kept inside its box. On the welcome face it's pinned beside the switch."
+				code: '<button class="floating top-right corner-button"\n\taria-label="Settings">…</button>',
+				note: "Here it's kept inside its box. On the welcome face it's pinned to the window's corner."
 			},
 			{
 				id: "password-toggle",
@@ -393,7 +372,7 @@ const sections = [
 				base: "segment",
 				title: "Clickable segment",
 				sel: ".segment.clickable",
-				desc: "A segment where the whole box is a link or a button. In dark mode it glows when pointed at; in light mode it lifts slightly instead, because a glow disappears against a pale page.",
+				desc: "A segment where the whole box is a link or a button. With white text it glows when pointed at; with black text on Beige Cream it lifts slightly instead, because a glow disappears against a pale page.",
 				demo: '<div class="segment clickable" tabindex="0">Point at me: a clickable segment.</div>',
 				code: '<a class="segment clickable" href="/faces/001">…</a>'
 			},
@@ -558,7 +537,7 @@ const sections = [
 				base: "link-tile",
 				title: "Tile with pictures",
 				sel: ".home-tile.has-slides > .tile-slides > img (+ .on)",
-				desc: "A link tile with pictures filling it, crossfading one into the next (the one showing is <b>.on</b>), darkened towards the bottom so its name reads over any of them, in light mode too. The Marketplace tile, with each registry's banner. <b>.has-slides</b> is only added once a picture has loaded, so a tile whose pictures never arrive looks like any other. Still with reduced motion.",
+				desc: "A link tile with pictures filling it, crossfading one into the next (the one showing is <b>.on</b>), darkened towards the bottom so its name reads over any of them, with black text too. The Marketplace tile, with each registry's banner. <b>.has-slides</b> is only added once a picture has loaded, so a tile whose pictures never arrive looks like any other. Still with reduced motion.",
 				demo: `<div style="display:grid;grid-template-columns:1fr 1fr;gap:1em;max-width:36em"><a class="segment clickable home-tile has-slides" href="#tile-slides"><span class="tile-slides" aria-hidden="true"><img class="on" alt="" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Cdefs%3E%3ClinearGradient id='g' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23f2a65a'/%3E%3Cstop offset='.5' stop-color='%23b4476b'/%3E%3Cstop offset='1' stop-color='%231d4f7a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='4' height='3' fill='url(%23g)'/%3E%3C/svg%3E"></span><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg><span class="tile-text"><strong>Marketplace</strong><span>Modules and themes to install</span></span></a></div>`,
 				code: '<a class="segment clickable home-tile has-slides" href="/marketplace">\n\t<span class="tile-slides" aria-hidden="true"><img class="on" src="…" alt=""><img src="…" alt=""></span>\n\t<svg>…</svg>\n\t<span class="tile-text">…</span>\n</a>'
 			},
@@ -648,7 +627,7 @@ const sections = [
 				id: "tabs",
 				title: "Tabs",
 				sel: ".tabs > .tab-btn (+ .active)",
-				desc: "A pill of named options, one of them chosen. Use it when the options are named things (Dark / Light / Device, Modules / Themes, the corner names), not a plain on and off. Often each option shows different settings underneath. A disabled one is faded.",
+				desc: "A pill of named options, one of them chosen. Use it when the options are named things (Dark / Light for notifications, Modules / Themes, the corner names), not a plain on and off. Often each option shows different settings underneath. A disabled one is faded.",
 				demo: '<div class="tabs" data-demo-tabs><button class="tab-btn active">Dark</button><button class="tab-btn">Light</button><button class="tab-btn">Device</button></div>',
 				code: '<div class="tabs">\n\t<button class="tab-btn active">Dark</button>\n\t<button class="tab-btn">Light</button>\n</div>',
 				note: "Clicking works here. On a real page, the page's own script moves .active."
@@ -689,10 +668,10 @@ const sections = [
 			{
 				id: "mode-previews",
 				title: "Mode previews",
-				sel: ".mode-previews (+ .narrow-previews) > .mode-preview (+ .active) > .mode-screen (+ .dark, .light, .note-dark, .note-light, .mode-screen-split) > .line (+ .head, .mid) · .mode-preview-label",
-				desc: "A choice made by looking: a few little screens rather than a switch, each showing what it is, the one picked with a stronger edge (<b>.active</b>). A screen is the page's colour (<b>.dark</b>, <b>.light</b>), or a notification's (<b>.note-dark</b>, <b>.note-light</b>), with lines of \"text\" on it: a heading line, then fainter ones. <b>.mode-screen-split</b> is half and half, for Device. <b>.narrow-previews</b> keeps them the size they are in a half-width box.",
-				demo: `<div class="mode-previews narrow-previews"><div class="mode-preview active" role="button" tabindex="0"><div class="mode-screen dark"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Dark</div></div><div class="mode-preview" role="button" tabindex="0"><div class="mode-screen light"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Light</div></div><div class="mode-preview" role="button" tabindex="0"><div class="mode-screen mode-screen-split"><div class="dark"><span class="line head"></span></div><div class="light"><span class="line head"></span></div></div><div class="mode-preview-label">Device</div></div></div>`,
-				code: "<div class=\"mode-previews\">\n\t<div class=\"mode-preview active\" role=\"button\" tabindex=\"0\">\n\t\t<div class=\"mode-screen dark\"><span class=\"line head\"></span><span class=\"line\"></span></div>\n\t\t<div class=\"mode-preview-label\">Dark</div>\n\t</div>\n\t…\n</div>"
+				sel: ".mode-previews (+ .narrow-previews) > .mode-preview (+ .active) > .mode-screen (+ .note-dark, .note-light) > .line (+ .head, .mid) · .mode-preview-label",
+				desc: "A choice made by looking: a few little screens rather than a switch, each showing what it is, the one picked with a stronger edge (<b>.active</b>). A screen is a notification's colour (<b>.note-dark</b>, <b>.note-light</b>), with lines of \"text\" on it: a heading line, then fainter ones. <b>.narrow-previews</b> keeps them the size they are in a half-width box. On a face's page, for its notifications.",
+				demo: `<div class="mode-previews narrow-previews"><div class="mode-preview active" role="button" tabindex="0"><div class="mode-screen note-dark"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Dark</div></div><div class="mode-preview" role="button" tabindex="0"><div class="mode-screen note-light"><span class="line head"></span><span class="line"></span></div><div class="mode-preview-label">Light</div></div></div>`,
+				code: "<div class=\"mode-previews\">\n\t<div class=\"mode-preview active\" role=\"button\" tabindex=\"0\">\n\t\t<div class=\"mode-screen note-dark\"><span class=\"line head\"></span><span class=\"line\"></span></div>\n\t\t<div class=\"mode-preview-label\">Dark</div>\n\t</div>\n\t…\n</div>"
 			},
 			{
 				id: "tint-chips",
@@ -762,7 +741,7 @@ const sections = [
 				id: "font-swatches",
 				title: "Picked by how it looks",
 				sel: ".font-swatches (.on-colour) > .font-swatch (+ .white-text, .black-text, .active); :root.font-white, :root.font-black",
-				desc: "Font colour, on the Appearance tab, in a strip like the font's: two choices, \"Aa\" in white and in black, each on a piece of the background through the real glass (its fill, then the tint with the Dim, the picture at its brightness), so it shows how that colour reads before it's picked. Once one is picked, the page puts <code>.font-white</code> or <code>.font-black</code> on <code>&lt;html&gt;</code> and the text's own colours (the text, its grey, a red or green word) follow at once, from the stylesheet; nothing made of glass changes. The background comes as <code>--swatch-picture</code> (a picture's address or a colour); the glass from the page's own variables, so the choices follow the sliders as they move. The one picked has a ring in the text's colour.",
+				desc: "Font colour, on the Appearance tab, in a strip like the font's: two choices, \"Aa\" in white and in black, each on a piece of the background through the real glass (its fill, then the tint with the Dim, the picture at its brightness), so it shows how that colour reads before it's picked. Once one is picked, the page puts <code>.font-white</code> or <code>.font-black</code> on <code>&lt;html&gt;</code> and it shows at once, from the stylesheet: over a picture or a colour the text's own colours follow (the text, its grey, a red or green word) and nothing made of glass changes; on the Default background the whole page follows, black with white text or Beige Cream with black text, since that's what the font colour picks there (since 2.0.0, when Light and Dark mode went away). The background comes as <code>--swatch-picture</code> (a picture's address, a colour, or on the Default background each choice's own colour); the glass from the page's own variables, so the choices follow the sliders as they move. The one picked has a ring in the text's colour.",
 				demo: `<div class="inset" style="max-width:24em"><div class="inset-text"><div class="inset-label">COLOUR</div><div class="inset-value">White</div></div><div class="font-swatches"><button type="button" class="font-swatch white-text active" style="--swatch-picture:linear-gradient(135deg,#3a6df0,#f2a65a)"><span>Aa</span></button><button type="button" class="font-swatch black-text" style="--swatch-picture:linear-gradient(135deg,#3a6df0,#f2a65a)"><span>Aa</span></button></div></div>`,
 				code: "<div class=\"font-swatches\" role=\"group\" aria-label=\"Font colour\">\n\t<button type=\"button\" class=\"font-swatch white-text active\" style=\"--swatch-picture:url('/backdrop/…')\"><span>Aa</span></button>\n\t<button type=\"button\" class=\"font-swatch black-text\" style=\"--swatch-picture:url('/backdrop/…')\"><span>Aa</span></button>\n</div>"
 			},
@@ -787,7 +766,7 @@ const sections = [
 				id: "inputs",
 				title: "Text, address, number, password and drop-down",
 				sel: "input[type=text | url | number | password], select",
-				desc: "All five look the same: full width, glass fill, a thin border, rounded corners. A drop-down's list is given the page's colours too; left alone, the browser draws it white on white in dark mode.",
+				desc: "All five look the same: full width, glass fill, a thin border, rounded corners. A drop-down's list is given the page's colours too; left alone, the browser draws it white on white with white text.",
 				demo: '<div class="field"><input type="text" placeholder="Text" aria-label="Text"></div><div class="field"><input type="url" placeholder="https://address" aria-label="Address"></div><div class="field"><input type="number" value="42" aria-label="Number"></div><div class="field"><input type="password" value="secret" aria-label="Password"></div><select aria-label="Drop-down"><option>Choice A</option><option>Choice B</option></select>',
 				code: '<input type="text">\n<input type="url">\n<input type="number">\n<input type="password">\n<select><option>…</option></select>'
 			},
@@ -1040,10 +1019,10 @@ const sections = [
 			{
 				id: "welcome-page",
 				title: "Welcome face",
-				sel: "body.welcome-page > .panel · .face-list > .face · .actions · .timer > .timer-lamp",
-				desc: "The welcome face (port 4000): the dashboards to open, in a frame of a fixed height that scrolls when there are more than fit (<b>.face-list</b>, each <b>.face</b> a clickable box with its address under its name), the buttons under it (<b>.actions</b>), and in the bottom-left corner a small round lamp that empties as it counts down to opening the last dashboard (<b>.timer</b>, its share left <code>--remaining</code>, 1 to 0).",
-				demo: `<div class="welcome-page"><div class="face-list" style="height:12em"><div class="segment clickable face"><strong>Hallway</strong><span>Port 4001</span></div><div class="segment clickable face"><strong>Kitchen</strong><span>Port 4002</span></div></div></div>`,
-				code: "<body class=\"welcome-page\">\n\t<div class=\"panel\"><h1>Choose your dashboard</h1></div>\n\t<div class=\"face-list\">\n\t\t<div class=\"segment clickable face\"><strong>Hallway</strong><span>…</span></div>\n\t</div>\n\t<div class=\"actions\">…</div>\n\t<div class=\"timer\"><div class=\"timer-lamp\" style=\"--remaining: 1\"></div></div>\n</body>"
+				sel: "body.welcome-page > .segment · .segment.face-list > .face · .actions · .timer > .timer-lamp",
+				desc: "The welcome face (port 4000). Its title and the line under it in a box of glass at the top (a plain <b>.segment</b>, like a widget's page), so they read against the glass over any background. Under it, the same width, a pane of glass of a fixed height with the dashboards to open, which scrolls when there are more than fit (<b>.segment.face-list</b>, each <b>.face</b> a clickable box with its address under its name). The buttons under that (<b>.actions</b>), the Settings button in the top-right corner, and in the bottom-left corner a small round lamp that empties as it counts down to opening the last dashboard (<b>.timer</b>, its share left <code>--remaining</code>, 1 to 0).",
+				demo: `<div class="welcome-page"><div class="segment" style="margin-bottom:1em"><h1>Welcome!</h1><p class="lede">Choose your dashboard.</p></div><div class="segment face-list" style="height:12em"><div class="segment clickable face"><strong>Hallway</strong><span>Port 4001</span></div><div class="segment clickable face"><strong>Kitchen</strong><span>Port 4002</span></div></div></div>`,
+				code: "<body class=\"welcome-page\">\n\t<div class=\"segment\"><h1>Welcome!</h1><p class=\"lede\">Choose your dashboard.</p></div>\n\t<div class=\"segment face-list\">\n\t\t<div class=\"segment clickable face\"><strong>Hallway</strong><span>…</span></div>\n\t</div>\n\t<div class=\"actions\">…</div>\n\t<div class=\"timer\"><div class=\"timer-lamp\" style=\"--remaining: 1\"></div></div>\n</body>"
 			},
 			{
 				id: "centred-page",
@@ -1076,7 +1055,7 @@ const sections = [
 				base: "tab-grid",
 				title: "Lending room",
 				sel: ".lends-room · .borrows-room",
-				desc: "Two boxes side by side in a tab grid, where the first has empty room at its end: it gets narrower (<b>.lends-room</b>) and the one after it starts that much further left (<b>.borrows-room</b>), so the gap between them stays the same. A share of the box, never more than 5em. The Appearance tab's mode box gives the Typography box room for its note on one line and Font colour beside the font. Only where the boxes sit side by side.",
+				desc: "Two boxes side by side in a tab grid, where the first has empty room at its end: it gets narrower (<b>.lends-room</b>) and the one after it starts that much further left (<b>.borrows-room</b>), so the gap between them stays the same. A share of the box, never more than 5em. The Appearance tab's saving box gives the Typography box room for its note on one line and Font colour beside the font. Only where the boxes sit side by side.",
 				demo: `<div class="home-bento" style="max-width:40em"><div class="segment c3 lends-room"><h2>Lends</h2></div><div class="segment c3 borrows-room"><h2>Borrows</h2></div></div>`,
 				code: '<div class="segment c3 row2 lends-room">…</div>\n<div class="segment c3 row2 borrows-room">…</div>'
 			}
@@ -1124,19 +1103,16 @@ const sections = [
 
 // The functions and scripts ui-theme.js hands to the pages that use it
 const helpers = [
-	["uiStyles({ forceMode })", "The whole stylesheet as text, for a page's <style> tag. forceMode \"light\" or \"dark\" wins; otherwise this browser's choice from its cookie; otherwise both, and the device decides."],
+	["uiStyles({ forceSet })", "The whole stylesheet as text, for a page's <style> tag. Its colours are the font colour's set: white text, the dark set; black text, the light set (Beige Cream on the Default background). forceSet \"dark\" or \"light\" wins (the docs site, Manual Setup)."],
+	["colourSet()", "Which set the pages have now, \"dark\" (white text) or \"light\" (black text), from the font colour. The About face follows it with its own colours."],
 	["backButton(href)", "The floating Back button, in the corner chosen in Settings. Nothing at all when href is empty: the welcome face, input faces and the wizard have nowhere to go back to."],
-	["modeSwitch()", "The round Light / Dark / Device button for the sign-in page and the welcome face, with all three icons and the choice in force in data-mode-current."],
 	["passwordField(inputHtml)", "Wraps a password box with its Show / Hide button."],
 	["versionHtml()", "The version as a page shows it: “1.19.4”, with a dev badge after it on a development build."],
 	["fontStack(settings) · fontFace(settings)", "The font list for CSS, and the @font-face rule for a downloaded font (served at /ui-font.woff2?v=…). Nothing for the system font."],
-	["UI_MODE_SCRIPT", "Gives the page setUiMode(mode): saves or forgets the omnicore_ui_mode cookie and reloads. Used by the Appearance tile and the switch."],
-	["MODE_SWITCH_SCRIPT", "Makes the switch work: each tap moves to the next of Light, Dark and Device (MODE_CHOICES)."],
 	["PASSWORD_TOGGLE_SCRIPT", "One listener for the whole page that makes every Show / Hide button work."],
-	["rememberUiMode · uiModeFromRequest · currentUiMode", "Server side: read the cookie (only exactly \"light\" or \"dark\" counts) and hand it to uiStyles() for the request being answered."],
-	["PALETTES · SYSTEM_FONT · UI_MODE_COOKIE", "The two colour tables, the system font list, and the cookie's name."],
+	["PALETTES · SYSTEM_FONT", "The two colour tables (\"dark\" for white text, \"light\" for black text) and the system font list."],
 	["styleTag(css)", "A <style> element holding some of the central theme's CSS. The one way a page gets one: no other file in core/ writes a <style>."],
-	["CURTAIN_CSS · curtainStyles(light)", "The page fade's look (already part of uiStyles), and the same with its colour for a page without uiStyles: light, dark, or null for whichever the device is set to."],
+	["CURTAIN_CSS · curtainStyles()", "The page fade's look (already part of uiStyles), and the same with its colour for a page without uiStyles: Beige Cream with black text on the Default background, black otherwise."],
 	["STATUS_CSS · notificationStyles(mode)", "The overlays' looks (Overlays, above): the status drawer and the takeover, and notifications in \"light\" or dark glass."]
 ];
 

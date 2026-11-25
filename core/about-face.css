@@ -8,9 +8,9 @@
  * Face:1303 has a look of its own: this file is all of it. It never
  * loads the central theme's stylesheet (core/ui-theme.js). Core adds
  * only its own elements, each bringing its own look: the Back button,
- * the page fade, the status drawer and the takeover. It follows Dark
- * and Light (data-mode on <html>, from Core, or the device's own when
- * none is picked) and nothing else from Settings.
+ * the page fade, the status drawer and the takeover. It follows the
+ * font colour picked in Settings (data-mode on <html>, from Core: "dark"
+ * for white text, "light" for black text) and nothing else from Settings.
  */
 
 /* Its colours, dark ------------------------------------------------ */
@@ -37,7 +37,7 @@
 	--radius: 0.75em;
 }
 
-/* ... and light: picked in this browser, or the device's own */
+/* ... and light: with black text picked in Settings */
 
 :root[data-mode="light"] {
 	--bg: #eedec5;
@@ -57,28 +57,6 @@
 	--danger-text: #7a1c12;
 	--ambient-a: rgba(120, 140, 255, 0.06);
 	--ambient-b: rgba(255, 190, 120, 0.06);
-}
-
-@media (prefers-color-scheme: light) {
-	:root:not([data-mode]) {
-		--bg: #eedec5;
-		--fg: #111;
-		--fg-muted: rgba(0, 0, 0, 0.55);
-		--glass-bg: rgba(255, 255, 255, 0.75);
-		--glass-bg-hover: rgba(255, 255, 255, 0.95);
-		--glass-border: rgba(0, 0, 0, 0.12);
-		--glass-sheen: rgba(255, 255, 255, 0.9);
-		--glass-sheen-strong: rgba(255, 255, 255, 1);
-		--glow-strong: rgba(50, 60, 100, 0.4);
-		--hover-subtle: rgba(0, 0, 0, 0.04);
-		--segment-bg: rgba(255, 255, 255, 0.7);
-		--segment-border: rgba(0, 0, 0, 0.08);
-		--danger-bg: rgba(255, 235, 233, 0.95);
-		--danger-border: rgba(192, 57, 43, 0.35);
-		--danger-text: #7a1c12;
-		--ambient-a: rgba(120, 140, 255, 0.06);
-		--ambient-b: rgba(255, 190, 120, 0.06);
-	}
 }
 
 * { box-sizing: border-box; }

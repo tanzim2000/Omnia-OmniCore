@@ -273,10 +273,18 @@ The plan, as decided:
 
 ### B. Appearance profiles
 
-- **Light and Dark mode go away for good.** User-made profiles replace
-  them. (The Appearance Mode box is already gone: its place is the
-  Appearance tab's saving box. A browser's earlier pick still counts
-  until profiles arrive.)
+- **Light and Dark mode go away for good** (done): the font colour picks
+  the everyday colours, for the whole install, until profiles let each
+  browser pick its own. On the Default background White is black and
+  Black is Beige Cream, picked on the Appearance tab. The switch is gone
+  from the welcome face and the sign-in page, and a browser's earlier
+  pick (its cookie) no longer counts.
+- **The welcome face** (done, with the step above): its title in a box
+  of glass like a widget's page, so it reads over any background; the
+  faces in a pane of the same width; only the Settings button in the
+  corner. Its Light / Dark / Device switch went with the modes.
+- **Save over a warm picture** (done): solid green with white words over
+  a picture or a colour.
 - **A profile is one `.ocap` file** (OmniCore Appearance Profile): its
   settings and its wallpaper inside. It **can't be made without a wallpaper
   or a colour**.

@@ -28,8 +28,8 @@ const paths = require("./paths");
 // Face:1303 keeps a look of its own (about-face.css) and never loads the
 // central theme's stylesheet. Core adds only its own elements: the Back
 // button (backButtonStyles), the page fade, the status drawer and the
-// takeover. currentUiMode says which of its own colours to use.
-const { rememberUiMode, versionHtml, currentUiMode, styleTag, backButtonStyles, curtainStyles } = require("./ui-theme");
+// takeover. colourSet says which of its own colours to use.
+const { versionHtml, colourSet, styleTag, backButtonStyles, curtainStyles } = require("./ui-theme");
 const omnicoreVersion = require("./version");
 const { portLinkScript, escapeHtml } = require("./face-links");
 const systemInfo = require("./system-info");
@@ -180,20 +180,20 @@ function renderPage(info) {
 
 	const health = healthPill(info);
 
-	// Dark or light: picked in this browser (Settings, Appearance), or the
-	// device's own when it hasn't been (no data-mode, about-face.css asks
-	// the device)
-	const mode = currentUiMode();
+	// Dark or light: whichever goes with the font colour picked in
+	// Settings (white text, dark; black text, light), as on every other
+	// page since Light and Dark mode went away in 2.0.0
+	const mode = colourSet();
 
 	return `<!DOCTYPE html>
-<html${mode ? ` data-mode="${mode}"` : ""}>
+<html data-mode="${mode}">
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>About</title>
 	${ICON_LINK}
 	<link rel="stylesheet" href="/about.css">
-	${styleTag(backButtonStyles() + curtainStyles(mode === "light" ? true : mode === "dark" ? false : null))}
+	${styleTag(backButtonStyles() + curtainStyles())}
 </head>
 <body>
 ${curtainHtml()}
@@ -275,9 +275,6 @@ function startAboutFace() {
 	// The network stream for the status drawer and the takeover (see
 	// network-status.js)
 	require("./network-status").attach(app, "other");
-
-	// Light or dark for whichever browser is asking. See ui-theme.js.
-	app.use(rememberUiMode);
 
 	// Served from a real file rather than inlined, so the stylesheet
 	// stays editable on its own.

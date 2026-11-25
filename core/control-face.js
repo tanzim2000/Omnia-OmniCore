@@ -7,12 +7,11 @@
 // nothing here can create, change, or delete anything, which is what
 // makes it safe to leave open on a wall display or hand to OmniView.
 //
-// STYLING: its own stylesheet rather than the shared Default UI, even
-// though it currently looks identical to it. That's deliberate -- this
-// is the screen a person is most likely to want to make their own, so
-// it's kept independently customisable rather than locked to whatever
-// the admin UI looks like. See
-// docs/planning/default-ui-architecture.md.
+// STYLING: the central theme (core/ui-theme.js), like every other page
+// OmniCore draws, with no looks of its own. Its title and the line under
+// it sit in a box of glass (the same header box a widget's page has), so
+// they stay readable over any background, and the faces sit in a pane of
+// glass under it.
 
 const { attachBackdropRoute } = require("./backdrop");
 const { ICON_LINK, attachIconRoute } = require("./icon");
@@ -21,11 +20,7 @@ const express = require("express");
 const faceStore = require("./face-store");
 const {
 	uiStyles,
-	styleTag,
-	rememberUiMode,
-	modeSwitch,
-	MODE_SWITCH_SCRIPT,
-	UI_MODE_SCRIPT
+	styleTag
 } = require("./ui-theme");
 const { attachFontRoute } = require("./font-service");
 const {
@@ -36,12 +31,11 @@ const {
 	ADMIN_PORT
 } = require("./face-links");
 
-// The round Settings button in the top-right, beside the Light / Dark /
-// Device switch. A gear, the same size and look as the switch. It opens
+// The round Settings button in the top-right corner, a gear. It opens
 // the admin face, which asks to sign in first if this browser hasn't.
 function settingsButton() {
 	return `
-	<button type="button" class="floating top-right-second corner-button"
+	<button type="button" class="floating top-right corner-button"
 		onclick="goToSettings()" aria-label="Settings" title="Settings">
 		<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
 			stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -83,9 +77,6 @@ function startControlFace() {
 	require("./network-status").attach(app, "other");
 
 	app.use(express.json());
-
-	// Light or dark for whichever browser is asking. See ui-theme.js.
-	app.use(rememberUiMode);
 
 	// The picture behind OmniCore's own pages, when one is set. See
 	// backdrop.js.
@@ -148,7 +139,7 @@ function startControlFace() {
 			res.send(
 				page(
 					"OmniCore",
-					`<div class="panel"><h1>Setting up…</h1>
+					`<div class="segment"><h1>Setting up…</h1>
 					<p class="lede">Taking you to create your first face.</p></div>`,
 					portLinkScript +
 						`location.replace(faceUrl(${WIZARD_PORT}) + "/faces/new");`
@@ -170,18 +161,17 @@ function startControlFace() {
 		const single = faces.length === 1;
 
 		const body = `
-			<div class="panel">
+			<div class="segment">
 				<h1>Welcome!</h1>
 				<p class="lede">Choose your dashboard.</p>
 			</div>
-			<div class="face-list">${list}</div>
+			<div class="segment face-list">${list}</div>
 			<div class="actions">
 				<button class="glass" onclick="goToWizard()">
 					Create a new face
 				</button>
 			</div>
 			${settingsButton()}
-			${modeSwitch()}
 			${
 				single
 					? `<div class="timer" id="timer" title="Opening ${escapeHtml(
@@ -199,13 +189,9 @@ function startControlFace() {
 			function goToWizard() {
 				omniGo(faceUrl(${WIZARD_PORT}) + "/faces/new");
 			}
+			// Pressing Settings cancels the auto-advance below like any
+			// other touch does
 			function goToSettings() { omniGo(faceUrl(${ADMIN_PORT})); }
-
-			// The Light / Dark / Device switch (see ui-theme.js). Pressing
-			// it, or Settings, cancels the auto-advance below like any
-			// other touch does.
-			${UI_MODE_SCRIPT}
-			${MODE_SWITCH_SCRIPT}
 		` +
 			(single
 				? `

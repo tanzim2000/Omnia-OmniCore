@@ -50,8 +50,8 @@ test.after(() => {
 function stylesheetClasses() {
 	// The Default UI, and the overlay bundle sent with a theme's page
 	const css =
-		theme.uiStyles({ forceMode: "dark" }) +
-		theme.uiStyles({ forceMode: "light" }) +
+		theme.uiStyles({ forceSet: "dark" }) +
+		theme.uiStyles({ forceSet: "light" }) +
 		theme.STATUS_CSS +
 		theme.notificationStyles("dark") +
 		theme.notificationStyles("light");

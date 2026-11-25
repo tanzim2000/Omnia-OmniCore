@@ -704,7 +704,7 @@ function setupPage() {
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>Manual Setup</title>
-	${theme.styleTag(theme.uiStyles({ forceMode: "dark" }))}
+	${theme.styleTag(theme.uiStyles({ forceSet: "dark" }))}
 </head>
 <body>
 	<section class="form-stack centred" id="omnisync" hidden>

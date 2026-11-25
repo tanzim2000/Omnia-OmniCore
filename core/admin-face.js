@@ -65,15 +65,10 @@ const {
 	uiStyles,
 	styleTag,
 	backButton,
-	rememberUiMode,
-	currentUiMode,
 	versionHtml,
-	UI_MODE_SCRIPT,
 	passwordField,
 	infoTip,
 	PASSWORD_TOGGLE_SCRIPT,
-	modeSwitch,
-	MODE_SWITCH_SCRIPT,
 	DIALOG_SCRIPT,
 	CONTROLS_SCRIPT,
 	DEFAULT_DARK,
@@ -300,7 +295,7 @@ function page(title, body, script, bodyClass, back) {
 ${pageStart()}
 	${body}
 	${backButton(back)}
-	<script>${UI_MODE_SCRIPT}${PASSWORD_TOGGLE_SCRIPT}${DIALOG_SCRIPT}${CONTROLS_SCRIPT}${script || ""}${ASK_FIRST_SCRIPT}</script>
+	<script>${PASSWORD_TOGGLE_SCRIPT}${DIALOG_SCRIPT}${CONTROLS_SCRIPT}${script || ""}${ASK_FIRST_SCRIPT}</script>
 </body>
 </html>`;
 }
@@ -702,12 +697,9 @@ function credentialsPage(options) {
 					<p class="status" id="status"></p>
 				</div>
 			</div>
-		</div>
-		${modeSwitch()}`;
+		</div>`;
 
 	const script = `
-		${MODE_SWITCH_SCRIPT}
-
 		const endpoint = ${JSON.stringify(options.endpoint)};
 		const status = document.getElementById("status");
 		const button = document.getElementById("submit");
@@ -781,11 +773,8 @@ function backgroundPanel(settings) {
 	// are a picture's: over a colour they're None.
 	const chosenTint = settings.glassTint === "match" ? "dominant" : settings.glassTint || "none";
 	const tint = !file && ["dominant", "vibrant"].includes(chosenTint) ? "none" : chosenTint;
-	const uiMode = currentUiMode();
-
-	// The glass as it's drawn now, for this browser's mode (or dark, when
-	// it follows the device and the page works the rest out itself)
-	const glass = backdropStore.glassFor(settings, uiMode === "light");
+	// The glass as it's drawn now
+	const glass = backdropStore.glassFor(settings);
 	const auto = settings.glassAuto !== false;
 	const pinned = Array.isArray(settings.glassPinned) ? settings.glassPinned : [];
 	const brightness = Number(settings.pictureBrightness) || 0;
@@ -1063,25 +1052,28 @@ function backgroundPanel(settings) {
 	// sits on a piece of the background through the real glass (its fill,
 	// tint and Dim, the picture at its brightness), so it shows how that
 	// colour reads before it's picked; they follow the sliders as they
-	// move. Only over a picture or a colour: the Default background has its
-	// mode's own colours.
-	const swatchPicture = file
-		? ` style="--swatch-picture:url('/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}')"`
-		: colour
-		? ` style="--swatch-picture:${escapeHtml(settings.backgroundColor)}"`
-		: "";
+	// move. On the Default background the font colour is what picks the
+	// page's colour (since 2.0.0, when Light and Dark mode went away):
+	// white text on black, black text on Beige Cream, so each "Aa" sits on
+	// its own.
+	const swatchPicture = (value) =>
+		file
+			? ` style="--swatch-picture:url('/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}')"`
+			: colour
+			? ` style="--swatch-picture:${escapeHtml(settings.backgroundColor)}"`
+			: ` style="--swatch-picture:${value === "black" ? DEFAULT_LIGHT : DEFAULT_DARK}"`;
 	const swatch = (value, name) =>
 		`<button type="button" class="font-swatch ${value}-text${fontColour === value ? " active" : ""}" data-font="${value}"` +
-		` aria-pressed="${fontColour === value}" aria-label="${name} text" title="${name} text"${swatchPicture}><span>Aa</span></button>`;
+		` aria-pressed="${fontColour === value}" aria-label="${name} text" title="${name} text"${swatchPicture(value)}><span>Aa</span></button>`;
 	const fontColourField = `
 					<div class="inset">
 						<div class="inset-text">
 							<div class="inset-label">COLOUR</div>
 							<div class="inset-value" id="font-colour-name">${
-								backdrop ? (fontColour === "black" ? "Black" : "White") : "With a picture or a colour"
+								fontColour === "black" ? (backdrop ? "Black" : "Black, on Beige Cream") : backdrop ? "White" : "White, on black"
 							}</div>
 						</div>
-						${backdrop ? `<div class="font-swatches${colour ? " on-colour" : ""}" role="group" aria-label="Font colour">${swatch("white", "White")}${swatch("black", "Black")}</div>` : ""}
+						<div class="font-swatches${backdrop && !colour ? "" : " on-colour"}" role="group" aria-label="Font colour">${swatch("white", "White")}${swatch("black", "Black")}</div>
 					</div>`;
 
 	const script = `
@@ -1137,16 +1129,6 @@ function backgroundPanel(settings) {
 		const autoBox = document.getElementById("glass-auto");
 		const warning = document.getElementById("glass-warning");
 
-		// Light or dark: this browser's own choice, or the device's when
-		// it hasn't made one
-		function light() {
-			return ${
-				uiMode
-					? JSON.stringify(uiMode === "light")
-					: 'window.matchMedia("(prefers-color-scheme: light)").matches'
-			};
-		}
-
 		// The tint's colour, from the choice
 		function tintOf(choice, picture) {
 			if (choice === "none") return "";
@@ -1164,7 +1146,7 @@ function backgroundPanel(settings) {
 					blur: hand.blur,
 					tintStrength: hand.tintStrength,
 					dim: 0,
-					font: light() ? "black" : "white",
+					font: font || fontColour,
 					readable: true
 				};
 			}
@@ -1240,18 +1222,21 @@ function backgroundPanel(settings) {
 				root.style.setProperty("--colour-lift", Math.max(0, bright) / 100);
 			}
 
-			// Over a picture: the text colours go with the font colour; the
-			// glass stays as it is
+			// The font colour shows at once: over a picture only the text
+			// colours follow it, and the glass stays as it is; on the Default
+			// background the whole page follows it, black or Beige Cream
+			const black = glass.font === "black";
+			showFont(black);
+			document.getElementById("font-colour-name").textContent = PICTURE
+				? (black ? "Black" : "White")
+				: (black ? "Black, on Beige Cream" : "White, on black");
 			if (PICTURE) {
-				const black = glass.font === "black";
-				showFont(black);
 				root.style.setProperty("--segment-bg", "rgba(255, 255, 255, " + MODEL.fill + ")");
 				root.style.setProperty("--segment-edge", "rgba(255, 255, 255, 0.16)");
 				// A page's title, on the background itself: white or black
 				// by the background at its brightness, never the font colour
 				const onIt = onPictureText({ mean: PICTURE.mean, brightness: bright, colour: PICTURE.colour });
 				root.style.setProperty("--on-picture-fg", onIt === "black" ? "#111" : "#fff");
-				document.getElementById("font-colour-name").textContent = black ? "Black" : "White";
 			}
 
 			// Said when the text may be hard to read: never overruled, only
@@ -1360,7 +1345,6 @@ function backgroundPanel(settings) {
 		// away (only the next change to the glass checks it again)
 		for (const button of document.querySelectorAll("[data-font]")) {
 			button.addEventListener("click", function () {
-				if (!PICTURE) return;
 				fontColour = button.dataset.font;
 				preview();
 				changed(false);
@@ -1598,14 +1582,14 @@ function backgroundPanel(settings) {
 					picture = PICTURE;
 					bright = brightness ? Number(brightness.value) : 0;
 				}
-				previewColour.style.setProperty("--colour", light() ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark);
+				previewColour.style.setProperty("--colour", fontColour === "black" ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark);
 			} else if (chosen.tab === "colour") {
 				const rgb = rgbOf(chosen.colour);
 				const shade = luminance(rgb[0], rgb[1], rgb[2]);
 				picture = { low: shade, high: shade, mean: shade, color: chosen.colour, vibrant: chosen.colour, colour: true };
 				previewColour.style.setProperty("--colour", chosen.colour);
 			} else {
-				previewColour.style.setProperty("--colour", light() ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark);
+				previewColour.style.setProperty("--colour", fontColour === "black" ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark);
 			}
 
 			// The piece of glass on it, as Auto would make it there, with
@@ -2914,9 +2898,6 @@ function startAdminFace() {
 	require("./network-setup").attach(app);
 
 	app.use(express.json());
-
-	// Light or dark for whichever browser is asking. See ui-theme.js.
-	app.use(rememberUiMode);
 
 	// The picture behind OmniCore's own pages, when one is set. See
 	// backdrop.js.

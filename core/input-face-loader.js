@@ -30,7 +30,6 @@ const { makeModuleApi } = require("./module-api");
 const renderInputFacePage = require("./input-face-page");
 const { renderInputPickerPage } = require("./input-face-page");
 const { attachFontRoute } = require("./font-service");
-const { rememberUiMode } = require("./ui-theme");
 const { inportFor, faceTakesInput, faceLabel } = require("./face-store");
 
 // Running Inports, keyed by port: { server }
@@ -77,9 +76,6 @@ function startInputFace(faceOrId, maybeFace) {
 		require("./network-status").attach(app, "other");
 
 		app.use(express.json());
-
-		// Light or dark for whichever browser is asking. See ui-theme.js.
-		app.use(rememberUiMode);
 
 		// The picture behind OmniCore's own pages, when one is set. See
 		// backdrop.js.

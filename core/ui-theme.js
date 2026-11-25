@@ -42,84 +42,18 @@
 // padding) are one variable used by both. Each entry in the catalogue says
 // which base it builds on.
 
-const { AsyncLocalStorage } = require("node:async_hooks");
 const { readSettings } = require("./settings-store");
 const backdrop = require("./backdrop");
 const pageMotion = require("./page-motion");
 
 // ---------------------------------------------------------------------
-// Light or dark: chosen per BROWSER, not per install
+// Light and dark (until 2.0.0's Appearance profiles)
 //
-// Before v1.19.2 this was one setting for the whole server, so picking
-// light on a phone turned the TV's input face light too. Now each
-// browser keeps its own choice in a small cookie, and a browser that
-// has never chosen follows its device (the system's own light/dark
-// setting). Cookies belong to the address, not the port, so the one
-// cookie covers every OmniCore page this browser opens on this server.
-//
-// The cookie is set by the page itself (see UI_MODE_SCRIPT below) and
-// only read here. Anything other than exactly "light" or "dark" is
-// treated as no choice at all, so a hand-edited cookie can't put
-// arbitrary text into the stylesheet.
-const UI_MODE_COOKIE = "omnicore_ui_mode";
-
-function uiModeFromRequest(req) {
-	const header = (req && req.headers && req.headers.cookie) || "";
-
-	for (const part of header.split(";")) {
-		const [name, value] = part.trim().split("=");
-
-		if (name === UI_MODE_COOKIE && (value === "light" || value === "dark")) {
-			return value;
-		}
-	}
-
-	return null;
-}
-
-// Every page calls uiStyles() deep inside its own rendering code, far
-// from the request that asked for it. Rather than pass the request down
-// through every one of those calls, each web server runs this once per
-// request (app.use(rememberUiMode)), and uiStyles() asks for "the mode
-// of whichever request I'm being drawn for". AsyncLocalStorage is
-// Node's own tool for exactly that: a value that follows one request
-// through all the code it runs, including across awaits, without
-// leaking into any other request running at the same time.
-const requestMode = new AsyncLocalStorage();
-
-function rememberUiMode(req, res, next) {
-	requestMode.run(uiModeFromRequest(req), next);
-}
-
-// "light", "dark", or null for "follow the device". Outside a request
-// (tests, mostly) it's null.
-function currentUiMode() {
-	const mode = requestMode.getStore();
-	return mode === "light" || mode === "dark" ? mode : null;
-}
-
-// Sets this browser's choice and reloads so the page redraws in it.
-// Shared by the Appearance tile and the switch on the sign-in page.
-// "device" forgets the choice, so the device decides again.
-const UI_MODE_SCRIPT = `
-	function setUiMode(mode) {
-		const name = ${JSON.stringify(UI_MODE_COOKIE)};
-
-		if (mode === "light" || mode === "dark") {
-			// A year; a browser that's still in use renews it each time
-			// the mode is changed
-			document.cookie = name + "=" + mode +
-				"; Path=/; Max-Age=31536000; SameSite=Lax";
-		} else {
-			document.cookie = name + "=; Path=/; Max-Age=0; SameSite=Lax";
-		}
-
-		// The background fades from this mode's to the other's
-		// (backdrop.js) rather than vanishing as the page reloads
-		if (typeof window !== "undefined" && window.omniKeepBackdrop) window.omniKeepBackdrop();
-		location.reload();
-	}
-`;
+// There is no Light or Dark mode any more. Before 2.0.0 each browser
+// picked one (a cookie) or followed its device. Now the font colour picks
+// the everyday colours: white text gets the dark set, black text the
+// light set, and on the Default background that's black or Beige Cream.
+// The cookie an older build left behind is simply never read.
 
 // The system stack a fresh install uses, and the fallback behind any
 // downloaded font — if a chosen font ever fails to load, the UI stays
@@ -128,14 +62,24 @@ const SYSTEM_FONT =
 	'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 
 // Everything colour-ish lives here rather than being written inline
-// anywhere, so light mode is a matter of swapping this table and
-// nothing else.
+// anywhere. Two sets: "dark", for white text, and "light", for black
+// text. The font colour picks one (see uiStyles).
 // The page's own colour with nothing picked (Settings, Background,
-// Default): pure black in dark mode and Beige Cream in light, since the v2
-// test run. (For a while in v2 dark mode was Artist's Charcoal, #37393e,
-// which looked more grey than black. Before v2, black and a light grey.)
+// Default): pure black with white text and Beige Cream with black text,
+// since the v2 test run. (For a while in v2 the dark set's was Artist's
+// Charcoal, #37393e, which looked more grey than black. Before v2, black
+// and a light grey.)
 const DEFAULT_DARK = "#000000";
 const DEFAULT_LIGHT = "#eedec5";
+
+// The green button over a picture or a colour (see uiStyles): a green
+// dark enough for white words on it (a contrast of about 5 to 1), and a
+// little lighter when pointed at
+const SOLID_GREEN = {
+	fill: "#17803f",
+	hover: "#1c9149",
+	border: "rgba(134, 240, 178, 0.55)"
+};
 
 const PALETTES = {
 	dark: {
@@ -244,8 +188,8 @@ const PALETTES = {
 		successHover: "#177a41",
 		successText: "#0c3d22",
 
-		// The green button in light mode is flat: one lighter green, white
-		// text, no bevel and no shadow. The glossy dark-mode version went
+		// The green button with black text is flat: one lighter green,
+		// white text, no bevel and no shadow. The glossy version went
 		// a heavy dark green here, with dark text that was hard to read.
 		successButton: "rgba(31, 154, 83, 0.14)",
 		successButtonHover: "rgba(31, 154, 83, 0.22)",
@@ -369,31 +313,40 @@ function textColourVariables(set) {
 	return TEXT_COLOURS.map((key) => `--${key.replace(/[A-Z]/g, (letter) => "-" + letter.toLowerCase())}: ${PALETTES[set][key]};`).join(" ");
 }
 
-// The few rules that differ between light and dark beyond their colours.
-// `light` picks which set.
-function modeRules(light) {
+// The few rules that differ between the two sets beyond their colours.
+// `light` picks which set. `scope` goes in front of each rule, for the
+// copy kept under .font-white or .font-black on the Default background
+// (see uiStyles).
+function setRules(light, scope) {
+	const at = scope || "";
 	if (light) {
 		return `
-	/* Light mode: a clickable segment lifts slightly rather than
-	   glowing — a glow reads as nothing against a pale background. */
-	.segment.clickable:hover,
-	.segment.clickable:focus-visible {
+	/* Black text on Beige Cream: a clickable segment lifts slightly
+	   rather than glowing -- a glow reads as nothing against a pale
+	   background. */
+	${at}.segment.clickable:hover,
+	${at}.segment.clickable:focus-visible {
 		transform: scale(1.02);
+		box-shadow:
+			inset 0 1px 0 var(--segment-edge),
+			0 0 0 1px transparent,
+			0 0 32px transparent,
+			0 0 70px transparent;
 		background-color: var(--glass-bg-hover);
 	}
 
 	/* A pop-up's shade: see .modal */
-	.modal { --modal-shade: rgba(255, 255, 255, 0.4); }`;
+	${at}.modal { --modal-shade: rgba(255, 255, 255, 0.4); }`;
 	}
 
 	return `
-	/* Dark mode: a clickable segment glows rather than moving —
+	/* White text: a clickable segment glows rather than moving --
 	   motion is unnecessary when light alone reads clearly against
 	   black. Values taken from working reference examples rather than
 	   a first guess: a visible glow sits close to 0.5 alpha at its
 	   core, not 0.1-0.25. */
-	.segment.clickable:hover,
-	.segment.clickable:focus-visible {
+	${at}.segment.clickable:hover,
+	${at}.segment.clickable:focus-visible {
 		transform: none;
 		box-shadow:
 			inset 0 1px 0 var(--segment-edge),
@@ -404,20 +357,30 @@ function modeRules(light) {
 	}
 
 	/* A pop-up's shade: see .modal */
-	.modal { --modal-shade: rgba(8, 10, 14, 0.4); }`;
+	${at}.modal { --modal-shade: rgba(8, 10, 14, 0.4); }`;
+}
+
+// Which everyday colours the pages have now: "dark" (white text) or
+// "light" (black text), from the font colour (backdrop.js glassFor)
+function colourSet(settings) {
+	return backdrop.glassFor(settings || readSettings()).set;
+}
+
+// The colour a page fades in from and out to (page-motion.js): Beige
+// Cream with black text on the Default background, black otherwise
+function curtainColour(settings, set) {
+	const given = settings || readSettings();
+	return !backdrop.hasBackdrop(given) && (set || colourSet(given)) === "light" ? DEFAULT_LIGHT : DEFAULT_DARK;
 }
 
 // Everything above, plus the components, as one stylesheet. Pages drop
 // this into a <style> tag rather than each writing their own CSS.
 //
 // Which colours it carries:
-//   - options.forceMode ("light" / "dark") wins over everything. Used
-//     for mockups, and the seam an input face would use once input
-//     faces can pick their own look.
-//   - otherwise this browser's own choice, from its cookie.
-//   - otherwise BOTH, dark first and light inside a
-//     prefers-color-scheme query, so the browser picks by itself with
-//     no script and no flash of the wrong colours on load.
+//   - options.forceSet ("dark" / "light") wins. Used for the docs site,
+//     which shows both, and the takeover's Manual Setup, which is always
+//     white on dark glass.
+//   - otherwise the font colour's set (colourSet).
 // The Settings pages' elements (admin-face.js draws the pages): the page
 // and its bento, the docked page, inset strips, the mode previews, a face's
 // page, the update boxes and release notes, rows, Location, Place search
@@ -487,8 +450,9 @@ function settingsPagesCss() {
 		gap: 1em;
 	}
 
-	/* Mode picker: two miniature screens rather than a switch, so the
-	   choice shows what it actually looks like instead of naming it */
+	/* Mode picker: miniature screens rather than a switch, so the
+	   choice shows what it actually looks like instead of naming it (a
+	   face's notifications, Dark or Light) */
 	.mode-previews { display: flex; gap: 10px; }
 
 	.mode-preview {
@@ -508,30 +472,19 @@ function settingsPagesCss() {
 	.mode-screen { border-radius: 0.3125em; height: 64px; padding: 0.5em; text-align: left; }
 	.mode-screen span { display: block; border-radius: 0.125em; margin-bottom: 5px; }
 
-	/* The little screen in each: the page's colour (.dark, .light) or a
-	   notification's (.note-dark, .note-light), and a few lines of
-	   "text": a heading line, then shorter, fainter lines */
-	.mode-screen.dark, .mode-screen-split > .dark { background: ${DEFAULT_DARK}; }
-	.mode-screen.light, .mode-screen-split > .light { background: ${DEFAULT_LIGHT}; }
+	/* The little screen in each: a notification's colour (.note-dark,
+	   .note-light), and a few lines of "text": a heading line, then
+	   shorter, fainter lines. (The page's own Dark, Light and Device
+	   screens went with Appearance Mode in 2.0.0.) */
 	.mode-screen.note-dark { background: #0c0d10; }
 	.mode-screen.note-light { background: #e5e7eb; }
 	.mode-screen .line { width: 70%; height: 4px; }
 	.mode-screen .line.head { width: 40%; height: 5px; }
 	.mode-screen .line.mid { width: 55%; }
-	.mode-screen-split .line.head { width: 60%; }
-	.mode-screen:is(.dark, .note-dark) > .line,
-	.mode-screen-split > .dark > .line { background: rgba(255, 255, 255, 0.3); }
-	.mode-screen:is(.dark, .note-dark) > .line.head,
-	.mode-screen-split > .dark > .line.head { background: rgba(255, 255, 255, 0.8); }
-	.mode-screen:is(.light, .note-light) > .line,
-	.mode-screen-split > .light > .line { background: #9ca3af; }
-	.mode-screen:is(.light, .note-light) > .line.head,
-	.mode-screen-split > .light > .line.head { background: #4b5563; }
-
-	/* Device: half dark, half light, since it's whichever the device
-	   is set to */
-	.mode-screen-split { display: flex; padding: 0; overflow: hidden; }
-	.mode-screen-split > div { flex: 1; padding: 0.5em; }
+	.mode-screen.note-dark > .line { background: rgba(255, 255, 255, 0.3); }
+	.mode-screen.note-dark > .line.head { background: rgba(255, 255, 255, 0.8); }
+	.mode-screen.note-light > .line { background: #9ca3af; }
+	.mode-screen.note-light > .line.head { background: #4b5563; }
 
 	/* On a full-width row two previews would stretch into long strips;
 	   kept to the size they are in a half-width box */
@@ -2180,16 +2133,19 @@ function otherPagesCss() {
 		gap: 1.75em;
 	}
 
-	:where(.welcome-page) .panel { width: 100%; max-width: 460px; }
+	/* The header box (its title and the line under it, like a widget's
+	   page has) and the pane of faces under it: the same width, so they
+	   line up. A title in a box reads against the glass, whatever is
+	   behind the page. */
+	body:where(.welcome-page) > .segment { width: 100%; max-width: 640px; }
 
 	:where(.welcome-page) .actions { display: flex; gap: 0.75em; justify-content: center; }
 
 	/* ---------------------------------------------------------------
-	   The face picker: a fixed-height framed region, not a box that
-	   grows to fit its content -- one face or twenty, the frame is
-	   the same size, with a visible border so its edge is obvious.
-	   Content sits centered within it; only becomes actually
-	   scrollable once it genuinely overflows.
+	   The face picker: a pane of glass (.segment.face-list) of a fixed
+	   height, not a box that grows to fit its content -- one face or
+	   twenty, it's the same size. Content sits centred within it; only
+	   becomes actually scrollable once it genuinely overflows.
 
 	   Centred with auto margins on the first and last face, NOT with
 	   justify-content: center. When the faces are taller than the box,
@@ -2204,24 +2160,23 @@ function otherPagesCss() {
 	   glow paints outside its own box, and this container clips
 	   anything crossing its edge the moment overflow-y is set at
 	   all -- not enough horizontal room here and the glow gets cut
-	   off exactly where it should be brightest.
+	   off exactly where it should be brightest. Written as
+	   .segment.face-list so it wins over a box's own padding.
 	   --------------------------------------------------------------- */
 	.face-list {
 		width: 100%;
 		max-width: 640px;
 		height: min(620px, 62vh);
-		border: 1px solid var(--segment-border);
-		border-radius: var(--radius);
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		gap: 0.75em;
-		padding: 2em 3em;
 		box-sizing: border-box;
 		scrollbar-width: thin;
 		scrollbar-color: var(--scroll-thumb) transparent;
 	}
+	.segment.face-list { padding: 2em 3em; }
 
 	.face-list > :first-child { margin-top: auto; }
 	.face-list > :last-child { margin-bottom: auto; }
@@ -2243,6 +2198,10 @@ function otherPagesCss() {
 	   only offers bottom-right and top-left, so the two can never
 	   collide.
 	   --------------------------------------------------------------- */
+	/* Room for the timer at the bottom, so Create a new face never ends
+	   up beside it on a narrow screen */
+	body:where(.welcome-page):has(> .timer) { padding-bottom: calc(1.5em + 3.2em + 1.5em); }
+
 	:where(.welcome-page) .timer {
 		position: fixed;
 		bottom: 1.5em;
@@ -2563,7 +2522,7 @@ const SETTINGS_HOME_CSS = `
 	   ---------------------------------------------------------------
 	   A narrow pill of frosted glass floating above the bottom edge and the
 	   home bar. Its colours come from the page's own (--bg, --fg and the
-	   glass border), so it follows light and dark mode and any background.
+	   glass border), so it follows the font colour and any background.
 	   A tab's name opens beside its icon and the capsule widens to make
 	   room (settings-home.js measures the end first, so the name, the
 	   capsule and the glass all arrive together). */
@@ -2839,7 +2798,7 @@ const SETTINGS_HOME_CSS = `
 	/* The Marketplace tile with the registries' banners behind it
 	   (MARKET_TILE_SCRIPT): the pictures fill the box, crossfading, and
 	   darken towards the bottom so the name stays readable over any of
-	   them, in light mode too */
+	   them, with black text too */
 	.tile-slides {
 		position: absolute;
 		inset: 0;
@@ -3030,68 +2989,64 @@ const FLOATING_CSS = `
 	   (a module's Save | Remove). */
 	body:has(> .floating.top-left) { padding-top: calc(1.5em + 3.4em + 1.5em); }
 	body:has(> .floating.bottom-right) { padding-bottom: calc(1.5em + 3.4em + 1.5em); }
+
+	/* The smaller corner button (the welcome face's Settings) keeps the
+	   same room free at the top for its own size: on a phone the header
+	   box would otherwise start under it */
+	body:has(> .floating.top-right.corner-button) { padding-top: calc(1.5em + 2.75em + 1.5em); }
 `;
 
 // The back button Core puts on Face:1303's pages (about-face.js), which
 // don't load uiStyles: the floating button, with the colours it needs
-// set on the button itself, in the mode this browser is in (the device's,
-// when it hasn't picked one).
+// set on the button itself, in the font colour's set.
 function backButtonStyles() {
-	const mode = currentUiMode();
-	const colours = (palette) => `
+	const palette = PALETTES[colourSet()];
+	return `.floating {
 		--glass-border: ${palette.glassBorder};
 		--segment-bg: ${palette.segmentBg};
 		--fg: ${palette.fg};
 		--glass-bg-hover: ${palette.glassBgHover};
 		--glow-strong: ${palette.glowStrong};
-		--flash: ${palette.flash};`;
-	const variables = mode
-		? `.floating {${colours(PALETTES[mode])}}`
-		: `.floating {${colours(PALETTES.dark)}}
-	@media (prefers-color-scheme: light) { .floating {${colours(PALETTES.light)}} }`;
-	return variables + FLOATING_CSS;
+		--flash: ${palette.flash};}` + FLOATING_CSS;
 }
 
 function uiStyles(options) {
 	const settings = readSettings();
-	const forced = options && options.forceMode;
-	const mode = forced === "light" || forced === "dark" ? forced : currentUiMode();
+	const forced = options && (options.forceSet === "light" || options.forceSet === "dark") ? options.forceSet : null;
 
-	// The palette, then the glass for the same mode (backdrop.js), which
-	// can override a palette value or two.
+	// The palette, then the glass (backdrop.js), which can override a
+	// palette value or two.
 	//
-	// Which palette: the mode's own, unless there's a picture or a colour
-	// behind the pages. Then the glass is always glass, the dark set's,
-	// whichever the mode and whichever the font colour, and only the text
-	// colours are the font colour's (overPicturePalette).
+	// Which palette: the font colour's set (glassFor's `set`), unless
+	// there's a picture or a colour behind the pages. Then the glass is
+	// always glass, the dark set's, whichever the font colour, and only
+	// the text colours are the font colour's (overPicturePalette).
 	//
 	// The curtain a page fades in from and out to (page-motion.js): the
-	// page's own base colour, black or white, rather than its grey
-	const curtain = (light) => `--curtain: ${light ? DEFAULT_LIGHT : DEFAULT_DARK};`;
+	// page's own base colour, black or Beige Cream, rather than its grey
 	const pictured = backdrop.hasBackdrop(settings);
-	const forMode = (light) => {
-		const set = backdrop.glassFor(settings, light).set;
-		const palette = pictured ? overPicturePalette(set) : PALETTES[set];
-		return {
-			variables: `${paletteVariables(palette)}${backdrop.glassVariables(settings, light)}${curtain(light)}`,
-			rules: modeRules(!pictured && set === "light")
-		};
-	};
+	const set = forced || backdrop.glassFor(settings).set;
+	const paletteFor = (which) => (pictured ? overPicturePalette(which) : PALETTES[which]);
+	const curtain = (which) => `--curtain: ${curtainColour(settings, which)};`;
+	const colours = `
+	:root {${paletteVariables(paletteFor(set))}${backdrop.glassVariables(settings)}${curtain(set)}}
+	${setRules(!pictured && set === "light")}`;
 
-	const dark = forMode(false);
-	const light = forMode(true);
-	const colours = mode
+	// A font colour picked on the Appearance tab shows at once, before
+	// it's saved: the page puts .font-white or .font-black on <html>.
+	// Over a picture or a colour only the text's own colours follow, and
+	// everything made of glass stays as it is. On the Default background
+	// the whole set follows, since that's what the font colour picks
+	// there: black or Beige Cream, and the glow or the lift on a hover.
+	const fontClasses = pictured
 		? `
-	:root {${(mode === "light" ? light : dark).variables}}
-	${(mode === "light" ? light : dark).rules}`
+	:root.font-white { ${textColourVariables("dark")} }
+	:root.font-black { ${textColourVariables("light")} }`
 		: `
-	:root {${dark.variables}}
-	${dark.rules}
-
-	@media (prefers-color-scheme: light) {
-		:root {${light.variables}}
-		${light.rules}
-	}`;
+	:root.font-white {${paletteVariables(PALETTES.dark)}${curtain("dark")}}
+	${setRules(false, ":root.font-white ")}
+	:root.font-black {${paletteVariables(PALETTES.light)}${curtain("light")}}
+	${setRules(true, ":root.font-black ")}`;
 
 	// With a picture behind the page, the faint blobs below have nothing
 	// left to do: the picture is what the glass blurs.
@@ -3107,9 +3062,22 @@ function uiStyles(options) {
 	//   - a glass button that isn't in a box (Create a new face, on the
 	//     welcome face): the glass's tint and Dim, like a box has, hovered
 	//     or not
+	//
+	// And the green button (Save, Install): solid green with white words.
+	// Its see-through green over a warm picture came out olive, with its
+	// pale green words hard to read on it. Solid, it reads the same over
+	// anything, whatever the font colour. Written with :root in front so
+	// it wins over the button's own rules further down.
 	const overPicture = backdrop.hasBackdrop(settings)
 		? `
 	body { background-image: none; }
+	:root .btn-glossy-green {
+		color: #fff;
+		background: ${SOLID_GREEN.fill};
+		border-color: ${SOLID_GREEN.border};
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 3px rgba(0, 0, 0, 0.25);
+	}
+	:root .btn-glossy-green:hover:not(:disabled) { background: ${SOLID_GREEN.hover}; }
 	:is(h1, h1 + .lede):not(.segment *, .modal *) { color: var(--on-picture-fg); }
 	.glass:not(.segment *, .modal *),
 	.glass:not(.segment *, .modal *):hover,
@@ -3170,13 +3138,7 @@ function uiStyles(options) {
 	}
 	${overPicture}
 
-	/* A font colour picked on the Appearance tab shows at once, before
-	   it's saved: the page puts .font-white or .font-black on <html>,
-	   and the text's own colours follow. Everything made of glass stays
-	   as it is. (Only ever put there with a picture or a colour behind
-	   the pages.) */
-	:root.font-white { ${textColourVariables("dark")} }
-	:root.font-black { ${textColourVariables("light")} }
+	${fontClasses}
 
 	${CURTAIN_CSS}
 
@@ -3527,9 +3489,9 @@ function uiStyles(options) {
 			background-color 0.3s ease;
 	}
 
-	/* How a clickable segment answers a hover differs between light
-	   and dark; those rules are in modeRules() near the top of this
-	   file, with the colours. */
+	/* How a clickable segment answers a hover differs between white
+	   and black text; those rules are in setRules() near the top of
+	   this file, with the colours. */
 
 	/* ---------------------------------------------------------------
 	   Box heading — a box's title: a segment's, or one at the top of a
@@ -3748,28 +3710,12 @@ function uiStyles(options) {
 ${FLOATING_CSS}
 
 	/* ---------------------------------------------------------------
-	   Corner buttons — the same round floating button, a size smaller,
-	   top-right. The Light / Dark / Device switch sits in the corner, on
-	   the sign-in page and the welcome face: someone who can't sign in
-	   yet, or is just picking a dashboard, still deserves to read the
-	   page in the light they want. The welcome face puts its Settings
-	   button beside it (.top-right-second).
-
-	   The switch shows the choice in force -- a sun for Light, a moon
-	   for Dark, a monitor for Device -- and each tap moves to the next.
-	   All three icons are in the markup; data-mode-current, written by
-	   the server, picks the one that shows.
+	   Corner button — the same round floating button, a size smaller,
+	   top-right: the welcome face's Settings button, a gear. (Until
+	   2.0.0's Appearance profiles the Light / Dark / Device switch sat
+	   there, on the welcome face and the sign-in page.)
 	   --------------------------------------------------------------- */
 	.floating.top-right { top: 1.5em; right: 1.5em; }
-
-	/* One button's width (2.75em) and a small gap to the left of the
-	   corner one */
-	.floating.top-right-second { top: 1.5em; right: calc(1.5em + 2.75em + 0.75em); }
-
-	.mode-switch svg { display: none; }
-	.mode-switch[data-mode-current="light"] .icon-sun,
-	.mode-switch[data-mode-current="dark"] .icon-moon,
-	.mode-switch[data-mode-current="device"] .icon-device { display: block; }
 
 	/* ---------------------------------------------------------------
 	   Badge — a small outlined label that sits beside a word, such as
@@ -3807,13 +3753,11 @@ ${FLOATING_CSS}
 		color: var(--fg);
 	}
 
-	.mode-switch,
 	.corner-button {
 		width: 2.75em;
 		height: 2.75em;
 	}
 
-	.mode-switch svg,
 	.corner-button svg {
 		width: 1.25em;
 		height: 1.25em;
@@ -4461,7 +4405,7 @@ ${FLOATING_CSS}
 	/* The same glass as a box: its fill, the tint, the light edge, the
 	   blur picked in Settings. Two things more, because a pop-up sits on
 	   top of text rather than a picture: a little shade (--modal-shade,
-	   in modeRules) and at least 16px of blur, so what's behind it can
+	   in setRules) and at least 16px of blur, so what's behind it can
 	   never be read through it, even with the blur turned right down. */
 	.modal {
 		width: 100%;
@@ -4735,60 +4679,6 @@ const PASSWORD_TOGGLE_SCRIPT = `
 	});
 `;
 
-// The three choices, in the order a tap moves through them, and what
-// each is called where a person reads it
-const MODE_CHOICES = ["light", "dark", "device"];
-const MODE_NAMES = { light: "Light", dark: "Dark", device: "Device" };
-
-// The Light / Dark / Device switch, for the sign-in page and the welcome
-// face. All three icons are in the markup; the stylesheet shows the one
-// for the choice in force, which this reads from the request (the
-// browser's cookie). No cookie means "Device": follow the system.
-function modeSwitch() {
-	const current = currentUiMode() || "device";
-	const next = MODE_CHOICES[(MODE_CHOICES.indexOf(current) + 1) % MODE_CHOICES.length];
-	const label = `Appearance: ${MODE_NAMES[current]}. Tap for ${MODE_NAMES[next]}.`;
-
-	return `
-	<button type="button" class="floating top-right mode-switch"
-		data-mode-switch data-mode-current="${current}"
-		aria-label="${label}" title="${label}">
-		<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-			stroke-width="2" stroke-linecap="round" aria-hidden="true">
-			<circle cx="12" cy="12" r="4"></circle>
-			<path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
-		</svg>
-		<svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-			stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-			<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
-		</svg>
-		<svg class="icon-device" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-			stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-			<rect x="3" y="4" width="18" height="12" rx="2"></rect>
-			<path d="M8 20h8M12 16v4"></path>
-		</svg>
-	</button>`;
-}
-
-// Moves to the next choice: Light, then Dark, then Device, then Light
-// again. Device forgets this browser's choice (see setUiMode), so the
-// system decides once more. Needs UI_MODE_SCRIPT on the page too.
-const MODE_SWITCH_SCRIPT = `
-	(function () {
-		const button = document.querySelector("[data-mode-switch]");
-
-		if (!button) return;
-
-		button.addEventListener("click", function () {
-			const order = ${JSON.stringify(MODE_CHOICES)};
-			const current = button.getAttribute("data-mode-current");
-			const at = order.indexOf(current);
-
-			setUiMode(order[(at + 1) % order.length]);
-		});
-	})();
-`;
-
 // What the shared controls need from a script: a slider's filled part
 // (--fill, see "Slider" in the stylesheet), kept up to date as it moves,
 // as a script changes its value, and for sliders added later. Every page
@@ -5013,16 +4903,10 @@ const CURTAIN_CSS = `
 	@keyframes omni-curtain-drop { from { opacity: 0; } to { opacity: 1; } }
 `;
 
-// The curtain with its colour, for a page without uiStyles: dark, light,
-// or (null) whichever the device is set to
-function curtainStyles(light) {
-	const colour =
-		light === true
-			? `:root { --curtain: ${DEFAULT_LIGHT}; }`
-			: light === false
-				? `:root { --curtain: ${DEFAULT_DARK}; }`
-				: `:root { --curtain: ${DEFAULT_DARK}; } @media (prefers-color-scheme: light) { :root { --curtain: ${DEFAULT_LIGHT}; } }`;
-	return colour + CURTAIN_CSS;
+// The curtain with its colour, for a page without uiStyles (a face with
+// a theme, the About face): see curtainColour
+function curtainStyles() {
+	return `:root { --curtain: ${curtainColour()}; }` + CURTAIN_CSS;
 }
 
 // The status drawer and the takeover (network-status.js): on every page,
@@ -5567,7 +5451,6 @@ module.exports = {
 	CODE_FONTS,
 	NOTE_GLASS,
 	notificationStyles,
-	MODE_CHOICES,
 	DIALOG_SCRIPT,
 	CONTROLS_SCRIPT,
 	uiStyles,
@@ -5580,15 +5463,9 @@ module.exports = {
 	DEFAULT_DARK,
 	DEFAULT_LIGHT,
 	SYSTEM_FONT,
-	UI_MODE_COOKIE,
-	UI_MODE_SCRIPT,
-	uiModeFromRequest,
-	rememberUiMode,
-	currentUiMode,
 	versionHtml,
 	passwordField,
 	infoTip,
 	PASSWORD_TOGGLE_SCRIPT,
-	modeSwitch,
-	MODE_SWITCH_SCRIPT
+	colourSet
 };

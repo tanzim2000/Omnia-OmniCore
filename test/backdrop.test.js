@@ -390,7 +390,7 @@ test("Picture brightness: Original, and where a bright new picture starts", () =
 	assert.equal(backdrop.startingBrightness("x"), 0);
 
 	// In the stylesheet: 0 is the picture as it is
-	const at = (value) => backdrop.glassVariables({ backgroundKind: "picture", backgroundFile: "backdrop-aaaaaaaaaaaa.jpg", pictureBrightness: value }, false);
+	const at = (value) => backdrop.glassVariables({ backgroundKind: "picture", backgroundFile: "backdrop-aaaaaaaaaaaa.jpg", pictureBrightness: value });
 	assert.match(at(0), /--backdrop-brightness: 1;/);
 	assert.match(at(-50), /--backdrop-brightness: 0\.5;/);
 	assert.match(at(20), /--backdrop-brightness: 1\.2;/);
@@ -422,14 +422,20 @@ test("the glass setting: in range, and only what it may be", () => {
 });
 
 test("the glass in the stylesheet: plain, a tint, a picture", () => {
-	const plain = backdrop.glassVariables({ glassBlur: 26, glassTint: "none", glassTintStrength: 12 }, false);
+	const plain = backdrop.glassVariables({ glassBlur: 26, glassTint: "none", glassTintStrength: 12 });
 	assert.match(plain, /--glass-blur: 26px;/, "with the Default, the sliders as set by hand");
+	// With the Default, the font colour picks the set: black or Beige Cream
+	assert.equal(backdrop.glassFor({}).set, "dark");
+	assert.equal(backdrop.glassFor({ fontColour: "black" }).set, "light");
+	assert.equal(backdrop.glassFor({ fontColour: "black" }).font, "black");
+	// and a brightness left from an earlier picture does nothing there
+	assert.match(backdrop.glassVariables({ pictureBrightness: -30 }), /--backdrop-brightness: 1;/);
 	assert.match(plain, /--glass-tint: transparent;/);
 	assert.match(plain, /--segment-edge: transparent;/, "no edge without a picture");
 	assert.ok(!plain.includes("--on-picture"), "nothing for a title on a picture without one");
 	assert.ok(!plain.includes("--segment-bg"), "the palette's own fill without a picture");
 
-	const tinted = backdrop.glassVariables({ glassBlur: 8, glassTint: "#ff0000", glassTintStrength: 20 }, false);
+	const tinted = backdrop.glassVariables({ glassBlur: 8, glassTint: "#ff0000", glassTintStrength: 20 });
 	assert.match(tinted, /--glass-tint: rgba\(255, 0, 0, 0\.2\);/);
 
 	const picture = {
@@ -445,10 +451,10 @@ test("the glass in the stylesheet: plain, a tint, a picture", () => {
 		glassTint: "dominant",
 		glassTintStrength: 10
 	};
-	const glass = backdrop.glassFor(picture, false);
+	const glass = backdrop.glassFor(picture);
 	assert.equal(glass.font, "white");
 	assert.equal(glass.set, "dark");
-	const over = backdrop.glassVariables(picture, false);
+	const over = backdrop.glassVariables(picture);
 	// The Dim is darkness added to the tint: one colour over the glass
 	assert.match(over, new RegExp(`--glass-tint: ${backdrop.tintWithDim("#336699", glass.tintStrength, glass.dim).replace(/[()]/g, "\\$&")};`));
 	assert.ok(glass.dim > 0, "the bright sky is dimmed");
@@ -457,18 +463,17 @@ test("the glass in the stylesheet: plain, a tint, a picture", () => {
 	// light shadow, whatever the font colour (that's for the glass)
 	assert.match(over, /--on-picture-fg: #111;/, "a title on a pale sky: black");
 	assert.ok(!over.includes("--on-picture-shadow"), "flat: no shadow or glow");
-	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }, false), /--on-picture-fg: #111;/);
+	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }), /--on-picture-fg: #111;/);
 	const night = { ...picture, backgroundLow: NIGHT.low, backgroundHigh: NIGHT.high, backgroundMean: NIGHT.mean };
-	assert.match(backdrop.glassVariables({ ...night, fontColour: "black" }, false), /--on-picture-fg: #fff;/, "white on a night city, though the font colour is black");
+	assert.match(backdrop.glassVariables({ ...night, fontColour: "black" }), /--on-picture-fg: #fff;/, "white on a night city, though the font colour is black");
 
-	// The font colour as picked, whichever the mode; black text: the light
-	// set for the text, and the same glass as under white
-	assert.equal(backdrop.glassFor(picture, true).font, "white", "light mode doesn't decide it over a picture");
-	const light = backdrop.glassFor({ ...picture, fontColour: "black" }, true);
+	// The font colour as picked; black text: the light set for the text,
+	// and the same glass as under white
+	const light = backdrop.glassFor({ ...picture, fontColour: "black" });
 	assert.equal(light.font, "black");
 	assert.equal(light.set, "light");
-	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }, true), /--segment-bg: rgba\(255, 255, 255, 0\.07\);/);
-	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }, true), /--segment-edge: rgba\(255, 255, 255, 0\.16\);/);
+	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }), /--segment-bg: rgba\(255, 255, 255, 0\.07\);/);
+	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }), /--segment-edge: rgba\(255, 255, 255, 0\.16\);/);
 
 	// No veil over the picture any more
 	assert.ok(!over.includes("--backdrop-dim"));
@@ -519,9 +524,9 @@ test("a colour behind the pages: its own brightness, and Colour brightness lifti
 
 	const gold = { ...changes, glassAuto: true, glassPinned: [], glassTint: "vibrant", glassTintStrength: 10 };
 	assert.ok(backdrop.hasColour(gold) && backdrop.hasBackdrop(gold) && !backdrop.hasPicture(gold));
-	const glass = backdrop.glassFor(gold, false);
+	const glass = backdrop.glassFor(gold);
 	assert.ok(glass.dim > 30, "a bright colour gets a darker glass under white text");
-	const css = backdrop.glassVariables(gold, false);
+	const css = backdrop.glassVariables(gold);
 	assert.match(css, /--segment-edge: rgba/, "the glass over a colour is the glass over a picture");
 	assert.match(backdrop.backdropHtml(gold), /<span class="omni-colour" style="--colour:#ffd700"><\/span>/);
 	assert.equal(backdrop.tintColour(gold), null, "Vibrant is a picture's: no tint over a colour");
@@ -530,22 +535,22 @@ test("a colour behind the pages: its own brightness, and Colour brightness lifti
 	// into it, so black gets lighter too (multiplying black by anything
 	// stays black)
 	const black = { ...backdrop.useColour("#000000").changes, glassAuto: true, glassPinned: [], glassTint: "none" };
-	const darker = backdrop.glassVariables({ ...black, pictureBrightness: -30 }, false);
+	const darker = backdrop.glassVariables({ ...black, pictureBrightness: -30 });
 	assert.match(darker, /--colour-brightness: 0\.7;/);
 	assert.match(darker, /--colour-lift: 0;/);
-	const brighter = backdrop.glassVariables({ ...black, pictureBrightness: 50 }, false);
+	const brighter = backdrop.glassVariables({ ...black, pictureBrightness: 50 });
 	assert.match(brighter, /--colour-brightness: 1;/);
 	assert.match(brighter, /--colour-lift: 0\.5;/);
 
 	// ...and Auto sees it: black lifted by half needs more glass under
 	// white text than black as it is
-	const asIs = backdrop.glassFor({ ...black, pictureBrightness: 0 }, false);
-	const lifted = backdrop.glassFor({ ...black, pictureBrightness: 50 }, false);
+	const asIs = backdrop.glassFor({ ...black, pictureBrightness: 0 });
+	const lifted = backdrop.glassFor({ ...black, pictureBrightness: 50 });
 	assert.equal(asIs.dim, 0, "black needs no Dim");
 	assert.ok(lifted.dim > asIs.dim, `lifted: Dim ${lifted.dim}`);
 	// A picture isn't lifted: its brightness still multiplies
 	const shadow = { ...black, backgroundKind: "picture", backgroundFile: "backdrop-aaaaaaaaaaaa.jpg", pictureBrightness: 50 };
-	assert.equal(backdrop.glassFor(shadow, false).dim, 0, "black in a picture stays black");
+	assert.equal(backdrop.glassFor(shadow).dim, 0, "black in a picture stays black");
 });
 
 test("a picture from an earlier v2 build gets its vibrant colour and overall brightness", () => {
@@ -679,12 +684,13 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.ok(glassScript.includes('sendPart("/appearance"'), "Text size and the Back button are saved with the rest");
 	assert.ok(!page.includes("saveAppearance("), "never saved straight away any more");
 
-	// With the Default background: no Auto, no brightness, no Dim, and
-	// the font colour's strip says what it needs, with nothing to pick
+	// With the Default background: no Auto, no brightness, no Dim. The
+	// font colour is offered all the same (since 2.0.0, when Light and
+	// Dark went away): it picks black or Beige Cream here
 	assert.ok(!page.includes('id="glass-auto"'), "nothing for Auto to read against");
 	assert.ok(!page.includes('id="brightness"') && !page.includes('id="dim"'));
-	assert.match(page, /<div class="inset-label">COLOUR<\/div>\s*<div class="inset-value" id="font-colour-name">With a picture or a colour<\/div>/);
-	assert.ok(!page.includes('class="font-swatches"'));
+	assert.match(page, /<div class="inset-label">COLOUR<\/div>\s*<div class="inset-value" id="font-colour-name">White, on black<\/div>/);
+	assert.ok(page.includes('class="font-swatches on-colour"'));
 	assert.ok(!page.includes('data-font="auto"'), "no Auto");
 
 	// Frosted glass stays short: the Tint colours on a row of their own,
@@ -961,9 +967,7 @@ test("the background fades: in once loaded, and from the old one after a reload 
 	assert.ok(script.includes("if (was && Date.now() - was.at > 10000) was = null;"), "an old copy is never shown much later");
 	assert.ok(script.includes("if (was && !still) {"), "no fade with reduced motion");
 
-	// Both reloads keep it first
-	assert.ok(uiTheme.UI_MODE_SCRIPT.includes("if (typeof window !== \"undefined\" && window.omniKeepBackdrop) window.omniKeepBackdrop();\n\t\tlocation.reload();"), "Dark and Light");
-	const css = uiTheme.uiStyles({ forceMode: "dark" });
+	const css = uiTheme.uiStyles({ forceSet: "dark" });
 	assert.match(css, /\.omni-backdrop\.omni-waiting picture,\s*\.omni-backdrop\.omni-waiting video \{ opacity: 0; \}/);
 	assert.match(css, /\.omni-backdrop-was\.going \{ opacity: 0; \}/);
 });

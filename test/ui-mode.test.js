@@ -1,16 +1,18 @@
 // test/ui-mode.test.js
-// In short: Light and dark
+// In short: White or black text, no Light or Dark
 //
-// Light and dark, since v1.19.2.
+// Light and dark, since v1.19.2, and how they went away in 2.0.0.
 //
 // Two separate choices live here:
-//   - how OmniCore's own pages look, chosen per BROWSER in a cookie
-//     (omnicore_ui_mode), following the device until one is picked;
+//   - how OmniCore's own pages look. Until 2.0.0 that was Light or Dark,
+//     chosen per BROWSER in a cookie (omnicore_ui_mode). Now the font
+//     colour (Settings, Appearance) picks the everyday colours: white
+//     text, the dark set; black text, the light set. The old cookie is
+//     never read.
 //   - how notifications look on a face's screen, chosen per FACE
-//     (notificationMode), dark unless changed.
+//     (notificationMode), dark unless changed. Still here.
 //
-// Plus the two small pieces that came with them: the light/dark switch
-// on the sign-in page, and the Show / Hide button on password boxes.
+// Plus the Show / Hide button on password boxes.
 
 const helpers = require("./helpers");
 
@@ -60,35 +62,80 @@ async function get(urlPath, extraCookie) {
 
 // --- The stylesheet on its own ----------------------------------------
 
-test("ui mode: with no choice made, the page carries both and the device picks", () => {
+const { writeSettings } = require("../core/settings-store");
+
+test("ui mode: a fresh install is white text on black, with no device query", () => {
+	resetState();
 	const css = theme.uiStyles();
 
-	assert.ok(css.includes(DARK_BG), "dark first");
-	assert.ok(css.includes("@media (prefers-color-scheme: light)"));
-	assert.ok(css.indexOf(LIGHT_BG) > css.indexOf("prefers-color-scheme: light"), "light inside the query");
+	assert.ok(css.includes(DARK_BG), "the dark set");
+	assert.ok(!css.includes("prefers-color-scheme"), "the device never decides");
+	assert.equal(theme.colourSet(), "dark");
 });
 
-test("ui mode: a forced mode carries only that palette", () => {
-	const light = theme.uiStyles({ forceMode: "light" });
-	assert.ok(light.includes(LIGHT_BG));
-	assert.ok(!light.includes(DARK_BG));
-	assert.ok(!light.includes("prefers-color-scheme"));
+test("ui mode: black text on the Default background is Beige Cream", () => {
+	resetState();
+	writeSettings({ fontColour: "black" });
+	const css = theme.uiStyles();
+	const root = css.slice(0, css.indexOf(":root.font-white"));
 
-	const dark = theme.uiStyles({ forceMode: "dark" });
-	assert.ok(dark.includes(DARK_BG));
-	assert.ok(!dark.includes(LIGHT_BG));
+	assert.ok(root.includes(LIGHT_BG), "the light set in force");
+	assert.ok(!root.includes(DARK_BG));
+	assert.equal(theme.colourSet(), "light");
+	assert.ok(root.includes("transform: scale(1.02)"), "a box lifts on a hover rather than glowing");
+	resetState();
 });
 
-test("ui mode: the cookie is read strictly", () => {
-	const read = (header) => theme.uiModeFromRequest({ headers: { cookie: header } });
+test("ui mode: on the Default background, both sets wait under the font classes", () => {
+	// So picking the font colour on the Appearance tab shows the whole
+	// page in it before it's saved, by a class and nothing else
+	resetState();
+	const css = theme.uiStyles();
+	const white = css.match(/:root\.font-white \{([^}]*)\}/)[1];
+	const black = css.match(/:root\.font-black \{([^}]*)\}/)[1];
 
-	assert.equal(read("omnicore_ui_mode=light"), "light");
-	assert.equal(read("a=b; omnicore_ui_mode=dark; c=d"), "dark");
-	assert.equal(read("omnicore_ui_mode=LIGHT"), null, "exactly light or dark");
-	assert.equal(read("omnicore_ui_mode=};body{display:none"), null);
-	assert.equal(read("other_ui_mode=light"), null);
-	assert.equal(read(""), null);
-	assert.equal(theme.uiModeFromRequest({ headers: {} }), null);
+	assert.ok(white.includes(DARK_BG));
+	assert.ok(black.includes(LIGHT_BG));
+	assert.ok(black.includes("--curtain: " + theme.DEFAULT_LIGHT));
+	assert.ok(css.includes(":root.font-black .segment.clickable:hover"), "the lift, for black text");
+	assert.ok(css.includes(":root.font-white .segment.clickable:hover"), "the glow, for white text");
+});
+
+test("ui mode: over a picture the font classes carry only the text's colours", () => {
+	resetState();
+	writeSettings({ backgroundKind: "colour", backgroundColor: "#3d5a99", backgroundLow: 0.1, backgroundHigh: 0.1, backgroundMean: 0.1 });
+	const css = theme.uiStyles();
+	const black = css.match(/:root\.font-black \{([^}]*)\}/)[1];
+
+	assert.ok(black.includes("--fg: " + theme.PALETTES.light.fg));
+	assert.ok(!black.includes("--bg:"), "the glass and the page stay as they are");
+
+	// The green button (Save) is solid green with white words over a
+	// picture or a colour, so it reads over a warm one too
+	assert.match(css, /:root \.btn-glossy-green \{\s*color: #fff;\s*background: #17803f;/);
+	assert.match(css, /:root \.btn-glossy-green:hover:not\(:disabled\) \{ background: #1c9149; \}/);
+	resetState();
+	assert.ok(!theme.uiStyles().includes(":root .btn-glossy-green"), "on the Default background it's as it was");
+});
+
+test("ui mode: a forced set carries only that palette", () => {
+	resetState();
+	const light = theme.uiStyles({ forceSet: "light" });
+	const lightRoot = light.slice(0, light.indexOf(":root.font-white"));
+	assert.ok(lightRoot.includes(LIGHT_BG));
+	assert.ok(!lightRoot.includes(DARK_BG));
+
+	const dark = theme.uiStyles({ forceSet: "dark" });
+	const darkRoot = dark.slice(0, dark.indexOf(":root.font-white"));
+	assert.ok(darkRoot.includes(DARK_BG));
+	assert.ok(!darkRoot.includes(LIGHT_BG));
+});
+
+test("ui mode: the cookie and the switch are gone", () => {
+	assert.equal(theme.uiModeFromRequest, undefined);
+	assert.equal(theme.rememberUiMode, undefined);
+	assert.equal(theme.modeSwitch, undefined);
+	assert.equal(theme.UI_MODE_SCRIPT, undefined);
 });
 
 test("ui mode: the setting is gone from a fresh install", () => {
@@ -106,11 +153,11 @@ test("ui mode: boots", async () => {
 	await waitForPort(PORT);
 });
 
-test("sign-in page: the light/dark switch and the password Show button", async () => {
+test("sign-in page: no light/dark switch, and the password Show button", async () => {
 	// First run: the setup screen shares the same template
 	const setup = await get("/");
 	assert.ok(setup.html.includes("Set up OmniCore"));
-	assert.ok(setup.html.includes("data-mode-switch"), "switch on setup");
+	assert.ok(!setup.html.includes("data-mode-switch"), "no switch on setup");
 	assert.ok(setup.html.includes('class="password-field"'), "password box on setup");
 	assert.ok(setup.html.includes('autocomplete="new-password"'));
 
@@ -120,10 +167,8 @@ test("sign-in page: the light/dark switch and the password Show button", async (
 	const signedOut = await fetch(`http://127.0.0.1:${PORT}/`);
 	const html = await signedOut.text();
 
-	assert.ok(html.includes("data-mode-switch"), "the switch");
-	assert.ok(html.includes('class="floating top-right mode-switch"'), "top-right");
-	assert.ok(html.includes('class="icon-sun"') && html.includes('class="icon-moon"'));
-	assert.ok(html.includes("function setUiMode"), "and the script that sets the cookie");
+	assert.ok(!html.includes("data-mode-switch"), "no switch");
+	assert.ok(!html.includes("function setUiMode"), "and no script setting a cookie");
 	assert.ok(
 		html.includes('<button type="button" class="password-toggle" data-password-toggle'),
 		"Show / Hide inside the password box"
@@ -131,33 +176,22 @@ test("sign-in page: the light/dark switch and the password Show button", async (
 	assert.ok(html.includes('autocomplete="current-password"'));
 });
 
-test("ui mode: the page follows this browser's cookie", async () => {
+test("ui mode: a browser's old Light or Dark cookie is never read", async () => {
 	const none = await get("/");
-	assert.ok(none.html.includes("prefers-color-scheme: light"), "no cookie: the device decides");
-
 	const light = await get("/", "omnicore_ui_mode=light");
-	assert.ok(light.html.includes(LIGHT_BG));
+
+	assert.ok(none.html.includes(DARK_BG));
+	assert.ok(light.html.includes(DARK_BG), "white text on black, as the font colour says");
 	assert.ok(!light.html.includes("prefers-color-scheme"));
-
-	const dark = await get("/", "omnicore_ui_mode=dark");
-	assert.ok(dark.html.includes(DARK_BG));
-	assert.ok(!dark.html.includes(LIGHT_BG));
-
-	const junk = await get("/", "omnicore_ui_mode=purple");
-	assert.ok(junk.html.includes("prefers-color-scheme: light"), "junk counts as no choice");
 });
 
-test("settings: no Appearance Mode box any more; a browser's pick still counts", async () => {
-	// Its place on the Appearance tab is the tab's saving box. Light and
-	// Dark go for good with appearance profiles; until then a browser's
-	// earlier pick still decides
-	const device = await get("/");
-	assert.ok(!device.html.includes('data-mode="device"'));
-	assert.ok(!device.html.includes("Device (Active)"));
-	assert.ok(!device.html.includes("setUiMode(preview.dataset.mode)"));
-
-	const light = await get("/", "omnicore_ui_mode=light");
-	assert.ok(light.html.includes(LIGHT_BG));
+test("settings: no Appearance Mode box; the font colour is offered on the Default background too", async () => {
+	const page = await get("/");
+	assert.ok(!page.html.includes('data-mode="device"'));
+	assert.ok(!page.html.includes("Device (Active)"));
+	assert.ok(page.html.includes("White, on black"), "what the font colour gives here");
+	assert.ok(page.html.includes('data-font="black"'), "both to pick from");
+	assert.ok(page.html.includes("--swatch-picture:" + theme.DEFAULT_LIGHT), "black text shown on Beige Cream");
 });
 
 test("face: notifications are dark until changed, and only light or dark is kept", async () => {

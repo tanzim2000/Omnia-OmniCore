@@ -4,7 +4,7 @@
 //
 // OmniCore's pages (Settings, the setup wizard, the welcome face, an
 // Inport's page, a face with no theme) have the Default background: black
-// in dark mode, Beige Cream in light (see ui-theme.js). The About face
+// with white text, Beige Cream with black text (see ui-theme.js). The About face
 // keeps a look of its own (about-face.css). A person can put something
 // else behind them instead:
 //
@@ -696,15 +696,16 @@ function hasBackdrop(settings) {
 	return hasPicture(settings) || hasColour(settings);
 }
 
-// The glass for one Appearance Mode (light or dark), as it will be drawn:
+// The glass as it will be drawn:
 //
 //   { blur, tintStrength, dim, font, contrast, readable, set }
 //
-// `set` is which text colours go with it: "dark" (white text) or "light"
-// (black text); the glass itself is the same either way. With the Default
-// background behind the pages there's nothing for Auto to read against:
-// the mode's own colours, Blur and Tint strength as set by hand, no Dim.
-function glassFor(settings, light) {
+// `set` is which everyday colours go with it: "dark" (white text) or
+// "light" (black text). With the Default background behind the pages
+// there's nothing for Auto to read against: the font colour as picked
+// (which is what picks black or Beige Cream there), Blur and Tint strength
+// as set by hand, no Dim.
+function glassFor(settings) {
 	const pinned = Array.isArray(settings.glassPinned) ? settings.glassPinned : [];
 	const auto = settings.glassAuto !== false;
 
@@ -713,14 +714,15 @@ function glassFor(settings, light) {
 			const value = Number(settings[name]);
 			return Number.isFinite(value) ? Math.min(most, Math.max(0, Math.round(value))) : fallback;
 		};
+		const font = fontOf(settings);
 		return {
 			blur: kept("glassBlur", BLUR_DEFAULT, BLUR_MOST),
 			tintStrength: kept("glassTintStrength", TINT_STRENGTH_DEFAULT, TINT_STRENGTH_MOST),
 			dim: 0,
-			font: light ? "black" : "white",
+			font,
 			contrast: null,
 			readable: true,
-			set: light ? "light" : "dark"
+			set: font === "black" ? "light" : "dark"
 		};
 	}
 
@@ -818,17 +820,18 @@ function onPictureText(input) {
 	return 1.05 / (light + 0.05) >= (light + 0.05) / 0.0556 ? "white" : "black";
 }
 
-// CSS variables for the glass and the picture, for one Appearance Mode
-// (light or dark). Part of uiStyles in ui-theme.js, after the palette
-// (which glassFor's `set` picked).
-function glassVariables(settings, light) {
-	const glass = glassFor(settings, light);
+// CSS variables for the glass and the picture. Part of uiStyles in
+// ui-theme.js, after the palette (which glassFor's `set` picked).
+function glassVariables(settings) {
+	const glass = glassFor(settings);
 	const picture = hasBackdrop(settings);
 	const tint = tintColour(settings);
 	const onIt = picture
 		? onPictureText({ mean: settings.backgroundMean, brightness: settings.pictureBrightness, colour: hasColour(settings) })
 		: null;
-	const brightness = Math.min(BRIGHTNESS_MOST, Math.max(BRIGHTNESS_LEAST, Number(settings.pictureBrightness) || 0));
+	// The brightness slider is a background's: with the Default there's
+	// nothing for it to change
+	const brightness = picture ? Math.min(BRIGHTNESS_MOST, Math.max(BRIGHTNESS_LEAST, Number(settings.pictureBrightness) || 0)) : 0;
 
 	return `
 		--glass-blur: ${glass.blur}px;
@@ -868,8 +871,8 @@ function glassVariables(settings, light) {
 //      Now it fades in once it's ready. One that's already loaded (from the
 //      browser's cache, going from page to page) is simply there, with no
 //      fade every time.
-//   2. Changing the background (a new picture, a colour, Default) or
-//      switching Dark and Light. Both reload the page, and the old
+//   2. Changing the background (a new picture, a colour, Default). It
+//      reloads the page, and the old
 //      background vanished before the new one was drawn. Now, just before
 //      the reload, the page keeps a copy of what's behind it
 //      (omniKeepBackdrop, in sessionStorage: what's on the screen, with
@@ -886,8 +889,7 @@ const BACKDROP_SCRIPT = `
 		var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 		var layer = document.querySelector(".omni-backdrop");
 
-		// Kept just before a reload; called by the Dark and Light switch and
-		// by Change background's Use
+		// Kept just before a reload; called by Change background's Use
 		window.omniKeepBackdrop = function () {
 			try {
 				var kept = { at: Date.now(), bg: getComputedStyle(document.body).backgroundColor, html: "" };
