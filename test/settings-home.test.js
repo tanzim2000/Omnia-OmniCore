@@ -306,7 +306,7 @@ test("pages: the settings home has four tabs, and no version pill", async () => 
 	const typeHead = pane("appearance").slice(pane("appearance").indexOf('class="type-head"'));
 	assert.ok(typeHead.indexOf("type-head-text") < typeHead.indexOf('class="stepper"'), "the note, then the stepper");
 	assert.ok(typeHead.indexOf('class="stepper"') < typeHead.indexOf('class="type-row"'), "the row under both");
-	assert.ok(typeHead.indexOf('class="tabs font-colours"') < typeHead.indexOf('class="inset"'), "Font colour, then the font");
+	assert.ok(typeHead.indexOf("COLOUR") < typeHead.indexOf("FONT"), "Font colour's strip, then the font's");
 	assert.ok(
 		typeHead.slice(typeHead.indexOf("type-head-text"), typeHead.indexOf('class="stepper"')).includes("Dashboards are unaffected."),
 		"the note sits in the left part, beside the stepper"

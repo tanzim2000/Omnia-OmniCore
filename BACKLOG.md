@@ -168,15 +168,21 @@ Built as below (`solveGlass` in `core/backdrop.js`; the Appearance tab is
 sent its source, so what it shows is what's saved). What it settled that
 the plan didn't say:
 
-- **The everyday colours follow the font colour** over a picture or a
-  colour: white text has the dark set, black text the light set,
-  whichever Appearance Mode this is. Phase B's rule, early, only where
-  there's something behind the pages. With the Default background
-  there's no Auto, Picture brightness or Dim, the font colour cards
-  can't be picked, and Blur and Tint strength are as set by hand.
-- **Light mode starts from black text**, dark mode from white. Black
-  text over a dark picture stays black while the half-white glass is
-  enough to read it on.
+- **Glass stays glass** (after the first build): over a picture or a
+  colour, everything made of glass (boxes, buttons, tabs, input boxes,
+  the Back button) is the dark set's glass, whatever the mode and the
+  font colour: a whisper of white, the tint and the Dim. Only the text
+  colours follow the font colour (`overPicturePalette` in ui-theme.js).
+  With the Default background there's no Auto, Picture brightness or
+  Dim, Font colour says it needs a picture or a colour, and Blur and Tint
+  strength are as set by hand.
+- **Font colour is White or Black, no Auto** (decided after the first
+  build). White to start with; the Appearance Mode doesn't decide it over
+  a picture. Core switches it, saying nothing, only when the glass or the
+  background changes and it can't be read even with every free slider
+  as far as it goes (`fontToKeep`). Picking it never sets that off, so a
+  person can switch back until the next change. Picked from two "Aa",
+  each on a piece of the background through the real glass.
 - **Text with no glass under it** (a page's title, and the line under the
   welcome face's and the wizard's) gets a soft shadow, dark under white
   text and light under black. A glass button outside any box (Create a

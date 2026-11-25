@@ -1557,7 +1557,7 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   colour picker, or the background's Dominant or Vibrant colour. **Dim**
   (0 to 100%) is darkness added to the tint; the two are one colour,
   `--glass-tint` (`tintWithDim`). Over a picture the glass gets a fuller
-  fill (a whisper of white under white text, half white under black), a
+  fill (a whisper of white, whatever the font colour), a
   thin light edge and a little more colour (`--glass-saturate`). With the
   plain background and no tint, it looks as it always did.
 - **Keeping the text readable** (`solveGlass`, sent as it is to the
@@ -1573,16 +1573,21 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   and only as far as needed; a slider that can't help counts as at its
   limit. A slider moved by hand is **pinned** (`glassPinned`) and keeps its
   value (`glassBlur`, `glassTintStrength`, `glassDim`); Auto off uses all
-  three as set. **Font colour** (`fontColour`: auto, white or black) is the
-  last resort: when it's Auto and the Appearance Mode's own colour (white in
-  dark, black in light) can't be made readable, Auto tries the other one,
-  its sliders starting again from where they start. White or Black keeps
-  it, and the page warns instead.
-- **The everyday colours follow the font colour** over a picture or a
-  colour (`glassFor(...).set` in `uiStyles`): white text has the dark
-  palette, black text the light one (Beige Cream), whatever the mode. With
-  the Default background, the mode's own palette, Blur and Tint strength
-  as set by hand, and no Dim. A page's title on the picture, with no glass
+  three as set. **Font colour** (`fontColour`: white or black, white to
+  start with) is kept as picked and drawn as it is (`solveGlass` never
+  switches it). When the glass or the background changes
+  (`POST /background/glass` with `recheck`, a new picture or colour),
+  `recheckFont` asks `fontToKeep`: if the text can't be read even with
+  Auto's free sliders as far as they go, and the other colour reads
+  better (its sliders starting again from where they start), it's
+  switched and saved. Picking the font colour sends no `recheck`, so it's
+  never undone straight away. The page does the same as it goes.
+- **Glass stays glass** over a picture or a colour (`overPicturePalette`
+  in `uiStyles`): every fill, edge, sheen, input box and track is the dark
+  palette's, whatever the mode and the font colour; only the text's own
+  colours (the text, its grey, a red or green word, a green button's
+  word) are the font colour's set. With the Default background, the
+  mode's own palette, Blur and Tint strength as set by hand, and no Dim. A page's title on the picture, with no glass
   under it, gets `--on-picture-shadow`.
 
 ### The settings home and page fades

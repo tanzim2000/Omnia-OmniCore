@@ -112,11 +112,11 @@ const DEFAULTS = {
 	glassTintStrength: 12,
 	glassDim: 0,
 
-	// The text over a picture or a colour: "white" or "black", or "auto"
-	// (the Appearance Mode's own, switched by Auto only when nothing else
-	// makes it readable). White text has the dark everyday colours, black
-	// the light ones.
-	fontColour: "auto",
+	// The text over a picture or a colour: "white" or "black". Core
+	// switches it when the glass or the background changes and the text
+	// can't be read otherwise (backdrop.js). The glass looks the same
+	// either way.
+	fontColour: "white",
 
 	// --- Notifications ----------------------------------------------
 	// Live here rather than in a face or a theme because the overlay is

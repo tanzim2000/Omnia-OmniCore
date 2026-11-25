@@ -54,17 +54,22 @@
 //   Blur            how blurred the picture is through the glass
 //   Tint strength   how much of the tint colour is laid over it
 //   Dim             how much darkness is added to the tint
-//   Font colour     white or black text (and with it the everyday
-//                   colours: white text has the dark set, black the light)
+//   Font colour     white or black text (and the grey text with it). The
+//                   glass looks the same either way.
 //
 // One Auto looks after Blur, Tint strength and Dim (solveGlass below): it
 // keeps the text at a contrast of at least 4.5 against what's behind the
 // glass. Moving one of the three by hand PINS it, and Auto leaves a pinned
 // one alone. Auto moves Dim first, then Blur, then Tint strength, each up
-// to its limit before the next, and only as far as needed. The font colour
-// is the last resort: when nothing else makes the text readable, Auto
-// switches it (unless it's pinned to White or Black, when the page warns
-// instead).
+// to its limit before the next, and only as far as needed.
+//
+// The font colour is White or Black, as picked, with nothing on the page
+// saying more. But when the glass or the background changes (a slider,
+// the tint, Auto, unpinning, a new picture or colour), Core checks it
+// (fontToKeep below): if even with every free slider as far as it goes
+// the text can't be read, it switches the font colour, and keeps the
+// switch. Only then: picking the font colour itself never sets it off, so
+// a person can always switch back, until the next change.
 
 const crypto = require("crypto");
 const fs = require("fs");
@@ -107,10 +112,10 @@ const AUTO_ORDER = ["dim", "blur", "tintStrength"];
 // the settings page can be sent it as it is and work out exactly what the
 // server will.
 //
-//   fill   how much white is in the glass over a picture, by font colour:
-//          a whisper of it under white text (the dark set), half of it
-//          under black text (the light set). The same values as
-//          glassVariables below.
+//   fill   how much white is in the glass over a picture: a whisper of
+//          it, whatever the font colour (the glass is the glass; the font
+//          colour changes only the text and the small controls). The same
+//          value as glassVariables below.
 //   dimMost   how far Auto takes Dim: never quite black glass (by hand it
 //             goes to 100%). Blur and Tint strength go as far as their
 //             sliders do.
@@ -121,7 +126,7 @@ const GLASS_MODEL = {
 	dimMost: 85,
 	blurDefault: BLUR_DEFAULT,
 	tintStrengthDefault: TINT_STRENGTH_DEFAULT,
-	fill: { white: 0.07, black: 0.5 }
+	fill: 0.07
 };
 
 function folder() {
@@ -461,7 +466,7 @@ function removeOthers(keep) {
 //   pinned                    which of the three Auto leaves alone
 //   brightness                Picture brightness, -50 to +50
 //   tint                      "none", "dominant", "vibrant" or a colour
-//   fontColour                "auto", "white" or "black"
+//   fontColour                "white" or "black"
 function cleanGlass(body) {
 	const sent = body && typeof body === "object" ? body : {};
 	const changes = {};
@@ -494,7 +499,7 @@ function cleanGlass(body) {
 	else if (sent.tint === "match") changes.glassTint = "dominant";
 	else if (hexColour(sent.tint)) changes.glassTint = hexColour(sent.tint);
 
-	if (["auto", "white", "black"].includes(sent.fontColour)) changes.fontColour = sent.fontColour;
+	if (["white", "black"].includes(sent.fontColour)) changes.fontColour = sent.fontColour;
 
 	return changes;
 }
@@ -529,10 +534,7 @@ function tintColour(settings) {
 //   input.pinned            the sliders moved by hand: "dim", "blur",
 //                           "tintStrength"
 //   input.blur, tintStrength, dim   the values set by hand
-//   input.font              "auto", "white" or "black"
-//   input.start             the font colour to try first when it's Auto:
-//                           the one the Appearance Mode has (white in
-//                           dark, black in light)
+//   input.font              "white" or "black"
 //   model                   GLASS_MODEL
 //
 // Returns { blur, tintStrength, dim, font, contrast, readable }.
@@ -570,7 +572,7 @@ function solveGlass(input, model) {
 		var light = font === "white" ? high - (high - mean) * spread : low + (mean - low) * spread;
 		var grey = Math.min(1, encode(Math.max(0, light)) * factor);
 		var colour = [grey, grey, grey];
-		var fill = model.fill[font];
+		var fill = model.fill;
 		var strength = tintRgb ? values.tintStrength / 100 : 0;
 		var dim = values.dim / 100;
 		for (var i = 0; i < 3; i++) {
@@ -645,20 +647,27 @@ function solveGlass(input, model) {
 		return values;
 	}
 
-	var first = input.font === "white" || input.font === "black" ? input.font : input.start === "black" ? "black" : "white";
-	var result = solveFor(first);
-
-	// The last resort: the other font colour, when it's free to change and
-	// this one can't be made readable. Its sliders start again from where
-	// they start, so whatever Auto raised for the first one comes down.
-	if (result.contrast < model.target && input.font !== "white" && input.font !== "black") {
-		var other = solveFor(first === "white" ? "black" : "white");
-		if (other.contrast >= model.target || other.contrast > result.contrast) result = other;
-	}
-
+	var result = solveFor(input.font === "black" ? "black" : "white");
 	result.readable = result.contrast >= model.target;
 	result.contrast = Math.round(result.contrast * 100) / 100;
 	return result;
+}
+
+// The font colour to keep after the glass or the background changed: the
+// one picked, unless even with Auto's sliders as far as they go it can't
+// be read and the other one reads better. The other one's sliders start
+// again from where they start, so whatever Auto raised for the first comes
+// down. Never called when the font colour itself was picked.
+//
+// A plain function too, sent to the settings page with solveGlass.
+function fontToKeep(input, model) {
+	var picked = input.font === "black" ? "black" : "white";
+	var mine = solveGlass(input, model);
+	if (mine.readable) return picked;
+
+	var other = picked === "white" ? "black" : "white";
+	var theirs = solveGlass(Object.assign({}, input, { font: other }), model);
+	return theirs.readable || theirs.contrast > mine.contrast ? other : picked;
 }
 
 // --- What a page gets --------------------------------------------------------------
@@ -683,10 +692,10 @@ function hasBackdrop(settings) {
 //
 //   { blur, tintStrength, dim, font, contrast, readable, set }
 //
-// `set` is which everyday colours go with it: "dark" (white text) or
-// "light" (black text). With the Default background behind the pages
-// there's nothing for Auto to read against: the mode's own colours, Blur
-// and Tint strength as set by hand, no Dim.
+// `set` is which text colours go with it: "dark" (white text) or "light"
+// (black text); the glass itself is the same either way. With the Default
+// background behind the pages there's nothing for Auto to read against:
+// the mode's own colours, Blur and Tint strength as set by hand, no Dim.
 function glassFor(settings, light) {
 	const pinned = Array.isArray(settings.glassPinned) ? settings.glassPinned : [];
 	const auto = settings.glassAuto !== false;
@@ -719,13 +728,40 @@ function glassFor(settings, light) {
 			blur: settings.glassBlur,
 			tintStrength: settings.glassTintStrength,
 			dim: settings.glassDim,
-			font: settings.fontColour,
-			start: light ? "black" : "white"
+			font: fontOf(settings)
 		},
 		GLASS_MODEL
 	);
 	result.set = result.font === "black" ? "light" : "dark";
 	return result;
+}
+
+// The font colour as picked: white unless it's black ("auto", from an
+// earlier v2 build, is white)
+function fontOf(settings) {
+	return settings && settings.fontColour === "black" ? "black" : "white";
+}
+
+// After the glass or the background changed: the font colour to keep, as
+// a change for the settings (or nothing, when it stays). `settings` is
+// them with the change already in. Nothing with the Default background.
+function recheckFont(settings) {
+	if (!hasBackdrop(settings)) return {};
+	const input = {
+		low: settings.backgroundLow,
+		high: settings.backgroundHigh,
+		mean: settings.backgroundMean,
+		brightness: settings.pictureBrightness,
+		tint: tintColour(settings) || "",
+		auto: settings.glassAuto !== false,
+		pinned: Array.isArray(settings.glassPinned) ? settings.glassPinned : [],
+		blur: settings.glassBlur,
+		tintStrength: settings.glassTintStrength,
+		dim: settings.glassDim,
+		font: fontOf(settings)
+	};
+	const keep = fontToKeep(input, GLASS_MODEL);
+	return keep === fontOf(settings) ? {} : { fontColour: keep };
 }
 
 function rgba(hex, alpha) {
@@ -779,11 +815,11 @@ function glassVariables(settings, light) {
 		${
 			picture
 				? `
-		/* Over a picture the glass is a little more there: a fuller fill
-		   (more under black text), a thin light edge along the top, and a
-		   little more colour in what shows through */
-		--segment-bg: ${black ? `rgba(255, 255, 255, ${GLASS_MODEL.fill.black})` : `rgba(255, 255, 255, ${GLASS_MODEL.fill.white})`};
-		--segment-edge: ${black ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.16)"};
+		/* Over a picture the glass is a little more there: a fuller fill,
+		   a thin light edge along the top, and a little more colour in
+		   what shows through. The same whatever the font colour. */
+		--segment-bg: rgba(255, 255, 255, ${GLASS_MODEL.fill});
+		--segment-edge: rgba(255, 255, 255, 0.16);
 		--glass-saturate: 1.4;
 		/* Text drawn straight on the picture, with no glass under it (a
 		   page's title): a soft shadow the other way round from the text */
@@ -1024,6 +1060,9 @@ module.exports = {
 	cleanGlass,
 	tintColour,
 	solveGlass,
+	fontToKeep,
+	fontOf,
+	recheckFont,
 	glassFor,
 	tintWithDim,
 	onPictureShadow,

@@ -647,9 +647,9 @@ const sections = [
 			{
 				id: "tabs",
 				title: "Tabs",
-				sel: ".tabs > .tab-btn (+ .active, .font-sample, .white-text, .black-text)",
-				desc: "A pill of named options, one of them chosen. Use it when the options are named things (Dark / Light / Device, Modules / Themes, the corner names), not a plain on and off. Often each option shows different settings underneath. A disabled one is faded. An option can be a sample instead of a word (<b>.font-sample</b>): Font colour (on the Appearance tab) is \"Aa\" in white (<b>.white-text</b>), Auto, and \"Aa\" in black (<b>.black-text</b>), each sample larger and edged the other way round so it reads on any glass.",
-				demo: '<div class="tabs" data-demo-tabs><button class="tab-btn active">Dark</button><button class="tab-btn">Light</button><button class="tab-btn">Device</button></div> <div class="tabs" data-demo-tabs><button class="tab-btn font-sample white-text">Aa</button><button class="tab-btn active">Auto</button><button class="tab-btn font-sample black-text">Aa</button></div>',
+				sel: ".tabs > .tab-btn (+ .active)",
+				desc: "A pill of named options, one of them chosen. Use it when the options are named things (Dark / Light / Device, Modules / Themes, the corner names), not a plain on and off. Often each option shows different settings underneath. A disabled one is faded.",
+				demo: '<div class="tabs" data-demo-tabs><button class="tab-btn active">Dark</button><button class="tab-btn">Light</button><button class="tab-btn">Device</button></div>',
 				code: '<div class="tabs">\n\t<button class="tab-btn active">Dark</button>\n\t<button class="tab-btn">Light</button>\n</div>',
 				note: "Clicking works here. On a real page, the page's own script moves .active."
 			},
@@ -746,9 +746,17 @@ const sections = [
 				id: "type-head",
 				title: "Heading with a control",
 				sel: ".type-head > .type-head-text · .type-row",
-				desc: "A box's heading and its note on the left and a control on the right (Typography's size stepper), and underneath a row of what follows (<b>.type-row</b>: Font colour's buttons, then the font strip taking the rest). On a narrow screen the control drops under the note rather than squeezing it, and the strip under the buttons.",
+				desc: "A box's heading and its note on the left and a control on the right (Typography's size stepper), and underneath a row of what follows (<b>.type-row</b>: two strips side by side, Font colour's and the font's). On a narrow screen the control drops under the note rather than squeezing it, and the strip under the buttons.",
 				demo: `<div class="type-head" style="max-width:30em"><div class="type-head-text"><h2 style="margin:0">Typography</h2><p class="hint">Dashboards are unaffected.</p></div><div class="stepper"><button class="glass" aria-label="Smaller">&minus;</button><input type="number" value="16"><span class="unit">px</span><button class="glass" aria-label="Bigger">+</button></div></div>`,
-				code: "<div class=\"type-head\">\n\t<div class=\"type-head-text\"><h2>Typography</h2><p class=\"hint\">…</p></div>\n\t<div class=\"stepper\">…</div>\n</div>\n<div class=\"type-row\">\n\t<div class=\"tabs\">…</div>\n\t<div class=\"inset\">…</div>\n</div>"
+				code: "<div class=\"type-head\">\n\t<div class=\"type-head-text\"><h2>Typography</h2><p class=\"hint\">…</p></div>\n\t<div class=\"stepper\">…</div>\n</div>\n<div class=\"type-row\">\n\t<div class=\"inset\">…COLOUR…</div>\n\t<div class=\"inset\">…FONT…</div>\n</div>"
+			},
+			{
+				id: "font-swatches",
+				title: "Picked by how it looks",
+				sel: ".font-swatches > .font-swatch (+ .white-text, .black-text, .active)",
+				desc: "Font colour, on the Appearance tab, in a strip like the font's: two choices, \"Aa\" in white and in black, each on a piece of the background through the real glass (its fill, then the tint with the Dim, the picture at its brightness), so it shows how that colour reads before it's picked. The background comes as <code>--swatch-picture</code> (a picture's address or a colour); the glass from the page's own variables, so the choices follow the sliders as they move. The one picked has a ring in the text's colour.",
+				demo: `<div class="inset" style="max-width:24em"><div class="inset-text"><div class="inset-label">COLOUR</div><div class="inset-value">White</div></div><div class="font-swatches"><button type="button" class="font-swatch white-text active" style="--swatch-picture:linear-gradient(135deg,#3a6df0,#f2a65a)"><span>Aa</span></button><button type="button" class="font-swatch black-text" style="--swatch-picture:linear-gradient(135deg,#3a6df0,#f2a65a)"><span>Aa</span></button></div></div>`,
+				code: "<div class=\"font-swatches\" role=\"group\" aria-label=\"Font colour\">\n\t<button type=\"button\" class=\"font-swatch white-text active\" style=\"--swatch-picture:url('/backdrop/…')\"><span>Aa</span></button>\n\t<button type=\"button\" class=\"font-swatch black-text\" style=\"--swatch-picture:url('/backdrop/…')\"><span>Aa</span></button>\n</div>"
 			},
 			{
 				id: "location-manual",

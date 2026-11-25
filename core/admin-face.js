@@ -78,8 +78,8 @@ const {
 	CONTROLS_SCRIPT,
 	DEFAULT_DARK,
 	DEFAULT_LIGHT,
-	PALETTES,
-	paletteVariables
+	paletteVariables,
+	overPicturePalette
 } = require("./ui-theme");
 const { portLinkScript, WIZARD_PORT } = require("./face-links");
 const { askAttribute, ASK_FIRST_SCRIPT } = require("./ask-first");
@@ -788,7 +788,7 @@ function backgroundPanel(settings) {
 	const auto = settings.glassAuto !== false;
 	const pinned = Array.isArray(settings.glassPinned) ? settings.glassPinned : [];
 	const brightness = Number(settings.pictureBrightness) || 0;
-	const fontColour = ["white", "black"].includes(settings.fontColour) ? settings.fontColour : "auto";
+	const fontColour = backdropStore.fontOf(settings);
 
 	// What a slider's value says: Auto's own, or pinned (moved by hand,
 	// so Auto leaves it alone), with Auto on
@@ -1042,26 +1042,30 @@ function backgroundPanel(settings) {
 				</div>
 `;
 
-	// Font colour, in the Typography box: three buttons side by side, "Aa"
-	// in white, Auto, and "Aa" in black. White and Black pin it; Auto lets
-	// Auto switch it when nothing else makes the text readable. Only over a
-	// picture or a colour: the Default background has its mode's own
-	// colours.
-	const fontButton = (value, inner, kind, title) => {
-		const on = fontColour === value;
-		return (
-			`<button type="button" class="tab-btn${kind}${on ? " active" : ""}" data-font="${value}" aria-pressed="${on}"` +
-			` title="${title}"${backdrop ? "" : " disabled"}>${inner}</button>`
-		);
-	};
-	const autoTitle = (font) => `Auto: ${font === "black" ? "black" : "white"} text now, switched only when nothing else makes it readable`;
+	// Font colour, in the Typography box: a strip like the font's beside
+	// it, saying White or Black, with two "Aa" to pick from. Each "Aa"
+	// sits on a piece of the background through the real glass (its fill,
+	// tint and Dim, the picture at its brightness), so it shows how that
+	// colour reads before it's picked; they follow the sliders as they
+	// move. Only over a picture or a colour: the Default background has its
+	// mode's own colours.
+	const swatchPicture = file
+		? ` style="--swatch-picture:url('/backdrop/${escapeHtml(settings.backgroundStill || settings.backgroundFile)}')"`
+		: colour
+		? ` style="--swatch-picture:${escapeHtml(settings.backgroundColor)}"`
+		: "";
+	const swatch = (value, name) =>
+		`<button type="button" class="font-swatch ${value}-text${fontColour === value ? " active" : ""}" data-font="${value}"` +
+		` aria-pressed="${fontColour === value}" aria-label="${name} text" title="${name} text"${swatchPicture}><span>Aa</span></button>`;
 	const fontColourField = `
-					<div class="tabs font-colours" role="group" aria-label="Font colour"${
-						backdrop ? "" : ' title="Font colour is for a picture or a colour behind the pages. The Default background has its Appearance Mode\'s own colours."'
-					}>
-						${fontButton("white", "Aa", " font-sample white-text", "White text")}
-						${fontButton("auto", "Auto", "", autoTitle(glass.font))}
-						${fontButton("black", "Aa", " font-sample black-text", "Black text")}
+					<div class="inset">
+						<div class="inset-text">
+							<div class="inset-label">COLOUR</div>
+							<div class="inset-value" id="font-colour-name">${
+								backdrop ? (fontColour === "black" ? "Black" : "White") : "With a picture or a colour"
+							}</div>
+						</div>
+						${backdrop ? `<div class="font-swatches" role="group" aria-label="Font colour">${swatch("white", "White")}${swatch("black", "Black")}</div>` : ""}
 					</div>`;
 
 	const script = `
@@ -1069,6 +1073,7 @@ function backgroundPanel(settings) {
 		// (backdrop.js), so what's previewed is what's saved
 		const MODEL = ${JSON.stringify(backdropStore.GLASS_MODEL)};
 		${backdropStore.solveGlass.toString()}
+		${backdropStore.fontToKeep.toString()}
 		${backdropStore.tintWithDim.toString()}
 		${backdropStore.startingBrightness.toString()}
 		${backdropStore.onPictureShadow.toString()}
@@ -1093,7 +1098,7 @@ function backgroundPanel(settings) {
 		// the pages: with the Default, the mode's own colours never change
 		// here.
 		const SETS = ${JSON.stringify(
-			backdrop ? { dark: paletteVariables(PALETTES.dark), light: paletteVariables(PALETTES.light) } : null
+			backdrop ? { dark: paletteVariables(overPicturePalette("dark")), light: paletteVariables(overPicturePalette("light")) } : null
 		).replace(/</g, "\\u003c")};
 
 		let tint = ${JSON.stringify(tint)};
@@ -1144,7 +1149,7 @@ function backgroundPanel(settings) {
 		// The glass as Auto (or the hand) sets it over a background, or
 		// over the Default, where there's nothing to read against: Blur and
 		// Tint strength as set by hand, no Dim
-		function solved(picture, bright) {
+		function solved(picture, bright, font) {
 			if (!picture) {
 				return {
 					blur: hand.blur,
@@ -1154,7 +1159,13 @@ function backgroundPanel(settings) {
 					readable: true
 				};
 			}
-			return solveGlass({
+			return solveGlass(inputFor(picture, bright, font || fontColour), MODEL);
+		}
+
+		// What Auto is given: the background, the glass as set, a font
+		// colour
+		function inputFor(picture, bright, font) {
+			return {
 				low: picture.low,
 				high: picture.high,
 				mean: picture.mean,
@@ -1165,9 +1176,17 @@ function backgroundPanel(settings) {
 				blur: hand.blur,
 				tintStrength: hand.tintStrength,
 				dim: hand.dim,
-				font: fontColour,
-				start: light() ? "black" : "white"
-			}, MODEL);
+				font: font
+			};
+		}
+
+		// The glass or the background changed: the font colour is checked,
+		// and switched when the text couldn't be read otherwise (the server
+		// does the same when it's saved). Picking the font colour itself
+		// never comes here.
+		function recheck() {
+			if (!PICTURE) return;
+			fontColour = fontToKeep(inputFor(PICTURE, brightness ? Number(brightness.value) : 0, fontColour), MODEL);
 		}
 
 		function brightnessWords(value) {
@@ -1216,18 +1235,15 @@ function backgroundPanel(settings) {
 				root.style.setProperty("--backdrop-brightness", (100 + bright) / 100);
 			}
 
-			// Over a picture: the everyday colours and the glass's fill go
-			// with the font colour
+			// Over a picture: the text colours go with the font colour; the
+			// glass stays as it is
 			if (PICTURE) {
 				const black = glass.font === "black";
 				showSet(black ? "light" : "dark");
-				root.style.setProperty("--segment-bg", "rgba(255, 255, 255, " + MODEL.fill[glass.font] + ")");
-				root.style.setProperty("--segment-edge", black ? "rgba(255, 255, 255, 0.85)" : "rgba(255, 255, 255, 0.16)");
+				root.style.setProperty("--segment-bg", "rgba(255, 255, 255, " + MODEL.fill + ")");
+				root.style.setProperty("--segment-edge", "rgba(255, 255, 255, 0.16)");
 				root.style.setProperty("--on-picture-shadow", onPictureShadow(black));
-				const autoButton = document.querySelector('[data-font="auto"]');
-				if (autoButton) {
-					autoButton.title = "Auto: " + (black ? "black" : "white") + " text now, switched only when nothing else makes it readable";
-				}
+				document.getElementById("font-colour-name").textContent = black ? "Black" : "White";
 			}
 
 			// Said when the text may be hard to read: never overruled, only
@@ -1235,15 +1251,13 @@ function backgroundPanel(settings) {
 			warning.hidden = glass.readable;
 			warning.textContent = glass.readable
 				? ""
-				: fontColour !== "auto"
-				? "Text in " + fontColour + " may be hard to read over this. Auto would switch it."
 				: !auto
-				? "Text may be hard to read over this. Auto would keep it readable."
+				? "Text in " + glass.font + " may be hard to read over this with Auto off."
 				: pinned.length
-				? "Text may be hard to read with " + pinned.map(function (name) {
+				? "Text in " + glass.font + " may be hard to read with " + pinned.map(function (name) {
 						return { dim: "Dim", blur: "Blur", tintStrength: "Tint strength" }[name];
 				  }).join(" and ") + " pinned. Press Pinned to let Auto move it."
-				: "Text may be hard to read over this, even with the glass as dark as Auto takes it.";
+				: "Text in " + glass.font + " may be hard to read over this.";
 
 			for (const chip of document.querySelectorAll("[data-tint]")) {
 				const on = chip.dataset.tint === tint;
@@ -1272,21 +1286,26 @@ function backgroundPanel(settings) {
 			slider.addEventListener("input", function () {
 				hand[name] = Number(slider.value);
 				if (PICTURE && auto && pinned.indexOf(name) === -1) pinned.push(name);
+				recheck();
 				preview();
 			});
-			slider.addEventListener("change", save);
+			slider.addEventListener("change", function () { save(true); });
 		}
 		if (brightness) {
-			brightness.addEventListener("input", preview);
-			brightness.addEventListener("change", save);
+			brightness.addEventListener("input", function () {
+				recheck();
+				preview();
+			});
+			brightness.addEventListener("change", function () { save(true); });
 		}
 
 		// Pinned: pressed, Auto may move that one again
 		for (const badge of document.querySelectorAll("[data-unpin]")) {
 			badge.addEventListener("click", function () {
 				pinned = pinned.filter(function (name) { return name !== badge.dataset.unpin; });
+				recheck();
 				preview();
-				save();
+				save(true);
 			});
 		}
 
@@ -1303,8 +1322,9 @@ function backgroundPanel(settings) {
 					pinned = [];
 				}
 				auto = autoBox.checked;
+				recheck();
 				preview();
-				save();
+				save(true);
 			});
 		}
 
@@ -1315,24 +1335,27 @@ function backgroundPanel(settings) {
 			// Picking a colour with the strength at nothing would show
 			// nothing; give it a little
 			if (tint !== "none" && Number(sliders.tintStrength.value) === 0) hand.tintStrength = MODEL.tintStrengthDefault;
+			recheck();
 			preview();
-			save();
+			save(true);
 		});
 
 		custom.addEventListener("input", function () {
 			tint = custom.value.toLowerCase();
 			if (Number(sliders.tintStrength.value) === 0) hand.tintStrength = MODEL.tintStrengthDefault;
+			recheck();
 			preview();
 		});
-		custom.addEventListener("change", save);
+		custom.addEventListener("change", function () { save(true); });
 
-		// Font colour: White, Black or Auto
+		// Font colour: White or Black, as picked, never checked straight
+		// away (only the next change to the glass checks it again)
 		for (const button of document.querySelectorAll("[data-font]")) {
 			button.addEventListener("click", function () {
 				if (!PICTURE) return;
 				fontColour = button.dataset.font;
 				preview();
-				save();
+				save(false);
 			});
 		}
 
@@ -1340,9 +1363,12 @@ function backgroundPanel(settings) {
 
 		// Saved as it changes: a slider when it's let go, a tint or a font
 		// colour when it's picked. A moment's wait, so dragging a slider
-		// across sends one save, not twenty.
+		// across sends one save, not twenty. \`checked\`: anything but the
+		// font colour changed, so the server checks the font colour too.
 		let saving = null;
-		function save() {
+		let checked = false;
+		function save(check) {
+			checked = check === true;
 			clearTimeout(saving);
 			saving = setTimeout(async function () {
 				const status = document.getElementById("glass-status");
@@ -1359,10 +1385,18 @@ function backgroundPanel(settings) {
 							pinned: pinned,
 							tint: tint,
 							brightness: brightness ? Number(brightness.value) : undefined,
-							fontColour: fontColour
+							fontColour: fontColour,
+							recheck: checked
 						})
 					});
 					if (!response.ok) throw new Error();
+					// What the server kept (the same, as it works it out
+					// the same way)
+					const kept = await response.json();
+					if (kept.fontColour && kept.fontColour !== fontColour) {
+						fontColour = kept.fontColour;
+						preview();
+					}
 					status.textContent = "Saved.";
 				} catch (error) {
 					status.className = "status bad";
@@ -1441,11 +1475,12 @@ function backgroundPanel(settings) {
 				previewColour.style.setProperty("--colour", light() ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark);
 			}
 
-			// The piece of glass on it, as Auto would make it there
-			const glass = solved(picture, bright);
+			// The piece of glass on it, as Auto would make it there, with
+			// the font colour checked against the new background as Use will
+			const glass = solved(picture, bright, picture ? fontToKeep(inputFor(picture, bright, fontColour), MODEL) : null);
 			const stage = document.getElementById("bg-preview");
 			stage.style.setProperty("--preview-brightness", (100 + bright) / 100);
-			stage.style.setProperty("--card-fill", "rgba(255, 255, 255, " + (picture ? MODEL.fill[glass.font] : 0.06) + ")");
+			stage.style.setProperty("--card-fill", "rgba(255, 255, 255, " + (picture ? MODEL.fill : 0.06) + ")");
 			stage.style.setProperty("--card-tint", tintWithDim(tintOf(tint, picture), glass.tintStrength, glass.dim));
 			stage.style.setProperty("--card-blur", glass.blur + "px");
 			stage.style.setProperty("--card-fg", glass.font === "black" ? "#111" : "#fff");
@@ -3716,7 +3751,9 @@ function startAdminFace() {
 			return;
 		}
 
-		const saved = writeSettings(result.changes);
+		// A new picture: the font colour is checked against it
+		const changes = { ...result.changes, ...backdropStore.recheckFont({ ...readSettings(), ...result.changes }) };
+		const saved = writeSettings(changes);
 
 		// The one before it goes
 		backdropStore.removeOthers([saved.backgroundFile, saved.backgroundStill]);
@@ -3737,14 +3774,23 @@ function startAdminFace() {
 			res.status(400).json(result);
 			return;
 		}
-		writeSettings(result.changes);
+		// A new colour: the font colour is checked against it
+		writeSettings({ ...result.changes, ...backdropStore.recheckFont({ ...readSettings(), ...result.changes }) });
 		backdropStore.removeOthers([]);
 		res.json({ ok: true, kind: "colour" });
 	});
 
+	// The glass changed. With `recheck` (anything but the font colour
+	// itself was changed), the font colour is checked against it too, and
+	// switched when the text couldn't be read otherwise. The page has
+	// already shown the switch; this is what keeps it.
 	app.post("/background/glass", (req, res) => {
-		writeSettings(backdropStore.cleanGlass(req.body));
-		res.json({ ok: true });
+		const changes = backdropStore.cleanGlass(req.body);
+		if (req.body && req.body.recheck === true) {
+			Object.assign(changes, backdropStore.recheckFont({ ...readSettings(), ...changes }));
+		}
+		const saved = writeSettings(changes);
+		res.json({ ok: true, fontColour: backdropStore.fontOf(saved) });
 	});
 
 	// A picture picked by an earlier v2 build, before its vibrant colour

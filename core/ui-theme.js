@@ -348,6 +348,21 @@ function paletteVariables(active) {
 	`;
 }
 
+// Over a picture or a colour: what changes with the font colour. Only
+// colours that are the text's own, drawn straight on the glass (the text,
+// its grey, a red or green word or icon, a green button's word); all the
+// rest (every fill, edge, sheen, input box and track) is the dark set's
+// glass, the same whatever the font colour.
+const TEXT_COLOURS = ["fg", "fgMuted", "danger", "success", "successButtonText"];
+
+// The palette over a picture or a colour, for white text ("dark") or
+// black text ("light")
+function overPicturePalette(set) {
+	const palette = { ...PALETTES.dark };
+	for (const key of TEXT_COLOURS) palette[key] = PALETTES[set][key];
+	return palette;
+}
+
 // The few rules that differ between light and dark beyond their colours.
 // `light` picks which set.
 function modeRules(light) {
@@ -544,11 +559,10 @@ function settingsPagesCss() {
 	.inset > .glass { flex-shrink: 0; padding: 0.641em 1.1218em; font-size: 0.78em; }
 
 	/* Typography: the heading and its note on the left, the size stepper
-	   on the right; under them, Font colour's three buttons and the font
-	   strip taking the rest of the row (.type-row). On a narrow screen the
-	   stepper drops under the note rather than squeezing it (flex-wrap,
-	   and the text keeps at least 12em), and the font strip under the
-	   buttons. */
+	   on the right; under them, two strips side by side, Font colour's
+	   and the font's (.type-row). On a narrow screen the stepper drops
+	   under the note rather than squeezing it (flex-wrap, and the text
+	   keeps at least 12em), and the font's strip under the colour's. */
 	.type-head {
 		display: flex;
 		flex-wrap: wrap;
@@ -561,8 +575,50 @@ function settingsPagesCss() {
 	.type-head-text .hint { margin: 0; }
 	.type-head .stepper { flex-shrink: 0; }
 	.type-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px 14px; }
-	.type-row > .tabs { flex: none; }
 	.type-row > .inset { flex: 1 1 14em; min-width: 0; }
+
+	/* Font colour's two choices, in its strip: "Aa" in white and in black,
+	   each on a piece of the background (--swatch-picture: a picture's
+	   address or a colour) at its brightness, through the real glass (its
+	   fill, then the tint with the Dim), so it shows how that colour reads
+	   before it's picked. The one picked has a ring in the text's colour. */
+	.font-swatches { display: flex; gap: 0.5em; flex-shrink: 0; }
+	.font-swatch {
+		position: relative;
+		width: 3.2em;
+		height: 2.4em;
+		padding: 0;
+		border: 1px solid var(--glass-border);
+		border-radius: 0.6em;
+		overflow: hidden;
+		background: none;
+		font-family: inherit;
+		font-size: 1em;
+		cursor: pointer;
+		transition: box-shadow 0.2s ease;
+	}
+	.font-swatch::before,
+	.font-swatch::after { content: ""; position: absolute; inset: 0; }
+	.font-swatch::before {
+		background: var(--swatch-picture, var(--bg)) center / cover;
+		filter: brightness(var(--backdrop-brightness, 1)) blur(2px);
+		transform: scale(1.1);
+	}
+	.font-swatch::after {
+		background-color: var(--segment-bg);
+		background-image: linear-gradient(var(--glass-tint, transparent), var(--glass-tint, transparent));
+	}
+	.font-swatch > span {
+		position: relative;
+		z-index: 1;
+		font-size: 1.3em;
+		line-height: 1;
+	}
+	.font-swatch.white-text > span { color: #fff; }
+	.font-swatch.black-text > span { color: #111; font-weight: 600; }
+	.font-swatch.active { box-shadow: 0 0 0 2px var(--fg); }
+	.font-swatch:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--glow-strong); }
+	.font-swatch.active:focus-visible { box-shadow: 0 0 0 2px var(--fg), 0 0 0 4px var(--glow-strong); }
 
 	.inset-label { font-size: 0.7em; color: var(--fg-muted); }
 	.inset-value { font-size: 0.85em; margin-top: 2px; }
@@ -2964,20 +3020,20 @@ function uiStyles(options) {
 	// can override a palette value or two.
 	//
 	// Which palette: the mode's own, unless there's a picture or a colour
-	// behind the pages. Then it's the font colour's (backdrop.glassFor):
-	// white text has the dark set, black text the light one, whichever
-	// mode this is. Auto may have switched the font colour to keep the
-	// text readable, and grey text, input boxes and the glass's own fill
-	// have to go with it.
+	// behind the pages. Then the glass is always glass, the dark set's,
+	// whichever the mode and whichever the font colour, and only the text
+	// colours are the font colour's (overPicturePalette).
 	//
 	// The curtain a page fades in from and out to (page-motion.js): the
 	// page's own base colour, black or white, rather than its grey
 	const curtain = (light) => `--curtain: ${light ? DEFAULT_LIGHT : DEFAULT_DARK};`;
+	const pictured = backdrop.hasBackdrop(settings);
 	const forMode = (light) => {
 		const set = backdrop.glassFor(settings, light).set;
+		const palette = pictured ? overPicturePalette(set) : PALETTES[set];
 		return {
-			variables: `${paletteVariables(PALETTES[set])}${backdrop.glassVariables(settings, light)}${curtain(light)}`,
-			rules: modeRules(set === "light")
+			variables: `${paletteVariables(palette)}${backdrop.glassVariables(settings, light)}${curtain(light)}`,
+			rules: modeRules(!pictured && set === "light")
 		};
 	};
 
@@ -3748,18 +3804,6 @@ ${FLOATING_CSS}
 	}
 
 	.tab-btn:disabled { opacity: 0.4; cursor: default; }
-
-	/* A tab that shows a sample instead of a word: "Aa" in white or in
-	   black (Font colour, on the Appearance tab), larger, each with a thin
-	   edge the other way round so it reads on any glass, picked or not */
-	.tab-btn.font-sample {
-		font-size: 1.35em;
-		line-height: 1;
-		padding: 0.3em 0.55em;
-		paint-order: stroke fill;
-	}
-	.tab-btn.font-sample.white-text { color: #fff; -webkit-text-stroke: 0.07em rgba(0, 0, 0, 0.6); }
-	.tab-btn.font-sample.black-text { color: #111; font-weight: 700; -webkit-text-stroke: 0.07em rgba(255, 255, 255, 0.6); }
 
 	/* A number stepper: down button, the value, up button. Used
 	   wherever a small bounded number is set (text size, and anything
@@ -5454,6 +5498,7 @@ module.exports = {
 	fontFace,
 	PALETTES,
 	paletteVariables,
+	overPicturePalette,
 	DEFAULT_DARK,
 	DEFAULT_LIGHT,
 	SYSTEM_FONT,

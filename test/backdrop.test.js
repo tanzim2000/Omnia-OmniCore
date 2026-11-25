@@ -13,7 +13,8 @@
 //   - Auto (since Phase A): the glass, not a veil over the picture, keeps
 //     the text readable. Dim, then Blur, then Tint strength, each only as
 //     far as needed; a slider moved by hand is pinned and left alone; the
-//     font colour is the last resort. Every row of the BACKLOG's table.
+//     font colour is White or Black, switched only when the glass changes
+//     and it can't be read. Every row of the BACKLOG's table.
 //   - The tint: None, Dominant, Vibrant or a colour.
 //   - Picture brightness: -50 to +50, Original being 0; a bright new
 //     picture starts darker.
@@ -192,7 +193,7 @@ const BUSY = { low: 0.1, high: 0.75, mean: 0.38 }; // confetti
 // on, nothing pinned, no tint, Original brightness, white text first
 function solve(picture, given) {
 	return backdrop.solveGlass(
-		{ ...picture, brightness: 0, tint: "", auto: true, pinned: [], blur: 20, tintStrength: 12, dim: 0, font: "auto", start: "white", ...given },
+		{ ...picture, brightness: 0, tint: "", auto: true, pinned: [], blur: 20, tintStrength: 12, dim: 0, font: "white", ...given },
 		M
 	);
 }
@@ -206,7 +207,7 @@ function contrastOf(picture, values, font, brightness, tint) {
 	const spread = (0.5 * values.blur) / M.blurMost;
 	const part = font === "white" ? picture.high - (picture.high - mean) * spread : picture.low + (mean - picture.low) * spread;
 	let rgb = [0, 1, 2].map(() => Math.min(1, encode(part) * (1 + (brightness || 0) / 100)));
-	rgb = rgb.map((v) => v * (1 - M.fill[font]) + M.fill[font]);
+	rgb = rgb.map((v) => v * (1 - M.fill) + M.fill);
 	if (tint) {
 		const t = [1, 3, 5].map((at) => parseInt(tint.slice(at, at + 2), 16) / 255);
 		rgb = rgb.map((v, i) => v * (1 - values.tintStrength / 100) + t[i] * (values.tintStrength / 100));
@@ -245,7 +246,7 @@ test("Auto: the BACKLOG's table, row by row", () => {
 	const capped = { ...M, dimMost: 20 };
 	const run = (pinned, given) =>
 		backdrop.solveGlass(
-			{ ...BUSY, brightness: 0, tint: "#202020", auto: true, pinned, blur: 20, tintStrength: 12, dim: 0, font: "white", start: "white", ...given },
+			{ ...BUSY, brightness: 0, tint: "#202020", auto: true, pinned, blur: 20, tintStrength: 12, dim: 0, font: "white", ...given },
 			capped
 		);
 
@@ -308,34 +309,52 @@ test("Auto: a slider that can't help is passed over", () => {
 	assert.equal(light.readable, false);
 });
 
-test("Auto: the font colour is the last resort", () => {
-	// With everything pinned low, white text can't read over the bright
-	// sky: Auto switches to black
+test("the font colour: as picked, switched only when the glass changes and it can't read", () => {
+	const keep = (picture, given) =>
+		backdrop.fontToKeep({ ...picture, brightness: 0, tint: "", auto: true, pinned: [], blur: 20, tintStrength: 12, dim: 0, font: "white", ...given }, M);
+
+	// solveGlass never switches it: the font colour as picked, readable
+	// or not
 	const pinnedLow = { pinned: ["dim", "blur", "tintStrength"], dim: 0, blur: 0, tintStrength: 0 };
-	const sky = solve(BRIGHT, pinnedLow);
-	assert.equal(sky.font, "black");
-	assert.ok(sky.readable);
-
-	// But never when white can be made to read: Dim first
-	assert.equal(solve(BRIGHT).font, "white");
-
-	// Black text darkening works against: whatever Auto raised for white
-	// comes back down
-	const switched = solve(BRIGHT, { pinned: ["blur", "tintStrength"], blur: 0, tintStrength: 0, start: "white" });
-	if (switched.font === "black") assert.equal(switched.dim, 0);
-
-	// Pinned to White or Black, it stays, and says it may be hard to read
 	const white = solve(BRIGHT, { ...pinnedLow, font: "white" });
 	assert.equal(white.font, "white");
 	assert.equal(white.readable, false);
-	const black = solve(NIGHT, { pinned: ["dim", "blur", "tintStrength"], dim: 90, blur: 0, tintStrength: 0, font: "black" });
+	const black = solve(NIGHT, { font: "black" });
 	assert.equal(black.font, "black");
-	assert.equal(black.readable, false);
+	assert.equal(black.readable, false, "nothing lightens the glass under black text");
 
-	// Light mode starts from black text; a night picture keeps it while
-	// the glass's light fill is enough
-	assert.equal(solve(BRIGHT, { start: "black" }).font, "black");
-	assert.equal(solve(BRIGHT, { start: "black" }).dim, 0, "no Dim under black text");
+	// After a change: kept while Auto can make it read (Dim first)...
+	assert.equal(keep(BRIGHT), "white");
+	assert.equal(keep(BRIGHT, { font: "black" }), "black", "black reads on the bright sky as it is");
+	// ...switched when even every free slider as far as it goes can't
+	assert.equal(keep(BRIGHT, pinnedLow), "black", "white on the bright sky, nothing free to move");
+	assert.equal(keep(NIGHT, { font: "black" }), "white", "black on a night sky");
+
+	// Not when the other one reads no better
+	assert.equal(keep(EVEN, { ...pinnedLow, font: "white" }), keep(EVEN, { ...pinnedLow, font: "white" }));
+
+	// The other one's sliders start again: under black text Dim stays at 0
+	assert.equal(solve(BRIGHT, { font: "black" }).dim, 0, "no Dim under black text");
+
+	// With the settings: nothing to switch with the Default background,
+	// and a change for the settings only when it switches
+	const sky = {
+		backgroundKind: "picture",
+		backgroundFile: "backdrop-aaaaaaaaaaaa.jpg",
+		backgroundLow: BRIGHT.low,
+		backgroundHigh: BRIGHT.high,
+		backgroundMean: BRIGHT.mean,
+		glassAuto: true,
+		glassPinned: ["dim", "blur", "tintStrength"],
+		glassDim: 0,
+		glassBlur: 0,
+		glassTintStrength: 0,
+		fontColour: "white"
+	};
+	assert.deepEqual(backdrop.recheckFont(sky), { fontColour: "black" });
+	assert.deepEqual(backdrop.recheckFont({ ...sky, fontColour: "black" }), {}, "already black");
+	assert.deepEqual(backdrop.recheckFont({ ...sky, backgroundKind: "plain" }), {});
+	assert.equal(backdrop.fontOf({ fontColour: "auto" }), "white", "an earlier v2's Auto is white");
 });
 
 test("the tint: none, the background's dominant or vibrant colour, or one picked", () => {
@@ -432,14 +451,14 @@ test("the glass in the stylesheet: plain, a tint, a picture", () => {
 	assert.match(over, /--segment-bg: rgba\(255, 255, 255, 0\.07\);/, "white text: a whisper of white in the glass");
 	assert.match(over, /--on-picture-shadow: 0 0 2px rgba\(0, 0, 0/, "a title on the picture: a dark shadow");
 
-	// Light mode starts from black text: the light set, half white glass
-	const light = backdrop.glassFor(picture, true);
+	// The font colour as picked, whichever the mode; black text: the light
+	// set for the text, and the same glass as under white
+	assert.equal(backdrop.glassFor(picture, true).font, "white", "light mode doesn't decide it over a picture");
+	const light = backdrop.glassFor({ ...picture, fontColour: "black" }, true);
 	assert.equal(light.font, "black");
 	assert.equal(light.set, "light");
-	assert.match(backdrop.glassVariables(picture, true), /--segment-bg: rgba\(255, 255, 255, 0\.5\);/);
-
-	// Pinned to white in light mode: white text, the dark set
-	assert.equal(backdrop.glassFor({ ...picture, fontColour: "white" }, true).set, "dark");
+	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }, true), /--segment-bg: rgba\(255, 255, 255, 0\.07\);/);
+	assert.match(backdrop.glassVariables({ ...picture, fontColour: "black" }, true), /--segment-edge: rgba\(255, 255, 255, 0\.16\);/);
 
 	// No veil over the picture any more
 	assert.ok(!over.includes("--backdrop-dim"));
@@ -595,13 +614,12 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.ok(page.includes('id="glass-status"'), "saved as it changes, and says so");
 
 	// With the Default background: no Auto, no brightness, no Dim, and
-	// the font colour cards can't be picked
+	// the font colour's strip says what it needs, with nothing to pick
 	assert.ok(!page.includes('id="glass-auto"'), "nothing for Auto to read against");
 	assert.ok(!page.includes('id="brightness"') && !page.includes('id="dim"'));
-	assert.match(page, /<div class="tabs font-colours" role="group" aria-label="Font colour" title="[^"]*The Default background has its Appearance Mode's own colours\."/);
-	assert.match(page, /<button type="button" class="tab-btn active" data-font="auto" aria-pressed="true" title="[^"]*" disabled>Auto<\/button>/, "Auto, and not pickable");
-	assert.match(page, /class="tab-btn font-sample white-text" data-font="white"[^>]*>Aa<\/button>/);
-	assert.match(page, /class="tab-btn font-sample black-text" data-font="black"[^>]*>Aa<\/button>/);
+	assert.match(page, /<div class="inset-label">COLOUR<\/div>\s*<div class="inset-value" id="font-colour-name">With a picture or a colour<\/div>/);
+	assert.ok(!page.includes('class="font-swatches"'));
+	assert.ok(!page.includes('data-font="auto"'), "no Auto");
 
 	// Frosted glass stays short: the Tint colours on a row of their own,
 	// first, and the sliders two or three to a row where there's room
@@ -646,7 +664,11 @@ test("pages: a colour as the background, Auto and its pins, and the font colour"
 	assert.match(page, /data-unpin="dim" hidden/, "nothing pinned");
 	assert.match(page, /<label for="brightness">Colour brightness <span class="muted" id="brightness-value">Original<\/span>/);
 	assert.ok(!page.match(/data-tint="(dominant|vibrant)"[^>]* disabled/), "Dominant and Vibrant work with a colour");
-	assert.match(page, /data-font="auto" aria-pressed="true" title="Auto: white text now[^"]*">Auto<\/button>/, "the font colour can be picked, and Auto says which it chose");
+	assert.match(page, /<div class="inset-value" id="font-colour-name">White<\/div>/);
+	assert.match(page, /class="font-swatch white-text active" data-font="white" aria-pressed="true"[^>]*--swatch-picture:#1e2a44/, "on the colour itself");
+	assert.match(page, /class="font-swatch black-text" data-font="black" aria-pressed="false"/);
+	assert.ok(!page.includes('data-font="auto"'), "White or Black, no Auto");
+	assert.ok(page.includes(backdrop.fontToKeep.toString()), "the page checks the font colour the way the server does");
 	assert.ok(page.includes('"dark":"'), "the everyday colours for white and black text, for the live preview");
 
 	// Over a picture or a colour: a title on it gets a shadow, and a glass
@@ -672,22 +694,33 @@ test("pages: a colour as the background, Auto and its pins, and the font colour"
 	assert.ok(off.includes('id="glass-auto">'), "off");
 	assert.match(off, /--glass-tint: rgba\(0, 0, 0, 0\.1\)/);
 
-	// Black text: the light set over the colour, whichever mode
+	// Black picked: kept as picked, never checked straight away, though
+	// it can't read on navy glass, and the page says so
 	assert.equal((await postJson("/background/glass", { fontColour: "black" })).status, 200);
+	assert.equal(readSettings().fontColour, "black");
 	const black = (await request(3000, "/")).body.toString();
-	assert.match(black, /--fg: #111;/);
-	assert.match(black, /class="tab-btn font-sample black-text active" data-font="black" aria-pressed="true"/);
-	assert.match(black, /id="glass-warning" hidden/, "black reads on the half-white glass over navy");
+	assert.match(black, /--fg: #111;/, "black text");
+	assert.match(black, /--glass-bg: rgba\(255, 255, 255, 0\.06\);/, "the glass the same as under white text");
+	assert.match(black, /--input-bg: rgba\(255, 255, 255, 0\.04\);/);
+	assert.match(black, /class="font-swatch black-text active" data-font="black"/);
+	assert.match(black, /id="glass-warning"><\/p>/, "shown, its words filled in by the page");
 
-	// Black text on dark glass: the page says it may be hard to read
-	assert.equal((await postJson("/background/glass", { dim: 70 })).status, 200);
-	const dark = (await request(3000, "/")).body.toString();
-	assert.match(dark, /id="glass-warning"><\/p>/, "shown, its words filled in by the page");
+	// The next change to the glass checks it: black can't read on navy,
+	// so it's white again
+	const changed = await postJson("/background/glass", { dim: 12, recheck: true });
+	assert.equal(changed.status, 200);
+	assert.equal(readSettings().fontColour, "white");
+	assert.equal(changed.body.fontColour, "white", "and the page is told");
+
+	// Without `recheck` (the font colour itself was picked), never
+	await postJson("/background/glass", { fontColour: "black" });
+	await postJson("/background/glass", { dim: 13 });
+	assert.equal(readSettings().fontColour, "black");
 
 	// Back to the Default for the tests after this one, and Auto back on
 	// (which frees all three)
 	assert.equal((await postJson("/background/plain", {})).status, 200);
-	await postJson("/background/glass", { auto: true, pinned: [], dim: 0, fontColour: "auto" });
+	await postJson("/background/glass", { auto: true, pinned: [], dim: 0, fontColour: "white" });
 	assert.deepEqual(readSettings().glassPinned, []);
 });
 
