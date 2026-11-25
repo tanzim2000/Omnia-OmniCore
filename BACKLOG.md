@@ -189,6 +189,13 @@ the plan didn't say:
   new face) and the floating Back button get the tint and Dim like a box.
 - **A slider moved by hand is pinned at once, and says so** ("Pinned",
   which can be pressed to let Auto have it back).
+- **Save and Cancel** (after the second build): the Frosted glass box
+  shows every change at once and keeps nothing until Save. Cancel, or
+  leaving the page, puts it back. No "Saved." line. Font colour is kept
+  as soon as it's picked, like Appearance Mode.
+- **Over a colour** (after the second build): no Dominant or Vibrant (they
+  would only tint the glass with the colour behind it), and Colour
+  brightness mixes white in to brighten, so black can get lighter.
 - **How Auto sees a picture:** the worst part under the text (its
   brightest tenth under white, its darkest under black), drawn towards
   the picture's overall brightness by Blur, up to halfway at 40 px. Each
@@ -208,8 +215,8 @@ The plan, as decided:
   background": the colour that covers most of the picture) and **Vibrant**
   (its most saturated, eye-catching colour), then the fixed colours. Both
   are worked out once, when the picture is picked, so nothing changes
-  colour while a video plays. A colour background gives the same colour
-  for both.
+  colour while a video plays. Only with a picture (a colour background
+  doesn't offer them, decided after the second build).
 - **Picture brightness:** a plain slider from **50% darker (-50%) to 50%
   brighter (+50%)**, with **Original (0%)**, the picture as it is, the
   default. Never automatic. Core may start a bright picture darker when

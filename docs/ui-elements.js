@@ -267,8 +267,8 @@ const sections = [
 			{
 				id: "button-row",
 				title: "Buttons in a row",
-				sel: ".buttons",
-				desc: "A few buttons side by side, each as wide as its words, wrapping onto a second line when there isn't room (Join and Cancel under a password). A pop-up's last row is the same element with .dialog-buttons, which makes every button equally wide: see the pop-up question below.",
+				sel: ".buttons (.to-end)",
+				desc: "A few buttons side by side, each as wide as its words, wrapping onto a second line when there isn't room (Join and Cancel under a password). With .to-end the row sits at the end of its box with its buttons on the right and a .status line on their left (the Frosted glass box's Cancel and Save, two coloured buttons). A pop-up's last row is the same element with .dialog-buttons, which makes every button equally wide: see the pop-up question below.",
 				demo: '<div class="buttons"><button class="glass">Join</button><button class="glass">Cancel</button></div>',
 				code: '<div class="buttons">\n\t<button class="glass">Join</button>\n\t<button class="glass">Cancel</button>\n</div>'
 			},
@@ -753,7 +753,7 @@ const sections = [
 			{
 				id: "font-swatches",
 				title: "Picked by how it looks",
-				sel: ".font-swatches > .font-swatch (+ .white-text, .black-text, .active)",
+				sel: ".font-swatches (.on-colour) > .font-swatch (+ .white-text, .black-text, .active)",
 				desc: "Font colour, on the Appearance tab, in a strip like the font's: two choices, \"Aa\" in white and in black, each on a piece of the background through the real glass (its fill, then the tint with the Dim, the picture at its brightness), so it shows how that colour reads before it's picked. The background comes as <code>--swatch-picture</code> (a picture's address or a colour); the glass from the page's own variables, so the choices follow the sliders as they move. The one picked has a ring in the text's colour.",
 				demo: `<div class="inset" style="max-width:24em"><div class="inset-text"><div class="inset-label">COLOUR</div><div class="inset-value">White</div></div><div class="font-swatches"><button type="button" class="font-swatch white-text active" style="--swatch-picture:linear-gradient(135deg,#3a6df0,#f2a65a)"><span>Aa</span></button><button type="button" class="font-swatch black-text" style="--swatch-picture:linear-gradient(135deg,#3a6df0,#f2a65a)"><span>Aa</span></button></div></div>`,
 				code: "<div class=\"font-swatches\" role=\"group\" aria-label=\"Font colour\">\n\t<button type=\"button\" class=\"font-swatch white-text active\" style=\"--swatch-picture:url('/backdrop/…')\"><span>Aa</span></button>\n\t<button type=\"button\" class=\"font-swatch black-text\" style=\"--swatch-picture:url('/backdrop/…')\"><span>Aa</span></button>\n</div>"

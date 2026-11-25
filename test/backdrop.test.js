@@ -371,9 +371,13 @@ test("the tint: none, the background's dominant or vibrant colour, or one picked
 	assert.equal(backdrop.tintColour({ ...picture, glassTint: "vibrant", backgroundVibrant: "" }), "#336699", "no vibrant yet: the dominant one");
 	assert.equal(backdrop.tintColour({ ...picture, glassTint: "#7aa2ff" }), "#7aa2ff");
 
-	// Dominant and Vibrant need something behind the pages
+	// Dominant and Vibrant are a picture's: none over the Default, and
+	// none over a colour (it would only tint the glass with what's
+	// already behind it)
 	assert.equal(backdrop.tintColour({ glassTint: "dominant", backgroundKind: "plain", backgroundColor: "#336699" }), null);
 	assert.equal(backdrop.tintColour({ glassTint: "vibrant", backgroundKind: "plain", backgroundVibrant: "#ff6e1f" }), null);
+	assert.equal(backdrop.tintColour({ glassTint: "dominant", backgroundKind: "colour", backgroundColor: "#336699" }), null);
+	assert.equal(backdrop.tintColour({ glassTint: "#7aa2ff", backgroundKind: "colour", backgroundColor: "#336699" }), "#7aa2ff", "a picked one still works");
 });
 
 test("Picture brightness: Original, and where a bright new picture starts", () => {
@@ -474,7 +478,7 @@ test("the tint and the Dim as one colour over the glass", () => {
 	assert.equal(backdrop.tintWithDim("#ff0000", 20, 50), "rgba(43, 0, 0, 0.6)");
 });
 
-test("a colour behind the pages: its own brightness, dominant and vibrant", () => {
+test("a colour behind the pages: its own brightness, and Colour brightness lifting even black", () => {
 	assert.equal(backdrop.luminance("#ffffff"), 1);
 	assert.equal(backdrop.luminance("#000000"), 0);
 	assert.ok(Math.abs(backdrop.luminance("#eedec5") - 0.745) < 0.001);
@@ -497,6 +501,28 @@ test("a colour behind the pages: its own brightness, dominant and vibrant", () =
 	const css = backdrop.glassVariables(gold, false);
 	assert.match(css, /--segment-edge: rgba/, "the glass over a colour is the glass over a picture");
 	assert.match(backdrop.backdropHtml(gold), /<span class="omni-colour" style="--colour:#ffd700"><\/span>/);
+	assert.equal(backdrop.tintColour(gold), null, "Vibrant is a picture's: no tint over a colour");
+
+	// Colour brightness: darker darkens the colour, brighter mixes white
+	// into it, so black gets lighter too (multiplying black by anything
+	// stays black)
+	const black = { ...backdrop.useColour("#000000").changes, glassAuto: true, glassPinned: [], glassTint: "none" };
+	const darker = backdrop.glassVariables({ ...black, pictureBrightness: -30 }, false);
+	assert.match(darker, /--colour-brightness: 0\.7;/);
+	assert.match(darker, /--colour-lift: 0;/);
+	const brighter = backdrop.glassVariables({ ...black, pictureBrightness: 50 }, false);
+	assert.match(brighter, /--colour-brightness: 1;/);
+	assert.match(brighter, /--colour-lift: 0\.5;/);
+
+	// ...and Auto sees it: black lifted by half needs more glass under
+	// white text than black as it is
+	const asIs = backdrop.glassFor({ ...black, pictureBrightness: 0 }, false);
+	const lifted = backdrop.glassFor({ ...black, pictureBrightness: 50 }, false);
+	assert.equal(asIs.dim, 0, "black needs no Dim");
+	assert.ok(lifted.dim > asIs.dim, `lifted: Dim ${lifted.dim}`);
+	// A picture isn't lifted: its brightness still multiplies
+	const shadow = { ...black, backgroundKind: "picture", backgroundFile: "backdrop-aaaaaaaaaaaa.jpg", pictureBrightness: 50 };
+	assert.equal(backdrop.glassFor(shadow, false).dim, 0, "black in a picture stays black");
 });
 
 test("a picture from an earlier v2 build gets its vibrant colour and overall brightness", () => {
@@ -605,13 +631,17 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.match(page, /<span class="info-tip"[^>]*aria-label="What can be used as a background">/);
 	assert.match(page, /<span class="info-bubble" role="tooltip">A picture \(JPEG, PNG, WebP\)/);
 	assert.ok(page.includes('accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm"'));
-	assert.match(page, /data-tint="dominant" disabled/, "Dominant needs a picture or a colour");
-	assert.match(page, /data-tint="vibrant" disabled/, "so does Vibrant");
+	assert.ok(!/class="tint-chip[^"]*" data-tint="dominant"/.test(page), "Dominant is a picture's");
+	assert.ok(!/class="tint-chip[^"]*" data-tint="vibrant"/.test(page), "so is Vibrant");
 	assert.ok(!page.includes('data-tint="match"'), "Match the background is Dominant now");
 	assert.ok(page.includes("never sent anywhere"));
 	assert.ok(page.includes(backdrop.solveGlass.toString()), "the preview works the glass out the way the server does");
 	assert.ok(page.includes(backdrop.tintWithDim.toString()));
-	assert.ok(page.includes('id="glass-status"'), "saved as it changes, and says so");
+	// The glass is kept with Save, or put back with Cancel: neither does
+	// anything until something changes, and nothing says "Saved."
+	assert.match(page, /<div class="buttons to-end">\s*<span class="status" id="glass-status" aria-live="polite"><\/span>\s*<button type="button" class="btn-glossy btn-glossy-neutral" id="glass-cancel" disabled>Cancel<\/button>\s*<button type="button" class="btn-glossy btn-glossy-green" id="glass-save" disabled>Save<\/button>/);
+	const glassScript = page.slice(page.indexOf('document.getElementById("glass-save")'), page.indexOf("// --- Changing the background"));
+	assert.ok(glassScript.includes('"Couldn\'t save."') && !glassScript.includes('"Saved."'), "only a save that fails says anything");
 
 	// With the Default background: no Auto, no brightness, no Dim, and
 	// the font colour's strip says what it needs, with nothing to pick
@@ -644,6 +674,17 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	for (const source of [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])) {
 		assert.doesNotThrow(() => new vm.Script(source));
 	}
+
+	// The Appearance tab's script: two functions of the same name there
+	// and the second quietly replaces the first everywhere (the glass's
+	// Save once went the background upload's way)
+	const appearance = [...page.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).find((source) => source.includes("glass-save"));
+	const declared = (text) => [...text.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)].map((m) => m[1]);
+	const glassOwn = declared(glassScript);
+	assert.ok(glassOwn.includes("sendGlass") && glassOwn.includes("snapshot"));
+	for (const name of glassOwn) {
+		assert.equal(declared(appearance).filter((other) => other === name).length, 1, `${name} once`);
+	}
 });
 
 test("pages: a colour as the background, Auto and its pins, and the font colour", async () => {
@@ -663,7 +704,12 @@ test("pages: a colour as the background, Auto and its pins, and the font colour"
 	assert.match(page, /<input type="range" id="dim" min="0" max="100" step="1" value="0">/);
 	assert.match(page, /data-unpin="dim" hidden/, "nothing pinned");
 	assert.match(page, /<label for="brightness">Colour brightness <span class="muted" id="brightness-value">Original<\/span>/);
-	assert.ok(!page.match(/data-tint="(dominant|vibrant)"[^>]* disabled/), "Dominant and Vibrant work with a colour");
+	assert.ok(!/class="tint-chip[^"]*" data-tint="(dominant|vibrant)"/.test(page), "no Dominant or Vibrant over a colour");
+	assert.match(page, /class="tint-chip active" data-tint="none"/, "None to start with");
+	assert.match(page, /class="font-swatches on-colour"/, "the swatches lighten the colour as the page does");
+	assert.ok(page.includes('"colour":true'), "the page knows it's a colour, for Colour brightness");
+	assert.match(page, /--colour-brightness: 1;/);
+	assert.match(page, /--colour-lift: 0;/);
 	assert.match(page, /<div class="inset-value" id="font-colour-name">White<\/div>/);
 	assert.match(page, /class="font-swatch white-text active" data-font="white" aria-pressed="true"[^>]*--swatch-picture:#1e2a44/, "on the colour itself");
 	assert.match(page, /class="font-swatch black-text" data-font="black" aria-pressed="false"/);

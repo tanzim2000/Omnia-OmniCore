@@ -1532,7 +1532,10 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   `.omni-colour`), as it is, at the Picture brightness picked
   (`pictureBrightness`, -50 to +50, 0 being Original). A bright new picture
   starts darker (`startingBrightness`). Since Phase A there's no veil over
-  the picture.
+  the picture. A colour can't be multiplied brighter (black stays black),
+  so over a colour, brighter mixes white in (`--colour-lift`, up to half)
+  and darker multiplies (`--colour-brightness`); `solveGlass` is told it's
+  a colour (`colour: true`) and works it out the same way.
 - **Reduced motion** shows the still frame and never starts the video. A
   hidden tab pauses the video.
 - **It fades in** (`BACKDROP_SCRIPT`, on every page with `backdropHtml()`,
@@ -1554,7 +1557,9 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   Back button, a glass button outside any box) blurs what's behind it
   (`--glass-blur`, 0 to 40 px, 20 by default) and can carry a tint: a
   colour laid over its fill at up to 100%, picked from a few presets or a
-  colour picker, or the background's Dominant or Vibrant colour. **Dim**
+  colour picker, or the picture's Dominant or Vibrant colour (a picture's
+  only: over a colour or the Default they're none, and the page doesn't
+  offer them). **Dim**
   (0 to 100%) is darkness added to the tint; the two are one colour,
   `--glass-tint` (`tintWithDim`). Over a picture the glass gets a fuller
   fill (a whisper of white, whatever the font colour), a
@@ -1582,6 +1587,13 @@ and Beige Cream (`#eedec5`) in light (`DEFAULT_DARK` and `DEFAULT_LIGHT` in
   better (its sliders starting again from where they start), it's
   switched and saved. Picking the font colour sends no `recheck`, so it's
   never undone straight away. The page does the same as it goes.
+- **Saving the glass:** the Appearance tab shows every change at once but
+  sends nothing until **Save** (`POST /background/glass` with every value
+  and `recheck`, unless the last thing done was picking the font colour).
+  **Cancel** puts the page back as it was saved; leaving the page keeps
+  nothing. Save and Cancel are greyed out until something differs from
+  what's saved. A font colour pick is sent as soon as it's made
+  (`fontColour` alone, no `recheck`).
 - **Glass stays glass** over a picture or a colour (`overPicturePalette`
   in `uiStyles`): every fill, edge, sheen, input box and track is the dark
   palette's, whatever the mode and the font colour; only the text's own

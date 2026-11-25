@@ -604,6 +604,14 @@ function settingsPagesCss() {
 		filter: brightness(var(--backdrop-brightness, 1)) blur(2px);
 		transform: scale(1.1);
 	}
+	/* Over a colour: brighter by white laid over it, as the colour behind
+	   the page is (.omni-colour) */
+	.font-swatches.on-colour .font-swatch::before {
+		background:
+			linear-gradient(rgba(255, 255, 255, var(--colour-lift, 0)), rgba(255, 255, 255, var(--colour-lift, 0))),
+			var(--swatch-picture, var(--bg));
+		filter: brightness(var(--colour-brightness, 1));
+	}
 	.font-swatch::after {
 		background-color: var(--segment-bg);
 		background-image: linear-gradient(var(--glass-tint, transparent), var(--glass-tint, transparent));
@@ -1188,9 +1196,19 @@ function settingsPagesCss() {
 	}
 
 	/* A colour behind the pages, or the Default, in the preview (the
-	   colour is --colour, set on it) */
-	.preview-colour { position: absolute; inset: 0; background: var(--colour); }
-	.preview-default { background: var(--bg); }
+	   colour is --colour, set on it). The picture or colour at the
+	   brightness picked, as it is behind the page: a colour brighter by
+	   white laid over it. */
+	.preview-colour {
+		position: absolute;
+		inset: 0;
+		background:
+			linear-gradient(rgba(255, 255, 255, var(--colour-lift, 0)), rgba(255, 255, 255, var(--colour-lift, 0))),
+			var(--colour);
+		filter: brightness(var(--colour-brightness, 1));
+	}
+	.backdrop-preview img { filter: brightness(var(--backdrop-brightness, 1)); }
+	.preview-default { background: var(--bg); filter: none; }
 
 	/* Change background: a wider pop-up, its preview with a piece of glass
 	   on it to judge the text by, the three choices and the colour wheel */
@@ -3152,15 +3170,18 @@ function uiStyles(options) {
 
 	.omni-backdrop picture { display: block; width: 100%; height: 100%; }
 
-	/* A colour behind the pages instead of a picture: dimmed by
-	   Brightness like a picture, and veiled the same way */
-	/* A colour behind the pages: its colour is --colour, on it */
+	/* A colour behind the pages instead of a picture (its colour is
+	   --colour, on it): darker by brightness() like a picture, brighter by
+	   white laid over it (--colour-lift), since brightness() can't make
+	   black any brighter */
 	.omni-colour {
 		display: block;
 		width: 100%;
 		height: 100%;
-		background: var(--colour);
-		filter: brightness(var(--backdrop-brightness));
+		background:
+			linear-gradient(rgba(255, 255, 255, var(--colour-lift, 0)), rgba(255, 255, 255, var(--colour-lift, 0))),
+			var(--colour);
+		filter: brightness(var(--colour-brightness, 1));
 	}
 
 	.omni-backdrop img,
@@ -3208,7 +3229,7 @@ function uiStyles(options) {
 		object-fit: cover;
 	}
 	.omni-backdrop-was img { filter: var(--was-filter, none); }
-	.omni-backdrop-was .omni-colour { filter: var(--was-filter, brightness(var(--backdrop-brightness))); }
+	.omni-backdrop-was .omni-colour { filter: var(--was-filter, brightness(var(--colour-brightness, 1))); }
 
 	@media (prefers-reduced-motion: reduce) {
 		.omni-backdrop picture,
@@ -3662,6 +3683,11 @@ function uiStyles(options) {
 	   little room above, and every button equally wide.
 	   --------------------------------------------------------------- */
 	.buttons { display: flex; flex-wrap: wrap; gap: 0.6em; }
+	/* .to-end: the row at the end of its box, its buttons on the right,
+	   with a line said beside them (Couldn't save.) on their left. The
+	   Frosted glass box's Save and Cancel. */
+	.buttons.to-end { justify-content: flex-end; align-items: center; margin-top: auto; padding-top: 0.8em; }
+	.buttons.to-end > .status { margin: 0 auto 0 0; }
 
 	/* A QR code on its own, in a pop-up or a frame: Core's drawing
 	   (qr.js), kept square, never bigger than a phone needs, and never

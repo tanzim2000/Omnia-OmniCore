@@ -504,15 +504,17 @@ function cleanGlass(body) {
 	return changes;
 }
 
-// The tint's colour: the picked one, the background's dominant or vibrant
-// one, or none. Dominant and Vibrant need a picture or a colour behind the
-// pages, and are none without. ("match", from an earlier v2 build, is
+// The tint's colour: the picked one, the picture's dominant or vibrant
+// one, or none. Dominant and Vibrant are a picture's: a colour behind the
+// pages is its own dominant and vibrant colour, so tinting with it would
+// only tint the glass with what's already behind it, and they're none
+// there, as with the Default. ("match", from an earlier v2 build, is
 // Dominant.)
 function tintColour(settings) {
 	const choice = settings.glassTint === "match" ? "dominant" : settings.glassTint;
 
 	if (choice === "dominant" || choice === "vibrant") {
-		if (!hasBackdrop(settings)) return null;
+		if (!hasPicture(settings)) return null;
 		const dominant = hexColour(settings.backgroundColor);
 		return choice === "vibrant" ? hexColour(settings.backgroundVibrant) || dominant : dominant;
 	}
@@ -535,6 +537,11 @@ function tintColour(settings) {
 //                           "tintStrength"
 //   input.blur, tintStrength, dim   the values set by hand
 //   input.font              "white" or "black"
+//   input.colour            true for a colour behind the pages, which is
+//                           made brighter towards white (a picture's
+//                           colours are multiplied, as the browser's
+//                           brightness() does; black times anything is
+//                           still black)
 //   model                   GLASS_MODEL
 //
 // Returns { blur, tintStrength, dim, font, contrast, readable }.
@@ -570,7 +577,8 @@ function solveGlass(input, model) {
 	function contrast(font, values) {
 		var spread = (0.5 * values.blur) / model.blurMost;
 		var light = font === "white" ? high - (high - mean) * spread : low + (mean - low) * spread;
-		var grey = Math.min(1, encode(Math.max(0, light)) * factor);
+		var grey = encode(Math.max(0, light));
+		grey = input.colour && factor > 1 ? grey + (1 - grey) * (factor - 1) : Math.min(1, grey * factor);
 		var colour = [grey, grey, grey];
 		var fill = model.fill;
 		var strength = tintRgb ? values.tintStrength / 100 : 0;
@@ -728,7 +736,8 @@ function glassFor(settings, light) {
 			blur: settings.glassBlur,
 			tintStrength: settings.glassTintStrength,
 			dim: settings.glassDim,
-			font: fontOf(settings)
+			font: fontOf(settings),
+			colour: hasColour(settings)
 		},
 		GLASS_MODEL
 	);
@@ -758,7 +767,8 @@ function recheckFont(settings) {
 		blur: settings.glassBlur,
 		tintStrength: settings.glassTintStrength,
 		dim: settings.glassDim,
-		font: fontOf(settings)
+		font: fontOf(settings),
+		colour: hasColour(settings)
 	};
 	const keep = fontToKeep(input, GLASS_MODEL);
 	return keep === fontOf(settings) ? {} : { fontColour: keep };
@@ -812,6 +822,11 @@ function glassVariables(settings, light) {
 		--glass-blur: ${glass.blur}px;
 		--glass-tint: ${tintWithDim(tint, glass.tintStrength, glass.dim)};
 		--backdrop-brightness: ${(100 + brightness) / 100};
+		/* A colour behind the pages: darker by brightness() like a
+		   picture, brighter by white laid over it (brightness() can't
+		   make black any brighter) */
+		--colour-brightness: ${(100 + Math.min(0, brightness)) / 100};
+		--colour-lift: ${Math.max(0, brightness) / 100};
 		${
 			picture
 				? `

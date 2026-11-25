@@ -779,7 +779,10 @@ function backgroundPanel(settings) {
 	const colour = backdropStore.hasColour(settings);
 	const backdrop = file || colour;
 	// "match", from an earlier v2 build, is Dominant
-	const tint = settings.glassTint === "match" ? "dominant" : settings.glassTint || "none";
+	// "match", from an earlier v2 build, is Dominant. Dominant and Vibrant
+	// are a picture's: over a colour they're None.
+	const chosenTint = settings.glassTint === "match" ? "dominant" : settings.glassTint || "none";
+	const tint = !file && ["dominant", "vibrant"].includes(chosenTint) ? "none" : chosenTint;
 	const uiMode = currentUiMode();
 
 	// The glass as it's drawn now, for this browser's mode (or dark, when
@@ -982,18 +985,15 @@ function backgroundPanel(settings) {
 					<div class="glass-fields">
 						<div class="field wide-field">
 							<label>Tint ${infoTip(
-								backdrop
-									? "Dominant is the colour that covers most of the " +
-											(file ? "picture" : "background") +
-											", Vibrant its most eye-catching one" +
-											(file ? ", both worked out once when it was picked." : ". A colour is both.")
-									: "Dominant and Vibrant need a picture or a colour behind the pages.",
+								file
+									? "Dominant is the colour that covers most of the picture, Vibrant its most eye-catching one, both worked out once when it was picked."
+									: "A colour laid over every box. With a picture behind the pages, its own colours can be the tint too.",
 								"About the tint"
 							)}</label>
 							<div class="tint-chips" id="tints">
 								${chip("none", "None", "", false)}
-								${chip("dominant", "Dominant", dominant, !backdrop)}
-								${chip("vibrant", "Vibrant", vibrant, !backdrop)}
+								${file ? chip("dominant", "Dominant", dominant, false) : ""}
+								${file ? chip("vibrant", "Vibrant", vibrant, false) : ""}
 								${backdropStore.TINT_PRESETS.map((colour) => chip(colour, colour, colour, false)).join("")}
 								<label class="tint-chip tint-custom${custom ? " active" : ""}" title="Pick a colour">
 									<input type="color" id="custom" value="${escapeHtml(custom ? tint : "#7aa2ff")}" aria-label="Pick a colour">
@@ -1038,7 +1038,11 @@ function backgroundPanel(settings) {
 						}
 					</div>
 					<p class="help glass-warning" id="glass-warning"${glass.readable ? " hidden" : ""}></p>
-					<p class="status" id="glass-status" aria-live="polite"></p>
+					<div class="buttons to-end">
+						<span class="status" id="glass-status" aria-live="polite"></span>
+						<button type="button" class="btn-glossy btn-glossy-neutral" id="glass-cancel" disabled>Cancel</button>
+						<button type="button" class="btn-glossy btn-glossy-green" id="glass-save" disabled>Save</button>
+					</div>
 				</div>
 `;
 
@@ -1065,7 +1069,7 @@ function backgroundPanel(settings) {
 								backdrop ? (fontColour === "black" ? "Black" : "White") : "With a picture or a colour"
 							}</div>
 						</div>
-						${backdrop ? `<div class="font-swatches" role="group" aria-label="Font colour">${swatch("white", "White")}${swatch("black", "Black")}</div>` : ""}
+						${backdrop ? `<div class="font-swatches${colour ? " on-colour" : ""}" role="group" aria-label="Font colour">${swatch("white", "White")}${swatch("black", "Black")}</div>` : ""}
 					</div>`;
 
 	const script = `
@@ -1086,6 +1090,7 @@ function backgroundPanel(settings) {
 						low: settings.backgroundLow,
 						high: settings.backgroundHigh,
 						mean: settings.backgroundMean,
+						colour: !file,
 						color: settings.backgroundColor || "",
 						vibrant: settings.backgroundVibrant || ""
 				  }
@@ -1176,7 +1181,8 @@ function backgroundPanel(settings) {
 				blur: hand.blur,
 				tintStrength: hand.tintStrength,
 				dim: hand.dim,
-				font: font
+				font: font,
+				colour: Boolean(picture.colour)
 			};
 		}
 
@@ -1233,6 +1239,8 @@ function backgroundPanel(settings) {
 				document.getElementById("brightness-value").textContent = brightnessWords(bright);
 				brightness.setAttribute("aria-valuetext", brightnessWords(bright));
 				root.style.setProperty("--backdrop-brightness", (100 + bright) / 100);
+				root.style.setProperty("--colour-brightness", (100 + Math.min(0, bright)) / 100);
+				root.style.setProperty("--colour-lift", Math.max(0, bright) / 100);
 			}
 
 			// Over a picture: the text colours go with the font colour; the
@@ -1289,14 +1297,14 @@ function backgroundPanel(settings) {
 				recheck();
 				preview();
 			});
-			slider.addEventListener("change", function () { save(true); });
+			slider.addEventListener("change", function () { changed(true); });
 		}
 		if (brightness) {
 			brightness.addEventListener("input", function () {
 				recheck();
 				preview();
 			});
-			brightness.addEventListener("change", function () { save(true); });
+			brightness.addEventListener("change", function () { changed(true); });
 		}
 
 		// Pinned: pressed, Auto may move that one again
@@ -1305,7 +1313,7 @@ function backgroundPanel(settings) {
 				pinned = pinned.filter(function (name) { return name !== badge.dataset.unpin; });
 				recheck();
 				preview();
-				save(true);
+				changed(true);
 			});
 		}
 
@@ -1324,7 +1332,7 @@ function backgroundPanel(settings) {
 				auto = autoBox.checked;
 				recheck();
 				preview();
-				save(true);
+				changed(true);
 			});
 		}
 
@@ -1337,7 +1345,7 @@ function backgroundPanel(settings) {
 			if (tint !== "none" && Number(sliders.tintStrength.value) === 0) hand.tintStrength = MODEL.tintStrengthDefault;
 			recheck();
 			preview();
-			save(true);
+			changed(true);
 		});
 
 		custom.addEventListener("input", function () {
@@ -1346,7 +1354,7 @@ function backgroundPanel(settings) {
 			recheck();
 			preview();
 		});
-		custom.addEventListener("change", function () { save(true); });
+		custom.addEventListener("change", function () { changed(true); });
 
 		// Font colour: White or Black, as picked, never checked straight
 		// away (only the next change to the glass checks it again)
@@ -1355,55 +1363,120 @@ function backgroundPanel(settings) {
 				if (!PICTURE) return;
 				fontColour = button.dataset.font;
 				preview();
-				save(false);
+				changed(false);
 			});
 		}
 
 		preview();
 
-		// Saved as it changes: a slider when it's let go, a tint or a font
-		// colour when it's picked. A moment's wait, so dragging a slider
-		// across sends one save, not twenty. \`checked\`: anything but the
-		// font colour changed, so the server checks the font colour too.
-		let saving = null;
-		let checked = false;
-		function save(check) {
-			checked = check === true;
-			clearTimeout(saving);
-			saving = setTimeout(async function () {
-				const status = document.getElementById("glass-status");
-				status.className = "status";
-				try {
-					const response = await fetch("/background/glass", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							blur: hand.blur,
-							tintStrength: hand.tintStrength,
-							dim: hand.dim,
-							auto: auto,
-							pinned: pinned,
-							tint: tint,
-							brightness: brightness ? Number(brightness.value) : undefined,
-							fontColour: fontColour,
-							recheck: checked
-						})
-					});
-					if (!response.ok) throw new Error();
-					// What the server kept (the same, as it works it out
-					// the same way)
-					const kept = await response.json();
-					if (kept.fontColour && kept.fontColour !== fontColour) {
-						fontColour = kept.fontColour;
-						preview();
-					}
-					status.textContent = "Saved.";
-				} catch (error) {
-					status.className = "status bad";
-					status.textContent = "Couldn't save.";
-				}
-			}, 300);
+		// The glass: nothing is kept until Save. Every change shows at once
+		// on this page; Cancel puts it back as it was saved, and leaving the
+		// page without saving keeps nothing. Font colour is a pick, like
+		// Appearance Mode beside it: kept as soon as it's picked.
+		const saveButton = document.getElementById("glass-save");
+		const cancelButton = document.getElementById("glass-cancel");
+		const glassStatus = document.getElementById("glass-status");
+
+		function snapshot() {
+			return JSON.stringify({
+				hand: hand,
+				auto: auto,
+				pinned: pinned.slice().sort(),
+				tint: tint,
+				brightness: brightness ? Number(brightness.value) : 0
+			});
 		}
+		let savedGlass = snapshot();
+		let savedFont = fontColour;
+
+		// Whether the last thing done was picking the font colour: then
+		// Save leaves it as picked. Otherwise the server checks it against
+		// the glass, the same way this page did.
+		let fontLast = false;
+
+		function changed(glass) {
+			if (!glass) {
+				fontLast = true;
+				saveFont();
+				return;
+			}
+			fontLast = false;
+			const dirty = snapshot() !== savedGlass;
+			saveButton.disabled = !dirty;
+			cancelButton.disabled = !dirty;
+			glassStatus.textContent = "";
+		}
+
+		// Sends what's on the page; says so only when it couldn't
+		async function sendGlass(body) {
+			try {
+				const response = await fetch("/background/glass", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify(body)
+				});
+				if (!response.ok) throw new Error();
+				glassStatus.textContent = "";
+				return await response.json();
+			} catch (error) {
+				glassStatus.className = "status bad";
+				glassStatus.textContent = "Couldn't save.";
+				return null;
+			}
+		}
+
+		async function saveFont() {
+			const picked = fontColour;
+			if (await sendGlass({ fontColour: picked })) savedFont = picked;
+		}
+
+		saveButton.addEventListener("click", async function () {
+			saveButton.disabled = true;
+			cancelButton.disabled = true;
+			const kept = await sendGlass({
+				blur: hand.blur,
+				tintStrength: hand.tintStrength,
+				dim: hand.dim,
+				auto: auto,
+				pinned: pinned,
+				tint: tint,
+				brightness: brightness ? Number(brightness.value) : undefined,
+				fontColour: fontColour,
+				recheck: !fontLast
+			});
+			if (!kept) {
+				saveButton.disabled = false;
+				cancelButton.disabled = false;
+				return;
+			}
+			// What the server kept (the same, as it works it out the same
+			// way)
+			if (kept.fontColour && kept.fontColour !== fontColour) {
+				fontColour = kept.fontColour;
+				preview();
+			}
+			savedGlass = snapshot();
+			savedFont = fontColour;
+		});
+
+		cancelButton.addEventListener("click", function () {
+			const was = JSON.parse(savedGlass);
+			hand.blur = was.hand.blur;
+			hand.tintStrength = was.hand.tintStrength;
+			hand.dim = was.hand.dim;
+			auto = was.auto;
+			if (autoBox) autoBox.checked = auto;
+			pinned = was.pinned;
+			tint = was.tint;
+			if (/^#/.test(tint)) custom.value = tint;
+			if (brightness) brightness.value = was.brightness;
+			fontColour = savedFont;
+			fontLast = false;
+			preview();
+			saveButton.disabled = true;
+			cancelButton.disabled = true;
+			glassStatus.textContent = "";
+		});
 
 		// --- Changing the background: the dialog --------------------------
 		//
@@ -1469,7 +1542,7 @@ function backgroundPanel(settings) {
 			} else if (chosen.tab === "colour") {
 				const rgb = rgbOf(chosen.colour);
 				const shade = luminance(rgb[0], rgb[1], rgb[2]);
-				picture = { low: shade, high: shade, mean: shade, color: chosen.colour, vibrant: chosen.colour };
+				picture = { low: shade, high: shade, mean: shade, color: chosen.colour, vibrant: chosen.colour, colour: true };
 				previewColour.style.setProperty("--colour", chosen.colour);
 			} else {
 				previewColour.style.setProperty("--colour", light() ? DEFAULT_COLOURS.light : DEFAULT_COLOURS.dark);
