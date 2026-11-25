@@ -272,6 +272,12 @@ function startAboutFace() {
 	// The browser tab's icon (core/icon.js)
 	attachIconRoute(app);
 
+	// Which appearance profile the browser asking uses (its cookie), so
+	// everything this port draws or sends (the page, the picture behind
+	// it, the font) is that profile's. Before any other route. See
+	// profiles.js.
+	app.use(require("./profiles").rememberProfile);
+
 	// The network stream for the status drawer and the takeover (see
 	// network-status.js)
 	require("./network-status").attach(app, "other");

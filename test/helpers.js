@@ -64,6 +64,11 @@ function resetState() {
 	}
 
 	fs.rmSync(path.join(dataDir, "faces"), { recursive: true, force: true });
+
+	// Appearance profiles (since 2.0.0) and their cache: with none, the
+	// pages use settings.json as they did before profiles
+	fs.rmSync(path.join(dataDir, "profiles"), { recursive: true, force: true });
+	fs.rmSync(path.join(dataDir, "cache"), { recursive: true, force: true });
 }
 
 // Everything the registry install test downloaded, cleared from the

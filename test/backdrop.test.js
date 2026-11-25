@@ -709,7 +709,7 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	const modal = page.slice(page.indexOf('id="background-modal"'), page.indexOf('id="font-modal"'));
 	for (const tab of ["picture", "colour", "default"]) assert.ok(modal.includes(`data-bg-tab="${tab}"`), tab);
 	assert.ok(modal.includes('<canvas id="wheel-canvas"'), "a colour wheel of our own");
-	assert.ok(modal.includes("black (#000000)") && modal.includes("Beige Cream (#eedec5)"));
+	assert.ok(modal.includes("Black (#000000) with white text: the look OmniCore starts"));
 	assert.ok(modal.includes('id="bg-use" disabled>Use</button>'), "nothing to use until something's chosen");
 	assert.ok(page.indexOf('id="background-modal"') > page.indexOf('data-pane="about"'), "outside every box");
 
@@ -875,11 +875,15 @@ test("pages: a new picture replaces the old one's files; Back to plain deletes t
 	assert.ok(!filesNow().includes(before), "the video is gone");
 	assert.deepEqual(filesNow(), [`backdrop-${sent.body.id}-still.jpg`, `backdrop-${sent.body.id}.jpg`]);
 
+	// Default, since 2.0.0: the colour black with white text (a profile
+	// always has a picture or a colour), and the picture's files go
 	assert.equal((await postJson("/background/plain", {})).status, 200);
-	assert.equal(readSettings().backgroundKind, "plain");
+	assert.equal(readSettings().backgroundKind, "colour");
+	assert.equal(readSettings().backgroundColor, "#000000");
+	assert.equal(readSettings().fontColour, "white");
 	assert.deepEqual(filesNow(), []);
 
-	// With nothing behind the pages, there's nothing to work out
+	// With no picture behind the pages, there's nothing to work out
 	assert.equal((await postJson("/background/about", { vibrant: "#3366ff", mean: 0.7 })).status, 400);
 });
 
@@ -911,15 +915,17 @@ test("pages: a raw upload only on the two routes meant for it", async () => {
 });
 
 test("pages: saving the glass, and it's in every port's stylesheet", async () => {
-	const saved = await postJson("/background/glass", { blur: 31, tint: "#b48cff", tintStrength: 20, brightness: 80 });
+	// Auto off, so the sliders are drawn as set (the Default is the colour
+	// black since 2.0.0, and Auto would work Blur out against it)
+	const saved = await postJson("/background/glass", { auto: false, blur: 31, tint: "#b48cff", tintStrength: 20, brightness: 80 });
 	assert.equal(saved.status, 200);
 
 	const settings = readSettings();
 	assert.equal(settings.glassBlur, 31);
 	assert.equal(settings.glassTint, "#b48cff");
 
-	// Not the About face's (1303): its look is its own, following Dark and
-	// Light only
+	// Not the About face's (1303): its look is its own, following the
+	// font colour only
 	for (const port of [3000, 3999, 4000]) {
 		const page = (await request(port, "/")).body.toString();
 		assert.ok(page.includes("--glass-blur: 31px;"), `blur on ${port}`);
@@ -928,7 +934,7 @@ test("pages: saving the glass, and it's in every port's stylesheet", async () =>
 
 	assert.equal(settings.pictureBrightness, 50, "brought into range");
 
-	writeSettings({ glassBlur: 20, glassTint: "none", glassTintStrength: 12, pictureBrightness: 0 });
+	writeSettings({ glassAuto: true, glassBlur: 20, glassTint: "none", glassTintStrength: 12, pictureBrightness: 0 });
 });
 
 test("pages: the wizard serves the chosen font too (it never did before v2)", async () => {

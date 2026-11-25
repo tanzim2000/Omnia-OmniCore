@@ -74,6 +74,19 @@ try {
 	process.exit(1);
 }
 
+// The appearance profiles (core/profiles.js): if there isn't one that can
+// be used, one is made. From the look this install already has, when it
+// had one before profiles (so nothing changes on its screens); on a fresh
+// install, black with white text. Any page drawn after this has a profile.
+try {
+	const made = require("./core/profiles").ensure();
+	if (made) console.log(`Appearance profile made: ${made.name}`);
+} catch (error) {
+	// Not a reason to stop: the pages use the settings as they are until
+	// a profile can be made
+	console.log(`No appearance profile could be made: ${error.message}`);
+}
+
 // Bring back every dashboard face that was previously created
 const faces = readFaces();
 for (const face of faces) {

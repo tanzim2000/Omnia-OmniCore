@@ -51,6 +51,7 @@ const widgetTypes = require("./widget-types");
 const marketplace = require("./marketplace");
 const imageProxy = require("./image-proxy");
 const { readSettings, writeSettings } = require("./settings-store");
+const profiles = require("./profiles");
 const { getLocation } = require("./location-service");
 const placeSearch = require("./place-search");
 const settingsHome = require("./settings-home");
@@ -939,8 +940,8 @@ function backgroundPanel(settings) {
 
 					<div class="bg-pane" data-bg-pane="default"${startTab === "default" ? "" : " hidden"}>
 						<p class="hint">
-							The pages' own colour: black (#000000) in dark mode,
-							Beige Cream (#eedec5) in light mode.${file ? " The picture in use now is deleted from OmniCore." : ""}
+							Black (#000000) with white text: the look OmniCore starts
+							with.${file ? " The picture in use now is deleted from OmniCore." : ""}
 						</p>
 					</div>
 
@@ -1037,7 +1038,14 @@ function backgroundPanel(settings) {
 	// kept from there.)
 	const actionsBox = `
 			<div class="segment c3 row2 lends-room tab-actions" id="appearance-actions">
-				<p class="hint" id="appearance-state">Everything on this tab is saved.</p>
+				<div class="inset">
+					<div class="inset-text">
+						<div class="inset-label">PROFILE ON THIS DEVICE</div>
+						<div class="inset-value" id="profile-name">${escapeHtml((settings.profile && settings.profile.name) || "None yet")}</div>
+					</div>
+					<button type="button" class="glass" id="open-profiles">Profiles</button>
+				</div>
+				<p class="hint" id="appearance-state">Everything on this tab is saved${settings.profile ? ", in this profile" : ""}.</p>
 				<p class="help glass-warning" id="glass-warning"${glass.readable ? " hidden" : ""}></p>
 				<div class="buttons to-end" id="appearance-buttons" hidden>
 					<span class="status" id="glass-status" aria-live="polite"></span>
@@ -1409,7 +1417,7 @@ function backgroundPanel(settings) {
 			glassStatus.textContent = "";
 			saveState.textContent = dirty
 				? "Not saved yet. Cancel, or leaving this page, puts it back."
-				: "Everything on this tab is saved.";
+				: "Everything on this tab is saved" + (document.getElementById("profile-name").textContent !== "None yet" ? ", in this profile." : ".");
 		}
 
 		// Text size: shown at once on this page
@@ -2882,12 +2890,18 @@ function placeSearchPanel(settings) {
 
 // The routes that take a file as it is rather than JSON. See the JSON
 // check in startAdminFace.
-const RAW_UPLOADS = ["/background/upload", "/background/still"];
+const RAW_UPLOADS = ["/background/upload", "/background/still", "/profiles/import"];
 
 function startAdminFace() {
 	const app = express();
 	// The browser tab's icon (core/icon.js)
 	attachIconRoute(app);
+
+	// Which appearance profile the browser asking uses (its cookie), so
+	// everything this port draws or sends (the page, the picture behind
+	// it, the font) is that profile's. Before any other route. See
+	// profiles.js.
+	app.use(require("./profiles").rememberProfile);
 
 	// The network stream for the status drawer and the takeover (see
 	// network-status.js). Before sign-in, so nothing stands in its way: the
@@ -3233,6 +3247,27 @@ function startAdminFace() {
 		) + `
 			${glassParts.backgroundModal}
 			${updates.majorModal}
+			<div class="modal-backdrop" id="profiles-modal" hidden>
+				<div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="profiles-title">
+					<div class="modal-head">
+						<h2 id="profiles-title">Appearance profiles</h2>
+						<button class="modal-close" data-close="profiles-modal" aria-label="Close">&times;</button>
+					</div>
+					<p class="hint">
+						How OmniCore's own pages look: the background, the glass, the
+						font and its colour, its size and the Back button. Each device
+						uses one. Changing a profile changes it on every device using it.
+						A profile is an .ocap file, signed by the OmniCore that made it.
+					</p>
+					<div class="list tight" id="profile-list"></div>
+					<p class="status" id="profiles-status" aria-live="polite"></p>
+					<div class="buttons dialog-buttons">
+						<button type="button" class="glass" id="profile-import">Import an .ocap</button>
+						<button type="button" class="glass" id="profile-new">New profile</button>
+					</div>
+					<input type="file" id="profile-file" accept=".ocap" hidden>
+				</div>
+			</div>
 			<div class="modal-backdrop" id="font-modal" hidden>
 				<div class="modal">
 					<div class="modal-head">
@@ -3412,6 +3447,188 @@ function startAdminFace() {
 					this.disabled = false;
 				}
 			});
+
+			// --- Appearance profiles --------------------------------------
+			// The Profiles pop-up: every profile, which one this device
+			// uses, and what can be done with each. Using another one, or
+			// making one, reloads the page in it.
+			(function () {
+				const list = document.getElementById("profile-list");
+				const status = document.getElementById("profiles-status");
+
+				function say(text, bad) {
+					status.textContent = text || "";
+					status.className = "status" + (bad ? " bad" : text ? " good" : "");
+				}
+
+				async function send(address, body) {
+					const response = await fetch(address, {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify(body || {})
+					});
+					const answer = await response.json().catch(function () { return {}; });
+					if (!response.ok) throw new Error(answer.error || "That didn't work.");
+					return answer;
+				}
+
+				// This device now looks like another profile: the old
+				// background fades into the new one as the page reloads
+				function reloadInIt() {
+					if (window.omniKeepBackdrop) window.omniKeepBackdrop();
+					location.reload();
+				}
+
+				function button(text, run, danger) {
+					const each = document.createElement("button");
+					each.type = "button";
+					each.className = "glass small" + (danger ? " glass-danger" : "");
+					each.textContent = text;
+					each.addEventListener("click", async function () {
+						each.disabled = true;
+						try {
+							await run();
+						} catch (error) {
+							say(error.message, true);
+						}
+						each.disabled = false;
+					});
+					return each;
+				}
+
+				function row(profile) {
+					const item = document.createElement("div");
+					item.className = "item" + (profile.inUse ? " current" : "");
+
+					const text = document.createElement("div");
+					text.className = "item-text";
+					const name = document.createElement("span");
+					const sub = document.createElement("span");
+					sub.className = "item-sub";
+					text.appendChild(name);
+					text.appendChild(sub);
+					item.appendChild(text);
+
+					if (!profile.valid) {
+						name.textContent = "Can't be used";
+						sub.textContent = profile.error;
+						const actions = document.createElement("div");
+						actions.className = "item-actions";
+						actions.appendChild(button("Delete", function () { return remove(profile, "this profile"); }, true));
+						item.appendChild(actions);
+						return item;
+					}
+
+					name.textContent = profile.name;
+					sub.textContent = [
+						profile.inUse ? "On this device" : "",
+						profile.isDefault ? "Default" : "",
+						profile.background,
+						profile.maker
+					].filter(Boolean).join(" · ");
+
+					const actions = document.createElement("div");
+					actions.className = "item-actions";
+					if (!profile.inUse) {
+						actions.appendChild(button("Use", async function () {
+							await send("/profiles/use", { id: profile.id });
+							reloadInIt();
+						}));
+					}
+					actions.appendChild(button("Rename", async function () {
+						const typed = await askDialog({ title: "Rename this profile", value: profile.name, confirm: "Rename" });
+						if (!typed) return;
+						await send("/profiles/rename", { id: profile.id, name: typed });
+						if (profile.inUse) document.getElementById("profile-name").textContent = typed.trim().slice(0, 40);
+						await show();
+					}));
+					if (!profile.isDefault) {
+						actions.appendChild(button("Make default", async function () {
+							await send("/profiles/default", { id: profile.id });
+							await show();
+						}));
+					}
+					const download = document.createElement("a");
+					download.className = "glass small";
+					download.href = "/profiles/" + profile.id + "/export";
+					download.textContent = "Export";
+					download.setAttribute("download", "");
+					actions.appendChild(download);
+					actions.appendChild(button("Delete", function () { return remove(profile, "“" + profile.name + "”"); }, true));
+					item.appendChild(actions);
+					return item;
+				}
+
+				async function remove(profile, what) {
+					const sure = await confirmDialog({
+						title: "Delete " + what + "?",
+						text: profile.inUse
+							? "This device and any other using it go back to the default profile."
+							: "Any device using it goes back to the default profile.",
+						confirm: "Delete",
+						danger: true
+					});
+					if (!sure) return;
+					await send("/profiles/delete", { id: profile.id });
+					if (profile.inUse) reloadInIt();
+					else await show();
+				}
+
+				async function show() {
+					const response = await fetch("/profiles");
+					const answer = await response.json().catch(function () { return {}; });
+					list.replaceChildren();
+					for (const profile of answer.profiles || []) list.appendChild(row(profile));
+				}
+
+				document.getElementById("open-profiles").addEventListener("click", async function () {
+					say("");
+					openModal("profiles-modal");
+					try {
+						await show();
+					} catch (error) {
+						say("The profiles couldn't be read.", true);
+					}
+				});
+
+				// A copy of the one this device uses, and this device uses it
+				document.getElementById("profile-new").addEventListener("click", async function () {
+					const typed = await askDialog({ title: "New profile", text: "A copy of the profile on this device, with a name of its own. This device uses it from then on.", placeholder: "Evening", confirm: "Make it" });
+					if (!typed) return;
+					try {
+						await send("/profiles/new", { name: typed });
+						reloadInIt();
+					} catch (error) {
+						say(error.message, true);
+					}
+				});
+
+				// An .ocap from somewhere else, sent as it is. OmniCore keeps
+				// it only if its signature and everything in it check out.
+				const picker = document.getElementById("profile-file");
+				document.getElementById("profile-import").addEventListener("click", function () {
+					picker.value = "";
+					picker.click();
+				});
+				picker.addEventListener("change", async function () {
+					const file = picker.files && picker.files[0];
+					if (!file) return;
+					say("Checking it…");
+					try {
+						const response = await fetch("/profiles/import", {
+							method: "POST",
+							headers: { "Content-Type": "application/octet-stream" },
+							body: file
+						});
+						const answer = await response.json().catch(function () { return {}; });
+						if (!response.ok) throw new Error(answer.error || "That file couldn't be used.");
+						await show();
+						say("Added “" + answer.name + "”. Its signature checks out.");
+					} catch (error) {
+						say(error.message, true);
+					}
+				});
+			})();
 
 			// --- Fonts -------------------------------------------------
 			document.getElementById("change-font").addEventListener("click", function () {
@@ -3778,8 +3995,12 @@ function startAdminFace() {
 		res.json({ ok: true, kind: saved.backgroundKind });
 	});
 
+	// The Default: black with white text, the look OmniCore starts with.
+	// Since 2.0.0 a profile always has a picture or a colour, so this is
+	// the colour black, not "nothing" (which is only what's drawn when no
+	// profile can be read at all).
 	app.post("/background/plain", (req, res) => {
-		writeSettings(backdropStore.PLAIN);
+		writeSettings({ ...backdropStore.useColour(DEFAULT_DARK).changes, fontColour: "white" });
 		backdropStore.removeOthers([]);
 		res.json({ ok: true });
 	});
@@ -3827,6 +4048,101 @@ function startAdminFace() {
 		writeSettings(result.changes);
 		res.json({ ok: true });
 	});
+
+	// ---- appearance profiles --------------------------------------------
+	//
+	// The Profiles pop-up on the Appearance tab. A profile is an .ocap file
+	// (profiles.js); this browser's pick is a cookie. Changing a profile
+	// changes it for every device using it.
+
+	// Every profile, with the one this browser uses and the default marked
+	app.get("/profiles", (req, res) => {
+		res.json({ profiles: profiles.listForPage() });
+	});
+
+	// Use one on this device (this browser), from now on
+	app.post("/profiles/use", (req, res) => {
+		const id = String((req.body || {}).id || "");
+		const profile = profiles.load(id);
+		if (!profile.valid) {
+			res.status(400).json({ error: profile.error });
+			return;
+		}
+		res.setHeader("Set-Cookie", profiles.cookieFor(id));
+		res.json({ ok: true });
+	});
+
+	// A new profile: a copy of the one this browser uses, with its own
+	// name, and this browser uses it from now on
+	app.post("/profiles/new", (req, res) => {
+		try {
+			const from = profiles.current();
+			if (!from) throw new Error("There's no profile to start from.");
+			const made = profiles.copy(from.id, (req.body || {}).name);
+			res.setHeader("Set-Cookie", profiles.cookieFor(made.id));
+			res.json({ ok: true, id: made.id });
+		} catch (error) {
+			res.status(400).json({ error: error.message });
+		}
+	});
+
+	app.post("/profiles/rename", (req, res) => {
+		try {
+			const body = req.body || {};
+			profiles.rename(String(body.id || ""), body.name);
+			res.json({ ok: true });
+		} catch (error) {
+			res.status(400).json({ error: error.message });
+		}
+	});
+
+	// The one a device that hasn't picked any uses
+	app.post("/profiles/default", (req, res) => {
+		const id = String((req.body || {}).id || "");
+		if (!profiles.load(id).valid) {
+			res.status(400).json({ error: "There's no such profile." });
+			return;
+		}
+		profiles.markDefault(id);
+		res.json({ ok: true });
+	});
+
+	// Devices using it go back to the default
+	app.post("/profiles/delete", (req, res) => {
+		try {
+			profiles.remove(String((req.body || {}).id || ""));
+			res.json({ ok: true });
+		} catch (error) {
+			res.status(400).json({ error: error.message });
+		}
+	});
+
+	// The .ocap itself, to keep or to give to someone, as it is: signed
+	app.get("/profiles/:id/export", (req, res) => {
+		const profile = profiles.load(req.params.id);
+		if (!profile.valid) {
+			res.status(404).end();
+			return;
+		}
+		res.setHeader("Content-Type", "application/octet-stream");
+		res.setHeader("Content-Disposition", `attachment; filename="${profiles.exportName(profile)}"`);
+		res.sendFile(profile.file);
+	});
+
+	// An .ocap someone brought, sent as it is. Kept only if its signature
+	// and every file in it check out.
+	app.post(
+		"/profiles/import",
+		express.raw({ type: "application/octet-stream", limit: 80 * 1024 * 1024 }),
+		(req, res) => {
+			try {
+				const profile = profiles.importFile(req.body);
+				res.json({ ok: true, id: profile.id, name: profile.name });
+			} catch (error) {
+				res.status(400).json({ error: error.message });
+			}
+		}
+	);
 
 	// A file too big for the upload routes: said in words, as JSON, rather
 	// than Express's own page

@@ -235,21 +235,41 @@ async function removeFont() {
 	}
 }
 
-// Where the downloaded font actually is, or null if there isn't one.
-// The routes that serve /ui-font.woff2 use this.
-function installedFontPath() {
+// The font just downloaded (installFont), before it goes into a profile,
+// or null. A profile takes its own copy of it (profiles.js).
+function downloadedFontPath() {
 	return fs.existsSync(fontFile()) ? fontFile() : null;
 }
 
-// A number that changes whenever a different font file is saved: when
-// the file was last written. The Default UI's stylesheet puts it on the
-// font's address (/ui-font.woff2?v=...), so a new font is a new address.
+// The font the browser asking now should get: its profile's, since 2.0.0
+// (from the profile's copy in the cache), or before there's any profile
+// the downloaded one. Null when there isn't one. The routes that serve
+// /ui-font.woff2 use this.
+function installedFontPath() {
+	const { readSettings } = require("./settings-store");
+	const settings = readSettings();
+	if (settings.profile) {
+		return settings.uiFontFamily ? require("./profiles").filePath(require("./profiles").FONT_NAME) : null;
+	}
+	return downloadedFontPath();
+}
+
+// A number that changes whenever a different font file is used. The
+// Default UI's stylesheet puts it on the font's address
+// (/ui-font.woff2?v=...), so a new font is a new address.
 //
 // Without it every font lived at the same address, and a browser that
 // had already loaded one kept drawing it after another was saved -- the
-// new file was downloaded and the old typeface still showed. 0 when no
-// font is installed.
+// new file was downloaded and the old typeface still showed. With a
+// profile, from the profile's digest (it changes whenever the profile
+// does); before, when the file was last written. 0 when there's no font.
 function installedFontVersion() {
+	const { readSettings } = require("./settings-store");
+	const settings = readSettings();
+	if (settings.profile) {
+		const profile = require("./profiles").current();
+		return profile && profile.valid && settings.uiFontFamily ? parseInt(profile.digest.slice(0, 8), 16) : 0;
+	}
 	try {
 		return Math.floor(fs.statSync(fontFile()).mtimeMs);
 	} catch (error) {
@@ -257,7 +277,14 @@ function installedFontVersion() {
 	}
 }
 
+// The font in use, { family }, or null for the system font. With a
+// profile, the profile's; before, what was downloaded last.
 function installedFont() {
+	const { readSettings } = require("./settings-store");
+	const settings = readSettings();
+	if (settings.profile) {
+		return settings.uiFontFamily && installedFontPath() ? { family: settings.uiFontFamily } : null;
+	}
 	if (!fs.existsSync(metaFile())) {
 		return null;
 	}
@@ -350,6 +377,7 @@ module.exports = {
 	installedFontPath,
 	installedFontVersion,
 	installedFont,
+	downloadedFontPath,
 	attachFontRoute,
 	ensureTitleFont,
 	TITLE_FONT_FAMILY,

@@ -285,16 +285,20 @@ The plan, as decided:
   corner. Its Light / Dark / Device switch went with the modes.
 - **Save over a warm picture** (done): solid green with white words over
   a picture or a colour.
-- **A profile is one `.ocap` file** (OmniCore Appearance Profile): its
-  settings and its wallpaper inside. It **can't be made without a wallpaper
-  or a colour**.
-- **Kept on the server**, so every device sees the same list of profiles.
-- **Each browser remembers its own pick**, one profile per device. OmniView
-  will remember up to two, to switch by time (one while the sun is up,
-  another after it goes down).
-- **The profile's font colour decides its everyday colours** (the quieter
-  grey text, the input boxes, the glass's base): white text, the dark set;
-  black text, the light set (Beige Cream).
+- **A profile is one `.ocap` file** (done): a signed tar file holding its
+  settings, its picture and its font. It can't be made without a picture
+  or a colour. Kept on the server, so every device sees the same list.
+  Each browser remembers its own pick, one profile per device. The first
+  one is made from the look an install already had, or black with white
+  text on a fresh one. Signed by the OmniCore that made it; a changed file
+  is refused. Every device using a profile sees its changes.
+- **Selling profiles** (later, with paid Resources in the Registry): the
+  signature already says who made a profile and that it's untouched.
+  Stopping an exact copy being passed on needs licences on top of it.
+- **OmniView** will remember up to two profiles, to switch by time (one
+  while the sun is up, another after it goes down).
+- **The profile's font colour decides its everyday colours** (done in
+  step 1): white text, the dark set; black text, the light set.
 
 ### C. The welcome wizard on Face:1303
 

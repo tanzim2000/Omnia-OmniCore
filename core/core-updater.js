@@ -247,7 +247,9 @@ function composeLine(fromRef, toRef) {
 // helper puts it back; see helperScript). In the data folder itself,
 // under backups/before-<version>, so it lives in the same volume and needs
 // nothing set up. Earlier backups are left alone; one for the same
-// version is replaced.
+// version is replaced. The cache isn't copied (data/cache: the appearance
+// profiles' pictures and fonts, unpacked): it's only ever a copy of what's
+// in the .ocap files, made again whenever it's needed.
 function backupData(version, dataDir) {
 	const from = dataDir || paths.dataDir();
 	const target = path.join(from, "backups", `before-${version}`);
@@ -256,7 +258,7 @@ function backupData(version, dataDir) {
 	fs.mkdirSync(target, { recursive: true });
 
 	for (const name of fs.readdirSync(from)) {
-		if (name === "backups") continue;
+		if (name === "backups" || name === "cache") continue;
 		fs.cpSync(path.join(from, name), path.join(target, name), { recursive: true });
 	}
 

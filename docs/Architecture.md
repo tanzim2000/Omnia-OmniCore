@@ -190,7 +190,8 @@ until the Marketplace puts something in them.
 | `page-motion.js`           | Page fades: the curtain every page starts with, which links and `omniGo()` fade out, which arrivals fade in (never a reload), and the `omnicore:revealed` signal for a theme's entrance.                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `settings-home.js`         | The settings home's frame: the notch and its four tabs, the sideways strip they lie on (snapping, the Left and Right keys, the tab in view, the sideways grid), the picture panning along, the remembered tab.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `time-service.js`          | One place that knows what time OmniCore thinks it is. Read-only; reachable by a module through `omni.time()` and by a theme directly at `GET /time`.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `settings-store.js`        | OmniCore's own install-wide settings (`data/settings.json`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `settings-store.js`        | OmniCore's own install-wide settings (`data/settings.json`), with the look (the font, the background, the glass) from the appearance profile the browser asking uses (`profiles.js`). `readStoredSettings` is the file alone.
+| `profiles.js`              | Appearance profiles: the `.ocap` file (a signed tar holding `profile.json`, its signature, the picture and the font), reading and checking one, the cache its files are sent from, each browser's pick (a cookie), and making, copying, importing and removing them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `paths.js`                 | Resolves where `data/`, `modules/` and `themes/` actually live. Honours `OMNICORE_*_DIR` overrides, which is what lets the test suite use a sandbox.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `content-tag.js`           | Builds the `ETag` standing for a tile's content, so a theme can tell new data from the same data again. See Content tagging in §8.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `about-face.js`            | Port 1303. What OmniCore is and real system facts. Its version tile shows a dot when an update is ready. Unauthenticated by design. Its pill under the wordmark says "All systems healthy" (the `/health` check), or "Development build" on a dev build.                                                                                                                                                                                                                                                                                                                                                                   |
@@ -1625,6 +1626,67 @@ font colour picks which: there is no Light or Dark mode since 2.0.0.
   colours (`data-mode`), and the page fade's colour is
   `curtainColour()`. `uiStyles({ forceSet })` still forces one set, for
   the docs site and Manual Setup.
+
+### Appearance profiles (`.ocap`)
+
+Since 2.0.0 there's no Light or Dark mode: how OmniCore's own pages look
+is an **appearance profile**, and a profile is one `.ocap` file (OmniCore
+Appearance Profile) in `data/profiles/<id>.ocap` (`profiles.js`).
+
+- **What it holds:** everything about the look (`KEYS`): the background
+  (a picture, an animation, a video or a colour, never nothing), Picture
+  brightness, the glass (Auto, its pins, Blur, tint, Tint strength, Dim),
+  the font colour, the font itself and its size, and the Back button's
+  corner. Everything else stays in `settings.json`.
+- **The file:** an ordinary tar file, so any tar reader opens it:
+  `profile.json` (its format and version, its name, when it was made and
+  changed, its maker's public key, the settings, and every file in it
+  with its size and SHA-256), `signature` (the maker's Ed25519 signature
+  of `profile.json`, byte for byte), the picture and its still frame
+  (`backdrop-….jpg`), and `font.woff2`. Written and read by `profiles.js`
+  itself (`writeTar`, `readIndex`), so reading `profile.json` never reads
+  past a 50 MB video, and nothing can be unpacked anywhere else.
+- **Signed:** a profile whose signature doesn't match, or whose files
+  don't match their fingerprints, or that has a file it doesn't list, or
+  no signature, is refused. So nobody can change a profile (a setting or
+  the picture) and pass it off as its maker's. A copy of a file is still
+  authentic: stopping that needs licences, later, in the Registry. This
+  OmniCore signs with its own key (`data/ocap-signing-key.pem`, made when
+  first needed); a profile changed here is signed again with it. The
+  Profiles pop-up shows "Made on this OmniCore", or the signer's
+  fingerprint (`fingerprint`, like `C1A4 610D 37B8 6ED8`).
+- **Never trusted as it is:** a profile can come from anyone, so every
+  setting is checked as it's read (`cleanValues`): the font's name and
+  every colour held to strict shapes (they go into CSS), numbers brought
+  into range, a picture checked by its first bytes against its name, and
+  a profile with no picture and no colour refused.
+- **Read once, then from memory:** `load` checks a profile from end to
+  end the first time it's read (and again whenever its file changes),
+  and puts its picture and font in the cache
+  (`data/cache/ocap/<id>-<digest>/`), where they're sent from
+  (`/backdrop/…`, `/ui-font.woff2`). The cache can be deleted whenever.
+- **Each browser its own:** the `omnicore_profile` cookie (ten years,
+  every port) names the profile a browser uses; `rememberProfile`, on
+  every port's app before any route, runs the request as that profile, so
+  `readSettings()` gives the profile's look and `writeSettings()` saves
+  the look into it (and the rest into `settings.json`). A browser with no
+  pick, or a pick that's gone, gets the default (`defaultProfile` in
+  `settings.json`, or the oldest). Changing a profile changes it on every
+  device using it.
+- **The first one:** at boot (`start.OmniCore`, `ensure`), when there's
+  no profile that can be used, one is made from the settings as they
+  are: an install from before profiles keeps its look ("My look"); a
+  fresh one is black with white text ("Default"). The Default background
+  of an older install becomes its colour (black, or Beige Cream with
+  black text). With no profile at all (only in tests), the pages use
+  `settings.json` as before.
+- **The Profiles pop-up** (the Appearance tab's saving box, Profiles):
+  every profile with Use, Rename, Make default, Export and Delete, and
+  Import an .ocap and New profile (a copy of this device's). Routes:
+  `GET /profiles`, `POST /profiles/use`, `/new`, `/rename`, `/default`,
+  `/delete`, `GET /profiles/:id/export`, and `POST /profiles/import`
+  (the file as it is, `application/octet-stream`). The last profile
+  can't be deleted.
 
 ### The settings home and page fades
 

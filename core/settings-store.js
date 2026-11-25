@@ -56,9 +56,15 @@ const DEFAULTS = {
 	// they're running. See docs/planning/default-ui-architecture.md.
 
 	// Light or dark is NOT here any more (it was `uiMode` until
-	// v1.19.2). Each browser keeps its own choice in a cookie; see
-	// ui-theme.js. An old settings file that still has uiMode in it is
-	// harmless: nothing reads it.
+	// v1.19.2, then a cookie per browser until 2.0.0). An old settings
+	// file that still has uiMode in it is harmless: nothing reads it.
+	//
+	// Since 2.0.0 everything below about how the pages look (the font,
+	// its size, the Back button's corner, the background, the glass, the
+	// font colour) is an appearance profile's: an .ocap file each
+	// browser picks (profiles.js). The values here are what an install
+	// had before profiles, which the first profile is made from, and
+	// what's used if no profile can be read at all.
 
 	// Font family for those same pages. Empty means the system's own
 	// font, which is what a fresh install uses — nothing is downloaded
@@ -76,7 +82,7 @@ const DEFAULTS = {
 
 	// --- Background and glass (since v2) -----------------------------
 	// What's behind OmniCore's own pages: "plain" is the Default (black,
-	// or Beige Cream in light mode), "picture", "animated" and
+	// or Beige Cream with black text), "picture", "animated" and
 	// "video" a file, "colour" one colour (backgroundColor). See
 	// backdrop.js for what each means.
 	backgroundKind: "plain",
@@ -144,7 +150,9 @@ const DEFAULTS = {
 	notificationsMinimumPriority: 1
 };
 
-function readSettings() {
+// The settings file as it is, with nothing from a profile: what the
+// install itself says. (profiles.js reads this, to find its default.)
+function readStoredSettings() {
 	if (!fs.existsSync(settingsPath())) {
 		return { ...DEFAULTS };
 	}
@@ -158,8 +166,8 @@ function readSettings() {
 	}
 }
 
-function writeSettings(changes) {
-	const settings = { ...readSettings(), ...changes };
+function writeStoredSettings(changes) {
+	const settings = { ...readStoredSettings(), ...changes };
 
 	fs.mkdirSync(path.dirname(settingsPath()), { recursive: true });
 	fs.writeFileSync(settingsPath(), JSON.stringify(settings, null, "\t"));
@@ -167,4 +175,48 @@ function writeSettings(changes) {
 	return settings;
 }
 
-module.exports = { readSettings, writeSettings, DEFAULTS };
+// The profile the browser asking now uses, if there is one that can be
+// read (profiles.js). Required here rather than at the top, because
+// profiles.js reads this file too.
+function currentProfile() {
+	try {
+		return require("./profiles").current();
+	} catch (error) {
+		return null;
+	}
+}
+
+// Everything, as the page being drawn should see it: the install's own
+// settings, with the look (the font, the background, the glass...) from
+// the profile this browser uses. `profile` says which one: { id, name }.
+function readSettings() {
+	const stored = readStoredSettings();
+	const profile = currentProfile();
+	if (!profile || !profile.valid) return stored;
+	return { ...stored, ...profile.values, profile: { id: profile.id, name: profile.name } };
+}
+
+// Saves some settings. The look's (profiles.js KEYS) go into the profile
+// this browser uses, which every device using it then sees; the rest into
+// the settings file. With no profile at all, everything goes in the file.
+function writeSettings(changes) {
+	const profile = currentProfile();
+	if (!profile || !profile.valid) {
+		writeStoredSettings(changes);
+		return readSettings();
+	}
+
+	const { KEYS, update } = require("./profiles");
+	const look = {};
+	const rest = {};
+	for (const [name, value] of Object.entries(changes || {})) {
+		if (KEYS.includes(name)) look[name] = value;
+		else if (name !== "profile") rest[name] = value;
+	}
+
+	if (Object.keys(look).length) update(profile.id, look);
+	if (Object.keys(rest).length) writeStoredSettings(rest);
+	return readSettings();
+}
+
+module.exports = { readSettings, writeSettings, readStoredSettings, writeStoredSettings, DEFAULTS };

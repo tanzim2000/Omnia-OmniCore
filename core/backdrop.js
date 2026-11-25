@@ -1040,6 +1040,10 @@ function backdropHtml(given) {
 // still frame, and nothing else. Mounted on every port that draws the
 // Default UI, because a page asks its own port for it. Before any sign-in
 // check: the sign-in page shows the picture too.
+//
+// Since 2.0.0 the picture is the profile's this browser uses (profiles.js):
+// sent from its copy in the cache, never pulled out of the .ocap each
+// time. (Before there's any profile, from data/backdrop/ as before.)
 function attachBackdropRoute(app) {
 	app.get("/backdrop/:name", (req, res) => {
 		const { readSettings } = require("./settings-store");
@@ -1051,9 +1055,11 @@ function attachBackdropRoute(app) {
 			return;
 		}
 
+		const fromProfile = settings.profile ? require("./profiles").filePath(name) : null;
+
 		// A new picture is a new name, so an old one can be kept forever
 		res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-		res.sendFile(path.join(folder(), name), (error) => {
+		res.sendFile(fromProfile || path.join(folder(), name), (error) => {
 			if (error && !res.headersSent) res.status(404).end();
 		});
 	});
@@ -1075,6 +1081,8 @@ module.exports = {
 	AUTO_ORDER,
 	GLASS_MODEL,
 	PLAIN,
+	NAME,
+	folder,
 	luminance,
 	useColour,
 	hasColour,

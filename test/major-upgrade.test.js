@@ -103,16 +103,20 @@ test("an image name that isn't plain gets no edit at all", () => {
 
 // --- The backup ------------------------------------------------------------------
 
-test("the backup: everything in the data folder but older backups, replaced for the same version", () => {
+test("the backup: everything in the data folder but older backups and the cache, replaced for the same version", () => {
 	const data = scratch("backup");
 	fs.writeFileSync(path.join(data, "settings.json"), '{"a":1}');
 	fs.mkdirSync(path.join(data, "faces"));
 	fs.writeFileSync(path.join(data, "faces", "f.json"), "{}");
 	fs.mkdirSync(path.join(data, "backups", "before-1.5.0"), { recursive: true });
+	// The profiles go; their cache (a copy of what's in them) doesn't
+	fs.mkdirSync(path.join(data, "profiles"));
+	fs.writeFileSync(path.join(data, "profiles", "aaaaaaaaaaaa.ocap"), "tar");
+	fs.mkdirSync(path.join(data, "cache", "ocap"), { recursive: true });
 
 	const target = coreUpdater.backupData("2.0.0", data);
 	assert.equal(target, path.join(data, "backups", "before-2.0.0"));
-	assert.deepEqual(fs.readdirSync(target).sort(), ["faces", "settings.json"]);
+	assert.deepEqual(fs.readdirSync(target).sort(), ["faces", "profiles", "settings.json"]);
 	assert.ok(fs.existsSync(path.join(data, "backups", "before-1.5.0")), "older backups left alone");
 
 	fs.writeFileSync(path.join(data, "settings.json"), '{"a":2}');

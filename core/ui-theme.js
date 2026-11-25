@@ -3612,7 +3612,9 @@ function uiStyles(options) {
 	.item-sub.good, .item.current .item-sub { color: var(--success); }
 	.item svg { flex-shrink: 0; }
 	.item-end { display: flex; align-items: center; flex-shrink: 0; color: var(--fg-muted); }
-	.item-actions { display: flex; gap: 0.4em; flex-shrink: 0; }
+	/* Its buttons wrap onto another line rather than running off the edge
+	   when there are more than fit (a profile's, on a phone) */
+	.item-actions { display: flex; flex-wrap: wrap; gap: 0.4em; flex-shrink: 0; max-width: 100%; }
 	.item[aria-disabled="true"] { cursor: default; }
 	.item[aria-disabled="true"]:not(.current) { opacity: 0.5; }
 
