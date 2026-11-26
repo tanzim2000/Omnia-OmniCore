@@ -109,14 +109,14 @@ async function waitForPort(port, timeoutMs) {
 	throw new Error(`Nothing answered on port ${port} within the timeout`);
 }
 
-// Creates the admin account and returns a cookie for it. Almost every
+// Makes the admin password and returns a signed-in cookie. Almost every
 // admin route is gated, so this is the prerequisite for testing any of
 // them.
 async function signIn(port) {
 	const response = await fetch(`http://127.0.0.1:${port || 3000}/setup`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ username: "test", password: "test-password-123" }),
+		body: JSON.stringify({ password: "test-password-123" }),
 		redirect: "manual"
 	});
 

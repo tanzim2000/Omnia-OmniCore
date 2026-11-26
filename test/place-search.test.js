@@ -499,7 +499,7 @@ test("pages: all three that search share the same drawing, with the credit line"
 	assert.ok(home.text.includes(".place-credit"), "and its look");
 	assertScriptsParse(home.text, "Settings");
 
-	const wizard = await get(3999, "/faces/new");
+	const wizard = await get(3999, "/create-dashboard");
 	assert.ok(wizard.text.includes("function findPlaces("), "the wizard");
 	assert.ok(!wizard.text.includes("window.pickCity"), "the wizard's old copy is gone");
 	assertScriptsParse(wizard.text, "the wizard");

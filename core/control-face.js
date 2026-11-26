@@ -148,7 +148,7 @@ function startControlFace() {
 					`<div class="segment"><h1>Setting up…</h1>
 					<p class="lede">Taking you to create your first face.</p></div>`,
 					portLinkScript +
-						`location.replace(faceUrl(${WIZARD_PORT}) + "/faces/new");`
+						`location.replace(faceUrl(${WIZARD_PORT}) + "/create-dashboard");`
 				)
 			);
 			return;
@@ -193,7 +193,7 @@ function startControlFace() {
 			`
 			function goToFace(port) { omniGo(faceUrl(port)); }
 			function goToWizard() {
-				omniGo(faceUrl(${WIZARD_PORT}) + "/faces/new");
+				omniGo(faceUrl(${WIZARD_PORT}) + "/create-dashboard");
 			}
 			// Pressing Settings cancels the auto-advance below like any
 			// other touch does

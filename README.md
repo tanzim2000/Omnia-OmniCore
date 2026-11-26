@@ -136,7 +136,8 @@ node start.OmniCore
 ```
 
 Requires Node 24 (Node 20 and 22 still work). Same pages afterward: port 3000 for the
-settings and Marketplace, port 3999 for the setup wizard, and port 4000
+settings and Marketplace, port 3999 for the wizards (`/getting-started` and
+`/create-dashboard`), and port 4000
 to pick which dashboard to show. Run this way it's a development build:
 its version has a `dev` badge, it never updates itself, and Settings'
 About tab shows what's in it, including work not released yet.

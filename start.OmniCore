@@ -2,7 +2,8 @@
 // Port layout:
 //   3000  = Admin face (OmniCore's own settings UI)
 //   1303  = About page.
-//   3999  = Setup wizard, where a new face gets built.
+//   3999  = The wizards: /getting-started and /create-dashboard (where a
+//           new face gets built). 3999/ on its own isn't an address.
 //   4000  = Welcome face, where OmniView picks a face to display.
 //   4001+ = Dashboard Faces, auto-assigned by OmniCore.
 //   5001+ = Control faces, one per instance that declares one.

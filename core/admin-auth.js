@@ -1,6 +1,12 @@
 // core/admin-auth.js
 // Login for the admin face.
 //
+// Since 2.0.0 there's an admin PASSWORD and nothing else: no account, no
+// username. When OmniCore comes as an operating system, the system's own
+// users will decide who can do what (and several admins come then). An
+// install from before keeps its password: the stored hash was only ever
+// of the password, so the username it also saved is simply ignored.
+//
 // Passwords are never stored — only a scrypt hash of them. scrypt is
 // deliberately slow and memory-hungry, which is what makes guessing a
 // stolen hash impractical. Each password gets its own random salt, so two
@@ -24,7 +30,7 @@ const MIN_PASSWORD_LENGTH = 8;
 // Live session tokens. Lost on restart, by design.
 const sessions = new Set();
 
-// Has an admin account been created yet?
+// Has the admin password been made yet?
 function isSetUp() {
 	return fs.existsSync(adminPath());
 }
@@ -38,19 +44,15 @@ function hashPassword(password, salt) {
 	return crypto.scryptSync(password, salt, 64).toString("hex");
 }
 
-// Create the admin account. Only works once — there's no way to overwrite
-// an existing account through this, which stops anyone who reaches the
-// setup page later from taking it over.
-function createAdmin(username, password) {
+// Make the admin password. Only works once: there's no way to overwrite
+// it through this, which stops anyone who reaches the setup page later
+// from taking OmniCore over.
+function createAdmin(password) {
 	if (isSetUp()) {
-		return { error: "An admin account already exists" };
+		return { error: "The admin password is already set." };
 	}
 
-	if (!username || username.trim() === "") {
-		return { error: "Pick a username" };
-	}
-
-	if (!password || password.length < MIN_PASSWORD_LENGTH) {
+	if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH) {
 		return {
 			error: "Password must be at least " + MIN_PASSWORD_LENGTH + " characters"
 		};
@@ -64,7 +66,6 @@ function createAdmin(username, password) {
 		adminPath(),
 		JSON.stringify(
 			{
-				username: username.trim(),
 				salt: salt,
 				hash: hashPassword(password, salt)
 			},
@@ -76,18 +77,13 @@ function createAdmin(username, password) {
 	return { ok: true };
 }
 
-// Check a username and password against the stored account
-function verify(username, password) {
-	if (!isSetUp()) {
+// Check a password against the stored one
+function verify(password) {
+	if (!isSetUp() || typeof password !== "string") {
 		return false;
 	}
 
 	const admin = readAdmin();
-
-	if (username !== admin.username) {
-		return false;
-	}
-
 	const attempt = Buffer.from(hashPassword(password, admin.salt), "hex");
 	const stored = Buffer.from(admin.hash, "hex");
 
@@ -149,15 +145,11 @@ function clearSessionCookie(res) {
 	);
 }
 
-// Check only the password, for someone already signed in who is asked
-// again before something sensitive (the Network page's Show, for a saved
-// Wi-Fi password). There's one admin account, so its own name is used.
+// The same check, for someone already signed in who is asked again
+// before something sensitive (the Network page's Show, for a saved Wi-Fi
+// password). Kept under its own name for the places that ask that way.
 function verifyPassword(password) {
-	if (!isSetUp() || typeof password !== "string") {
-		return false;
-	}
-
-	return verify(readAdmin().username, password);
+	return verify(password);
 }
 
 module.exports = {

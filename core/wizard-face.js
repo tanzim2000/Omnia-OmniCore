@@ -1,5 +1,13 @@
 // core/wizard-face.js
-// The setup wizard, on port 3999.
+// The wizards, on port 3999. Each has an address of its own:
+//
+//   /getting-started    Getting Started, the first-time wizard
+//   /create-dashboard   Create Dashboard, the face wizard below
+//
+// The port on its own (3999/) isn't an address: anything in OmniCore that
+// sends someone there is a bug, and the page says so.
+//
+// The rest of this comment is about Create Dashboard.
 //
 // This used to live on 4000 alongside the face picker. It was split out
 // so that 4000 could become a pure picker with no ability to create or
@@ -195,15 +203,35 @@ function startWizardFace() {
 		res.json(await searchPlaces(req.query.q || "", readSettings()));
 	});
 
-	// The setup wizard
-	// The wizard only ever answers at /faces/new, so the bare root used
-	// to be a dead "Cannot GET /". Anyone who trims the path, or who
-	// bookmarked the port itself, lands somewhere real now.
+	// 3999/ on its own isn't an address (since 2.0.0, when 3999 got two
+	// wizards). Whatever sent someone here is a bug, so the page says so
+	// and offers the way on, rather than guessing which wizard was meant.
 	app.get("/", (req, res) => {
-		res.redirect("/faces/new");
+		res.status(404).send(
+			page(
+				"Nothing here",
+				`<div class="bento narrow">
+					<div class="segment">
+						<h1>There's nothing at this address</h1>
+						<p class="lede">The wizards each have their own address. If OmniCore brought you here, that's a bug: please report it.</p>
+						<div class="segment-actions">
+							<button class="glass glass-block" onclick="omniGo(faceUrl(4000))">Go to the dashboards</button>
+						</div>
+					</div>
+				</div>`,
+				portLinkScript
+			)
+		);
 	});
 
+	// Where Create Dashboard was until 2.0.0: kept, so an old bookmark
+	// still arrives
 	app.get("/faces/new", (req, res) => {
+		res.redirect("/create-dashboard");
+	});
+
+	// Create Dashboard
+	app.get("/create-dashboard", (req, res) => {
 		// Everything the wizard needs, handed over up front so it can run
 		// entirely in the browser without saving anything as it goes
 		const modules = listModules().map((moduleId) => {

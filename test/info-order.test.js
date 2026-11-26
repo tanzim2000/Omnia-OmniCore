@@ -204,7 +204,7 @@ test("widget page: a saved order comes back, in that order, in short form", asyn
 });
 
 test("wizard: draws Info order with the same function, and its script parses", async () => {
-	const { html } = await get(WIZARD, "/faces/new");
+	const { html } = await get(WIZARD, "/create-dashboard");
 
 	assert.ok(html.includes(priorityUi.priorityFieldHtml.toString()), "the same function, sent as source");
 	assert.ok(html.includes(priorityUi.PRIORITY_SCRIPT), "the same browser code");

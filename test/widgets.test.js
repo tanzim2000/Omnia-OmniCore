@@ -353,7 +353,7 @@ test("wizard: hands the browser the widget types and OmniCore's own picker", asy
 	require("../core/wizard-face")();
 	await waitForPort(WIZARD_PORT);
 
-	const html = await (await fetch(`http://127.0.0.1:${WIZARD_PORT}/faces/new`)).text();
+	const html = await (await fetch(`http://127.0.0.1:${WIZARD_PORT}/create-dashboard`)).text();
 
 	assert.ok(html.includes('"Month View"'), "the widget types are in the page's data");
 	assert.ok(!html.includes("Agenda View</script>"), "a name can't end the page's script");

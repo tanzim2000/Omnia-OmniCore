@@ -244,7 +244,7 @@ test.after(() => {
 });
 
 test("pages: every page OmniCore draws starts with the curtain", async () => {
-	for (const [port, address] of [[3000, "/"], [3000, "/faces"], [3999, "/faces/new"], [1303, "/"], [4000, "/"]]) {
+	for (const [port, address] of [[3000, "/"], [3000, "/faces"], [3999, "/create-dashboard"], [1303, "/"], [4000, "/"]]) {
 		const { text } = await get(port, address);
 		const body = text.slice(text.indexOf("<body", text.indexOf("</head>")));
 		const first = body.slice(body.indexOf(">") + 1).trim();

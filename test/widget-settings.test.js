@@ -313,7 +313,7 @@ test("unit: a number setting with a unit has it beside the box", async () => {
 });
 
 test("unit: the setup wizard draws refresh and units the same way", async () => {
-	const { html } = await get(WIZARD, "/faces/new");
+	const { html } = await get(WIZARD, "/create-dashboard");
 
 	assert.ok(html.includes('field.key === "refreshMinutes"'), "spots the refresh setting");
 	assert.ok(html.includes('label: "Refresh every", unit: "minutes"'));

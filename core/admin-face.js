@@ -673,8 +673,8 @@ function renderFields(schema, config, context, scope) {
 		.join("");
 }
 
-// Shared by the setup and login pages — both are a username, a password,
-// and one button
+// Shared by the setup and login pages: a password and one button. There's
+// no username since 2.0.0: OmniCore has an admin password, not accounts.
 function credentialsPage(options) {
 	const body = `
 		<div class="bento narrow">
@@ -682,11 +682,7 @@ function credentialsPage(options) {
 				<h1>${escapeHtml(options.heading)}</h1>
 				<p class="lede">${escapeHtml(options.lede)}</p>
 				<div class="field">
-					<label for="username">Username</label>
-					<input type="text" id="username" autocomplete="username">
-				</div>
-				<div class="field">
-					<label for="password">Password</label>
+					<label for="password">${options.isSetup ? "Admin password" : "Password"}</label>
 					${passwordField(
 						`<input type="password" id="password" autocomplete="${
 							options.isSetup ? "new-password" : "current-password"
@@ -706,7 +702,6 @@ function credentialsPage(options) {
 		const button = document.getElementById("submit");
 
 		async function submit() {
-			const username = document.getElementById("username").value;
 			const password = document.getElementById("password").value;
 
 			button.disabled = true;
@@ -717,7 +712,7 @@ function credentialsPage(options) {
 				const response = await fetch(endpoint, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ username, password })
+					body: JSON.stringify({ password })
 				});
 
 				const result = await response.json();
@@ -2989,13 +2984,15 @@ function startAdminFace() {
 			return;
 		}
 
-		// No account yet — first thing to do is create one
+		// No admin password yet: the first thing to do is make one.
+		// (Getting Started, on 3999, normally does this; this is what's
+		// left if it can't be reached.)
 		if (!auth.isSetUp()) {
 			res.send(
 				credentialsPage({
 					heading: "Set up OmniCore",
-					lede: "Create the admin account. It's stored on this machine only.",
-					button: "Create account",
+					lede: "Make the admin password. It's kept on this machine only.",
+					button: "Make the password",
 					endpoint: "/setup",
 					isSetup: true
 				})
@@ -3014,9 +3011,9 @@ function startAdminFace() {
 		);
 	});
 
-	// Create the admin account — only possible once
+	// Make the admin password: only possible once
 	app.post("/setup", (req, res) => {
-		const result = auth.createAdmin(req.body.username, req.body.password);
+		const result = auth.createAdmin((req.body || {}).password);
 
 		if (result.error) {
 			res.status(400).json(result);
@@ -3029,10 +3026,8 @@ function startAdminFace() {
 	});
 
 	app.post("/login", (req, res) => {
-		if (!auth.verify(req.body.username, req.body.password)) {
-			// Deliberately vague: saying which half was wrong would tell an
-			// attacker whether a username exists
-			res.status(401).json({ error: "Wrong username or password." });
+		if (!auth.verify((req.body || {}).password)) {
+			res.status(401).json({ error: "That isn't the admin password." });
 			return;
 		}
 
@@ -5544,7 +5539,7 @@ function startAdminFace() {
 			portLinkScript +
 			`
 			function goToWizard() {
-				omniGo(faceUrl(${WIZARD_PORT}) + "/faces/new");
+				omniGo(faceUrl(${WIZARD_PORT}) + "/create-dashboard");
 			}
 		`;
 

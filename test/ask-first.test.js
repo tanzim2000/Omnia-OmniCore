@@ -154,7 +154,7 @@ test("the widget page and the wizard both draw a select that asks", async () => 
 
 	// The wizard draws its forms in the browser, from the module list it
 	// was given: the ask has to be in that list, and the script with it
-	const wizard = await (await fetch("http://127.0.0.1:3999/")).text();
+	const wizard = await (await fetch("http://127.0.0.1:3999/create-dashboard")).text();
 	assert.ok(wizard.includes("function setUpAskFirst"));
 	assert.ok(wizard.includes("Do you have an OpenWeatherMap API key?"));
 	assert.ok(wizard.includes("setUpAskFirst();"));
