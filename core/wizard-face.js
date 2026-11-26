@@ -101,6 +101,11 @@ function startWizardFace() {
 	// profiles.js.
 	app.use(require("./profiles").rememberProfile);
 
+	// While Getting Started has a step to do, only the device doing it
+	// gets past this; every other screen is asked to connect (see
+	// getting-started.js)
+	app.use(require("./getting-started").gate);
+
 	// The network stream for the status drawer and the takeover (see
 	// network-status.js)
 	require("./network-status").attach(app, "other");
@@ -202,6 +207,9 @@ function startWizardFace() {
 	app.get("/geocode", async (req, res) => {
 		res.json(await searchPlaces(req.query.q || "", readSettings()));
 	});
+
+	// Getting Started: its page and routes (getting-started-page.js)
+	require("./getting-started-page").attach(app);
 
 	// 3999/ on its own isn't an address (since 2.0.0, when 3999 got two
 	// wizards). Whatever sent someone here is a bug, so the page says so

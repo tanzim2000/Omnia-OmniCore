@@ -120,4 +120,22 @@ async function resolveLocations(moduleId, config) {
 // only). Since v2 it's place-search.js, which can ask any of eight
 // services, picked under Settings -> Place search.
 
-module.exports = { getLocation, resolveLocations };
+// What a page sent to save the location (the General tab's Location
+// Service, Getting Started's Location step), as settings. Blank or
+// unparseable coordinates are stored as "none" rather than NaN.
+function locationFromBody(body) {
+	const given = body || {};
+	const latitude = Number(given.latitude);
+	const longitude = Number(given.longitude);
+	const coordinate = (value, number, most) =>
+		value === "" || value === null || value === undefined || !Number.isFinite(number) || Math.abs(number) > most ? null : number;
+	return {
+		locationEnabled: Boolean(given.locationEnabled),
+		locationMode: given.locationMode === "manual" ? "manual" : "auto",
+		locationLabel: String(given.locationLabel || "").slice(0, 120),
+		latitude: coordinate(given.latitude, latitude, 90),
+		longitude: coordinate(given.longitude, longitude, 180)
+	};
+}
+
+module.exports = { getLocation, resolveLocations, locationFromBody };

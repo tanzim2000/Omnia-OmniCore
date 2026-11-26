@@ -197,6 +197,9 @@ until the Marketplace puts something in them.
 | `about-face.js`            | Port 1303. What OmniCore is and real system facts. Its version tile shows a dot when an update is ready. Unauthenticated by design. Its pill under the wordmark says "All systems healthy" (the `/health` check), or "Development build" on a dev build.                                                                                                                                                                                                                                                                                                                                                                   |
 | `system-info.js`           | Reads the real facts the About face reports: host OS, container runtime, resource counts. Every one fails soft rather than showing a blank.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `wizard-face.js`           | Port 3999. The wizards: Getting Started (`/getting-started`) and Create Dashboard (`/create-dashboard`, the face wizard, on its own port since v1.12.0; `/faces/new` until 2.0.0, which still arrives there). |
+| `getting-started.js`       | Getting Started's datasheet (which steps were done, by id and version) and the one device doing it: the gate on every port and the screen before Getting Started. |
+| `getting-started-page.js`  | Getting Started's page and routes on 3999/getting-started: its steps, one sheet at a time. |
+| `major-offer.js`           | What's offered when a new major version is out (its document and OmniCore's own closing part), for Settings and Getting Started. |
 | `face-links.js`            | The cross-port link helper. A face on one port cannot assume the host name another is reached on, so links are resolved in the browser. Also the port numbers other faces link to (welcome, wizard, admin).                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `ui-theme.js`              | The shared component library behind the admin face, wizard, fallback page and input faces: colours, buttons (glass, and the coloured `.btn-glossy` ones), the `.toolbar` row, the password box with Show / Hide, the round corner button, the `.badge` label, the `.dock` capsule (with `.danger` for a red section), and `.segment`, the one box every page is built from (frosted glass, on since v2: `--segment-blur`, with the picture behind it from `backdrop.js`), and pop-ups (`.modal`, the same glass). Every checkbox is drawn as a toggle and every slider the same way (`CONTROLS_SCRIPT` keeps a slider's filled part up to date). Hovers fade rather than snap: a clickable box carries its glow at rest, transparent, and every control fades its colours. Its colours are the font colour's set, for the whole install (white text, the dark set; black text, the light set): there is no Light or Dark mode since 2.0.0. Never a dashboard theme. **Every page OmniCore draws is built only from these elements**, with no looks of its own (`test/central-theme.test.js` fails on any, a style a page script makes included: a page switches classes and sets CSS variables, nothing more); each page's own layout is a body class (`.settings-page`, `.wizard-page`, `.welcome-page`, `.centred-page`). The one exception is Face:1303, the About face, which never loads this stylesheet and has its own look (`about-face.css`), with only Core's Back button (`backButtonStyles()`), page fade, drawer and takeover on it. |
 | `font-service.js`          | The UI font setting. Searches Google Fonts, downloads the chosen one once, then serves it locally so it works with no internet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -1628,6 +1631,48 @@ font colour picks which: there is no Light or Dark mode since 2.0.0.
   colours (`data-mode`), and the page fade's colour is
   `curtainColour()`. `uiStyles({ forceSet })` still forces one set, for
   the docs site and Manual Setup.
+
+### Getting Started (3999/getting-started)
+
+The first-time wizard, on Face:3999 beside Create Dashboard. Two files:
+`getting-started.js` (the datasheet, and the one device doing it, shared
+by every port) and `getting-started-page.js` (the page and its routes).
+
+- **The datasheet:** `data/getting-started.json`, one record per step,
+  by id with the step's version (`{ steps: { location: { version: 1,
+  at } }, holder }`). A step with no record, or an older version's, is
+  still to do; a later version that reworks a step bumps its version and
+  everyone sees it once, filled in with what's already set. A step about
+  something OmniCore can check for itself (`check`: the admin password
+  exists) is checked for real. Welcome and Done (`frame`) are never a
+  reason on their own to run it. Only one step may be skipped
+  (`skippable`), and skipping counts as done.
+- **One device at a time:** `gate`, on every port's app right after
+  `rememberProfile`. While a step is left (`needed()`), every page shows
+  only the screen before Getting Started (`connectPage`): "Please connect
+  ... to get started" and Okay, or, while another device has it, "being
+  set up on another device" and Use this screen instead. Both post to
+  `/getting-started/claim` on whatever port they're on (the gate answers
+  it), and both ask for the admin password once there is one. The device
+  that claims it gets a token in a cookie (`omnicore_setup`, HttpOnly),
+  its fingerprint kept in the datasheet so it survives a restart. Its
+  pages go to 3999/getting-started; anyone else's other requests get 423.
+  The Wi-Fi takeover's routes, the picture and the font stay open. A
+  device quiet for `IDLE_MS` (15 minutes) is let go. Done lets go too.
+  `OMNICORE_GETTING_STARTED=off` turns the gate off, for the test suite.
+- **The page:** every sheet the plan needs, one shown at a time; Next
+  records the step (`POST /getting-started/step`) and slides the next one
+  in. Drawn with `uiStyles({ device: true })` and `pageStart({ plain:
+  true })`: the Default background following the device's own dark or
+  light setting, nothing behind it. Steps: Welcome (fades in, room for the
+  Omnia logo), Admin password (made once; the device making it is signed
+  in), Wi-Fi (how OmniCore is connected, from `network-page.js now()`;
+  changing it is Settings, Network), Location (the General tab's rules,
+  `locationFromBody` in `location-service.js`), Updates (a minor update
+  installed there and then, followed through the restart; a major one
+  offered with its document, `major-offer.js`, read to the end before
+  Upgrade), Done (recorded at once, then Settings). The terms join after
+  Updates once they're written.
 
 ### Appearance profiles (`.ocap`)
 

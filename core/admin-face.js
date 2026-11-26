@@ -81,7 +81,7 @@ const coreUpdater = require("./core-updater");
 const networkHelper = require("./network-helper");
 const networkPage = require("./network-page");
 const updateStore = require("./update-store");
-const upgradeNotes = require("./upgrade-notes");
+const majorOffer = require("./major-offer");
 const semver = require("semver");
 const installStore = require("./install-store");
 const resourceScheduler = require("./resource-scheduler");
@@ -2901,6 +2901,11 @@ function startAdminFace() {
 	// profiles.js.
 	app.use(require("./profiles").rememberProfile);
 
+	// While Getting Started has a step to do, only the device doing it
+	// gets past this; every other screen is asked to connect (see
+	// getting-started.js)
+	app.use(require("./getting-started").gate);
+
 	// The network stream for the status drawer and the takeover (see
 	// network-status.js). Before sign-in, so nothing stands in its way: the
 	// takeover is for every screen, the sign-in page's too.
@@ -3915,20 +3920,9 @@ function startAdminFace() {
 	});
 
 	app.post("/location", (req, res) => {
-		const latitude = Number(req.body.latitude);
-		const longitude = Number(req.body.longitude);
-
-		const location = {
-			locationEnabled: Boolean(req.body.locationEnabled),
-			locationMode:
-				req.body.locationMode === "manual" ? "manual" : "auto",
-			locationLabel: req.body.locationLabel || "",
-			// Blank or unparseable coordinates are stored as "none"
-			// rather than NaN
-			latitude: Number.isNaN(latitude) || req.body.latitude === "" ? null : latitude,
-			longitude:
-				Number.isNaN(longitude) || req.body.longitude === "" ? null : longitude
-		};
+		// The same rules as Getting Started's Location step
+		// (location-service.js)
+		const location = require("./location-service").locationFromBody(req.body);
 
 		writeSettings(location);
 
@@ -5155,56 +5149,9 @@ function startAdminFace() {
 	networkPage.attach(app, { page });
 
 	app.get("/updates/major", async (req, res) => {
-		const running = (process.env.OMNICORE_VERSION || "dev").replace(/^v/, "");
-		const next = updateStore.lastResult(running).nextMajor;
-
-		if (!next) {
-			res.status(404).json({ error: "There's no new major version to upgrade to." });
-			return;
-		}
-
-		const [notes, readiness] = await Promise.all([
-			upgradeNotes.fetchUpgradeNotes(next),
-			coreUpdater.applyReadiness()
-		]);
-		const compose = readiness.ready ? await coreUpdater.checkComposeFile(next) : { state: "unknown" };
-
-		const ours = [`<h3>Before ${escapeHtml(next)} starts</h3>`];
-		ours.push(
-			`<p>OmniCore copies your data to <code>data/backups/before-${escapeHtml(next)}</code> first. ` +
-				`If ${escapeHtml(next)} doesn't start properly, the version you have now comes back on its own, ` +
-				`with that copy of your data.</p>`
-		);
-		if (compose.state === "ready") {
-			ours.push(
-				`<p>Once ${escapeHtml(next)} is running, OmniCore changes one line in <code>${escapeHtml(compose.file)}</code>, ` +
-					`<code>${escapeHtml(compose.from)}</code> to <code>${escapeHtml(compose.to)}</code>, so Docker Compose keeps the new version. ` +
-					`A copy of the file is kept beside it. You don't need to change anything.</p>`
-			);
-		} else if (compose.state === "manual") {
-			ours.push(
-				`<p><strong>One thing to do by hand, this time only.</strong> OmniCore can't reach <code>${escapeHtml(compose.file)}</code> ` +
-					`to keep it in step, so after upgrading, change <code>${escapeHtml(compose.from)}</code> to ` +
-					`<code>${escapeHtml(compose.to)}</code> in it. Until then, <code>docker compose up -d</code> would start the old version again, ` +
-					`which won't start on data ${escapeHtml(next)} has brought up to date.</p>`
-			);
-		}
-
-		const offReason = !notes
-			? `What's changing in ${next} couldn't be loaded from GitHub. Try again in a moment.`
-			: omnicoreVersion.isDevBuild()
-			? "This is a development build, which doesn't update itself."
-			: !readiness.ready
-			? "Updates are turned off on this install: OmniCore has no access to Docker, so it can't install a new version itself."
-			: null;
-
+		const offer = await majorOffer.build();
 		res.setHeader("Cache-Control", "no-store");
-		res.json({
-			version: next,
-			html: (notes ? notes.html : `<p class="lede">${escapeHtml(offReason)}</p>`) +
-				`<div class="major-ours">${ours.join("")}</div>`,
-			offReason
-		});
+		res.status(offer.status).json(offer.body);
 	});
 
 	// Upgrade. Like Update now: starts it and answers straight away, and

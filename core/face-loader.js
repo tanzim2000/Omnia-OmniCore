@@ -142,6 +142,11 @@ function startFace(face) {
 		// profiles.js.
 		app.use(require("./profiles").rememberProfile);
 
+		// While Getting Started has a step to do, only the device doing it
+		// gets past this; every other screen is asked to connect (see
+		// getting-started.js)
+		app.use(require("./getting-started").gate);
+
 		// The network stream for the status drawer and the takeover (see
 		// network-status.js)
 		require("./network-status").attach(app, "dashboard");

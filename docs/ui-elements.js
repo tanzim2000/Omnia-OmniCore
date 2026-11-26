@@ -1025,6 +1025,14 @@ const sections = [
 				code: "<body class=\"welcome-page\">\n\t<div class=\"segment\"><h1>Welcome!</h1><p class=\"lede\">Choose your dashboard.</p></div>\n\t<div class=\"segment face-list\">\n\t\t<div class=\"segment clickable face\"><strong>Hallway</strong><span>…</span></div>\n\t</div>\n\t<div class=\"actions\">…</div>\n\t<div class=\"timer\"><div class=\"timer-lamp\" style=\"--remaining: 1\"></div></div>\n</body>"
 			},
 			{
+				id: "getting-started",
+				title: "Getting Started",
+				sel: "body.getting-started > .gs-stage > .gs-sheet (+ .arriving, .leaving) · .gs-welcome > .gs-logo · .gs-done > .gs-done-word",
+				desc: "Getting Started (3999/getting-started): one sheet at a time in the middle of the screen, all of them in the same place (<b>.gs-stage</b>, a grid of one cell), so the page never jumps. Next slides the next sheet in from the right (<b>.arriving</b>) while the one before is pushed off to the left (<b>.leaving</b>), like sheets of paper; with reduced motion they fade. A step's sheet is a box (<b>.segment</b>) with its title, a line under it, what it asks, and Next at its bottom right. The first sheet (<b>.gs-welcome</b>): room for the Omnia logo (<b>.gs-logo</b>, an SVG still to come) over its title, a line and Next, fading in one after another. The last (<b>.gs-done</b>): \"Done!\" growing in with a glow (<b>.gs-done-word</b>), then \"Enjoy!\". Drawn with the Default background, following the device's own dark or light setting.",
+				demo: `<div class="gs-welcome" style="padding:1em 0"><div class="gs-logo" style="width:3em;height:3em"></div><h1>Welcome to Omnia</h1><p class="lede">Let's get your OmniCore ready.</p><button class="glass big">Next</button></div>`,
+				code: "<body class=\"getting-started\">\n\t<main class=\"gs-stage\">\n\t\t<section class=\"gs-sheet gs-welcome\">\n\t\t\t<div class=\"gs-logo\"></div>\n\t\t\t<h1>Welcome to Omnia</h1>\n\t\t\t…\n\t\t</section>\n\t\t<section class=\"gs-sheet\" hidden>\n\t\t\t<div class=\"segment\">…</div>\n\t\t</section>\n\t</main>\n</body>"
+			},
+			{
 				id: "centred-page",
 				title: "Centred page",
 				sel: "body.centred-page (+ .fallback-page, .inport-page) · .inport-page .controls",

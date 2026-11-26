@@ -35,6 +35,10 @@ const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "omnicore-test-"));
 process.env.OMNICORE_DATA_DIR = path.join(sandbox, "data");
 process.env.OMNICORE_MODULES_DIR = path.join(sandbox, "modules");
 process.env.OMNICORE_THEMES_DIR = path.join(sandbox, "themes");
+// Getting Started (core/getting-started.js) would put every page behind
+// its connect screen on a fresh data folder. The tests are about
+// everything else, so it's off; test/getting-started.test.js turns it on.
+process.env.OMNICORE_GETTING_STARTED = "off";
 
 const root = path.join(__dirname, "..");
 const dataDir = process.env.OMNICORE_DATA_DIR;
@@ -69,6 +73,9 @@ function resetState() {
 	// pages use settings.json as they did before profiles
 	fs.rmSync(path.join(dataDir, "profiles"), { recursive: true, force: true });
 	fs.rmSync(path.join(dataDir, "cache"), { recursive: true, force: true });
+
+	// Getting Started's datasheet: a fresh install has been through nothing
+	fs.rmSync(path.join(dataDir, "getting-started.json"), { force: true });
 }
 
 // Everything the registry install test downloaded, cleared from the

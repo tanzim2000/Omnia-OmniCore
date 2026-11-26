@@ -2280,6 +2280,79 @@ function otherPagesCss() {
 
 	:where(.fallback-page) .buttons { gap: 1em; justify-content: center; }
 
+	/* ---------------------------------------------------------------
+	   Getting Started (getting-started-page.js, 3999/getting-started) —
+	   one sheet at a time in the middle of the screen. Next slides the
+	   next sheet in from the right, pushing the one before off to the
+	   left, like sheets of paper (.arriving, .leaving); with reduced
+	   motion they fade instead. All the sheets share one place
+	   (.gs-stage is a grid of one cell), so the page never jumps.
+
+	   .gs-welcome: the first sheet, room for the Omnia logo (.gs-logo)
+	   over its title, its parts fading in one after another.
+	   .gs-done: the last, "Done!" growing in with a glow, then "Enjoy!".
+	   --------------------------------------------------------------- */
+	body:where(.getting-started) {
+		min-height: 100vh;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1.5em;
+		overflow-x: hidden;
+	}
+	.gs-stage { display: grid; width: 100%; max-width: 38em; }
+	.gs-sheet { grid-area: 1 / 1; min-width: 0; }
+	.gs-sheet.arriving { animation: gs-arrive 0.55s cubic-bezier(0.22, 0.7, 0.2, 1) both; }
+	.gs-sheet.leaving { animation: gs-leave 0.55s cubic-bezier(0.5, 0, 0.75, 0.3) both; pointer-events: none; }
+	@keyframes gs-arrive { from { transform: translateX(110vw); } to { transform: none; } }
+	@keyframes gs-leave { from { transform: none; } to { transform: translateX(-110vw); } }
+	@media (prefers-reduced-motion: reduce) {
+		.gs-sheet.arriving { animation: gs-fade-in 0.3s ease both; }
+		.gs-sheet.leaving { animation: gs-fade-out 0.3s ease both; }
+	}
+	@keyframes gs-fade-in { from { opacity: 0; } to { opacity: 1; } }
+	@keyframes gs-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+	.gs-sheet > .segment > h1 { margin-top: 0; }
+	.gs-sheet > .segment > .lede { margin-bottom: 1.2em; }
+	.gs-sheet .buttons.to-end { margin-top: 1.2em; }
+
+	.gs-welcome {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		gap: 1.2em;
+	}
+	/* Room for the Omnia logo, an SVG still to come */
+	.gs-logo { width: 7em; height: 7em; }
+	.gs-welcome > * { animation: gs-rise 1s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+	.gs-welcome > :nth-child(2) { animation-delay: 0.35s; }
+	.gs-welcome > :nth-child(3) { animation-delay: 0.7s; }
+	.gs-welcome > :nth-child(4) { animation-delay: 1.1s; }
+	@keyframes gs-rise { from { opacity: 0; transform: translateY(0.8em); } to { opacity: 1; transform: none; } }
+	.gs-welcome h1 { margin: 0; }
+	.gs-welcome .lede { margin: 0; max-width: 26em; }
+
+	.gs-done { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.4em; }
+	.gs-done .gs-done-word {
+		font-size: 4em;
+		font-weight: 300;
+		margin: 0;
+		animation: gs-done-in 0.9s cubic-bezier(0.2, 1.4, 0.4, 1) both, gs-done-glow 2.2s ease-in-out 0.6s both;
+	}
+	.gs-done .lede { margin: 0; animation: gs-rise 0.9s ease 0.8s both; }
+	@keyframes gs-done-in { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+	@keyframes gs-done-glow {
+		0%, 100% { text-shadow: 0 0 0 transparent; }
+		45% { text-shadow: 0 0 28px var(--glow-strong); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.gs-welcome > *,
+		.gs-done .gs-done-word,
+		.gs-done .lede { animation: gs-fade-in 0.6s ease both; }
+	}
+
 	body:where(.inport-page) { -webkit-user-select: none; user-select: none; }
 	/* ...except what's typed: a number box stays one you can select in
 	   (and, on some phones, one you can type in at all) */
@@ -3011,7 +3084,13 @@ function backButtonStyles() {
 }
 
 function uiStyles(options) {
-	const settings = readSettings();
+	// options.device: the Default background, following the device's own
+	// dark or light setting rather than an appearance profile (Getting
+	// Started, and the screen before it, when no profile has been made
+	// yet): white text on black, or black text on Beige Cream when the
+	// device asks for light. Nothing behind the page.
+	const device = Boolean(options && options.device);
+	const settings = device ? { ...readSettings(), ...backdrop.PLAIN, fontColour: "white" } : readSettings();
 	const forced = options && (options.forceSet === "light" || options.forceSet === "dark") ? options.forceSet : null;
 
 	// The palette, then the glass (backdrop.js), which can override a
@@ -3028,9 +3107,17 @@ function uiStyles(options) {
 	const set = forced || backdrop.glassFor(settings).set;
 	const paletteFor = (which) => (pictured ? overPicturePalette(which) : PALETTES[which]);
 	const curtain = (which) => `--curtain: ${curtainColour(settings, which)};`;
-	const colours = `
+	const colours =
+		`
 	:root {${paletteVariables(paletteFor(set))}${backdrop.glassVariables(settings)}${curtain(set)}}
-	${setRules(!pictured && set === "light")}`;
+	${setRules(!pictured && set === "light")}` +
+		(device && !forced
+			? `
+	@media (prefers-color-scheme: light) {
+		:root {${paletteVariables(PALETTES.light)}${curtain("light")}}
+		${setRules(true)}
+	}`
+			: "");
 
 	// A font colour picked on the Appearance tab shows at once, before
 	// it's saved: the page puts .font-white or .font-black on <html>.

@@ -204,9 +204,13 @@ function curtainHtml(options) {
 // What every page OmniCore draws starts its <body> with: the curtain, the
 // picture behind the page (backdrop.js), and the status drawer and the
 // takeover (network-status.js)
-function pageStart() {
+// options.plain: no picture or colour behind the page, whatever the
+// appearance profile says (Getting Started, and the screen before it,
+// drawn with uiStyles({ device: true }))
+function pageStart(options) {
 	const { backdropHtml } = require("./backdrop");
-	return curtainHtml() + backdropHtml() + require("./network-status").CLIENT_HTML;
+	const plain = Boolean(options && options.plain);
+	return curtainHtml() + (plain ? "" : backdropHtml()) + require("./network-status").CLIENT_HTML;
 }
 
 // Moving on from a page's own script: with the fade where there is one.
