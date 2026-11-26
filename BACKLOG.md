@@ -300,28 +300,88 @@ The plan, as decided:
 - **The profile's font colour decides its everyday colours** (done in
   step 1): white text, the dark set; black text, the light set.
 
-### C. The welcome wizard on Face:1303
+### C. The wizards on Face:3999
 
-- Face:1303 keeps its own look and never uses `ui-theme.js`.
-- `1303/about-core`: what the About face shows today. `1303/welcome`: the
-  new wizard. `1303/themes`: later.
-- The wizard has the user make the **first `.ocap`**.
-- It runs on a new install, and **once after the upgrade** to the version
-  that brings it.
-- **Core remembers which steps were done, by id**, not by whether a `.ocap`
-  exists (files can go missing). Each version's wizard adds or drops
-  steps: a new install goes through all of them, an existing one only
-  through the ones it hasn't done.
-- The wizard's name is still to be picked. More to discuss before
-  building it.
+Face:3999 holds the wizards, each at its own address:
+
+- `3999/getting-started`: **Getting Started**, the first-time wizard.
+- `3999/create-dashboard`: **Create Dashboard**, the face wizard that's on
+  3999 today, moved here. Face:4000's "Create a new face" and everything
+  else that sends people to it point here.
+- `3999/` on its own is not an address. Anything in Core that sends
+  someone there is a bug.
+
+Face:1303 is only the About face again (`1303/about-core`), the easter
+egg, with its own look; it never uses `ui-theme.js`. The wizards use the
+central theme like every other page.
+
+**Before Getting Started.** Whenever Getting Started has a step to show,
+every screen first shows only "Please connect to your OmniCore with a
+browser or via OmniSync to get started" and **Okay**: no background,
+nothing else. Okay makes that browser the one doing the setup (a token in
+a cookie), and Core refuses every other connection until it's finished.
+Every other screen shows "OmniCore is being set up on another device" with
+**Use this screen instead**, which moves the setup there. Once the admin
+password exists, Use this screen instead asks for it. If the browser
+doing the setup goes quiet (closed, asleep) the setup is let go after a
+while, so it can never lock OmniCore for good; nothing is lost, the
+datasheet says where it was.
+
+**The look.** The central theme with the Default background, following
+the device's own dark or light setting (the browser, or OmniView, says
+which): white text on black, or black text on Beige Cream. No picture
+until the user picks one. Welcome fades in. Each Next slides the next
+page in, pushing the one before off the screen like a sheet of paper (a
+fade with reduced motion).
+
+**The steps, in order:**
+
+1. **Welcome to Omnia**: fades in, with room for the Omnia logo (an SVG,
+   not made yet) and Next.
+2. **Admin password**: a password only, no username. There are no admin
+   accounts any more: when OmniCore comes as an OS (Alpine), the OS's own
+   users will decide who can do what, and several admins come then. An
+   install from before keeps its password (its hash is of the password
+   alone); sign-in stops asking for a username.
+3. **Wi-Fi**: before anything that needs the internet.
+4. **Location**.
+5. **Check for updates**: "Checking for updates…" while it looks. A minor
+   update is installed there and then (OmniCore restarts, and the wizard
+   carries on from the datasheet). A major upgrade is offered, to take or
+   turn down.
+6. **Terms**: after the updates, so they're the terms of the version that
+   will actually run. The step records which terms were accepted: a later
+   version with new terms shows it again. (What the terms are is still to
+   be written: `LICENSE`, `LICENSING.md`, `TRADEMARKS.md` and `CLA.md` are
+   licences, not terms of use.)
+7. **Background, Frosted glass and Font**: one page, since Core keeps the
+   font colour readable against the glass. This makes the first `.ocap`.
+8. **Modules**: the only step that can be skipped ("Skip for now"), and
+   skipping counts as done.
+9. **First dashboard**.
+10. **Done! Enjoy!**: an animation, then the Settings page.
+
+**The datasheet.** Each step leaves its own record, by id with a version
+(`appearance-1`). Core goes through it every time it starts: a step with
+no record, or an older version's, is shown. A version bumped later shows
+the step again, filled in with what's already set, to confirm or change;
+nothing is ever wiped. A step about something Core can check is checked
+for real (the admin password exists) rather than trusted to the record.
+Having an `.ocap` doesn't count as having done the appearance step: only
+the record does.
 
 ### Later, after 2.0.0
 
-- **Seasonal themes for `1303/about-core`** (Lunar New Year, Christmas,
+- **Seasonal themes for `1303/about-core`** only (Lunar New Year, Christmas,
   Halloween, Easter, ...), from an open-source **theme distributor**: the
   core sends it its location, it sends back the theme, from a stash the
   developer manages, and stores nothing. Themes are **signed**, not
   encrypted, and Core refuses one without the developer's signature.
+- **A seasonal theme for every page, for good** (switching the central
+  theme itself): a big promise, so not now. Every new element Core adds
+  would break every such theme until its maker caught up. A smaller step
+  first, if wanted: a seasonal theme changing the central theme's colours,
+  fonts and background without drawing anything of its own.
 
 ## Then: releasing 2.0.0
 
