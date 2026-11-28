@@ -60,6 +60,9 @@ const STEPS = [
 	{ id: "wifi", version: 1 },
 	{ id: "location", version: 1 },
 	{ id: "updates", version: 1 },
+	{ id: "look", version: 1 },
+	{ id: "modules", version: 1, skippable: true },
+	{ id: "first-dashboard", version: 1 },
 	{ id: "done", version: 1, frame: true }
 ];
 

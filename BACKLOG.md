@@ -361,13 +361,14 @@ fade with reduced motion).
 9. **First dashboard**.
 10. **Done! Enjoy!**: an animation, then the Settings page.
 
-**Built so far** (Phase C, steps 1 to 3): the addresses on 3999, the
-admin password, the datasheet, the screen before Getting Started with
-the one device doing it, and the steps Welcome, Admin password, Wi-Fi,
-Location, Updates and Done. Left: Background, Frosted glass and Font (the
-first `.ocap`), Modules, First dashboard. Wi-Fi shows how OmniCore is
-connected; changing the network stays in Settings, Network, since joining
-another one can cut off the device doing the setup.
+**Built** (Phase C, steps 1 to 4): the addresses on 3999, the admin
+password, the datasheet, the screen before Getting Started with the one
+device doing it, and every step but the terms (still to be written).
+Wi-Fi shows how OmniCore is connected; changing the network stays in
+Settings, Network, since joining another one can cut off the device doing
+the setup. Your look is the Appearance tab itself; from it on, the page
+is drawn in the appearance profile rather than the device's dark or
+light. The Omnia logo's room on Welcome is empty until the SVG exists.
 
 **The datasheet.** Each step leaves its own record, by id with a version
 (`appearance-1`). Core goes through it every time it starts: a step with

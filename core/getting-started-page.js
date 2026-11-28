@@ -166,6 +166,72 @@ function updatesSheet() {
 	</section>`;
 }
 
+// Background, Frosted glass and Font: the Appearance tab itself
+// (admin-face.js appearancePane), with Next doing what its Save does.
+// This makes the device's first appearance profile.
+function lookSheet(pane) {
+	return `
+	<section class="gs-sheet gs-wide" data-step="look" hidden>
+		<div class="segment gs-head">
+			<h1>Your look</h1>
+			<p class="lede">The background, the frosted glass and the font for OmniCore's own pages. Pick a picture or a colour first: the page shows it at once. This becomes your first appearance profile, and it can all be changed later in Settings, Appearance.</p>
+		</div>
+		<div class="home-bento">${pane.boxes}</div>
+		<div class="buttons to-end">
+			<span class="status" id="gs-look-status" aria-live="polite"></span>
+			<button type="button" class="glass" data-next>Next</button>
+		</div>
+	</section>`;
+}
+
+// Modules from the Marketplace: what the dashboards are made of. The one
+// step that can be skipped.
+function modulesSheet() {
+	return `
+	<section class="gs-sheet" data-step="modules" hidden>
+		<div class="segment">
+			<h1>Modules</h1>
+			<p class="lede">What your dashboards show: the weather, the time, your calendar and more. Install a few now; more can be added any time from Settings, Resources.</p>
+			<div class="list tight" id="gs-modules"><p class="hint"><span class="spinner" aria-hidden="true"></span>Looking in the Marketplace…</p></div>
+			<div class="buttons to-end">
+				<span class="status" id="gs-modules-status" aria-live="polite"></span>
+				<button type="button" class="glass" id="gs-modules-skip">Skip for now</button>
+				<button type="button" class="glass" data-next id="gs-modules-next" hidden>Next</button>
+			</div>
+		</div>
+	</section>`;
+}
+
+// The first dashboard: a name, a theme, and the modules on it
+function dashboardSheet() {
+	return `
+	<section class="gs-sheet" data-step="first-dashboard" hidden>
+		<div class="segment">
+			<h1>Your first dashboard</h1>
+			<p class="lede" id="gs-dash-line">A dashboard is a screen of widgets, for a wall display or any browser. Name it, pick its look, and choose what goes on it.</p>
+			<div id="gs-dash-form">
+				<div class="field">
+					<label for="gs-dash-name">Name</label>
+					<input type="text" id="gs-dash-name" maxlength="60">
+				</div>
+				<div class="field">
+					<label for="gs-dash-theme">Theme</label>
+					<select id="gs-dash-theme"></select>
+				</div>
+				<div class="field">
+					<span class="label">On it</span>
+					<div class="form-stack" id="gs-dash-modules"></div>
+				</div>
+			</div>
+			<button type="button" class="glass" id="gs-dash-another" hidden>Make another one</button>
+			<div class="buttons to-end">
+				<span class="status" id="gs-dash-status" aria-live="polite"></span>
+				<button type="button" class="glass" data-next>Next</button>
+			</div>
+		</div>
+	</section>`;
+}
+
 function doneSheet() {
 	return `
 	<section class="gs-sheet gs-done" data-step="done" hidden>
@@ -180,6 +246,9 @@ const SHEETS = {
 	wifi: () => wifiSheet(),
 	location: (settings, current) => locationSheet(settings, current),
 	updates: () => updatesSheet(),
+	look: (settings, current, pane) => lookSheet(pane),
+	modules: () => modulesSheet(),
+	"first-dashboard": () => dashboardSheet(),
 	done: () => doneSheet()
 };
 
@@ -190,6 +259,7 @@ function pageScript(plan) {
 	return `
 	(function () {
 		var PLAN = ${JSON.stringify(plan)};
+		var OWN_LOOK = ${JSON.stringify(ownLook(plan))};
 		var at = 0;
 		var moving = false;
 
@@ -235,6 +305,14 @@ function pageScript(plan) {
 				// Said on the step's own status line, when it has one
 				var status = sheet(id).querySelector(".status");
 				if (status) say(status.id, error.message, true);
+				return;
+			}
+
+			// The Look step is drawn in the profile's own look, not the
+			// device's: the page comes back in it, at that step
+			if (PLAN[at + 1] === "look" && !OWN_LOOK) {
+				if (window.omniGo) omniGo(location.href);
+				else location.reload();
 				return;
 			}
 
@@ -492,6 +570,168 @@ function pageScript(plan) {
 			STEPS.updates = { show: check };
 		})();
 
+		// --- Your look -----------------------------------------------------------------
+		// The Appearance tab's own script runs it all; Next saves what
+		// isn't saved, exactly as its Save would
+		if (window.omniAppearanceSave) {
+			STEPS.look = {
+				leave: async function () {
+					var kept = await window.omniAppearanceSave();
+					if (!kept) say("gs-look-status", "It couldn't be saved. Try again.", true);
+					return kept ? undefined : false;
+				}
+			};
+		}
+
+		// --- Modules -------------------------------------------------------------------
+		(function () {
+			var list = document.getElementById("gs-modules");
+			if (!list) return;
+			var nextButton = document.getElementById("gs-modules-next");
+			var skip = document.getElementById("gs-modules-skip");
+
+			function row(entry) {
+				var item = document.createElement("div");
+				item.className = "item";
+				var text = document.createElement("div");
+				text.className = "item-text";
+				var name = document.createElement("span");
+				name.textContent = entry.name;
+				var sub = document.createElement("span");
+				sub.className = "item-sub";
+				sub.textContent = entry.description || "";
+				text.appendChild(name);
+				text.appendChild(sub);
+				item.appendChild(text);
+
+				var actions = document.createElement("div");
+				actions.className = "item-actions";
+				var button = document.createElement("button");
+				button.type = "button";
+				button.className = "glass small";
+				function installed() {
+					button.textContent = "Installed";
+					button.disabled = true;
+					item.classList.add("current");
+					nextButton.hidden = false;
+				}
+				if (entry.installed) installed();
+				else button.textContent = "Install";
+				button.addEventListener("click", async function () {
+					button.disabled = true;
+					button.textContent = "Installing…";
+					try {
+						await send("/getting-started/modules/install", { id: entry.id });
+						installed();
+					} catch (error) {
+						button.disabled = false;
+						button.textContent = "Install";
+						say("gs-modules-status", error.message, true);
+					}
+				});
+				actions.appendChild(button);
+				item.appendChild(actions);
+				return item;
+			}
+
+			skip.addEventListener("click", function () {
+				skip.disabled = true;
+				next({ skipped: true }).finally(function () { skip.disabled = false; });
+			});
+
+			STEPS.modules = {
+				show: async function () {
+					try {
+						var response = await fetch("/getting-started/modules", { cache: "no-store" });
+						var answer = await response.json();
+						if (!response.ok) throw new Error(answer.error || "The Marketplace couldn't be reached.");
+						list.replaceChildren();
+						for (var i = 0; i < answer.modules.length; i++) list.appendChild(row(answer.modules[i]));
+						if (!answer.modules.length) list.innerHTML = '<p class="hint">The Marketplace has nothing to offer right now.</p>';
+					} catch (error) {
+						list.innerHTML = "";
+						var line = document.createElement("p");
+						line.className = "hint";
+						line.textContent = error.message + " You can skip this for now and install modules later from Settings, Resources.";
+						list.appendChild(line);
+					}
+				}
+			};
+		})();
+
+		// --- First dashboard -----------------------------------------------------------
+		(function () {
+			var form = document.getElementById("gs-dash-form");
+			if (!form) return;
+			var another = document.getElementById("gs-dash-another");
+			var making = true;
+
+			another.addEventListener("click", function () {
+				form.hidden = false;
+				another.hidden = true;
+				making = true;
+			});
+
+			STEPS["first-dashboard"] = {
+				show: async function () {
+					try {
+						var parts = await (await fetch("/getting-started/dashboard", { cache: "no-store" })).json();
+						document.getElementById("gs-dash-name").value = parts.nextName || "";
+						var theme = document.getElementById("gs-dash-theme");
+						theme.replaceChildren();
+						parts.themes.forEach(function (each) {
+							var option = document.createElement("option");
+							option.value = each.id;
+							option.textContent = each.name;
+							theme.appendChild(option);
+						});
+						var modules = document.getElementById("gs-dash-modules");
+						modules.replaceChildren();
+						parts.modules.forEach(function (each) {
+							var label = document.createElement("label");
+							label.className = "option";
+							var box = document.createElement("input");
+							box.type = "checkbox";
+							box.value = each.id;
+							box.checked = true;
+							var name = document.createElement("span");
+							name.textContent = each.name;
+							label.appendChild(box);
+							label.appendChild(name);
+							modules.appendChild(label);
+						});
+						if (!parts.modules.length) modules.innerHTML = '<p class="hint">No modules are installed yet: the dashboard starts empty, and widgets can be added later in Settings, Manage Faces.</p>';
+						// An install that already has dashboards needn't make one
+						if (parts.existing > 0) {
+							document.getElementById("gs-dash-line").textContent =
+								"You already have " + parts.existing + (parts.existing === 1 ? " dashboard" : " dashboards") + ". Carry on, or make another one now.";
+							form.hidden = true;
+							another.hidden = false;
+							making = false;
+						}
+					} catch (error) {
+						say("gs-dash-status", "What's installed couldn't be read.", true);
+					}
+				},
+				leave: async function () {
+					if (!making) return;
+					var name = document.getElementById("gs-dash-name").value.trim();
+					if (!name) { say("gs-dash-status", "Give it a name first.", true); return false; }
+					var chosen = Array.prototype.map.call(document.querySelectorAll("#gs-dash-modules input:checked"), function (box) { return box.value; });
+					try {
+						await send("/getting-started/dashboard", {
+							name: name,
+							theme: document.getElementById("gs-dash-theme").value,
+							modules: chosen
+						});
+					} catch (error) {
+						say("gs-dash-status", error.message, true);
+						return false;
+					}
+				}
+			};
+		})();
+
 		// --- Done ----------------------------------------------------------------------
 		STEPS.done = {
 			show: function () {
@@ -509,13 +749,110 @@ function pageScript(plan) {
 
 // --- The routes ----------------------------------------------------------------------
 
-function attach(app) {
+function attach(app, options) {
+	const createDashboard = options && options.createDashboard;
+
 	// Only while Getting Started has something left to do
 	function stillOn(res) {
 		if (gettingStarted.needed()) return true;
 		res.status(409).json({ error: "OmniCore is already set up." });
 		return false;
 	}
+
+	// The Look step's routes: the Appearance tab's own, under
+	// /getting-started, for the device doing the setup while there's a step
+	// left (the gate lets nobody else through)
+	require("./admin-face").attachAppearanceRoutes(app, "/getting-started", (req, res, next) => {
+		if (stillOn(res)) next();
+	});
+
+	// --- Modules: what the Marketplace offers, and installing one
+	app.get("/getting-started/modules", async (req, res) => {
+		if (!stillOn(res)) return;
+		res.setHeader("Cache-Control", "no-store");
+		try {
+			const available = await require("./marketplace").listAvailable();
+			res.json({
+				modules: available.modules.map((entry) => ({
+					id: entry.id,
+					name: entry.name || entry.id,
+					description: entry.description || "",
+					installed: Boolean(entry.installed)
+				}))
+			});
+		} catch (error) {
+			res.status(502).json({ error: "The Marketplace couldn't be reached." });
+		}
+	});
+
+	app.post("/getting-started/modules/install", async (req, res) => {
+		if (!stillOn(res)) return;
+		try {
+			await require("./marketplace").installEntry("module", String((req.body || {}).id || ""), false);
+			res.json({ ok: true });
+		} catch (error) {
+			res.status(400).json({ error: error.message });
+		}
+	});
+
+	// --- First dashboard: what it can be made of, and making it
+	app.get("/getting-started/dashboard", (req, res) => {
+		if (!stillOn(res)) return;
+		res.setHeader("Cache-Control", "no-store");
+		const faceStore = require("./face-store");
+		const themeLoader = require("./theme-loader");
+		const { listModules } = require("./module-loader");
+		const { readManifest } = require("./module-config");
+		res.json({
+			existing: faceStore.readFaces().length,
+			nextName: faceStore.defaultFaceName(faceStore.nextDashboardPort()),
+			themes: themeLoader.listThemes().map((theme) => ({ id: theme.id, name: theme.name || theme.id })),
+			modules: listModules().map((id) => ({ id, name: readManifest(id).name || id }))
+		});
+	});
+
+	app.post("/getting-started/dashboard", async (req, res) => {
+		if (!stillOn(res)) return;
+		if (!createDashboard) {
+			res.status(500).json({ error: "Dashboards can't be made from here." });
+			return;
+		}
+		const body = req.body || {};
+		const theme = String(body.theme || "");
+		const themeLoader = require("./theme-loader");
+		const { listModules } = require("./module-loader");
+		const { readManifest, applyDefaults } = require("./module-config");
+		if (!themeLoader.listThemes().some((each) => each.id === theme)) {
+			res.status(400).json({ error: "Pick a theme." });
+			return;
+		}
+		const installed = listModules();
+		const wanted = (Array.isArray(body.modules) ? body.modules : []).map(String).filter((id) => installed.includes(id));
+
+		// Each module as Create Dashboard would add it with nothing changed:
+		// its own defaults, and the theme's for a module with a tile or
+		// one that works behind the scenes
+		const face = await createDashboard({
+			name: String(body.name || "").trim().slice(0, 60),
+			title: String(body.name || "").trim().slice(0, 60),
+			theme,
+			instances: wanted.map((id) => {
+				const tile = readManifest(id).tile !== false;
+				return {
+					module: id,
+					label: "",
+					config: applyDefaults(id, {}),
+					themeConfig: themeLoader.instanceDefaults(theme, tile)
+				};
+			}),
+			themeConfig: themeLoader.applyDefaults(theme, {})
+		});
+		if (face.error) {
+			res.status(400).json(face);
+			return;
+		}
+		res.json({ ok: true, id: face.id });
+	});
 
 	app.get("/getting-started", async (req, res) => {
 		res.setHeader("Cache-Control", "no-store");
@@ -535,7 +872,22 @@ function attach(app) {
 		const plan = gettingStarted.plan();
 		const settings = readSettings();
 		const current = plan.includes("location") ? await getLocation().catch(() => null) : null;
-		const sheets = plan.map((id) => (SHEETS[id] ? SHEETS[id](settings, current) : "")).join("");
+
+		// The Look step: the Appearance tab itself, its routes under
+		// /getting-started (attached below)
+		const pane = plan.includes("look")
+			? require("./admin-face").appearancePane(settings, require("./font-service").installedFont(), {
+					base: "/getting-started",
+					inWizard: true
+			  })
+			: null;
+		const sheets = plan.map((id) => (SHEETS[id] ? SHEETS[id](settings, current, pane) : "")).join("");
+
+		// Drawn in the device's own dark or light until there's a look of
+		// the user's own: once the Look step has changed the profile (or
+		// it's an install's own from before, with its picture), the page is
+		// drawn in it, the picture behind it and all
+		const own = ownLook(plan);
 
 		const { uiStyles, styleTag, PASSWORD_TOGGLE_SCRIPT } = require("./ui-theme");
 		const { pageStart } = require("./page-motion");
@@ -550,12 +902,13 @@ function attach(app) {
 	<meta name="color-scheme" content="dark light">
 	<title>Getting Started</title>
 	${ICON_LINK}
-	${styleTag(uiStyles({ device: true }))}
+	${styleTag(uiStyles(own ? {} : { device: true }))}
 </head>
 <body class="getting-started">
-${pageStart({ plain: true })}
+${pageStart(own ? {} : { plain: true })}
 	<main class="gs-stage">${sheets}</main>
-	<script>${portLinkScript}${PASSWORD_TOGGLE_SCRIPT}${pageScript(plan)}</script>
+	${pane ? pane.modals : ""}
+	<script>${portLinkScript}${PASSWORD_TOGGLE_SCRIPT}${pane ? MODAL_SCRIPT + pane.script : ""}${pageScript(plan)}</script>
 </body>
 </html>`);
 	});
@@ -684,6 +1037,38 @@ ${pageStart({ plain: true })}
 	});
 }
 
+// The steps drawn in the device's own dark or light; from the Look step
+// on, the page is drawn in the appearance profile (the black one OmniCore
+// made at its first start, until a background is picked; an install's
+// own from before, with its picture), since that's what the Look step
+// changes and shows. Arriving at the Look step reloads the page into it.
+const BEFORE_LOOK = ["welcome", "admin-password", "wifi", "location", "updates"];
+
+function ownLook(plan) {
+	return !plan.some((id) => BEFORE_LOOK.includes(id));
+}
+
+// The pop-ups the Look step's Appearance tab opens (Change background,
+// Choose a font): open, close, and closing on the dimmed area or Escape,
+// the same as on Settings
+const MODAL_SCRIPT = `
+	function openModal(id) { document.getElementById(id).hidden = false; }
+	function closeModal(id) { document.getElementById(id).hidden = true; }
+	document.querySelectorAll("[data-close]").forEach(function (button) {
+		button.addEventListener("click", function () { closeModal(button.dataset.close); });
+	});
+	document.querySelectorAll(".modal-backdrop").forEach(function (backdrop) {
+		backdrop.addEventListener("click", function (event) {
+			if (event.target === backdrop) backdrop.hidden = true;
+		});
+	});
+	document.addEventListener("keydown", function (event) {
+		if (event.key === "Escape") {
+			document.querySelectorAll(".modal-backdrop").forEach(function (backdrop) { backdrop.hidden = true; });
+		}
+	});
+`;
+
 // The Wi-Fi step's words, from the Network page's look at the Wi-Fi
 // (network-page.js now()): { line, note }
 function wifiWords(now) {
@@ -703,4 +1088,4 @@ function wifiWords(now) {
 	return { line: "OmniCore is online.", note: later };
 }
 
-module.exports = { attach, wifiWords, SHEETS, STEP_PATH, ALIVE_PATH };
+module.exports = { attach, wifiWords, ownLook, SHEETS, STEP_PATH, ALIVE_PATH };

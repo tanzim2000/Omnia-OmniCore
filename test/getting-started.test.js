@@ -132,13 +132,13 @@ test("datasheet: every step to do on a fresh install, Welcome first and Done las
 	fs.rmSync(sheetFile(), { force: true });
 
 	assert.equal(gettingStarted.needed(), true);
-	assert.deepEqual(gettingStarted.plan(), ["welcome", "admin-password", "wifi", "location", "updates", "done"]);
+	assert.deepEqual(gettingStarted.plan(), ["welcome", "admin-password", "wifi", "location", "updates", "look", "modules", "first-dashboard", "done"]);
 });
 
 test("datasheet: a step is done by its record at its version, or by checking for itself", () => {
 	writeSheet({ steps: { welcome: { version: 1 }, wifi: { version: 1 }, location: { version: 0 } } });
 	// Welcome seen (the wizard carrying on), Wi-Fi done, Location's record an older version's
-	assert.deepEqual(gettingStarted.plan(), ["admin-password", "location", "updates", "done"]);
+	assert.deepEqual(gettingStarted.plan(), ["admin-password", "location", "updates", "look", "modules", "first-dashboard", "done"]);
 
 	// The admin password is checked for real, whatever the record says
 	writeSheet({ steps: { "admin-password": { version: 1 } } });
@@ -153,7 +153,10 @@ test("datasheet: a step is done by its record at its version, or by checking for
 
 test("datasheet: Done lets the device go and says Welcome again next time", () => {
 	writeSheet({ steps: { welcome: { version: 1 } }, holder: { token: "x", seen: Date.now() } });
-	for (const id of ["wifi", "location", "updates"]) gettingStarted.record(id);
+	for (const id of ["wifi", "location", "updates", "look", "first-dashboard"]) gettingStarted.record(id);
+	assert.equal(gettingStarted.needed(), true, "Modules is still to do");
+	gettingStarted.record("modules", { skipped: true });
+	assert.equal(gettingStarted.readDatasheet().steps.modules.skipped, true, "skipping counts as done");
 	assert.equal(gettingStarted.needed(), false, "Welcome and Done alone are never a reason to run");
 	gettingStarted.record("done");
 
@@ -289,7 +292,7 @@ test("steps: recorded one at a time, and the wizard carries on from there", asyn
 	const wizard = await page(3999, "/getting-started", holder);
 	assert.ok(!wizard.html.includes('data-step="welcome"'));
 	assert.ok(!wizard.html.includes('data-step="location"'));
-	assert.match(wizard.html, /var PLAN = \["updates","done"\]/);
+	assert.match(wizard.html, /var PLAN = \["updates","look","modules","first-dashboard","done"\]/);
 });
 
 test("steps: Updates, then Done opens OmniCore again", async () => {
@@ -298,6 +301,63 @@ test("steps: Updates, then Done opens OmniCore again", async () => {
 	assert.match((await checked.json()).line, /development build/);
 
 	assert.equal(await step({ id: "updates" }), 200);
+
+	// Your look: the Appearance tab itself, its routes under
+	// /getting-started, for this device only
+	const look = await page(3999, "/getting-started", holder);
+	assert.ok(look.html.includes('<section class="gs-sheet gs-wide" data-step="look"'));
+	assert.ok(look.html.includes('<div class="home-bento">'));
+	assert.ok(look.html.includes('id="glass"') && look.html.includes('id="background"') && look.html.includes('id="size"'));
+	assert.ok(look.html.includes('const BASE = "/getting-started";'));
+	assert.ok(look.html.includes('id="background-modal"') && look.html.includes('id="font-modal"'), "its pop-ups");
+	assert.ok(!look.html.includes('id="open-profiles"'), "no profile strip: this is the first");
+	assert.ok(look.html.includes("window.omniAppearanceSave"), "Next saves what Save would");
+
+	const colour = await fetch("http://127.0.0.1:3999/getting-started/background/colour", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", cookie: holder },
+		body: JSON.stringify({ color: "#3d5a99" })
+	});
+	assert.equal(colour.status, 200);
+	const { readSettings } = require("../core/settings-store");
+	assert.equal(readSettings().backgroundColor, "#3d5a99");
+	const stranger = await fetch("http://127.0.0.1:3999/getting-started/background/colour", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ color: "#ff0000" })
+	});
+	assert.equal(stranger.status, 423, "nobody else");
+	assert.equal(await step({ id: "look" }), 200);
+
+	// Modules: the one that can be skipped
+	assert.equal(await step({ id: "modules", skipped: true }), 200);
+
+	// First dashboard: what it can be made of, and making it
+	const parts = await (await fetch("http://127.0.0.1:3999/getting-started/dashboard", { headers: { cookie: holder } })).json();
+	assert.equal(typeof parts.existing, "number");
+	assert.ok(Array.isArray(parts.themes) && Array.isArray(parts.modules));
+	const badTheme = await fetch("http://127.0.0.1:3999/getting-started/dashboard", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", cookie: holder },
+		body: JSON.stringify({ name: "Hallway", theme: "no-such-theme", modules: [] })
+	});
+	assert.equal(badTheme.status, 400);
+	if (parts.themes.length) {
+		const faceStore = require("../core/face-store");
+		const before = faceStore.readFaces().length;
+		const made = await fetch("http://127.0.0.1:3999/getting-started/dashboard", {
+			method: "POST",
+			headers: { "Content-Type": "application/json", cookie: holder },
+			body: JSON.stringify({ name: "Hallway", theme: parts.themes[0].id, modules: parts.modules.map((each) => each.id).concat("not-installed") })
+		});
+		assert.equal(made.status, 200);
+		const faces = faceStore.readFaces();
+		assert.equal(faces.length, before + 1);
+		assert.equal(faces[faces.length - 1].name, "Hallway");
+		assert.ok(!faces[faces.length - 1].instances.some((each) => each.module === "not-installed"), "only what's installed");
+	}
+	assert.equal(await step({ id: "first-dashboard" }), 200);
+
 	assert.equal(await step({ id: "done" }), 200);
 	assert.equal(gettingStarted.needed(), false);
 
@@ -310,6 +370,14 @@ test("steps: Updates, then Done opens OmniCore again", async () => {
 });
 
 // --- Pieces -----------------------------------------------------------------------------
+
+test("pieces: from the Look step on, the page is in the profile's own look", () => {
+	const { ownLook } = require("../core/getting-started-page");
+	assert.equal(ownLook(["look", "modules", "done"]), true);
+	assert.equal(ownLook(["first-dashboard", "done"]), true);
+	assert.equal(ownLook(["updates", "look", "done"]), false, "the device's own until then");
+	assert.equal(ownLook(["welcome", "admin-password", "done"]), false);
+});
 
 test("pieces: the Wi-Fi step's words", () => {
 	assert.equal(wifiWords({ available: true, card: { connected: true, ssid: "Home", bars: 4 } }).line, "Connected to Home, with a strong signal.");

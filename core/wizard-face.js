@@ -121,13 +121,15 @@ function startWizardFace() {
 	// mounted here, so the wizard fell back to the system font.
 	attachFontRoute(app);
 
-	app.post("/faces", async (req, res) => {
-		const { name, title, theme, instances, themeConfig } = req.body;
+	// Makes a face from what a wizard gathered and starts it: Create
+	// Dashboard's POST /faces, and Getting Started's First dashboard step
+	// (getting-started-page.js). Resolves to the face, or { error }.
+	async function createDashboard(given) {
+		const { name, title, theme, instances, themeConfig } = given || {};
 
 		// A face cannot exist without a theme
 		if (!theme) {
-			res.status(400).json({ error: "A theme is required" });
-			return;
+			return { error: "A theme is required" };
 		}
 
 		const installed = listModules();
@@ -195,6 +197,15 @@ function startWizardFace() {
 		// on -- see the same call in admin-face.js.
 		background.syncFace(face);
 
+		return face;
+	}
+
+	app.post("/faces", async (req, res) => {
+		const face = await createDashboard(req.body);
+		if (face.error) {
+			res.status(400).json(face);
+			return;
+		}
 		res.json(face);
 	});
 
@@ -209,7 +220,7 @@ function startWizardFace() {
 	});
 
 	// Getting Started: its page and routes (getting-started-page.js)
-	require("./getting-started-page").attach(app);
+	require("./getting-started-page").attach(app, { createDashboard });
 
 	// 3999/ on its own isn't an address (since 2.0.0, when 3999 got two
 	// wizards). Whatever sent someone here is a bug, so the page says so

@@ -758,7 +758,13 @@ function credentialsPage(options) {
 // Appearance tab of the settings home draws them (since v2 they were a
 // page of their own, /background, which now opens that tab). Returns the
 // two boxes as HTML and the script behind both.
-function backgroundPanel(settings) {
+// options.base: where its routes are (attachAppearanceRoutes): "" on
+// Settings, "/getting-started" in Getting Started's Look step.
+// options.inWizard: drawn in Getting Started, so without the profile strip
+// (the profile being made is this device's first).
+function backgroundPanel(settings, options) {
+	const base = (options && options.base) || "";
+	const inWizard = Boolean(options && options.inWizard);
 	// A picture (or an animation, or a video), a colour, or neither: the
 	// Default, the pages' own colour
 	const file = backdropStore.hasPicture(settings);
@@ -1036,13 +1042,17 @@ function backgroundPanel(settings) {
 	// kept from there.)
 	const actionsBox = `
 			<div class="segment c3 row2 lends-room tab-actions" id="appearance-actions">
-				<div class="inset">
+				${
+					inWizard
+						? ""
+						: `<div class="inset">
 					<div class="inset-text">
 						<div class="inset-label">PROFILE ON THIS DEVICE</div>
 						<div class="inset-value" id="profile-name">${escapeHtml((settings.profile && settings.profile.name) || "None yet")}</div>
 					</div>
 					<button type="button" class="glass" id="open-profiles">Profiles</button>
-				</div>
+				</div>`
+				}
 				<p class="hint" id="appearance-state">Everything on this tab is saved${settings.profile ? ", in this profile" : ""}.</p>
 				<p class="help glass-warning" id="glass-warning"${glass.readable ? " hidden" : ""}></p>
 				<div class="buttons to-end keeps-room" id="appearance-buttons" hidden>
@@ -1083,6 +1093,10 @@ function backgroundPanel(settings) {
 					</div>`;
 
 	const script = `
+		// Where this tab's routes are: "" on Settings, "/getting-started"
+		// in Getting Started (attachAppearanceRoutes)
+		const BASE = ${JSON.stringify(base)};
+
 		// How Auto works out the glass, the same functions the server uses
 		// (backdrop.js), so what's previewed is what's saved
 		const MODEL = ${JSON.stringify(backdropStore.GLASS_MODEL)};
@@ -1415,7 +1429,7 @@ function backgroundPanel(settings) {
 			glassStatus.textContent = "";
 			saveState.textContent = dirty
 				? "Not saved yet. Cancel, or leaving this page, puts it back."
-				: "Everything on this tab is saved" + (document.getElementById("profile-name").textContent !== "None yet" ? ", in this profile." : ".");
+				: "Everything on this tab is saved" + (document.getElementById("profile-name") && document.getElementById("profile-name").textContent !== "None yet" ? ", in this profile." : ".");
 		}
 
 		// Text size: shown at once on this page
@@ -1471,12 +1485,15 @@ function backgroundPanel(settings) {
 			return response.json();
 		}
 
-		saveButton.addEventListener("click", async function () {
+		// Saves everything on the tab that isn't saved. True once it's kept.
+		// Save calls it, and so does Getting Started's Next
+		// (window.omniAppearanceSave).
+		async function saveTab() {
 			saveButton.disabled = true;
 			cancelButton.disabled = true;
 			const was = JSON.parse(saved);
 			try {
-				const kept = await sendPart("/background/glass", {
+				const kept = await sendPart(BASE + "/background/glass", {
 					blur: hand.blur,
 					tintStrength: hand.tintStrength,
 					dim: hand.dim,
@@ -1488,7 +1505,7 @@ function backgroundPanel(settings) {
 					recheck: glassTouched && !fontLast
 				});
 				if (was.size !== Number(size.value) || was.corner !== corner) {
-					await sendPart("/appearance", { uiFontSize: Number(size.value), backButtonCorner: corner });
+					await sendPart(BASE + "/appearance", { uiFontSize: Number(size.value), backButtonCorner: corner });
 				}
 				// What the server kept (the same, as it works it out the
 				// same way)
@@ -1500,13 +1517,19 @@ function backgroundPanel(settings) {
 				glassTouched = false;
 				fontLast = false;
 				showSaved();
+				return true;
 			} catch (error) {
 				glassStatus.className = "status bad";
 				glassStatus.textContent = "Couldn't save.";
 				saveButton.disabled = false;
 				cancelButton.disabled = false;
+				return false;
 			}
-		});
+		}
+		saveButton.addEventListener("click", saveTab);
+		window.omniAppearanceSave = function () {
+			return snapshot() === saved ? Promise.resolve(true) : saveTab();
+		};
 
 		cancelButton.addEventListener("click", function () {
 			const was = JSON.parse(saved);
@@ -1969,9 +1992,9 @@ function backgroundPanel(settings) {
 			try {
 				if (chosen.tab === "picture") {
 					say("Sending it…");
-					const received = await send("/background/upload", chosen.file);
-					await send("/background/still?id=" + encodeURIComponent(received.id), chosen.about.still);
-					const response = await fetch("/background/use", {
+					const received = await send(BASE + "/background/upload", chosen.file);
+					await send(BASE + "/background/still?id=" + encodeURIComponent(received.id), chosen.about.still);
+					const response = await fetch(BASE + "/background/use", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify({
@@ -1986,7 +2009,7 @@ function backgroundPanel(settings) {
 					const answer = await response.json().catch(function () { return {}; });
 					if (!response.ok) throw new Error(answer.error || "Couldn't use it.");
 				} else {
-					const response = await fetch(chosen.tab === "colour" ? "/background/colour" : "/background/plain", {
+					const response = await fetch(BASE + (chosen.tab === "colour" ? "/background/colour" : "/background/plain"), {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
 						body: JSON.stringify(chosen.tab === "colour" ? { color: chosen.colour } : {})
@@ -2024,7 +2047,7 @@ function backgroundPanel(settings) {
 				context.drawImage(image, 0, 0, 48, 48);
 				URL.revokeObjectURL(image.src);
 				const about = colours(context.getImageData(0, 0, 48, 48).data);
-				const response = await fetch("/background/about", {
+				const response = await fetch(BASE + "/background/about", {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({ vibrant: about.vibrant, mean: about.mean })
@@ -2042,6 +2065,369 @@ function backgroundPanel(settings) {
 	`;
 
 	return { backgroundBox, glassBox, actionsBox, backgroundModal, fontColourField, script };
+}
+
+// The Appearance tab, all of it: its four boxes (Frosted glass,
+// Background, the saving box, Typography), its pop-ups (Change background,
+// Choose a font) and its script. Settings draws it on its Appearance tab;
+// Getting Started draws the same in its Look step (options.base
+// "/getting-started", options.inWizard), so the two are one thing.
+function appearancePane(settings, installedFont, options) {
+	const glassParts = backgroundPanel(settings, options);
+
+	const textBox = `
+		<div class="segment c3 row2 borrows-room">
+			<div class="type-head">
+				<div class="type-head-text">
+					<h2>Typography</h2>
+					<p class="hint">Dashboards are unaffected.</p>
+				</div>
+				<div class="stepper">
+					<button type="button" class="glass" id="size-down"
+						aria-label="Smaller">&#8722;</button>
+					<input type="number" id="size" min="12" max="24" step="1"
+						value="${Number(settings.uiFontSize) || 16}">
+					<span class="muted">px</span>
+					<button type="button" class="glass" id="size-up"
+						aria-label="Larger">&#43;</button>
+				</div>
+			</div>
+			<div class="type-row">
+				${glassParts.fontColourField}
+				<div class="inset">
+					<div class="inset-text">
+						<div class="inset-label">FONT</div>
+						<div class="inset-value">${
+							installedFont
+								? escapeHtml(installedFont.family)
+								: "System font"
+						}</div>
+					</div>
+					<button class="glass" id="change-font">
+						Change
+					</button>
+				</div>
+			</div>
+		</div>`;
+
+	const fontModal = `
+		<div class="modal-backdrop" id="font-modal" hidden>
+			<div class="modal">
+				<div class="modal-head">
+					<h2>Choose a font</h2>
+					<button class="modal-close" data-close="font-modal"
+						aria-label="Close">&times;</button>
+				</div>
+				<p class="hint">
+					Downloaded once and served by OmniCore itself, so it keeps
+					working with no internet.
+				</p>
+				<input class="font-search" id="font-q"
+					placeholder="Search Google Fonts...">
+				<div class="list" id="font-results"></div>
+				${
+					installedFont
+						? `<button class="glass glass-block" id="clear-font">Back to the system font</button>`
+						: ""
+				}
+				<p class="status" id="font-status"></p>
+			</div>
+		</div>`;
+
+	return {
+		boxes: glassParts.glassBox + glassParts.backgroundBox + glassParts.actionsBox + textBox,
+		modals: glassParts.backgroundModal + fontModal,
+		script:
+			glassParts.script +
+			`
+		// --- Fonts -------------------------------------------------
+		document.getElementById("change-font").addEventListener("click", function () {
+			openModal("font-modal");
+			document.getElementById("font-q").focus();
+		});
+
+		const fontResults = document.getElementById("font-results");
+		const fontQuery = document.getElementById("font-q");
+		const fontStatus = document.getElementById("font-status");
+		let fontSearchTimer = null;
+
+		function renderFonts(fonts) {
+			if (!fonts.length) {
+				fontResults.innerHTML = '<p class="hint">No matches.</p>';
+				return;
+			}
+
+			fontResults.innerHTML = fonts.map(function (font) {
+				const safe = font.family.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+				return '<button type="button" class="font-row" onclick="pickFont(' +
+					JSON.stringify(font.family).replace(/"/g, "&quot;") +
+					')"><strong style="--sample-font:' +
+					JSON.stringify(font.family).replace(/"/g, "&quot;") +
+					'">' + safe + '</strong>' +
+					'<span class="hint">' + font.category + '</span></button>';
+			}).join("");
+
+			// A live preview needs the real font, and there's no way
+			// around that -- but this search is already an
+			// online-only action, so fetching it here doesn't touch
+			// the offline guarantee that matters: the one font
+			// someone actually installs still gets downloaded once
+			// and served locally forever after.
+			//
+			// One request for every result shown, not one per font --
+			// the browser only actually downloads a given family's
+			// file once something on the page is set to use it,
+			// which is exactly the results currently rendered.
+			let previewLink = document.getElementById("font-preview-link");
+			if (!previewLink) {
+				previewLink = document.createElement("link");
+				previewLink.id = "font-preview-link";
+				previewLink.rel = "stylesheet";
+				document.head.appendChild(previewLink);
+			}
+
+			const families = fonts
+				.map(function (font) {
+					return "family=" + encodeURIComponent(font.family).replace(/%20/g, "+");
+				})
+				.join("&");
+
+			previewLink.href =
+				"https://fonts.googleapis.com/css2?" + families + "&display=swap";
+		}
+
+		// Debounced: a search per keystroke would hammer the
+		// catalogue for results nobody has finished asking for yet.
+		fontQuery.addEventListener("input", function () {
+			clearTimeout(fontSearchTimer);
+			fontSearchTimer = setTimeout(async function () {
+				if (!fontQuery.value.trim()) {
+					fontResults.innerHTML = "";
+					return;
+				}
+
+				fontStatus.textContent = "Searching...";
+
+				try {
+					const response = await fetch(BASE + "/fonts/search?q=" +
+						encodeURIComponent(fontQuery.value));
+					const data = await response.json();
+
+					if (!response.ok) {
+						fontStatus.textContent =
+							data.error || "Could not reach Google Fonts.";
+						fontResults.innerHTML = "";
+						return;
+					}
+
+					fontStatus.textContent = "";
+					renderFonts(data);
+				} catch (error) {
+					fontStatus.textContent = "Could not reach Google Fonts.";
+				}
+			}, 300);
+		});
+
+		window.pickFont = async function (family) {
+			fontStatus.textContent = "Downloading " + family + "...";
+
+			const response = await fetch(BASE + "/fonts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ family: family })
+			});
+
+			const data = await response.json();
+
+			if (!response.ok) {
+				fontStatus.textContent = data.error || "Could not install that font.";
+				return;
+			}
+
+			location.reload();
+		};
+
+		const clearFont = document.getElementById("clear-font");
+		if (clearFont) {
+			clearFont.addEventListener("click", async function () {
+				await fetch(BASE + "/fonts", { method: "DELETE" });
+				location.reload();
+			});
+		}
+`
+	};
+}
+
+// The Appearance tab's routes (appearancePane's script calls them): the
+// text size and the Back button, the font, the background and the glass.
+// Settings attaches them as they are (base ""), behind its sign-in;
+// Getting Started's Look step attaches them under "/getting-started",
+// with `guard` letting only the device doing the setup use them, and only
+// while there's a step left. Everything they save goes into the
+// appearance profile this browser uses (settings-store.js).
+//
+// A picture, an animation or a video behind the pages, and the frosted
+// glass over it (backdrop.js). Picking a file goes in three steps, so a
+// big file is sent as it is rather than as text inside JSON:
+//
+//   1. POST …/background/upload   the file itself; kept aside, not used
+//   2. POST …/background/still    a still frame the page drew from it
+//   3. POST …/background/use      put it in place, with what the page
+//                                 worked out (its dominant and vibrant
+//                                 colours, how dark and bright it is)
+function attachAppearanceRoutes(app, base, guard) {
+	const guarded = guard ? [guard] : [];
+
+	app.post(base + "/appearance", ...guarded, (req, res) => {
+		const body = req.body || {};
+		const patch = {};
+
+		if (
+			body.backButtonCorner === "bottom-right" ||
+			body.backButtonCorner === "top-left"
+		) {
+			patch.backButtonCorner = body.backButtonCorner;
+		}
+
+		if (body.uiFontSize !== undefined) {
+			// Clamped rather than trusted: this value goes straight into
+			// a CSS declaration, and a hostile or fat-fingered number
+			// could make the admin UI unusable to fix itself with.
+			const size = Number(body.uiFontSize);
+
+			if (Number.isFinite(size)) {
+				patch.uiFontSize = Math.min(24, Math.max(12, Math.round(size)));
+			}
+		}
+
+		if (Object.keys(patch).length === 0) {
+			res.status(400).json({ error: "Nothing recognisable to save" });
+			return;
+		}
+
+		writeSettings(patch);
+		res.json({ ok: true, ...patch });
+	});
+
+	// --- Fonts: the font picker's own routes
+
+	app.get(base + "/fonts/search", ...guarded, async (req, res) => {
+		try {
+			res.json(await fontService.searchFonts(req.query.q, 25));
+		} catch (error) {
+			// Google unreachable, most likely. Say so plainly rather
+			// than showing an empty list, which would read as "no font
+			// matches that" and send someone hunting for a typo.
+			res.status(502).json({ error: error.message });
+		}
+	});
+
+	app.post(base + "/fonts", ...guarded, async (req, res) => {
+		try {
+			const family = await fontService.installFont((req.body || {}).family);
+			writeSettings({ uiFontFamily: family });
+			res.json({ ok: true, family });
+		} catch (error) {
+			res.status(400).json({ error: error.message });
+		}
+	});
+
+	app.delete(base + "/fonts", ...guarded, async (req, res) => {
+		await fontService.removeFont();
+		writeSettings({ uiFontFamily: "" });
+		res.json({ ok: true });
+	});
+
+	app.post(
+		base + "/background/upload",
+		...guarded,
+		express.raw({ type: "application/octet-stream", limit: backdropStore.MAX_BYTES }),
+		(req, res) => {
+			const result = backdropStore.receive(req.body);
+			res.status(result.error ? 400 : 200).json(result);
+		}
+	);
+
+	app.post(
+		base + "/background/still",
+		...guarded,
+		express.raw({ type: "application/octet-stream", limit: backdropStore.MAX_STILL_BYTES }),
+		(req, res) => {
+			const result = backdropStore.receiveStill(String(req.query.id || ""), req.body);
+			res.status(result.error ? 400 : 200).json(result);
+		}
+	);
+
+	app.post(base + "/background/use", ...guarded, (req, res) => {
+		const result = backdropStore.use((req.body || {}).id, req.body);
+
+		if (result.error) {
+			res.status(400).json(result);
+			return;
+		}
+
+		// A new picture: the font colour is checked against it
+		const changes = { ...result.changes, ...backdropStore.recheckFont({ ...readSettings(), ...result.changes }) };
+		const saved = writeSettings(changes);
+
+		// The one before it goes
+		backdropStore.removeOthers([saved.backgroundFile, saved.backgroundStill]);
+		res.json({ ok: true, kind: saved.backgroundKind });
+	});
+
+	// The Default: black with white text, the look OmniCore starts with.
+	// Since 2.0.0 a profile always has a picture or a colour, so this is
+	// the colour black, not "nothing" (which is only what's drawn when no
+	// profile can be read at all).
+	app.post(base + "/background/plain", ...guarded, (req, res) => {
+		writeSettings({ ...backdropStore.useColour(DEFAULT_DARK).changes, fontColour: "white" });
+		backdropStore.removeOthers([]);
+		res.json({ ok: true });
+	});
+
+	// One colour behind the pages, picked on the colour wheel. The picture
+	// before it, if there was one, goes.
+	app.post(base + "/background/colour", ...guarded, (req, res) => {
+		const result = backdropStore.useColour((req.body || {}).color);
+		if (result.error) {
+			res.status(400).json(result);
+			return;
+		}
+		// A new colour: the font colour is checked against it
+		writeSettings({ ...result.changes, ...backdropStore.recheckFont({ ...readSettings(), ...result.changes }) });
+		backdropStore.removeOthers([]);
+		res.json({ ok: true, kind: "colour" });
+	});
+
+	// The glass changed. With `recheck` (anything but the font colour
+	// itself was changed), the font colour is checked against it too, and
+	// switched when the text couldn't be read otherwise. The page has
+	// already shown the switch; this is what keeps it.
+	app.post(base + "/background/glass", ...guarded, (req, res) => {
+		const changes = backdropStore.cleanGlass(req.body);
+		if (req.body && req.body.recheck === true) {
+			Object.assign(changes, backdropStore.recheckFont({ ...readSettings(), ...changes }));
+		}
+		const saved = writeSettings(changes);
+		res.json({ ok: true, fontColour: backdropStore.fontOf(saved) });
+	});
+
+	// A picture picked by an earlier v2 build, before its vibrant colour
+	// and overall brightness were worked out: the Appearance tab works
+	// them out once and sends them here. Nothing else changes.
+	app.post(base + "/background/about", ...guarded, (req, res) => {
+		if (!backdropStore.hasPicture(readSettings())) {
+			res.status(400).json({ error: "There's no picture behind the pages." });
+			return;
+		}
+		const result = backdropStore.aboutPicture(req.body);
+		if (result.error) {
+			res.status(400).json(result);
+			return;
+		}
+		writeSettings(result.changes);
+		res.json({ ok: true });
+	});
 }
 
 // The server's address on the home network, the one other devices use to
@@ -3161,42 +3547,7 @@ function startAdminFace() {
 
 		// --- Appearance -----------------------------------------------------
 
-		const glassParts = backgroundPanel(settings);
-
-		const textBox = `
-			<div class="segment c3 row2 borrows-room">
-				<div class="type-head">
-					<div class="type-head-text">
-						<h2>Typography</h2>
-						<p class="hint">Dashboards are unaffected.</p>
-					</div>
-					<div class="stepper">
-						<button type="button" class="glass" id="size-down"
-							aria-label="Smaller">&#8722;</button>
-						<input type="number" id="size" min="12" max="24" step="1"
-							value="${Number(settings.uiFontSize) || 16}">
-						<span class="muted">px</span>
-						<button type="button" class="glass" id="size-up"
-							aria-label="Larger">&#43;</button>
-					</div>
-				</div>
-				<div class="type-row">
-					${glassParts.fontColourField}
-					<div class="inset">
-						<div class="inset-text">
-							<div class="inset-label">FONT</div>
-							<div class="inset-value">${
-								installedFont
-									? escapeHtml(installedFont.family)
-									: "System font"
-							}</div>
-						</div>
-						<button class="glass" id="change-font">
-							Change
-						</button>
-					</div>
-				</div>
-			</div>`;
+		const pane = appearancePane(settings, installedFont, {});
 
 		// --- Resources ------------------------------------------------------
 
@@ -3242,13 +3593,13 @@ function startAdminFace() {
 					// under Saved keys and Try a city search, so the tab ends
 					// level like the others
 					`<div class="segment c4 row3" id="general-more" aria-hidden="true"></div>`,
-				appearance: glassParts.glassBox + glassParts.backgroundBox + glassParts.actionsBox + textBox,
+				appearance: pane.boxes,
 				resources: resourcesPane,
 				about: updates.aboutBox + updates.updatesBox + updates.notesBox
 			},
 			updates.updateReady
 		) + `
-			${glassParts.backgroundModal}
+			${pane.modals}
 			${updates.majorModal}
 			<div class="modal-backdrop" id="profiles-modal" hidden>
 				<div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="profiles-title">
@@ -3271,28 +3622,7 @@ function startAdminFace() {
 					<input type="file" id="profile-file" accept=".ocap" hidden>
 				</div>
 			</div>
-			<div class="modal-backdrop" id="font-modal" hidden>
-				<div class="modal">
-					<div class="modal-head">
-						<h2>Choose a font</h2>
-						<button class="modal-close" data-close="font-modal"
-							aria-label="Close">&times;</button>
-					</div>
-					<p class="hint">
-						Downloaded once and served by OmniCore itself, so it keeps
-						working with no internet.
-					</p>
-					<input class="font-search" id="font-q"
-						placeholder="Search Google Fonts...">
-					<div class="list" id="font-results"></div>
-					${
-						installedFont
-							? `<button class="glass glass-block" id="clear-font">Back to the system font</button>`
-							: ""
-					}
-					<p class="status" id="font-status"></p>
-				</div>
-			</div>`;
+`;
 
 		const script =
 			portLinkScript +
@@ -3300,7 +3630,7 @@ function startAdminFace() {
 			settingsHome.HOME_SCRIPT +
 			settingsHome.MARKET_TILE_SCRIPT +
 			networkPage.TILE_SCRIPT +
-			glassParts.script +
+			pane.script +
 			updates.script +
 			places.script +
 			`
@@ -3633,121 +3963,6 @@ function startAdminFace() {
 				});
 			})();
 
-			// --- Fonts -------------------------------------------------
-			document.getElementById("change-font").addEventListener("click", function () {
-				openModal("font-modal");
-				document.getElementById("font-q").focus();
-			});
-
-			const fontResults = document.getElementById("font-results");
-			const fontQuery = document.getElementById("font-q");
-			const fontStatus = document.getElementById("font-status");
-			let fontSearchTimer = null;
-
-			function renderFonts(fonts) {
-				if (!fonts.length) {
-					fontResults.innerHTML = '<p class="hint">No matches.</p>';
-					return;
-				}
-
-				fontResults.innerHTML = fonts.map(function (font) {
-					const safe = font.family.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-					return '<button type="button" class="font-row" onclick="pickFont(' +
-						JSON.stringify(font.family).replace(/"/g, "&quot;") +
-						')"><strong style="--sample-font:' +
-						JSON.stringify(font.family).replace(/"/g, "&quot;") +
-						'">' + safe + '</strong>' +
-						'<span class="hint">' + font.category + '</span></button>';
-				}).join("");
-
-				// A live preview needs the real font, and there's no way
-				// around that -- but this search is already an
-				// online-only action, so fetching it here doesn't touch
-				// the offline guarantee that matters: the one font
-				// someone actually installs still gets downloaded once
-				// and served locally forever after.
-				//
-				// One request for every result shown, not one per font --
-				// the browser only actually downloads a given family's
-				// file once something on the page is set to use it,
-				// which is exactly the results currently rendered.
-				let previewLink = document.getElementById("font-preview-link");
-				if (!previewLink) {
-					previewLink = document.createElement("link");
-					previewLink.id = "font-preview-link";
-					previewLink.rel = "stylesheet";
-					document.head.appendChild(previewLink);
-				}
-
-				const families = fonts
-					.map(function (font) {
-						return "family=" + encodeURIComponent(font.family).replace(/%20/g, "+");
-					})
-					.join("&");
-
-				previewLink.href =
-					"https://fonts.googleapis.com/css2?" + families + "&display=swap";
-			}
-
-			// Debounced: a search per keystroke would hammer the
-			// catalogue for results nobody has finished asking for yet.
-			fontQuery.addEventListener("input", function () {
-				clearTimeout(fontSearchTimer);
-				fontSearchTimer = setTimeout(async function () {
-					if (!fontQuery.value.trim()) {
-						fontResults.innerHTML = "";
-						return;
-					}
-
-					fontStatus.textContent = "Searching...";
-
-					try {
-						const response = await fetch("/fonts/search?q=" +
-							encodeURIComponent(fontQuery.value));
-						const data = await response.json();
-
-						if (!response.ok) {
-							fontStatus.textContent =
-								data.error || "Could not reach Google Fonts.";
-							fontResults.innerHTML = "";
-							return;
-						}
-
-						fontStatus.textContent = "";
-						renderFonts(data);
-					} catch (error) {
-						fontStatus.textContent = "Could not reach Google Fonts.";
-					}
-				}, 300);
-			});
-
-			window.pickFont = async function (family) {
-				fontStatus.textContent = "Downloading " + family + "...";
-
-				const response = await fetch("/fonts", {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ family: family })
-				});
-
-				const data = await response.json();
-
-				if (!response.ok) {
-					fontStatus.textContent = data.error || "Could not install that font.";
-					return;
-				}
-
-				location.reload();
-			};
-
-			const clearFont = document.getElementById("clear-font");
-			if (clearFont) {
-				clearFont.addEventListener("click", async function () {
-					await fetch("/fonts", { method: "DELETE" });
-					location.reload();
-				});
-			}
-
 			// --- A new major version (since 1.20.0) ------------------
 			// The box opens what's changing. Upgrade can be pressed only
 			// once it has loaded, this OmniCore can install it itself,
@@ -3857,67 +4072,10 @@ function startAdminFace() {
 	});
 
 
-	app.post("/appearance", (req, res) => {
-		const body = req.body || {};
-		const patch = {};
-
-		if (
-			body.backButtonCorner === "bottom-right" ||
-			body.backButtonCorner === "top-left"
-		) {
-			patch.backButtonCorner = body.backButtonCorner;
-		}
-
-		if (body.uiFontSize !== undefined) {
-			// Clamped rather than trusted: this value goes straight into
-			// a CSS declaration, and a hostile or fat-fingered number
-			// could make the admin UI unusable to fix itself with.
-			const size = Number(body.uiFontSize);
-
-			if (Number.isFinite(size)) {
-				patch.uiFontSize = Math.min(24, Math.max(12, Math.round(size)));
-			}
-		}
-
-		if (Object.keys(patch).length === 0) {
-			res.status(400).json({ error: "Nothing recognisable to save" });
-			return;
-		}
-
-		writeSettings(patch);
-		res.json({ ok: true, ...patch });
-	});
-
-	// --- Fonts -------------------------------------------------------
-	// The picker's own endpoints. The UI that calls these lands in the
-	// next stage; the capability is here so it can be tested on its own.
-
-	app.get("/fonts/search", async (req, res) => {
-		try {
-			res.json(await fontService.searchFonts(req.query.q, 25));
-		} catch (error) {
-			// Google unreachable, most likely. Say so plainly rather
-			// than showing an empty list, which would read as "no font
-			// matches that" and send someone hunting for a typo.
-			res.status(502).json({ error: error.message });
-		}
-	});
-
-	app.post("/fonts", async (req, res) => {
-		try {
-			const family = await fontService.installFont((req.body || {}).family);
-			writeSettings({ uiFontFamily: family });
-			res.json({ ok: true, family });
-		} catch (error) {
-			res.status(400).json({ error: error.message });
-		}
-	});
-
-	app.delete("/fonts", async (req, res) => {
-		await fontService.removeFont();
-		writeSettings({ uiFontFamily: "" });
-		res.json({ ok: true });
-	});
+	// The Appearance tab's routes: its text size and Back button, its
+	// font, its background and glass (attachAppearanceRoutes, below; the
+	// same ones Getting Started's Look step uses)
+	attachAppearanceRoutes(app, "");
 
 	app.post("/location", (req, res) => {
 		// The same rules as Getting Started's Location step
@@ -3934,111 +4092,11 @@ function startAdminFace() {
 
 	// ---- background and glass -----------------------------------------
 	//
-	// A picture, an animation or a video behind OmniCore's own pages, and
-	// the frosted glass over it. See backdrop.js. Reached from the
-	// settings page.
-	//
-	// Picking a file goes in three steps, so a big file is sent as it is
-	// rather than as text inside JSON:
-	//
-	//   1. POST /background/upload   the file itself; kept aside, not used
-	//   2. POST /background/still    a still frame the page drew from it
-	//   3. POST /background/use      put it in place, with what the page
-	//                                worked out (its dominant and vibrant
-	//                                colours, how dark and bright it is)
+	// Their routes are attachAppearanceRoutes' (attached above).
 	// Background and glass were a page of their own until the settings
 	// home had tabs; that address now opens the Appearance tab
 	app.get("/background", (req, res) => {
 		res.redirect("/#appearance");
-	});
-
-	app.post(
-		"/background/upload",
-		express.raw({ type: "application/octet-stream", limit: backdropStore.MAX_BYTES }),
-		(req, res) => {
-			const result = backdropStore.receive(req.body);
-			res.status(result.error ? 400 : 200).json(result);
-		}
-	);
-
-	app.post(
-		"/background/still",
-		express.raw({ type: "application/octet-stream", limit: backdropStore.MAX_STILL_BYTES }),
-		(req, res) => {
-			const result = backdropStore.receiveStill(String(req.query.id || ""), req.body);
-			res.status(result.error ? 400 : 200).json(result);
-		}
-	);
-
-	app.post("/background/use", (req, res) => {
-		const result = backdropStore.use((req.body || {}).id, req.body);
-
-		if (result.error) {
-			res.status(400).json(result);
-			return;
-		}
-
-		// A new picture: the font colour is checked against it
-		const changes = { ...result.changes, ...backdropStore.recheckFont({ ...readSettings(), ...result.changes }) };
-		const saved = writeSettings(changes);
-
-		// The one before it goes
-		backdropStore.removeOthers([saved.backgroundFile, saved.backgroundStill]);
-		res.json({ ok: true, kind: saved.backgroundKind });
-	});
-
-	// The Default: black with white text, the look OmniCore starts with.
-	// Since 2.0.0 a profile always has a picture or a colour, so this is
-	// the colour black, not "nothing" (which is only what's drawn when no
-	// profile can be read at all).
-	app.post("/background/plain", (req, res) => {
-		writeSettings({ ...backdropStore.useColour(DEFAULT_DARK).changes, fontColour: "white" });
-		backdropStore.removeOthers([]);
-		res.json({ ok: true });
-	});
-
-	// One colour behind the pages, picked on the colour wheel. The picture
-	// before it, if there was one, goes.
-	app.post("/background/colour", (req, res) => {
-		const result = backdropStore.useColour((req.body || {}).color);
-		if (result.error) {
-			res.status(400).json(result);
-			return;
-		}
-		// A new colour: the font colour is checked against it
-		writeSettings({ ...result.changes, ...backdropStore.recheckFont({ ...readSettings(), ...result.changes }) });
-		backdropStore.removeOthers([]);
-		res.json({ ok: true, kind: "colour" });
-	});
-
-	// The glass changed. With `recheck` (anything but the font colour
-	// itself was changed), the font colour is checked against it too, and
-	// switched when the text couldn't be read otherwise. The page has
-	// already shown the switch; this is what keeps it.
-	app.post("/background/glass", (req, res) => {
-		const changes = backdropStore.cleanGlass(req.body);
-		if (req.body && req.body.recheck === true) {
-			Object.assign(changes, backdropStore.recheckFont({ ...readSettings(), ...changes }));
-		}
-		const saved = writeSettings(changes);
-		res.json({ ok: true, fontColour: backdropStore.fontOf(saved) });
-	});
-
-	// A picture picked by an earlier v2 build, before its vibrant colour
-	// and overall brightness were worked out: the Appearance tab works
-	// them out once and sends them here. Nothing else changes.
-	app.post("/background/about", (req, res) => {
-		if (!backdropStore.hasPicture(readSettings())) {
-			res.status(400).json({ error: "There's no picture behind the pages." });
-			return;
-		}
-		const result = backdropStore.aboutPicture(req.body);
-		if (result.error) {
-			res.status(400).json(result);
-			return;
-		}
-		writeSettings(result.changes);
-		res.json({ ok: true });
 	});
 
 	// ---- appearance profiles --------------------------------------------
@@ -6546,3 +6604,8 @@ function startAdminFace() {
 }
 
 module.exports = startAdminFace;
+
+// For Getting Started's Look step (getting-started-page.js): the same
+// Appearance tab, and its routes
+module.exports.appearancePane = appearancePane;
+module.exports.attachAppearanceRoutes = attachAppearanceRoutes;

@@ -683,7 +683,7 @@ test("pages: Background and Frosted glass, on Settings' Appearance tab", async (
 	assert.ok(!page.includes('data-mode="device"'), "Appearance Mode is gone");
 	const glassScript = page.slice(page.indexOf("// --- Saving the Appearance tab"), page.indexOf("// --- Changing the background"));
 	assert.ok(glassScript.includes('"Couldn\'t save."') && !glassScript.includes('"Saved."'), "only a save that fails says anything");
-	assert.ok(glassScript.includes('sendPart("/appearance"'), "Text size and the Back button are saved with the rest");
+	assert.ok(glassScript.includes('sendPart(BASE + "/appearance"'), "Text size and the Back button are saved with the rest");
 	assert.ok(!page.includes("saveAppearance("), "never saved straight away any more");
 
 	// With the Default background: no Auto, no brightness, no Dim. The

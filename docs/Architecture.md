@@ -1671,8 +1671,17 @@ by every port) and `getting-started-page.js` (the page and its routes).
   `locationFromBody` in `location-service.js`), Updates (a minor update
   installed there and then, followed through the restart; a major one
   offered with its document, `major-offer.js`, read to the end before
-  Upgrade), Done (recorded at once, then Settings). The terms join after
-  Updates once they're written.
+  Upgrade), Your look (the Appearance tab itself, `appearancePane` in
+  `admin-face.js` with its routes from `attachAppearanceRoutes` under
+  `/getting-started`; Next does what its Save does,
+  `window.omniAppearanceSave`; arriving at it reloads the page into the
+  appearance profile's own look, and every step after is drawn in it),
+  Modules (the Marketplace's modules with Install, `marketplace.js`; the
+  one step that can be skipped), First dashboard (a name, a theme and the
+  installed modules on it, made by the same `createDashboard` as Create
+  Dashboard's `POST /faces`; an install that has dashboards can carry on
+  or make another), Done (recorded at once, then Settings). The terms
+  join after Updates once they're written.
 
 ### Appearance profiles (`.ocap`)
 

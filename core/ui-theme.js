@@ -2300,8 +2300,13 @@ function otherPagesCss() {
 		padding: 1.5em;
 		overflow-x: hidden;
 	}
-	.gs-stage { display: grid; width: 100%; max-width: 38em; }
-	.gs-sheet { grid-area: 1 / 1; min-width: 0; }
+	.gs-stage { display: grid; width: 100%; max-width: 70em; }
+	.gs-sheet { grid-area: 1 / 1; min-width: 0; width: 100%; max-width: 38em; justify-self: center; }
+	/* A step with the Appearance tab's boxes in it (Your look): as wide as
+	   the tab, its title in a box over them */
+	.gs-sheet.gs-wide { max-width: 70em; display: flex; flex-direction: column; gap: 1em; }
+	.gs-sheet.gs-wide > .gs-head { margin: 0; }
+	.gs-sheet.gs-wide > .buttons.to-end { margin-top: 0; }
 	.gs-sheet.arriving { animation: gs-arrive 0.55s cubic-bezier(0.22, 0.7, 0.2, 1) both; }
 	.gs-sheet.leaving { animation: gs-leave 0.55s cubic-bezier(0.5, 0, 0.75, 0.3) both; pointer-events: none; }
 	@keyframes gs-arrive { from { transform: translateX(110vw); } to { transform: none; } }
